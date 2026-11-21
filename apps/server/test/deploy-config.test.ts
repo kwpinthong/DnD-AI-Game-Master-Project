@@ -54,6 +54,26 @@ describe('Railway service config (.railway/railway.ts)', () => {
   });
 });
 
+describe('deploy guide (docs/deploy.md) matches the config files', () => {
+  const guide = read('docs/deploy.md');
+  const source = read('.railway/railway.ts');
+
+  it.each(['startCommand', 'healthcheckPath'])('uses the same %s as .railway/railway.ts', (key) => {
+    expect(guide).toContain(`\`${literal(source, key)}\``);
+  });
+
+  it('names the same volume mount, DB_PATH, build command and Node version', () => {
+    expect(guide).toContain('Mount Path** = `/data`');
+    expect(guide).toContain('`DB_PATH=/data/isekai.sqlite`');
+    expect(guide).toContain(`\`${literal(source, 'buildCommand')?.replaceAll('\\"', '"')}\``);
+    expect(guide).toContain('`RAILPACK_NODE_VERSION=26`');
+  });
+
+  it('has a post-deploy check for every Case C1-C7', () => {
+    for (const id of ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7']) expect(guide).toMatch(new RegExp(`^\\| ${id}\\b`, 'm'));
+  });
+});
+
 describe('Netlify site config (netlify.toml)', () => {
   const toml = read('netlify.toml');
   const value = (key: string) => toml.match(new RegExp(`^\\s*${key}\\s*=\\s*"((?:[^"\\\\]|\\\\.)*)"`, 'm'))?.[1];
