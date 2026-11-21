@@ -14,6 +14,7 @@ import { isUniqueViolation, openSession, type Clock } from '../auth/join.ts';
 import { hashPin } from '../auth/pin.ts';
 import type { Db } from '../db/client.ts';
 import { character, game, member, session } from '../db/schema.ts';
+import { canEditScenario } from '../scenario/editor.ts';
 import { copyTemplateForGame } from '../scenario/store.ts';
 
 export type GameRow = typeof game.$inferSelect;
@@ -106,6 +107,7 @@ export function gameView(db: Db | Tx, gameId: string, viewer: MemberRow): GameVi
       hasCharacter: withCharacter.has(m.id),
     })),
     players: { count: members.filter((m) => m.role === 'player').length, ...limits },
+    canEditScenario: canEditScenario(row, viewer),
     startBlockers: row.startedAt === null ? startBlockers(row, members, withCharacter) : [],
   };
 }

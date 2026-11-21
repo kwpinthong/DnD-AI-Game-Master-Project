@@ -43,6 +43,7 @@ function view(patch: Partial<GameView> = {}): GameView {
       { id: 'm-bel', name: 'เบล', role: 'player', isOwner: false, hasCharacter: false },
     ],
     players: { count: 2, min: 2, max: 6 },
+    canEditScenario: false,
     startBlockers: ['ยังไม่สร้างตัวละคร: เบล'],
     ...patch,
   };

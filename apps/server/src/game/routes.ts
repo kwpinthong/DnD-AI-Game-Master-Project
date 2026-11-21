@@ -9,6 +9,7 @@ import { memberRowForToken, type Clock } from '../auth/join.ts';
 import { bearerToken, sendError } from '../auth/routes.ts';
 import type { AiService } from '../ai/core/service.ts';
 import type { Db } from '../db/client.ts';
+import { readScenario, resetScenario, saveScenario, type ScenarioEditOutcome } from '../scenario/editor.ts';
 import { createCodeChecker } from './create-code.ts';
 import {
   createGame,
@@ -117,6 +118,45 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
         });
     }
   }
+
+  function sendScenario(reply: FastifyReply, outcome: ScenarioEditOutcome) {
+    switch (outcome.kind) {
+      case 'ok':
+        return reply.code(200).send({ scenario: outcome.scenario, locked: outcome.locked });
+      case 'forbidden':
+        return sendError(reply, 403, {
+          code: 'forbidden',
+          message: 'เฉพาะ GM คนของเกมนี้แก้หรือดู scenario ได้ (เกมที่ไม่มี GM คนใช้ scenario ตั้งต้น)',
+        });
+      case 'game_started':
+        return sendError(reply, 409, { code: 'game_started', message: 'เกมเริ่มแล้ว แก้ scenario ผ่านหน้านี้ไม่ได้' });
+      case 'invalid': {
+        // One message per field, keyed by its path (`timeline.3.day`; `timeline` for the whole list).
+        const fields: Record<string, string> = {};
+        for (const issue of outcome.errors) fields[issue.path || 'scenario'] ??= issue.message;
+        return sendError(reply, 400, { code: 'invalid_input', message: 'scenario ไม่ถูกต้อง', fields });
+      }
+    }
+  }
+
+  // Scenario editor (GEN-046): the Human GM only; players never get scenario content.
+  app.get('/api/game/scenario', async (request, reply) => {
+    const me = caller(request, reply);
+    if (!me) return reply;
+    return sendScenario(reply, readScenario(db, me));
+  });
+
+  app.put('/api/game/scenario', async (request, reply) => {
+    const me = caller(request, reply);
+    if (!me) return reply;
+    return sendScenario(reply, saveScenario(db, me, request.body, now()));
+  });
+
+  app.post('/api/game/scenario/reset', async (request, reply) => {
+    const me = caller(request, reply);
+    if (!me) return reply;
+    return sendScenario(reply, resetScenario(db, me, now()));
+  });
 
   app.get('/api/game', async (request, reply) => {
     const me = caller(request, reply);

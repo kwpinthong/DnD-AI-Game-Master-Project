@@ -83,6 +83,8 @@ export const ScenarioEvent = z.object({
   kind: z.enum(['event', 'climax', 'finale']).default('event'),
   title: text(120),
   description: optionalText(1000),
+  /** ผลตั้งต้น: what happens when no player steps in (GEN-046). */
+  outcome: optionalText(1000),
   /** Crisis events are the ones that can raise an A-grade NPC to S (Rules Spec §8.3). */
   crisis: z.boolean().default(false),
   locationId: Id.nullable().default(null),
@@ -262,6 +264,24 @@ export function parseScenario(input: unknown): ScenarioParseResult {
     errors: result.error.issues.map((issue) => ({ path: issue.path.map(String).join('.'), message: issue.message })),
   };
 }
+
+const PHASE_ORDER: Record<Phase, number> = { MORNING: 0, AFTERNOON: 1, NIGHT: 2 };
+
+/** The timeline in play order: by day, then MORNING → AFTERNOON → NIGHT; ties keep their order. */
+export function sortTimeline<T extends Pick<Scenario, 'timeline'>>(scenario: T): T {
+  const timeline = scenario.timeline
+    .map((event, index) => ({ event, index }))
+    .sort((a, b) => a.event.day - b.event.day || PHASE_ORDER[a.event.phase] - PHASE_ORDER[b.event.phase] || a.index - b.index)
+    .map(({ event }) => event);
+  return { ...scenario, timeline };
+}
+
+/**
+ * 200 from GET / PUT /api/game/scenario and POST /api/game/scenario/reset (Human GM only, GEN-046).
+ * `locked` once the game has started: the editor shows it read-only.
+ */
+export const GameScenarioResponse = z.object({ scenario: Scenario, locked: z.boolean() });
+export type GameScenarioResponse = z.infer<typeof GameScenarioResponse>;
 
 /** The Social Title text for a reputation score in this scenario. */
 export function socialTitleFor(scenario: Pick<Scenario, 'socialTitles'>, reputation: number): string {
