@@ -6,3 +6,5 @@ export const HealthResponse = z.object({
   db: z.enum(['connected', 'error']),
 });
 export type HealthResponse = z.infer<typeof HealthResponse>;
+
+export * from './join.ts';
