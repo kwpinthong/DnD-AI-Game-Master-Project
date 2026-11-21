@@ -66,3 +66,16 @@ export const session = sqliteTable(
   },
   (t) => [index('session_member').on(t.memberId)],
 );
+
+/**
+ * Each game's own copy of its scenario (GEN-045), made from the template when the game is created.
+ * `data` is the Scenario JSON of `@isekai/protocol`; always read it back through `parseScenario`.
+ */
+export const gameScenario = sqliteTable('game_scenario', {
+  gameId: text('game_id')
+    .primaryKey()
+    .references(() => game.id, { onDelete: 'cascade' }),
+  schemaVersion: integer('schema_version').notNull(),
+  data: text('data').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
