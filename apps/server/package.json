@@ -15,6 +15,7 @@
   "dependencies": {
     "@fastify/cors": "11.4.3",
     "@isekai/protocol": "workspace:*",
+    "@isekai/rules": "workspace:*",
     "better-sqlite3": "13.2.0",
     "drizzle-orm": "0.45.4",
     "fastify": "5.12.8",
