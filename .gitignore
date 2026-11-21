@@ -1,0 +1,22 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# SQLite database and backups (never commit)
+data/
+backups/
+*.sqlite
+*.sqlite-*
+
+# Secrets
+.env
+.env.*
+*.env
+!*.env.example
+
+# Scratch output of the @isekai/rules boundary test
+packages/rules/.boundary-check/
+
+.DS_Store
+Thumbs.db
