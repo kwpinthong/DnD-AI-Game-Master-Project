@@ -11,3 +11,4 @@ export {
   type DiceExpression,
   type DiceRoll,
 } from './dice.ts';
+export { pickWeighted, rollRange, type WeightedEntry } from './random.ts';
