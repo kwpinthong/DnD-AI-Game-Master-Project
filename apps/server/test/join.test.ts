@@ -24,7 +24,7 @@ describe('POST /api/join (invite code + name + PIN)', { timeout: 30_000 }, () =>
   });
 
   async function start() {
-    server = await startServer({ host: '127.0.0.1', port: 0, dataDir }, { now: () => clock });
+    server = await startServer({ host: '127.0.0.1', port: 0, dbPath: `${dataDir}/isekai.sqlite` }, { now: () => clock });
     return server;
   }
 

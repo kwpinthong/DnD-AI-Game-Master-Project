@@ -3,7 +3,7 @@ import { openDatabase } from './client.ts';
 
 // `pnpm db:migrate`: apply pending migrations without starting the server.
 try {
-  const { sqlite, dbPath, migrationsApplied } = openDatabase(loadConfig(process.env).dataDir);
+  const { sqlite, dbPath, migrationsApplied } = openDatabase(loadConfig(process.env).dbPath);
   sqlite.close();
   console.log(`[isekai-server] ${dbPath}: applied ${migrationsApplied} migration(s)`);
 } catch (error) {

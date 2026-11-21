@@ -6,21 +6,20 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as schema from './schema.ts';
 
-export const DB_FILE_NAME = 'isekai.sqlite';
 export const migrationsFolder = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'drizzle');
 
 export type Db = BetterSQLite3Database<typeof schema>;
 
 /** The database at `dbPath` cannot be created, opened, written or migrated. */
 export class DatabaseUnavailableError extends Error {
-  constructor(
-    readonly dbPath: string,
-    cause: unknown,
-  ) {
+  readonly dbPath: string;
+
+  constructor(dbPath: string, cause: unknown) {
     super(`Cannot use the database at "${dbPath}": ${cause instanceof Error ? cause.message : String(cause)}`, {
       cause,
     });
     this.name = 'DatabaseUnavailableError';
+    this.dbPath = dbPath;
   }
 }
 
@@ -32,12 +31,14 @@ export interface OpenedDatabase {
   migrationsApplied: number;
 }
 
-/** Creates `<dataDir>/isekai.sqlite` if needed, checks it is writable, and applies pending migrations. */
-export function openDatabase(dataDir: string): OpenedDatabase {
-  const dbPath = join(dataDir, DB_FILE_NAME);
+/**
+ * Creates the DB file (and its directory) if needed, checks it is writable, and applies pending
+ * migrations. Drizzle records applied migrations in `__drizzle_migrations`, so each runs once per file.
+ */
+export function openDatabase(dbPath: string): OpenedDatabase {
   let sqlite: Database.Database | undefined;
   try {
-    mkdirSync(dataDir, { recursive: true });
+    mkdirSync(dirname(dbPath), { recursive: true });
     if (existsSync(dbPath)) accessSync(dbPath, constants.W_OK);
     sqlite = new Database(dbPath);
     sqlite.pragma('journal_mode = WAL');

@@ -4,28 +4,66 @@ import { fileURLToPath } from 'node:url';
 export interface ServerConfig {
   host: string;
   port: number;
-  /** Directory holding isekai.sqlite. */
-  dataDir: string;
+  /** The SQLite file. On Railway it must be on the volume (e.g. /data/isekai.sqlite). */
+  dbPath: string;
   /** Browser origins allowed to call the API (CORS). The web app is hosted separately (Q-031). */
   webOrigins?: string[];
+  /** Invite code of a game created at start if no game has it yet (until GEN-025 adds game creation). */
+  bootstrapInviteCode?: string;
 }
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
-/** Reads HOST, PORT, DATA_DIR and WEB_ORIGIN. Defaults: 127.0.0.1, 3000, <repo>/data, the Vite dev origin. */
+/** Variables a production start cannot guess: a wrong guess loses data (DB_PATH) or blocks the web (WEB_ORIGIN). */
+const REQUIRED_IN_PRODUCTION = ['WEB_ORIGIN', 'DB_PATH'] as const;
+
+/**
+ * Reads HOST, PORT, DB_PATH, WEB_ORIGIN and BOOTSTRAP_INVITE_CODE.
+ * Dev defaults: 127.0.0.1, 3000, <repo>/data/isekai.sqlite, the Vite dev origin.
+ * NODE_ENV=production: HOST defaults to 0.0.0.0, and WEB_ORIGIN and DB_PATH are required.
+ */
 export function loadConfig(env: Record<string, string | undefined>): ServerConfig {
-  const port = Number(env.PORT ?? '3000');
+  const production = env.NODE_ENV === 'production';
+  const value = (name: string) => env[name]?.trim() || undefined;
+
+  if (production) {
+    const missing = REQUIRED_IN_PRODUCTION.filter((name) => value(name) === undefined);
+    if (missing.length > 0) {
+      throw new Error(`NODE_ENV=production needs these environment variables: ${missing.join(', ')}`);
+    }
+  }
+
+  const port = Number(value('PORT') ?? '3000');
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
     throw new Error(`PORT must be a whole number from 0 to 65535, got "${env.PORT}"`);
   }
-  const webOrigins = (env.WEB_ORIGIN || 'http://localhost:5173')
+
+  const webOrigins = (value('WEB_ORIGIN') ?? 'http://localhost:5173')
     .split(',')
-    .map((origin) => origin.trim())
+    .map((origin) => origin.trim().replace(/\/+$/, ''))
     .filter(Boolean);
+  for (const origin of webOrigins) {
+    if (!isOrigin(origin)) {
+      throw new Error(`WEB_ORIGIN must be origins like https://<site>.netlify.app (no path), got "${origin}"`);
+    }
+  }
+
+  const dbPath = value('DB_PATH');
+  const bootstrapInviteCode = value('BOOTSTRAP_INVITE_CODE');
   return {
-    host: env.HOST ?? '127.0.0.1',
+    host: value('HOST') ?? (production ? '0.0.0.0' : '127.0.0.1'),
     port,
-    dataDir: env.DATA_DIR ? resolve(env.DATA_DIR) : resolve(repoRoot, 'data'),
+    dbPath: dbPath ? resolve(dbPath) : resolve(repoRoot, 'data', 'isekai.sqlite'),
     webOrigins,
+    ...(bootstrapInviteCode ? { bootstrapInviteCode } : {}),
   };
+}
+
+function isOrigin(candidate: string): boolean {
+  try {
+    const url = new URL(candidate);
+    return (url.protocol === 'https:' || url.protocol === 'http:') && url.origin === candidate;
+  } catch {
+    return false;
+  }
 }
