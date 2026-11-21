@@ -23,6 +23,9 @@ importers:
       '@isekai/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@isekai/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
       better-sqlite3:
         specifier: 13.2.0
         version: 13.2.0
