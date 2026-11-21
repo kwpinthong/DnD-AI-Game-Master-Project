@@ -1,3 +1,4 @@
+import cors from '@fastify/cors';
 import type { HealthResponse } from '@isekai/protocol';
 import type Database from 'better-sqlite3';
 import Fastify from 'fastify';
@@ -23,6 +24,7 @@ export async function startServer(config: ServerConfig): Promise<RunningServer> 
   const { sqlite, db, dbPath, migrationsApplied } = openDatabase(config.dataDir);
 
   const app = Fastify({ logger: false });
+  await app.register(cors, { origin: config.webOrigins ?? [] });
 
   app.get('/health', async (_req, reply) => {
     let body: HealthResponse;

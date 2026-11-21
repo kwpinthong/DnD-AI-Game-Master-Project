@@ -6,15 +6,28 @@ import { loadConfig } from '../src/config.ts';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 describe('loadConfig', () => {
-  it('defaults to loopback:3000 and <repo>/data', () => {
-    expect(loadConfig({})).toEqual({ host: '127.0.0.1', port: 3000, dataDir: join(repoRoot, 'data') });
+  it('defaults to loopback:3000, <repo>/data and the Vite dev origin', () => {
+    expect(loadConfig({})).toEqual({
+      host: '127.0.0.1',
+      port: 3000,
+      dataDir: join(repoRoot, 'data'),
+      webOrigins: ['http://localhost:5173'],
+    });
   });
 
-  it('reads HOST, PORT and DATA_DIR from the environment', () => {
-    expect(loadConfig({ HOST: '0.0.0.0', PORT: '4100', DATA_DIR: 'C:/dnd-web/data' })).toEqual({
+  it('reads HOST, PORT, DATA_DIR and a comma-separated WEB_ORIGIN from the environment', () => {
+    expect(
+      loadConfig({
+        HOST: '0.0.0.0',
+        PORT: '4100',
+        DATA_DIR: 'C:/isekai/data',
+        WEB_ORIGIN: 'https://isekai.netlify.app, http://localhost:5173',
+      }),
+    ).toEqual({
       host: '0.0.0.0',
       port: 4100,
-      dataDir: resolve('C:/dnd-web/data'),
+      dataDir: resolve('C:/isekai/data'),
+      webOrigins: ['https://isekai.netlify.app', 'http://localhost:5173'],
     });
   });
 
