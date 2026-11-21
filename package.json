@@ -10,7 +10,8 @@
     "dev": "pnpm --parallel --filter @isekai/server --filter @isekai/web dev",
     "build": "pnpm -r build",
     "test": "vitest run",
-    "lint": "pnpm -r typecheck && pnpm run typecheck:infra",
+    "lint": "pnpm run typecheck",
+    "typecheck": "pnpm -r typecheck && pnpm run typecheck:infra",
     "typecheck:infra": "tsc -p .railway/tsconfig.json",
     "db:generate": "pnpm --filter @isekai/server db:generate",
     "db:migrate": "pnpm --filter @isekai/server db:migrate"
