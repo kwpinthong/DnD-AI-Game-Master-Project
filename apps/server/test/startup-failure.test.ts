@@ -28,7 +28,7 @@ describe('start with an unusable database path', { timeout: 60_000 }, () => {
     const dataDir = join(blocker, 'data');
     const port = await freePort();
 
-    const attempt = startServer({ host: '127.0.0.1', port, dataDir });
+    const attempt = startServer({ host: '127.0.0.1', port, dbPath: join(dataDir, 'isekai.sqlite') });
 
     await expect(attempt).rejects.toThrow(join(dataDir, 'isekai.sqlite'));
     expect(await isListening(port)).toBe(false);
@@ -41,7 +41,7 @@ describe('start with an unusable database path', { timeout: 60_000 }, () => {
     const port = await freePort();
 
     try {
-      await expect(startServer({ host: '127.0.0.1', port, dataDir: dir })).rejects.toThrow(dbPath);
+      await expect(startServer({ host: '127.0.0.1', port, dbPath })).rejects.toThrow(dbPath);
       expect(await isListening(port)).toBe(false);
     } finally {
       chmodSync(dbPath, 0o644);
@@ -53,9 +53,9 @@ describe('start with an unusable database path', { timeout: 60_000 }, () => {
     writeFileSync(blocker, '');
     const dataDir = join(blocker, 'data');
 
-    const result = spawnSync(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
+    const result = spawnSync(process.execPath, ['src/index.ts'], {
       cwd: serverDir,
-      env: { ...process.env, DATA_DIR: dataDir, PORT: String(await freePort()), HOST: '127.0.0.1' },
+      env: { ...process.env, DB_PATH: join(dataDir, 'isekai.sqlite'), PORT: String(await freePort()), HOST: '127.0.0.1' },
       encoding: 'utf8',
       timeout: 30_000,
     });

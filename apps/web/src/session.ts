@@ -21,6 +21,21 @@ export function saveToken(token: string | null) {
   }
 }
 
+/** A server that accepts the connection but never answers counts as unreachable after this long. */
+export const REQUEST_TIMEOUT_MS = 8_000;
+
+/** fetch that gives up after REQUEST_TIMEOUT_MS (or when `signal` aborts) by rejecting like a network error. */
+export function fetchWithTimeout(url: string, init: RequestInit = {}, signal?: AbortSignal): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const forward = () => controller.abort();
+  signal?.addEventListener('abort', forward);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', forward);
+  });
+}
+
 /** Joins the API base URL ('' = same origin via the Vite proxy) with a path. */
 export function apiUrl(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/, '')}${path}`;
@@ -42,7 +57,7 @@ export async function postJoin(
   let res: Response;
   let json: unknown;
   try {
-    res = await fetch(apiUrl(baseUrl, '/api/join'), {
+    res = await fetchWithTimeout(apiUrl(baseUrl, '/api/join'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
@@ -81,7 +96,7 @@ export async function postJoin(
 /** The member for a kept token: a Member, null when the server refused it, 'unreachable' otherwise. */
 export async function fetchMe(baseUrl: string, token: string): Promise<Member | null | 'unreachable'> {
   try {
-    const res = await fetch(apiUrl(baseUrl, '/api/me'), { headers: { authorization: `Bearer ${token}` } });
+    const res = await fetchWithTimeout(apiUrl(baseUrl, '/api/me'), { headers: { authorization: `Bearer ${token}` } });
     if (res.status === 401) return null;
     const parsed = MeResponse.safeParse(await res.json());
     return res.ok && parsed.success ? parsed.data.member : 'unreachable';

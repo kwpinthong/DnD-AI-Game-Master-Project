@@ -1,13 +1,13 @@
 import { HealthResponse, type Member } from '@isekai/protocol';
 import { useEffect, useState } from 'react';
 import { JoinForm } from './JoinForm.tsx';
-import { apiUrl, fetchMe, loadToken, postLogout, saveToken } from './session.ts';
+import { apiUrl, fetchMe, fetchWithTimeout, loadToken, postLogout, saveToken } from './session.ts';
 
 type Status = 'checking' | 'connected' | 'unreachable';
 
 async function checkHealth(baseUrl: string, signal: AbortSignal): Promise<Status> {
   try {
-    const res = await fetch(apiUrl(baseUrl, '/health'), { signal });
+    const res = await fetchWithTimeout(apiUrl(baseUrl, '/health'), {}, signal);
     const body = HealthResponse.safeParse(await res.json());
     return res.ok && body.success && body.data.db === 'connected' ? 'connected' : 'unreachable';
   } catch {

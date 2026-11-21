@@ -1,0 +1,25 @@
+# Netlify site for apps/web (GEN-041a). See docs/deploy.md.
+# Base directory = repo root (leave "Base directory" empty in the Netlify UI): pnpm installs the
+# whole workspace from pnpm-lock.yaml, and the web build needs packages/protocol.
+# VITE_API_URL (the Railway URL) is set in Netlify > Site configuration > Environment variables,
+# not here. The build fails on Netlify if it is missing (apps/web/vite.config.ts).
+
+[build]
+  command = "pnpm --filter \"@isekai/web...\" run build"
+  publish = "apps/web/dist"
+
+[build.environment]
+  # Same major as engines.node; pnpm comes from "packageManager" in package.json (Corepack).
+  NODE_VERSION = "26"
+
+# Single-page app: every path serves index.html (files that exist are served first).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Netlify serves https on *.netlify.app and redirects http to https; tell browsers to stay on https.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Strict-Transport-Security = "max-age=31536000"

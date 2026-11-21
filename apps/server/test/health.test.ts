@@ -1,4 +1,5 @@
 import { HealthResponse } from '@isekai/protocol';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { startServer, type RunningServer } from '../src/server.ts';
 import { makeTempDir } from './helpers.ts';
@@ -17,7 +18,7 @@ describe('GET /health', () => {
   async function start() {
     const tmp = makeTempDir();
     cleanup = tmp.cleanup;
-    server = await startServer({ host: '127.0.0.1', port: 0, dataDir: tmp.dir });
+    server = await startServer({ host: '127.0.0.1', port: 0, dbPath: join(tmp.dir, 'isekai.sqlite') });
     return server;
   }
 
