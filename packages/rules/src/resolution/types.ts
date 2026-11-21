@@ -1,0 +1,239 @@
+/** Resolution engine types (Rules Spec GEN-042 §2-7, §12-13). Every value is plain JSON so logs replay. */
+
+export const DC_LADDER = [5, 8, 11, 14, 17, 20, 23] as const;
+export type Dc = (typeof DC_LADDER)[number];
+
+export const ACTION_KINDS = ['general', 'complex', 'exertion'] as const;
+export type ActionKind = (typeof ACTION_KINDS)[number];
+
+export const ACTION_TAGS = ['physical', 'social', 'stealth', 'perception', 'craft', 'faith', 'knowledge'] as const;
+export type ActionTag = (typeof ACTION_TAGS)[number];
+
+/** Q-053: no critRange / fumbleRange scope; crit and fumble are the natural die only. */
+export const STATUS_SCOPES = [...ACTION_KINDS, ...ACTION_TAGS, 'observe', 'defense', 'priority', 'all'] as const;
+export type StatusScope = (typeof STATUS_SCOPES)[number];
+
+/** Uses outside an action roll (observe a Secret, be a PvP target, phase ordering). */
+export type StatUse = 'observe' | 'defense' | 'priority';
+
+export type Tier = 'Common' | 'Rare' | 'Legendary';
+export type NpcGrade = 'F' | 'B' | 'A' | 'S' | 'SS';
+export const SEVERITIES = ['minor', 'light', 'moderate', 'heavy', 'severe', 'lethal'] as const;
+export type Severity = (typeof SEVERITIES)[number];
+export type Visibility = 'public' | 'secret';
+export type Degree = 'fumble' | 'fail' | 'success' | 'crit';
+
+export interface StatusMod {
+  readonly scope: StatusScope;
+  readonly value: number;
+}
+
+/** A buff or debuff (ค่าสถานะ, Q-032). Conditions from HP/Stamina are derived each roll and never stored. */
+export interface StatusEffect {
+  readonly id: string;
+  readonly label: string;
+  readonly polarity: 'buff' | 'debuff';
+  readonly origin: 'trait' | 'event' | 'gear';
+  readonly visible: boolean;
+  readonly mods: readonly StatusMod[];
+  /** Phases left; null = permanent (trait, gear). Ticking down is phase logic (GEN-052). */
+  readonly phasesLeft: number | null;
+  /** Item or skill id that grants a gear effect; it cannot also be claimed as an `item` modifier. */
+  readonly ref?: string;
+}
+
+export interface OwnedRef {
+  readonly id: string;
+  readonly tier: Tier;
+}
+
+export interface ActorState {
+  readonly id: string;
+  readonly locationId: string;
+  readonly hp: number;
+  readonly stamina: number;
+  readonly rep: number;
+  /** Hidden from clients (spec §6). */
+  readonly karma: number;
+  /** Affinity per NPC id; a missing NPC counts as 0. */
+  readonly affinity: Readonly<Record<string, number>>;
+  readonly items: readonly OwnedRef[];
+  readonly skills: readonly OwnedRef[];
+  readonly statuses: readonly StatusEffect[];
+  /** Quantitative after_action refund, e.g. Auto Pilot +3 (net cost still >= 1, Q-037). */
+  readonly afterActionStamina: number;
+  /** Quantitative damage reduction: Common 2, Rare 4, Legendary 8. */
+  readonly damageReduction: number;
+}
+
+export interface NpcState {
+  readonly id: string;
+  readonly grade: NpcGrade;
+  readonly hp: number;
+  readonly locationId: string;
+  /** -2..+2 from the NPC's personality in the scenario (spec §10.4). */
+  readonly obsTrait: number;
+  readonly damageReduction: number;
+}
+
+/** State snapshot an action resolves against. */
+export interface ResolutionState {
+  readonly actor: ActorState;
+  readonly npcs: Readonly<Record<string, NpcState>>;
+}
+
+/** Judged sources: the AI proposes a value within the tier cap. */
+export interface JudgedModifier {
+  readonly source: 'item' | 'skill';
+  readonly ref: string;
+  readonly value: number;
+}
+
+/** Derived sources: the AI only says they apply; the server computes the number. */
+export type DerivedModifier =
+  | { readonly source: 'stat' }
+  | { readonly source: 'rep'; readonly mode: 'favor' | 'fear' }
+  | { readonly source: 'karma'; readonly align: 'light' | 'dark' }
+  | { readonly source: 'affinity'; readonly ref: string };
+
+export type Modifier = JudgedModifier | DerivedModifier;
+
+/** An event status the AI asks to add to the actor (Q-052: +/-3, 1..9 phases, at most 4 active). */
+export interface StatusRequest {
+  readonly label: string;
+  readonly polarity: 'buff' | 'debuff';
+  readonly mods: readonly StatusMod[];
+  readonly phases: number;
+  readonly visible: boolean;
+}
+
+export interface Effects {
+  /** Applied only when Public (Secret uses repDeltaIfCaught when caught). */
+  readonly repDelta: number;
+  /** Applied on every action. */
+  readonly karmaDelta: number;
+  readonly affinity: readonly { readonly npcId: string; readonly delta: number }[];
+  /** Damage to the NPC target. */
+  readonly damage: Severity | null;
+  readonly selfDamage: Severity | null;
+  /** Heals the NPC target, or the actor when there is no target. */
+  readonly heal: Severity | null;
+  readonly addStatus: readonly StatusRequest[];
+  /** Ids of the actor's event statuses to remove. */
+  readonly removeStatus: readonly string[];
+}
+
+export type Check = { readonly type: 'dc'; readonly dc: Dc } | { readonly type: 'none' };
+
+/** What the AI GM proposes for one action, before any die is rolled (spec §13, single-action subset). */
+export interface ResolutionProposal {
+  readonly actionId: string;
+  readonly kind: ActionKind;
+  readonly tags: readonly ActionTag[];
+  readonly opposed: boolean;
+  readonly staminaCost: number;
+  /** Chosen by the player when submitting the action. */
+  readonly visibility: Visibility;
+  readonly target: { readonly npc: string } | null;
+  readonly check: Check;
+  readonly modifiers: readonly Modifier[];
+  readonly witnessNpcIds: readonly string[];
+  readonly repDeltaIfCaught: number;
+  readonly onSuccess: Effects;
+  readonly onFail: Effects;
+  readonly reason: string;
+}
+
+export interface ResolutionInput {
+  readonly state: ResolutionState;
+  readonly proposal: ResolutionProposal;
+}
+
+export type ProposalErrorCode =
+  | 'actor_unconscious'
+  | 'not_integer'
+  | 'out_of_range'
+  | 'unknown_kind'
+  | 'unknown_tag'
+  | 'unknown_scope'
+  | 'unknown_severity'
+  | 'dc_not_on_ladder'
+  | 'unknown_check'
+  | 'stamina_cost_mismatch'
+  | 'missing_source'
+  | 'unknown_source'
+  | 'missing_ref'
+  | 'ref_not_owned'
+  | 'gear_claimed_twice'
+  | 'derived_value_given'
+  | 'value_over_cap'
+  | 'too_many'
+  | 'duplicate'
+  | 'unknown_npc'
+  | 'npc_not_present'
+  | 'unknown_status'
+  | 'invalid_field';
+
+export interface ProposalError {
+  readonly code: ProposalErrorCode;
+  /** Where in the proposal, e.g. "modifiers[1].value". */
+  readonly path: string;
+  readonly message: string;
+}
+
+export interface LoggedModifier {
+  readonly source: Modifier['source'];
+  readonly ref?: string;
+  readonly mode?: 'favor' | 'fear';
+  readonly align?: 'light' | 'dark';
+  readonly value: number;
+}
+
+export interface CheckLog {
+  readonly dc: Dc;
+  readonly d20: number;
+  readonly modifiers: readonly LoggedModifier[];
+  readonly modifierSum: number;
+  /** clamp(modifierSum, -10, +10) */
+  readonly modifierTotal: number;
+  readonly total: number;
+  readonly margin: number;
+}
+
+export interface ChangeLog {
+  readonly before: number;
+  readonly delta: number;
+  readonly after: number;
+}
+
+export interface HpLog {
+  readonly before: number;
+  readonly damage: number;
+  readonly heal: number;
+  readonly after: number;
+}
+
+export interface ResolutionLog {
+  /** Deep copy of everything the result depends on, except the dice. */
+  readonly input: ResolutionInput;
+  /** Every die face in the order rolled: the action d20, then the witness d20 if any. */
+  readonly rolls: readonly number[];
+  /** null when the proposal has no roll (check: none). */
+  readonly check: CheckLog | null;
+  readonly degree: Degree;
+  readonly caught: boolean;
+  readonly observation: { readonly npcId: string; readonly d20: number; readonly total: number } | null;
+  readonly stamina: { readonly before: number; readonly cost: number; readonly net: number; readonly after: number };
+  readonly rep: ChangeLog;
+  readonly karma: ChangeLog;
+  readonly affinity: readonly ({ readonly npcId: string } & ChangeLog)[];
+  readonly hp: { readonly actor: HpLog; readonly target: ({ readonly npcId: string } & HpLog) | null };
+  readonly statusesAdded: readonly StatusEffect[];
+  readonly statusesRemoved: readonly string[];
+  /** Q-036 / Q-057: HP 0 is unconscious; there is no death. */
+  readonly actorCondition: 'ok' | 'unconscious';
+}
+
+export type ResolveResult =
+  | { readonly ok: true; readonly state: ResolutionState; readonly log: ResolutionLog }
+  | { readonly ok: false; readonly errors: readonly ProposalError[] };
