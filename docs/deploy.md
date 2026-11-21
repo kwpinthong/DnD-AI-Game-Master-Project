@@ -28,6 +28,7 @@ browser ──https──> https://<site>.netlify.app        (Netlify: apps/web/
 | Railway | `WEB_ORIGIN` | `https://<site>.netlify.app` | origin ของ web ไม่มี path (มี `/` ท้ายได้) ใส่หลาย origin คั่นด้วย `,` |
 | Railway | `RAILPACK_NODE_VERSION` | `26` | ให้ Railpack ใช้ Node 26 ตรงกับ `engines.node` |
 | Railway | `CREATE_CODE_HASH` | hash ของ create code (`scrypt$...`) ไม่ใช่ตัว code | ต้องมีถึงจะสร้างเกมได้ (Q-021) ทำ hash ตามข้อ 1.4 ไม่มีค่านี้ = หน้าสร้างเกมตอบ "server นี้ยังไม่ได้ตั้ง create code" / ค่าที่ไม่ใช่ hash = server ไม่ start (log บอกชื่อตัวแปร ไม่พิมพ์ค่า) |
+| Railway | `ANTHROPIC_API_KEY` | API key ของ Anthropic (secret) | AI GM (GEN-038) ไม่มีค่านี้ server ยัง start ได้ แต่สร้างเกมและเริ่มเกมไม่ได้ ตอบเหตุผลเป็นภาษาไทย (Q-075) ค่าอื่นของ AI (`AI_PROVIDER`, `AI_MODEL`, เพดาน `AI_GAME_MONTHLY_USD`) ดู `apps/server/server.env.example` |
 | Railway | `PORT` | Railway ใส่เอง | ห้ามตั้งเอง |
 | Railway | `HOST` | ไม่ต้องตั้ง | production ใช้ `0.0.0.0` เป็นค่าเริ่ม |
 | Netlify | `VITE_API_URL` | `https://<service>.up.railway.app` | ฝังตอน build ถ้าไม่มีหรือไม่ใช่ https build บน Netlify จะ fail |

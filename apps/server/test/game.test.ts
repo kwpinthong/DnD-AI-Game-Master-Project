@@ -1,6 +1,7 @@
 import { ApiError, CreateGameResponse, GameView, JoinResponse, MeResponse } from '@isekai/protocol';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { defaultScenario } from '@isekai/protocol';
+import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
 import { getGameScenario, updateGameScenario } from '../src/scenario/store.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
@@ -8,6 +9,8 @@ import { makeTempDir } from './helpers.ts';
 
 const CREATE_CODE = 'ลับเฉพาะ-2026';
 const MINUTE = 60_000;
+const MOCK_AI = loadAiConfig({ AI_PROVIDER: 'mock' });
+const AI_WITHOUT_KEY = loadAiConfig({ AI_PROVIDER: 'anthropic' });
 
 type Body = Record<string, unknown>;
 
@@ -33,10 +36,11 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     cleanup();
   });
 
-  async function start(withCreateCode = true) {
+  /** AI_PROVIDER=mock unless a test needs an AI that is not ready (a real provider with no key). */
+  async function start(withCreateCode = true, ai = MOCK_AI) {
     server = await startServer(
       { host: '127.0.0.1', port: 0, dbPath: `${dataDir}/isekai.sqlite`, ...(withCreateCode ? { createCodeHash } : {}) },
-      { now: () => clock },
+      { now: () => clock, ai, aiLog: () => {} },
     );
     return server;
   }
@@ -403,5 +407,26 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     expect(updateGameScenario(orm, a.game.id, edited).ok).toBe(true);
     expect(getGameScenario(orm, a.game.id)?.name).toBe('แก้เฉพาะเกม A');
     expect(getGameScenario(orm, b.game.id)).toEqual(defaultScenario());
+  });
+
+  it('Q-075: without a ready AI (no ANTHROPIC_API_KEY) creating a game is refused with the Thai reason', async () => {
+    await start(true, AI_WITHOUT_KEY);
+    const res = await call('POST', '/api/games', { body: validCreate });
+    expect(res.status).toBe(503);
+    expect(error(res.body)).toMatchObject({ code: 'ai_not_ready', message: expect.stringMatching(/ANTHROPIC_API_KEY.*สร้างหรือเริ่มเกม/) });
+    expect(server!.db.prepare('select count(*) as n from game').get()).toEqual({ n: 0 });
+  });
+
+  it('Q-075: without a ready AI the owner cannot start a game that could otherwise start', async () => {
+    await start();
+    const created = await createGame({ mode: 'single' });
+    seedCharacter(created.member.id);
+    await server!.close();
+    await start(true, AI_WITHOUT_KEY);
+
+    const res = await call('POST', '/api/game/start', { token: created.token });
+    expect(res.status).toBe(503);
+    expect(error(res.body)).toMatchObject({ code: 'ai_not_ready', message: expect.stringMatching(/สร้างหรือเริ่มเกม/) });
+    expect((await getGame(created.token)).status).toBe('lobby');
   });
 });

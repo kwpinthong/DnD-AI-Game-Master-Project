@@ -7,6 +7,7 @@ import {
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { memberRowForToken, type Clock } from '../auth/join.ts';
 import { bearerToken, sendError } from '../auth/routes.ts';
+import type { AiService } from '../ai/core/service.ts';
 import type { Db } from '../db/client.ts';
 import { createCodeChecker } from './create-code.ts';
 import {
@@ -23,6 +24,8 @@ import {
 export interface GameRouteOptions {
   /** scrypt hash of the create code (CREATE_CODE_HASH); without it nobody can create a game. */
   createCodeHash?: string;
+  /** The AI GM boundary: a game cannot be created or started while it is not ready (GEN-038 C4, Q-075). */
+  ai: Pick<AiService, 'ready'>;
 }
 
 const minutesUntil = (at: number, t: number) => Math.max(1, Math.ceil((at - t) / 60_000));
@@ -34,6 +37,14 @@ const minutesUntil = (at: number, t: number) => Math.max(1, Math.ceil((at - t) /
 export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, options: GameRouteOptions) {
   const checkCreateCode = createCodeChecker(options.createCodeHash, now);
 
+  /** Sends 503 with the AI service's Thai reason and returns true when the AI GM is not ready. */
+  function refuseWithoutAi(reply: FastifyReply): boolean {
+    const state = options.ai.ready();
+    if (state.ok) return false;
+    void sendError(reply, 503, { code: 'ai_not_ready', message: state.message });
+    return true;
+  }
+
   app.post('/api/games', async (request, reply) => {
     const parsed = CreateGameRequest.safeParse(request.body ?? {});
     if (!parsed.success) {
@@ -43,6 +54,9 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
         fields: createGameFieldErrors(request.body),
       });
     }
+
+    // Checked before the create code so a server without AI does not use up create-code attempts.
+    if (refuseWithoutAi(reply)) return reply;
 
     // The create code itself is never logged or echoed (Q-021).
     const check = await checkCreateCode(parsed.data.createCode);
@@ -140,6 +154,7 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
   app.post('/api/game/start', async (request, reply) => {
     const me = caller(request, reply);
     if (!me) return reply;
+    if (refuseWithoutAi(reply)) return reply;
     return sendOutcome(reply, startGame(db, me, now));
   });
 }

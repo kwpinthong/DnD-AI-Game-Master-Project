@@ -70,7 +70,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
 
   const now = options.now ?? Date.now;
   registerAuthRoutes(app, db, now);
-  registerGameRoutes(app, db, now, config.createCodeHash ? { createCodeHash: config.createCodeHash } : {});
+  registerGameRoutes(app, db, now, { ai, ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}) });
 
   try {
     await app.listen({ host: config.host, port: config.port });

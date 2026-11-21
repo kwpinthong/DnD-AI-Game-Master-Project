@@ -16,11 +16,11 @@ let createCodeHash = '';
 
 /**
  * The environment Railway gives the service: NODE_ENV, PORT, the volume DB_PATH, WEB_ORIGIN and
- * CREATE_CODE_HASH; no HOST. A leftover BOOTSTRAP_INVITE_CODE from GEN-041a is set to show it does nothing.
+ * CREATE_CODE_HASH (AI_PROVIDER=mock here, so no API key is needed); no HOST. A leftover BOOTSTRAP_INVITE_CODE from GEN-041a is set to show it does nothing.
  */
 function railwayEnv(dbPath: string, port: number): NodeJS.ProcessEnv {
   const { HOST: _host, DB_PATH: _db, WEB_ORIGIN: _web, ...rest } = process.env;
-  return { ...rest, NODE_ENV: 'production', PORT: String(port), DB_PATH: dbPath, WEB_ORIGIN: WEB, CREATE_CODE_HASH: createCodeHash, BOOTSTRAP_INVITE_CODE: 'TEST01' };
+  return { ...rest, NODE_ENV: 'production', PORT: String(port), DB_PATH: dbPath, WEB_ORIGIN: WEB, CREATE_CODE_HASH: createCodeHash, BOOTSTRAP_INVITE_CODE: 'TEST01', AI_PROVIDER: 'mock' };
 }
 
 /** `node apps/server/src/index.ts`: Node strips the types; no tsx at runtime. */
