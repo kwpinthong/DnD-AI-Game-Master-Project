@@ -41,3 +41,4 @@ export {
   type RescueOutcome,
   type Safety,
 } from './resolution/rescue.ts';
+export { socialTitle, STARTING_STATS } from './character.ts';

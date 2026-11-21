@@ -94,14 +94,27 @@ export const gameScenario = sqliteTable('game_scenario', {
 });
 
 /**
- * A player's character. GEN-025 only needs to know whether one exists (the start check);
- * GEN-047 (character creation) adds the character's columns.
+ * A player's character: one per member, so one per player per game (the Human GM has none).
+ * GEN-025 created the row as the "has a character" marker for the start check; GEN-047 adds the
+ * identity (GDD §2) and the stats. The stats start at STARTING_STATS and only the engine changes
+ * them; `karma` and `reputation` are never sent to players (they see the Social Title).
  */
 export const character = sqliteTable('character', {
   memberId: text('member_id')
     .primaryKey()
     .references(() => member.id, { onDelete: 'cascade' }),
   createdAt: integer('created_at').notNull(),
+  // --- GEN-047 (migration 0005_character) ---
+  name: text('name').notNull().default(''),
+  appearance: text('appearance').notNull().default(''),
+  personality: text('personality').notNull().default(''),
+  hp: integer('hp').notNull().default(100),
+  hpMax: integer('hp_max').notNull().default(100),
+  stamina: integer('stamina').notNull().default(30),
+  staminaMax: integer('stamina_max').notNull().default(30),
+  reputation: integer('reputation').notNull().default(0),
+  karma: integer('karma').notNull().default(0),
+  updatedAt: integer('updated_at'),
 });
 
 // GEN-038: AI usage lives in its own file so parallel schema work merges cleanly.
