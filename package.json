@@ -1,0 +1,21 @@
+{
+  "name": "isekai-chronicles",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": ">=26"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @isekai/server --filter @isekai/web dev",
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "lint": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @isekai/server db:generate",
+    "db:migrate": "pnpm --filter @isekai/server db:migrate"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vitest": "5.1.1"
+  }
+}
