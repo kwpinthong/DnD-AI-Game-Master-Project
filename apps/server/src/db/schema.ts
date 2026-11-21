@@ -103,3 +103,6 @@ export const character = sqliteTable('character', {
     .references(() => member.id, { onDelete: 'cascade' }),
   createdAt: integer('created_at').notNull(),
 });
+
+// GEN-038: AI usage lives in its own file so parallel schema work merges cleanly.
+export * from './schema-ai.ts';

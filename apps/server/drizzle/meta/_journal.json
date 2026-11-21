@@ -29,6 +29,13 @@
       "when": 1795285718621,
       "tag": "0003_game_setup",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1795285897042,
+      "tag": "0004_ai_usage",
+      "breakpoints": true
     }
   ]
 }
