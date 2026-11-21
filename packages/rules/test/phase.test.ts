@@ -139,6 +139,97 @@ describe('C3 one Secret phase per day', () => {
   });
 });
 
+describe('C4 Stamina 0 locks the next phase and the character sleeps through it', () => {
+  it('locks input, does not wait for the sleeper, and recovers +15 + on_sleep in a day phase', () => {
+    let s = start({ 'pc-a': { sleepBonus: 2 } });
+    const morning = ok(phaseStep(submitAll(s), { type: 'resolved', results: { 'pc-a': { stamina: 0 } } }, new SeededRng(1)));
+    expect(morning.log).toContainEqual(expect.objectContaining({ type: 'exhausted', playerId: 'pc-a', sleepsAt: { day: 1, phase: 'AFTERNOON' } }));
+    s = morning.state;
+    expect(s.phase).toBe('AFTERNOON');
+    expect(s.players['pc-a']!.condition).toBe('exhausted');
+    expect(s.players['pc-a']!.mustSubmit).toBe(false);
+    expect(rejected(phaseStep(s, { type: 'submit', playerId: 'pc-a', action: act() }, new SeededRng(1)))).toBe('cannot_act');
+
+    s = submit(s, 'pc-b');
+    const closed = ok(phaseStep(s, { type: 'submit', playerId: 'pc-c', action: act() }, new SeededRng(1)));
+    expect(closed.state.status).toBe('resolving');
+    expect(closed.log).toContainEqual(expect.objectContaining({ type: 'phase_closed', asleep: [{ playerId: 'pc-a', reason: 'exhausted' }] }));
+
+    s = resolve(closed.state);
+    expect(s.phase).toBe('NIGHT');
+    expect(s.players['pc-a']!.stamina).toBe(17);
+    expect(s.players['pc-a']!.condition).toBe('awake');
+    expect(s.players['pc-a']!.mustSubmit).toBe(true);
+  });
+
+  it('a forced sleep at Night recovers like a Night rest at the inn', () => {
+    let s = playTo(start(), 1, 'AFTERNOON');
+    s = playPhase(s, { 'pc-a': { stamina: 0 } });
+    expect(s.players['pc-a']!.condition).toBe('exhausted');
+    const night = ok(phaseStep(submitAll(s), { type: 'resolved', results: { 'pc-a': { atInn: true } } }, new SeededRng(7)));
+    const rec = night.log.find((e) => e.type === 'recovered');
+    expect(rec).toMatchObject({ playerId: 'pc-a', kind: 'exhausted_night_inn' });
+    if (rec?.type !== 'recovered') throw new Error('no recovery logged');
+    expect(rec.roll).toBeGreaterThanOrEqual(15);
+    expect(rec.roll).toBeLessThanOrEqual(25);
+    expect(night.state.players['pc-a']!.stamina).toBe(rec.roll);
+    expect(night.state.day).toBe(2);
+  });
+
+  it('when every player is asleep the phase closes at once', () => {
+    const s = playPhase(start(), { 'pc-a': { stamina: 0 }, 'pc-b': { stamina: 0 }, 'pc-c': { stamina: 0 } });
+    expect(s.phase).toBe('AFTERNOON');
+    expect(s.status).toBe('resolving');
+    expect(resolve(s).players['pc-b']!.stamina).toBe(15);
+  });
+});
+
+describe('C5 Night rest at the inn: +15..25 + bonus, capped at max', () => {
+  const innRest = act('นอนที่โรงเตี๊ยม', { rest: true, restAtInn: true });
+
+  function restAtNight(stamina: number, seed: number, sleepBonus = 0) {
+    let s = playTo(start({ 'pc-a': { sleepBonus } }), 1, 'NIGHT');
+    s = submit(s, 'pc-a', innRest);
+    s = submitAll(s);
+    return ok(phaseStep(s, { type: 'resolved', results: { 'pc-a': { stamina } } }, new SeededRng(seed)));
+  }
+
+  it('Stamina 20 gains a 15..25 roll but stops at 30', () => {
+    const r = restAtNight(20, 3);
+    const rec = r.log.find((e) => e.type === 'recovered');
+    if (rec?.type !== 'recovered') throw new Error('no recovery logged');
+    expect(rec.kind).toBe('night_inn');
+    expect(rec.roll).toBeGreaterThanOrEqual(15);
+    expect(rec.roll).toBeLessThanOrEqual(25);
+    expect(rec.stamina).toEqual({ before: 20, gain: 10, after: 30 });
+    expect(r.state.players['pc-a']!.stamina).toBe(30);
+  });
+
+  it('the gain is the seeded rollRange(15, 25) plus the on_sleep bonus', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const expected = new SeededRng(seed).nextInt(15, 25);
+      const r = restAtNight(0, seed, 1);
+      expect(r.state.players['pc-a']!.stamina).toBe(Math.min(30, expected + 1));
+    }
+  });
+
+  it('a Night rest marks the player asleep for the feed (Q-046)', () => {
+    let s = playTo(start(), 1, 'NIGHT');
+    s = submit(s, 'pc-a', innRest);
+    const closed = ok(phaseStep(s, { type: 'submit', playerId: 'pc-b', action: act() }, new SeededRng(1)));
+    const last = ok(phaseStep(closed.state, { type: 'submit', playerId: 'pc-c', action: act() }, new SeededRng(1)));
+    expect(last.log).toContainEqual(expect.objectContaining({ type: 'phase_closed', asleep: [{ playerId: 'pc-a', reason: 'night_rest' }] }));
+  });
+
+  it('restAtInn is only valid on a Night rest', () => {
+    const s = start();
+    expect(rejected(phaseStep(s, { type: 'submit', playerId: 'pc-a', action: innRest }, new SeededRng(1)))).toBe('invalid_action');
+    const night = playTo(s, 1, 'NIGHT');
+    const noRest = act('ไปโรงเตี๊ยม', { restAtInn: true });
+    expect(rejected(phaseStep(night, { type: 'submit', playerId: 'pc-a', action: noRest }, new SeededRng(1)))).toBe('invalid_action');
+  });
+});
+
 describe('C7 resubmitting before the phase closes replaces the action; during resolve it is rejected', () => {
   it('replaces the earlier action', () => {
     let s = start();
