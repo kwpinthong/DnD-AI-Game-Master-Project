@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Pure rules code: no Node or DOM types, so `import 'node:fs'` fails to compile (ADR S-4).
+    "types": [],
+    "lib": ["ES2023"]
+  },
+  "include": ["src"]
+}
