@@ -7,6 +7,7 @@ import type { ServerConfig } from './config.ts';
 import { registerAuthRoutes } from './auth/routes.ts';
 import type { Clock } from './auth/join.ts';
 import { openDatabase, type Db } from './db/client.ts';
+import { ensureGame } from './db/bootstrap.ts';
 
 export interface RunningServer {
   url: string;
@@ -28,7 +29,8 @@ export interface ServerOptions {
 }
 
 export async function startServer(config: ServerConfig, options: ServerOptions = {}): Promise<RunningServer> {
-  const { sqlite, db, dbPath, migrationsApplied } = openDatabase(config.dataDir);
+  const { sqlite, db, dbPath, migrationsApplied } = openDatabase(config.dbPath);
+  if (config.bootstrapInviteCode) ensureGame(db, config.bootstrapInviteCode, (options.now ?? Date.now)());
 
   const app = Fastify({ logger: false });
   await app.register(cors, { origin: config.webOrigins ?? [] });

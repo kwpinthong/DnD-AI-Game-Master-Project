@@ -37,7 +37,7 @@ describe('database migrations at start', () => {
   });
 
   const start = async () => {
-    server = await startServer({ host: '127.0.0.1', port: 0, dataDir });
+    server = await startServer({ host: '127.0.0.1', port: 0, dbPath: join(dataDir, 'isekai.sqlite') });
     return server;
   };
 
