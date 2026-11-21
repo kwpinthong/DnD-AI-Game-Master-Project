@@ -4,6 +4,8 @@ import type Database from 'better-sqlite3';
 import Fastify from 'fastify';
 import type { AddressInfo } from 'node:net';
 import type { ServerConfig } from './config.ts';
+import { registerAuthRoutes } from './auth/routes.ts';
+import type { Clock } from './auth/join.ts';
 import { openDatabase, type Db } from './db/client.ts';
 
 export interface RunningServer {
@@ -20,7 +22,12 @@ export interface RunningServer {
  * Opens and migrates the database first, then listens. If the database is unusable this rejects
  * with a DatabaseUnavailableError naming the path, and nothing is listening.
  */
-export async function startServer(config: ServerConfig): Promise<RunningServer> {
+export interface ServerOptions {
+  /** Current time in epoch ms (tests move it to check lockout and session expiry). */
+  now?: Clock;
+}
+
+export async function startServer(config: ServerConfig, options: ServerOptions = {}): Promise<RunningServer> {
   const { sqlite, db, dbPath, migrationsApplied } = openDatabase(config.dataDir);
 
   const app = Fastify({ logger: false });
@@ -36,6 +43,8 @@ export async function startServer(config: ServerConfig): Promise<RunningServer> 
     }
     return reply.code(body.ok ? 200 : 503).send(body);
   });
+
+  registerAuthRoutes(app, db, options.now ?? Date.now);
 
   try {
     await app.listen({ host: config.host, port: config.port });

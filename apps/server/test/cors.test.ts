@@ -34,6 +34,23 @@ describe('CORS for the web origin', () => {
     expect(res.headers.get('access-control-allow-origin')).toBe('https://isekai.example.app');
   });
 
+  it('lets the web origin send the bearer token to /api/me (preflight)', async () => {
+    const { url } = await start();
+
+    const res = await fetch(`${url}/api/me`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'https://isekai.example.app',
+        'Access-Control-Request-Method': 'GET',
+        'Access-Control-Request-Headers': 'authorization',
+      },
+    });
+
+    expect(res.status).toBeLessThan(300);
+    expect(res.headers.get('access-control-allow-origin')).toBe('https://isekai.example.app');
+    expect(res.headers.get('access-control-allow-headers')?.toLowerCase()).toContain('authorization');
+  });
+
   it('does not allow an origin that is not configured', async () => {
     const { url } = await start();
 
