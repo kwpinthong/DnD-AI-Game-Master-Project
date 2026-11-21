@@ -11,3 +11,4 @@ export * from './join.ts';
 
 export * from './scenario.ts';
 export * from './scenario-default.ts';
+export * from './game.ts';

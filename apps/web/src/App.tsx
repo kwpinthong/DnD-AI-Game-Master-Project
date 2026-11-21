@@ -1,6 +1,8 @@
-import { HealthResponse, type Member } from '@isekai/protocol';
+import { HealthResponse, type GameView, type Member } from '@isekai/protocol';
 import { useEffect, useState } from 'react';
+import { CreateGameForm } from './CreateGameForm.tsx';
 import { JoinForm } from './JoinForm.tsx';
+import { Lobby } from './Lobby.tsx';
 import { apiUrl, fetchMe, fetchWithTimeout, loadToken, postLogout, saveToken } from './session.ts';
 
 type Status = 'checking' | 'connected' | 'unreachable';
@@ -22,11 +24,16 @@ const label: Record<Status, string> = {
 };
 
 /** 'restoring' while a kept token is being checked with GET /api/me. */
-type Auth = { state: 'restoring' } | { state: 'guest' } | { state: 'member'; member: Member; token: string };
+/** `game` is set right after creating a game, so the lobby opens without another request. */
+type Auth =
+  | { state: 'restoring' }
+  | { state: 'guest' }
+  | { state: 'member'; member: Member; token: string; game?: GameView };
 
 export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
   const [status, setStatus] = useState<Status>('checking');
   const [auth, setAuth] = useState<Auth>(() => (loadToken() ? { state: 'restoring' } : { state: 'guest' }));
+  const [guestView, setGuestView] = useState<'join' | 'create'>('join');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -51,9 +58,16 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
     };
   }, [apiBaseUrl]);
 
-  function joined(member: Member, token: string) {
+  function joined(member: Member, token: string, game?: GameView) {
     saveToken(token);
-    setAuth({ state: 'member', member, token });
+    setAuth({ state: 'member', member, token, ...(game ? { game } : {}) });
+  }
+
+  /** The server refused the session (kicked or expired): back to the join form. */
+  function sessionLost() {
+    saveToken(null);
+    setGuestView('join');
+    setAuth({ state: 'guest' });
   }
 
   function logout() {
@@ -68,7 +82,20 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
       <p role="status" data-status={status}>
         {label[status]}
       </p>
-      {auth.state === 'guest' && <JoinForm apiBaseUrl={apiBaseUrl} onJoined={joined} />}
+      {auth.state === 'guest' && guestView === 'join' && (
+        <>
+          <JoinForm apiBaseUrl={apiBaseUrl} onJoined={joined} />
+          <p>
+            มี create code?{' '}
+            <button type="button" onClick={() => setGuestView('create')}>
+              สร้างเกมใหม่
+            </button>
+          </p>
+        </>
+      )}
+      {auth.state === 'guest' && guestView === 'create' && (
+        <CreateGameForm apiBaseUrl={apiBaseUrl} onCreated={joined} onBack={() => setGuestView('join')} />
+      )}
       {auth.state === 'restoring' && <p>กำลังเข้าเกม…</p>}
       {auth.state === 'member' && (
         <section aria-label="ผู้เล่น">
@@ -78,6 +105,13 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
           <button type="button" onClick={logout}>
             ออกจากเกม
           </button>
+          <Lobby
+            key={auth.token}
+            apiBaseUrl={apiBaseUrl}
+            token={auth.token}
+            {...(auth.game ? { initial: auth.game } : {})}
+            onSessionLost={sessionLost}
+          />
         </section>
       )}
     </main>

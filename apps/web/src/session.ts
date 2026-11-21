@@ -88,7 +88,8 @@ export async function postJoin(
         fields: {},
         form: `ชื่อนี้ถูกล็อกชั่วคราวเพราะใส่ PIN ผิดหลายครั้ง ลองใหม่ได้เวลา ${clockTime(error.data.retryAt)}`,
       };
-    case 'unauthorized':
+    default:
+      // game_full, game_started, kicked and anything newer: the server's Thai message as is.
       return { ok: false, fields: {}, form: error.data.message };
   }
 }

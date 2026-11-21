@@ -9,12 +9,21 @@ export const appMeta = sqliteTable('app_meta', {
 });
 
 /**
- * A game players join with its invite code. GEN-024 needs only the lookup; GEN-025 (create game)
- * adds the rest. `invite_code` is stored normalised: upper-case, no spaces or dashes.
+ * A game players join with its invite code. `invite_code` is stored normalised: upper-case, no
+ * spaces or dashes; the owner can replace it (the old code stops working).
  */
 export const game = sqliteTable('game', {
   id: text('id').primaryKey(),
   inviteCode: text('invite_code').notNull().unique(),
+  name: text('name').notNull().default(''),
+  /** 'online' (2-6 players) or 'single' (1 player). */
+  mode: text('mode', { enum: ['online', 'single'] }).notNull().default('online'),
+  /** The creator is a Human GM (no character, not a player). Single games never have one. */
+  humanGm: integer('human_gm', { mode: 'boolean' }).notNull().default(false),
+  /** The member who created the game; only they may kick, edit, renew the code or start. */
+  ownerMemberId: text('owner_member_id'),
+  /** Set once by the start; mode and members are locked from then on. */
+  startedAt: integer('started_at'),
   createdAt: integer('created_at').notNull(),
 });
 
@@ -35,6 +44,10 @@ export const member = sqliteTable(
     pinHash: text('pin_hash').notNull(),
     /** Set when the 5th wrong PIN in 10 minutes arrives; joins are refused until then. */
     lockedUntil: integer('locked_until'),
+    /** 'gm' only for the Human GM (the creator of a game with one). */
+    role: text('role', { enum: ['player', 'gm'] }).notNull().default('player'),
+    /** Set when the owner kicks the member: sessions are gone and the name cannot join again. */
+    kickedAt: integer('kicked_at'),
     createdAt: integer('created_at').notNull(),
   },
   (t) => [uniqueIndex('member_game_name_key').on(t.gameId, t.nameKey)],
@@ -78,4 +91,15 @@ export const gameScenario = sqliteTable('game_scenario', {
   schemaVersion: integer('schema_version').notNull(),
   data: text('data').notNull(),
   updatedAt: integer('updated_at').notNull(),
+});
+
+/**
+ * A player's character. GEN-025 only needs to know whether one exists (the start check);
+ * GEN-047 (character creation) adds the character's columns.
+ */
+export const character = sqliteTable('character', {
+  memberId: text('member_id')
+    .primaryKey()
+    .references(() => member.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at').notNull(),
 });

@@ -22,6 +22,13 @@
       "when": 1795285000311,
       "tag": "0002_game_scenario",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1795285718621,
+      "tag": "0003_game_setup",
+      "breakpoints": true
     }
   ]
 }

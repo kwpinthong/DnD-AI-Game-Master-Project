@@ -23,8 +23,8 @@ const SECRET_PATTERNS: Array<[name: string, pattern: RegExp]> = [
   [
     'secret env variable with a value',
     new RegExp(
-      '^[ \\t]*(?:export[ \\t]+)?(?:[A-Z0-9_]*API_KEY|APP_SECRET|CREATE_CODE(?:_HASH)?|BOOTSTRAP_INVITE_' +
-        'CODE)[ \\t]*=[ \\t]*["\']?[^\\s"\'#]+',
+      '^[ \\t]*(?:export[ \\t]+)?(?:[A-Z0-9_]*API_KEY|APP_SECRET|CREATE_' +
+        'CODE(?:_HASH)?)[ \\t]*=[ \\t]*["\']?[^\\s"\'#]+',
       'm',
     ),
   ],
@@ -69,11 +69,11 @@ describe('secret scan of tracked files (git ls-files)', () => {
       'RAILWAY_' + 'TOKEN=0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b',
       'NETLIFY_AUTH_' + 'TOKEN: abcdef123456',
       'CREATE_' + 'CODE=hunter22',
-      'BOOTSTRAP_INVITE_' + 'CODE=K7Q2MX',
+      'CREATE_CODE_' + 'HASH=scrypt$16384$8$1$c2FsdA==$aGFzaA==',
     ];
     for (const sample of samples) expect(findSecrets(sample), sample).not.toEqual([]);
     // Names without values (env examples, docs) are fine.
-    expect(findSecrets('CREATE_CODE=\nBOOTSTRAP_INVITE_CODE=\n# RAILWAY_TOKEN is never committed')).toEqual([]);
+    expect(findSecrets('CREATE_CODE=\nCREATE_CODE_HASH=\n# RAILWAY_TOKEN is never committed')).toEqual([]);
   });
 });
 

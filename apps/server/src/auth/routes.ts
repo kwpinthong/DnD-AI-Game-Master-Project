@@ -7,7 +7,7 @@ import { endSession, joinGame, memberForToken, type Clock } from './join.ts';
 // browsers increasingly block third-party cookies even with SameSite=None. The web keeps the
 // token in localStorage and sends `Authorization: Bearer <token>`.
 
-const sendError = (reply: FastifyReply, status: number, body: ApiError) => reply.code(status).send(body);
+export const sendError = (reply: FastifyReply, status: number, body: ApiError) => reply.code(status).send(body);
 
 export function registerAuthRoutes(app: FastifyInstance, db: Db, now: Clock) {
   app.post('/api/join', async (request, reply) => {
@@ -24,6 +24,15 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, now: Clock) {
     switch (outcome.kind) {
       case 'game_not_found':
         return sendError(reply, 404, { code: 'game_not_found', message: 'ไม่พบเกมจากโค้ดนี้ ตรวจตัวอักษรอีกครั้ง' });
+      case 'game_started':
+        return sendError(reply, 409, { code: 'game_started', message: GAME_STARTED_JOIN });
+      case 'game_full':
+        return sendError(reply, 409, {
+          code: 'game_full',
+          message: outcome.mode === 'single' ? 'เกมเต็ม (เกมนี้เล่นคนเดียว)' : `เกมเต็ม (ผู้เล่นครบ ${outcome.max} คนแล้ว)`,
+        });
+      case 'kicked':
+        return sendError(reply, 403, { code: 'kicked', message: 'ชื่อนี้ถูกเจ้าของเกมเชิญออกแล้ว เข้าเกมนี้อีกไม่ได้' });
       case 'wrong_pin':
         return sendError(reply, 401, {
           code: 'wrong_pin',
@@ -69,6 +78,8 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, now: Clock) {
   });
 }
 
-function bearerToken(header: string | undefined): string | undefined {
+export const GAME_STARTED_JOIN = 'เกมนี้เริ่มไปแล้ว รับคนเพิ่มไม่ได้';
+
+export function bearerToken(header: string | undefined): string | undefined {
   return /^Bearer (\S+)$/.exec(header ?? '')?.[1];
 }

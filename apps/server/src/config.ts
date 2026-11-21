@@ -1,5 +1,6 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isSecretHash } from './auth/pin.ts';
 
 export interface ServerConfig {
   host: string;
@@ -8,8 +9,11 @@ export interface ServerConfig {
   dbPath: string;
   /** Browser origins allowed to call the API (CORS). The web app is hosted separately (Q-031). */
   webOrigins?: string[];
-  /** Invite code of a game created at start if no game has it yet (until GEN-025 adds game creation). */
-  bootstrapInviteCode?: string;
+  /**
+   * scrypt hash of the create code needed to create a game (Q-021). The code itself never reaches
+   * the server's config. Without it, POST /api/games answers 503 and nobody can create a game.
+   */
+  createCodeHash?: string;
 }
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -18,7 +22,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '.
 const REQUIRED_IN_PRODUCTION = ['WEB_ORIGIN', 'DB_PATH'] as const;
 
 /**
- * Reads HOST, PORT, DB_PATH, WEB_ORIGIN and BOOTSTRAP_INVITE_CODE.
+ * Reads HOST, PORT, DB_PATH, WEB_ORIGIN and CREATE_CODE_HASH.
  * Dev defaults: 127.0.0.1, 3000, <repo>/data/isekai.sqlite, the Vite dev origin.
  * NODE_ENV=production: HOST defaults to 0.0.0.0, and WEB_ORIGIN and DB_PATH are required.
  */
@@ -49,13 +53,19 @@ export function loadConfig(env: Record<string, string | undefined>): ServerConfi
   }
 
   const dbPath = value('DB_PATH');
-  const bootstrapInviteCode = value('BOOTSTRAP_INVITE_CODE');
+  const createCodeHash = value('CREATE_CODE_HASH');
+  if (createCodeHash !== undefined && !isSecretHash(createCodeHash)) {
+    // The value is not printed: it may be the create code itself pasted by mistake.
+    throw new Error(
+      'CREATE_CODE_HASH must be a hash from "pnpm --filter @isekai/server run create-code:hash" (scrypt$...), not the create code itself',
+    );
+  }
   return {
     host: value('HOST') ?? (production ? '0.0.0.0' : '127.0.0.1'),
     port,
     dbPath: dbPath ? resolve(dbPath) : resolve(repoRoot, 'data', 'isekai.sqlite'),
     webOrigins,
-    ...(bootstrapInviteCode ? { bootstrapInviteCode } : {}),
+    ...(createCodeHash ? { createCodeHash } : {}),
   };
 }
 

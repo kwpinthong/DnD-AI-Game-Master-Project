@@ -1,5 +1,5 @@
-import { nameKey, type JoinRequest, type Member } from '@isekai/protocol';
-import { and, count, eq, lte } from 'drizzle-orm';
+import { nameKey, ONLINE_MAX_PLAYERS, type JoinRequest, type Member } from '@isekai/protocol';
+import { and, count, eq, isNull, lte } from 'drizzle-orm';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { Db } from '../db/client.ts';
 import { game, member, pinFailure, session } from '../db/schema.ts';
@@ -16,18 +16,27 @@ export type Clock = () => number;
 export type JoinOutcome =
   | { kind: 'joined'; created: boolean; member: Member; token: string; expiresAt: number }
   | { kind: 'game_not_found' }
+  | { kind: 'game_full'; mode: 'online' | 'single'; max: number }
+  | { kind: 'game_started' }
+  | { kind: 'kicked' }
   | { kind: 'wrong_pin'; attemptsLeft: number }
   | { kind: 'locked'; retryAt: number };
 
 type MemberRow = typeof member.$inferSelect;
 
+/** Online games hold 6 players and Single games 1; a Human GM takes no player slot. */
+const maxPlayers = (mode: 'online' | 'single') => (mode === 'single' ? 1 : ONLINE_MAX_PLAYERS);
+
 const toMember = (row: MemberRow): Member => ({ id: row.id, gameId: row.gameId, name: row.name });
 
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
-/** First join with a name creates the member; later joins need the same PIN. */
+/**
+ * First join with a name creates the member (refused once the game has started or is full); later
+ * joins need the same PIN and still work after the start. A kicked member's name is blocked.
+ */
 export async function joinGame(db: Db, input: JoinRequest, now: Clock): Promise<JoinOutcome> {
-  const found = db.select({ id: game.id }).from(game).where(eq(game.inviteCode, input.inviteCode)).get();
+  const found = db.select().from(game).where(eq(game.inviteCode, input.inviteCode)).get();
   if (!found) return { kind: 'game_not_found' };
 
   const key = nameKey(input.name);
@@ -37,11 +46,38 @@ export async function joinGame(db: Db, input: JoinRequest, now: Clock): Promise<
   const existing = findMember();
   if (existing) return joinExisting(db, existing, input.pin, now);
 
+  if (found.startedAt !== null) return { kind: 'game_started' };
   const pinHash = await hashPin(input.pin);
   const createdAt = now();
-  const row: MemberRow = { id: randomUUID(), gameId: found.id, name: input.name, nameKey: key, pinHash, lockedUntil: null, createdAt };
+  const row: MemberRow = {
+    id: randomUUID(),
+    gameId: found.id,
+    name: input.name,
+    nameKey: key,
+    pinHash,
+    lockedUntil: null,
+    role: 'player',
+    kickedAt: null,
+    createdAt,
+  };
   try {
-    db.insert(member).values(row).run();
+    // Re-read inside one transaction: the game may have started or filled up while scrypt ran.
+    const refused = db.transaction((tx): JoinOutcome | undefined => {
+      const current = tx.select().from(game).where(eq(game.id, found.id)).get();
+      if (!current) return { kind: 'game_not_found' };
+      if (current.startedAt !== null) return { kind: 'game_started' };
+      const players =
+        tx
+          .select({ n: count() })
+          .from(member)
+          .where(and(eq(member.gameId, found.id), eq(member.role, 'player'), isNull(member.kickedAt)))
+          .get()?.n ?? 0;
+      const max = maxPlayers(current.mode);
+      if (players >= max) return { kind: 'game_full', mode: current.mode, max };
+      tx.insert(member).values(row).run();
+      return undefined;
+    });
+    if (refused) return refused;
   } catch (error) {
     // Two first joins with the same name raced; the other one won, so this is now a returning join.
     const winner = isUniqueViolation(error) ? findMember() : undefined;
@@ -63,6 +99,8 @@ async function joinExisting(db: Db, row: MemberRow, pin: string, now: Clock): Pr
     if (current?.lockedUntil != null && t < current.lockedUntil) return { kind: 'locked', retryAt: current.lockedUntil };
 
     if (pinMatches) {
+      // Checked only after a right PIN, so a guess does not learn who was kicked.
+      if (row.kickedAt !== null) return { kind: 'kicked' };
       tx.delete(pinFailure).where(eq(pinFailure.memberId, row.id)).run();
       tx.update(member).set({ lockedUntil: null }).where(eq(member.id, row.id)).run();
       return { kind: 'joined', created: false, member: toMember(row), ...openSession(tx, row.id, t) };
@@ -81,15 +119,20 @@ async function joinExisting(db: Db, row: MemberRow, pin: string, now: Clock): Pr
   });
 }
 
-function openSession(db: Pick<Db, 'insert'>, memberId: string, t: number) {
+export function openSession(db: Pick<Db, 'insert'>, memberId: string, t: number) {
   const token = randomBytes(32).toString('base64url');
   const expiresAt = t + SESSION_TTL_MS;
   db.insert(session).values({ tokenHash: hashToken(token), memberId, createdAt: t, expiresAt }).run();
   return { token, expiresAt };
 }
 
-/** The member a bearer token belongs to, or undefined when it is unknown or expired. */
+/** The member a bearer token belongs to, or undefined when it is unknown, expired or kicked. */
 export function memberForToken(db: Db, token: string, now: Clock): Member | undefined {
+  const row = memberRowForToken(db, token, now);
+  return row && toMember(row);
+}
+
+export function memberRowForToken(db: Db, token: string, now: Clock): MemberRow | undefined {
   const tokenHash = hashToken(token);
   const row = db
     .select({ member, expiresAt: session.expiresAt })
@@ -102,7 +145,7 @@ export function memberForToken(db: Db, token: string, now: Clock): Member | unde
     db.delete(session).where(eq(session.tokenHash, tokenHash)).run();
     return undefined;
   }
-  return toMember(row.member);
+  return row.member.kickedAt === null ? row.member : undefined;
 }
 
 export function endSession(db: Db, token: string) {
@@ -110,7 +153,7 @@ export function endSession(db: Db, token: string) {
 }
 
 /** Drizzle wraps driver errors (DrizzleQueryError), so look through `cause` too. */
-function isUniqueViolation(error: unknown): boolean {
+export function isUniqueViolation(error: unknown): boolean {
   for (let e = error as { code?: unknown; cause?: unknown } | undefined; e; e = e.cause as typeof e) {
     if (e.code === 'SQLITE_CONSTRAINT_UNIQUE') return true;
   }

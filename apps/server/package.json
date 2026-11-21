@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node src/db/migrate-cli.ts"
+    "db:migrate": "node src/db/migrate-cli.ts",
+    "create-code:hash": "node src/auth/create-code-hash-cli.ts"
   },
   "dependencies": {
     "@fastify/cors": "11.4.3",

@@ -44,9 +44,16 @@ describe('Railway service config (.railway/railway.ts)', () => {
     expect(read('apps/server/src/server.ts')).toMatch(/openDatabase\(config\.dbPath\)/);
   });
 
-  it('C4: WEB_ORIGIN and the invite code are kept from Railway, not written in the repo', () => {
+  it('C4: WEB_ORIGIN and the create code hash are kept from Railway, not written in the repo', () => {
     expect(source).toMatch(/WEB_ORIGIN:\s*preserve\(\)/);
-    expect(source).toMatch(/BOOTSTRAP_INVITE_CODE:\s*preserve\(\)/);
+    expect(source).toMatch(/CREATE_CODE_HASH:\s*preserve\(\)/);
+  });
+
+  // GEN-025 (Q-065): games are created through the API, so the start-up game variable is gone.
+  it('no longer sets BOOTSTRAP_INVITE_CODE (here or in server.env.example)', () => {
+    expect(source).not.toContain('BOOTSTRAP_INVITE_CODE');
+    expect(read('apps/server/server.env.example')).not.toContain('BOOTSTRAP_INVITE_CODE');
+    expect(read('apps/server/server.env.example')).toMatch(/^CREATE_CODE_HASH=$/m);
   });
 
   it('pins Node 26 for Railpack, matching engines.node', () => {
@@ -68,6 +75,12 @@ describe('deploy guide (docs/deploy.md) matches the config files', () => {
     expect(guide).toContain('`DB_PATH=/data/isekai.sqlite`');
     expect(guide).toContain(`\`${literal(source, 'buildCommand')?.replaceAll('\\"', '"')}\``);
     expect(guide).toContain('`RAILPACK_NODE_VERSION=26`');
+  });
+
+  it('says how to make CREATE_CODE_HASH and to delete the old BOOTSTRAP_INVITE_CODE', () => {
+    expect(guide).toContain('`CREATE_CODE_HASH`');
+    expect(guide).toContain('create-code:hash');
+    expect(guide).toMatch(/ลบ.*`BOOTSTRAP_INVITE_CODE`/);
   });
 
   it('has a post-deploy check for every Case C1-C7', () => {

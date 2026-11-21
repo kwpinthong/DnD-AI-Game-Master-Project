@@ -1,6 +1,6 @@
 # Deploy: server บน Railway + web บน Netlify (GEN-041a)
 
-คู่มือ deploy / update / rollback ของ skeleton ตอนนี้ (scaffold GEN-023 + join GEN-024) ตาม Q-060 (Railway แทน PC + Cloudflare Tunnel) และ Q-031 (web บน Netlify, server แยก origin)
+คู่มือ deploy / update / rollback ของ skeleton ตอนนี้ (scaffold GEN-023 + join GEN-024 + สร้างเกม GEN-025) ตาม Q-060 (Railway แทน PC + Cloudflare Tunnel) และ Q-031 (web บน Netlify, server แยก origin)
 ไม่รวม backup job (GEN-037), realtime / Socket.IO (GEN-056) และ Cloudflare Access (Q-023)
 
 ```
@@ -27,7 +27,7 @@ browser ──https──> https://<site>.netlify.app        (Netlify: apps/web/
 | Railway | `DB_PATH` | `/data/isekai.sqlite` | ต้องอยู่ใน mount path ของ Volume ไม่งั้นข้อมูลหายทุก deploy |
 | Railway | `WEB_ORIGIN` | `https://<site>.netlify.app` | origin ของ web ไม่มี path (มี `/` ท้ายได้) ใส่หลาย origin คั่นด้วย `,` |
 | Railway | `RAILPACK_NODE_VERSION` | `26` | ให้ Railpack ใช้ Node 26 ตรงกับ `engines.node` |
-| Railway | `BOOTSTRAP_INVITE_CODE` | โค้ดเกมที่ Nok ตั้งเอง เช่น 6 ตัวอักษร | ไม่บังคับ server สร้างเกมนี้ตอน start ถ้ายังไม่มี (ใช้จนกว่า GEN-025 จะมีหน้าสร้างเกม) ถือเป็นความลับระดับเดียวกับ invite code |
+| Railway | `CREATE_CODE_HASH` | hash ของ create code (`scrypt$...`) ไม่ใช่ตัว code | ต้องมีถึงจะสร้างเกมได้ (Q-021) ทำ hash ตามข้อ 1.4 ไม่มีค่านี้ = หน้าสร้างเกมตอบ "server นี้ยังไม่ได้ตั้ง create code" / ค่าที่ไม่ใช่ hash = server ไม่ start (log บอกชื่อตัวแปร ไม่พิมพ์ค่า) |
 | Railway | `PORT` | Railway ใส่เอง | ห้ามตั้งเอง |
 | Railway | `HOST` | ไม่ต้องตั้ง | production ใช้ `0.0.0.0` เป็นค่าเริ่ม |
 | Netlify | `VITE_API_URL` | `https://<service>.up.railway.app` | ฝังตอน build ถ้าไม่มีหรือไม่ใช่ https build บน Netlify จะ fail |
@@ -42,7 +42,7 @@ browser ──https──> https://<site>.netlify.app        (Netlify: apps/web/
    - **Build**: Builder = Railpack, **Custom Build Command** = `pnpm --filter "@isekai/server..." run typecheck`, **Watch Paths** = `apps/server/**`, `packages/**`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `tsconfig.base.json`, `.railway/**`
    - **Deploy**: **Custom Start Command** = `node apps/server/src/index.ts`, **Pre-deploy Command** เว้นว่าง (ดูหมายเหตุ migration ข้อ 2), **Healthcheck Path** = `/health`, **Healthcheck Timeout** = `60`, **Restart Policy** = On Failure, **Max Retries** = `10`, **Replicas** = `1`
 4. **Volume**: ใน canvas ของ project กด **+ / Create → Volume** (หรือคลิกขวาที่ service → Attach volume) เลือก service นี้ **Mount Path** = `/data`
-5. **Variables** ของ service: `NODE_ENV=production`, `DB_PATH=/data/isekai.sqlite`, `RAILPACK_NODE_VERSION=26` และถ้าจะทดสอบ join ให้ใส่ `BOOTSTRAP_INVITE_CODE=<โค้ดที่ตั้งเอง>` (`WEB_ORIGIN` ใส่หลัง Netlify มี URL ในข้อ 1.3)
+5. **Variables** ของ service: `NODE_ENV=production`, `DB_PATH=/data/isekai.sqlite`, `RAILPACK_NODE_VERSION=26`, `CREATE_CODE_HASH=<hash จากข้อ 1.4>` (`WEB_ORIGIN` ใส่หลัง Netlify มี URL ในข้อ 1.3)
 6. **Settings → Networking → Generate Domain** ได้ `https://<service>.up.railway.app` จดไว้
 7. deploy แรกจะยังไม่ผ่าน healthcheck จนกว่าจะมี `WEB_ORIGIN` (server หยุดพร้อม log `NODE_ENV=production needs these environment variables: WEB_ORIGIN`) เป็นพฤติกรรมที่ตั้งใจ
 
@@ -57,6 +57,16 @@ browser ──https──> https://<site>.netlify.app        (Netlify: apps/web/
 ### 1.3 ผูกสองฝั่ง
 1. Railway → Variables → `WEB_ORIGIN=https://<site>.netlify.app` → Railway redeploy เอง
 2. รอ deployment ขึ้น **Active** (healthcheck `/health` ผ่าน) แล้วทำ checklist ข้อ 4
+
+### 1.4 Create code (สร้างเกม, GEN-025)
+create code คือรหัสระดับ server ที่ต้องใส่ตอนสร้างเกม (Q-021) แยกจากโค้ดเกม (invite code) ที่ระบบออกให้แต่ละเกม server เก็บแค่ hash (scrypt) ใน `CREATE_CODE_HASH`
+1. ที่ root ของ repo ในเครื่อง รัน `pnpm --silent --filter @isekai/server run create-code:hash` แล้วพิมพ์ create code ที่ตั้งเอง กด Enter ตามด้วย Ctrl+D (PowerShell / cmd: Ctrl+Z แล้ว Enter) — code อ่านจาก stdin จึงไม่ค้างใน history ของ shell
+2. คัดลอกบรรทัดที่ได้ (`scrypt$16384$8$1$...`) ไปใส่ Railway → Variables → `CREATE_CODE_HASH` ทั้งบรรทัดตามที่พิมพ์ออกมา
+3. บอก create code กับคนที่ให้สร้างเกมได้ทางช่องทางส่วนตัว ห้ามใส่ใน repo หรือแชทกลุ่ม
+4. เปลี่ยน code: ทำข้อ 1-2 ใหม่ (Railway redeploy เอง) เกมที่สร้างไว้แล้วไม่กระทบ
+5. ใส่ create code ผิด 10 ครั้งใน 10 นาที (นับรวมทั้ง server) = สร้างเกมไม่ได้ 10 นาที ตัวนับอยู่ใน memory รีสตาร์ทแล้วหาย
+
+**ย้ายจาก GEN-041a:** ถ้า Railway ยังมี `BOOTSTRAP_INVITE_CODE` ให้ลบ `BOOTSTRAP_INVITE_CODE` ออกจาก Variables (server ไม่อ่านค่านี้แล้ว เกมที่เคยสร้างจากค่านี้ยังอยู่และยัง join ได้ด้วยโค้ดเดิม แต่ไม่มีเจ้าของเกม จึงเตะ / ออกโค้ดใหม่ / เริ่มเกมไม่ได้ ให้สร้างเกมใหม่ผ่านหน้าเว็บแทน)
 
 ## 2. Update (deploy version ใหม่)
 1. merge งานเข้า branch ที่ deploy แล้ว `git push`
@@ -82,10 +92,10 @@ browser ──https──> https://<site>.netlify.app        (Netlify: apps/web/
 |---|---|---|
 | C1 | มือถือปิด Wi-Fi (4G) เปิด `<web>` / `curl -s <api>/health` | หน้าแสดง `Server: ต่อได้ (database connected)` / ได้ `{"ok":true,"db":"connected"}` |
 | C2 | `curl -sI http://<site>.netlify.app/` และ `curl -sI http://<service>.up.railway.app/health` | ทั้งคู่ได้ `301` (หรือ 308) และ `location: https://...` / เปิดแบบ http ใน browser แล้ว URL เปลี่ยนเป็น https |
-| C3 | ที่ `<web>` กรอก โค้ดเกม = `BOOTSTRAP_INVITE_CODE`, ชื่อ, PIN 4-6 หลัก → เข้าร่วม แล้วกด reload | เห็น `เข้าเกมแล้ว: <ชื่อ>` ทั้งก่อนและหลัง reload |
+| C3 | ที่ `<web>` กด "สร้างเกมใหม่" ใส่ create code (ข้อ 1.4), ชื่อเกม, ชื่อ, PIN 4-6 หลัก → สร้าง แล้วกด reload / อีกเครื่องกรอกโค้ดเกมที่ได้ + ชื่อ + PIN → เข้าร่วม | เห็นห้องรอ `เข้าเกมแล้ว: <ชื่อ>` พร้อมโค้ดเกม ทั้งก่อนและหลัง reload / อีกเครื่องเห็นชื่อตัวเองในรายชื่อผู้เล่น |
 | C3 (CORS) | `curl -s -D - -o /dev/null -H "Origin: <web>" <api>/health \| grep -i access-control-allow-origin` แล้วรันซ้ำด้วย `-H "Origin: https://evil.example.com"` | ครั้งแรกได้ `access-control-allow-origin: <web>` ครั้งที่สองไม่มีบรรทัดนี้ |
 | C4 | ในเครื่อง: `pnpm test` (มี `repo-secrets.test.ts`) และ `git ls-files \| grep -iE '(^\|/)\.env$\|\.sqlite'` | test ผ่าน / grep ไม่มีผล / Railway, Netlify token ไม่เคยถูกสร้างหรือใส่ใน repo |
-| C5 | หลัง C3 (มี member + session แล้ว) push commit ใหม่ที่แตะ `apps/server` (หรือ Redeploy) → รอ Active → ดู Deploy Logs → reload `<web>` | log ของ deploy แรก `migrations applied: 2` ของ deploy ถัดไป `migrations applied: 0` / ยัง login อยู่ ชื่อเดิม |
+| C5 | หลัง C3 (มี member + session แล้ว) push commit ใหม่ที่แตะ `apps/server` (หรือ Redeploy) → รอ Active → ดู Deploy Logs → reload `<web>` | log ของ deploy แรก `migrations applied: 3` (ถ้า DB เคยรัน GEN-041a มาแล้ว = 1) ของ deploy ถัดไป `migrations applied: 0` / ยัง login อยู่ ชื่อเดิม |
 | C6 | Deployments → deployment ที่ Active → ⋮ → **Restart** แล้ว reload `<web>` / Settings → Deploy ยังเป็น Restart Policy On Failure | กลับมา Active เองไม่ต้องกดอะไรอีก ยัง login อยู่ log `migrations applied: 0` |
 | C7 (web) | Chrome DevTools → Network → คลิกขวา request `/health` → **Block request domain** แล้ว reload `<web>` (ปลด block หลังตรวจ) | หน้าแสดง `Server: ต่อไม่ได้` ไม่มี error ดิบ ถ้า server ไม่ตอบเลยจะขึ้นภายใน 8 วิ |
 | C7 (Railway) | Variables → ลบ `WEB_ORIGIN` ชั่วคราว → Railway redeploy → รอ → ใส่ค่าเดิมกลับ | deployment ใหม่เป็น **Failed** (healthcheck ไม่ผ่าน, log บอกว่าขาด `WEB_ORIGIN`) deployment เดิมยัง Active และ `<web>` ยัง `ต่อได้` ตลอด |
