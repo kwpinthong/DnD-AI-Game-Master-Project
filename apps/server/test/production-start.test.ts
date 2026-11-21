@@ -1,20 +1,26 @@
-import { HealthResponse, JoinResponse } from '@isekai/protocol';
+import { CreateGameResponse, HealthResponse } from '@isekai/protocol';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { hashSecret } from '../src/auth/pin.ts';
 import { freePort, isListening, makeTempDir } from './helpers.ts';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 /** Railway's start command (.railway/railway.ts), run from the repo root like Railpack does. */
 const START = ['apps/server/src/index.ts'];
 const WEB = 'https://isekai-test.netlify.app';
+const CREATE_CODE = 'test-create-code';
+let createCodeHash = '';
 
-/** The environment Railway gives the service: NODE_ENV, PORT, the volume DB_PATH and WEB_ORIGIN; no HOST. */
+/**
+ * The environment Railway gives the service: NODE_ENV, PORT, the volume DB_PATH, WEB_ORIGIN and
+ * CREATE_CODE_HASH; no HOST. A leftover BOOTSTRAP_INVITE_CODE from GEN-041a is set to show it does nothing.
+ */
 function railwayEnv(dbPath: string, port: number): NodeJS.ProcessEnv {
   const { HOST: _host, DB_PATH: _db, WEB_ORIGIN: _web, ...rest } = process.env;
-  return { ...rest, NODE_ENV: 'production', PORT: String(port), DB_PATH: dbPath, WEB_ORIGIN: WEB, BOOTSTRAP_INVITE_CODE: 'TEST01' };
+  return { ...rest, NODE_ENV: 'production', PORT: String(port), DB_PATH: dbPath, WEB_ORIGIN: WEB, CREATE_CODE_HASH: createCodeHash, BOOTSTRAP_INVITE_CODE: 'TEST01' };
 }
 
 /** `node apps/server/src/index.ts`: Node strips the types; no tsx at runtime. */
@@ -54,6 +60,10 @@ describe('production start (NODE_ENV=production, node on src)', { timeout: 60_00
   let cleanup = () => {};
   let child: ChildProcess | undefined;
 
+  beforeAll(async () => {
+    createCodeHash = await hashSecret(CREATE_CODE);
+  });
+
   beforeEach(() => {
     ({ dir, cleanup } = makeTempDir());
   });
@@ -73,13 +83,19 @@ describe('production start (NODE_ENV=production, node on src)', { timeout: 60_00
     const health = await fetch(`${base}/health`);
     expect(health.status).toBe(200);
     expect(HealthResponse.parse(await health.json())).toEqual({ ok: true, db: 'connected' });
-    const joined = await fetch(`${base}/api/join`, {
+    const bootstrap = await fetch(`${base}/api/join`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', origin: WEB },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ inviteCode: 'TEST01', name: 'Nok', pin: '1234' }),
     });
-    expect(joined.headers.get('access-control-allow-origin')).toBe(WEB);
-    const { token } = JoinResponse.parse(await joined.json());
+    expect(bootstrap.status).toBe(404);
+    const created = await fetch(`${base}/api/games`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: WEB },
+      body: JSON.stringify({ createCode: CREATE_CODE, gameName: 'test', mode: 'online', humanGm: false, name: 'Nok', pin: '1234' }),
+    });
+    expect(created.headers.get('access-control-allow-origin')).toBe(WEB);
+    const { token } = CreateGameResponse.parse(await created.json());
 
     await stop(child);
     expect(existsSync(dbPath)).toBe(true);

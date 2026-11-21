@@ -97,6 +97,21 @@ describe('Join page', () => {
     expect(screen.getByLabelText('โค้ดเกม').getAttribute('aria-invalid')).toBe('true');
   });
 
+  // GEN-025: a full game, a started game and a kicked name are refused with the server's message.
+  it.each([
+    ['game_full', 409, 'เกมเต็ม (ผู้เล่นครบ 6 คนแล้ว)'],
+    ['game_started', 409, 'เกมนี้เริ่มไปแล้ว รับคนเพิ่มไม่ได้'],
+    ['kicked', 403, 'ชื่อนี้ถูกเจ้าของเกมเชิญออกแล้ว เข้าเกมนี้อีกไม่ได้'],
+  ])('GEN-025: shows the %s message and stays logged out', async (code, status, message) => {
+    stubApi({ '/api/join': () => Response.json({ code, message }, { status }) });
+
+    render(<App apiBaseUrl="" />);
+    fillAndSubmit({});
+
+    expect(await screen.findByText(message)).toBeTruthy();
+    expect(localStorage.getItem(TOKEN_KEY)).toBeNull();
+  });
+
   it('C6: a 3-digit PIN and an empty name are flagged per field without calling the server', async () => {
     const fetchMock = stubApi({ '/api/join': () => Response.json(joined) });
 

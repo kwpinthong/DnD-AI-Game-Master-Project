@@ -7,7 +7,7 @@ import type { ServerConfig } from './config.ts';
 import { registerAuthRoutes } from './auth/routes.ts';
 import type { Clock } from './auth/join.ts';
 import { openDatabase, type Db } from './db/client.ts';
-import { ensureGame } from './db/bootstrap.ts';
+import { registerGameRoutes } from './game/routes.ts';
 
 export interface RunningServer {
   url: string;
@@ -30,10 +30,10 @@ export interface ServerOptions {
 
 export async function startServer(config: ServerConfig, options: ServerOptions = {}): Promise<RunningServer> {
   const { sqlite, db, dbPath, migrationsApplied } = openDatabase(config.dbPath);
-  if (config.bootstrapInviteCode) ensureGame(db, config.bootstrapInviteCode, (options.now ?? Date.now)());
 
   const app = Fastify({ logger: false });
-  await app.register(cors, { origin: config.webOrigins ?? [] });
+  // PATCH and DELETE are not in @fastify/cors's default methods; the lobby uses both.
+  await app.register(cors, { origin: config.webOrigins ?? [], methods: ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE'] });
 
   app.get('/health', async (_req, reply) => {
     let body: HealthResponse;
@@ -46,7 +46,9 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     return reply.code(body.ok ? 200 : 503).send(body);
   });
 
-  registerAuthRoutes(app, db, options.now ?? Date.now);
+  const now = options.now ?? Date.now;
+  registerAuthRoutes(app, db, now);
+  registerGameRoutes(app, db, now, config.createCodeHash ? { createCodeHash: config.createCodeHash } : {});
 
   try {
     await app.listen({ host: config.host, port: config.port });

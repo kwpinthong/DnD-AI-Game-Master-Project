@@ -84,8 +84,19 @@ describe('loadConfig (NODE_ENV=production, Railway)', () => {
     expect(loadConfig({ ...production, HOST: '::' }).host).toBe('::');
   });
 
-  it('reads BOOTSTRAP_INVITE_CODE (first game until GEN-025 adds game creation)', () => {
-    expect(loadConfig({ ...production, BOOTSTRAP_INVITE_CODE: 'ab12-cd' }).bootstrapInviteCode).toBe('ab12-cd');
-    expect(loadConfig(production)).not.toHaveProperty('bootstrapInviteCode');
+  // GEN-025 (Q-065): games are created through POST /api/games; the start-up game is gone.
+  it('ignores BOOTSTRAP_INVITE_CODE (removed in GEN-025)', () => {
+    expect(loadConfig({ ...production, BOOTSTRAP_INVITE_CODE: 'ab12-cd' })).toEqual(loadConfig(production));
+  });
+
+  it('reads CREATE_CODE_HASH when it is a scrypt hash', () => {
+    const hash = 'scrypt$16384$8$1$c2FsdHNhbHRzYWx0c2FsdA==$aGFzaGhhc2hoYXNoaGFzaGhhc2hoYXNoaGFzaGhhc2g=';
+    expect(loadConfig({ ...production, CREATE_CODE_HASH: hash }).createCodeHash).toBe(hash);
+    expect(loadConfig(production)).not.toHaveProperty('createCodeHash');
+  });
+
+  it('refuses a CREATE_CODE_HASH that is not a hash (e.g. the create code itself) without printing it', () => {
+    expect(() => loadConfig({ ...production, CREATE_CODE_HASH: 'my-secret-code' })).toThrow(/CREATE_CODE_HASH/);
+    expect(() => loadConfig({ ...production, CREATE_CODE_HASH: 'my-secret-code' })).not.toThrow(/my-secret-code/);
   });
 });

@@ -57,8 +57,8 @@ export default defineRailway(() => {
       RAILPACK_NODE_VERSION: '26',
       // https://<site>.netlify.app, set in the dashboard once the Netlify site exists.
       WEB_ORIGIN: preserve(),
-      // Optional first game until GEN-025; set in the dashboard, never in the repo.
-      BOOTSTRAP_INVITE_CODE: preserve(),
+      // scrypt hash of the create code (Q-021) from `create-code:hash`; set in the dashboard, never in the repo.
+      CREATE_CODE_HASH: preserve(),
     },
   });
 

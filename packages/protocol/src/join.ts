@@ -80,14 +80,31 @@ export type MeResponse = z.infer<typeof MeResponse>;
 
 /** Every non-2xx answer of the /api routes. `message` is Thai text for the player. */
 export const ApiError = z.discriminatedUnion('code', [
-  z.object({
-    code: z.literal('invalid_input'),
-    message: z.string(),
-    fields: z.partialRecord(z.enum(['inviteCode', 'name', 'pin']), z.string()),
-  }),
+  /** 400. `fields` maps request field names to their first error. */
+  z.object({ code: z.literal('invalid_input'), message: z.string(), fields: z.record(z.string(), z.string()) }),
   z.object({ code: z.literal('game_not_found'), message: z.string() }),
   z.object({ code: z.literal('wrong_pin'), message: z.string(), attemptsLeft: z.number().int() }),
   z.object({ code: z.literal('locked'), message: z.string(), retryAt: z.string() }),
   z.object({ code: z.literal('unauthorized'), message: z.string() }),
+  /** 403: the owner removed this member; the name cannot join this game again. */
+  z.object({ code: z.literal('kicked'), message: z.string() }),
+  /** 409: no room for another player (Online has 6, Single has its 1). */
+  z.object({ code: z.literal('game_full'), message: z.string() }),
+  /** 409: mode and members are locked once the game has started. */
+  z.object({ code: z.literal('game_started'), message: z.string() }),
+  /** 403: wrong create code (POST /api/games). */
+  z.object({ code: z.literal('wrong_create_code'), message: z.string() }),
+  /** 429: too many wrong create codes on this server; try again after `retryAt`. */
+  z.object({ code: z.literal('too_many_attempts'), message: z.string(), retryAt: z.string() }),
+  /** 503: the server has no CREATE_CODE_HASH, so nobody can create a game. */
+  z.object({ code: z.literal('create_disabled'), message: z.string() }),
+  /** 403: only the game's owner may do this. */
+  z.object({ code: z.literal('forbidden'), message: z.string() }),
+  /** 404: no such member in the caller's game. */
+  z.object({ code: z.literal('member_not_found'), message: z.string() }),
+  /** 409: the change is not allowed in the game's current state (e.g. Single with 2 players). */
+  z.object({ code: z.literal('not_allowed'), message: z.string() }),
+  /** 409 from POST /api/game/start; `reasons` lists what is missing (Thai, one line each). */
+  z.object({ code: z.literal('cannot_start'), message: z.string(), reasons: z.array(z.string()) }),
 ]);
 export type ApiError = z.infer<typeof ApiError>;

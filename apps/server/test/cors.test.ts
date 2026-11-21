@@ -52,6 +52,26 @@ describe('CORS for the web origin', () => {
     expect(res.headers.get('access-control-allow-headers')?.toLowerCase()).toContain('authorization');
   });
 
+  // GEN-025: the lobby edits the game with PATCH and kicks with DELETE.
+  it.each([
+    ['PATCH', '/api/game'],
+    ['DELETE', '/api/game/members/m-1'],
+  ])('lets the web origin send %s %s with the bearer token (preflight)', async (method, path) => {
+    const { url } = await start();
+
+    const res = await fetch(`${url}${path}`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'https://isekai.example.app',
+        'Access-Control-Request-Method': method,
+        'Access-Control-Request-Headers': 'authorization,content-type',
+      },
+    });
+
+    expect(res.status).toBeLessThan(300);
+    expect(res.headers.get('access-control-allow-methods')).toContain(method);
+  });
+
   it('does not allow an origin that is not configured', async () => {
     const { url } = await start();
 

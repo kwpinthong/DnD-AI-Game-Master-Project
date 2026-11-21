@@ -12,6 +12,14 @@ function derive(pin: string, salt: Buffer, options: ScryptOptions, keyLength: nu
   });
 }
 
+/** True when `stored` has the shape hashSecret writes (used to check CREATE_CODE_HASH at start). */
+export function isSecretHash(stored: string): boolean {
+  const [scheme, n, r, p, saltB64, hashB64, ...rest] = stored.split('$');
+  const positive = (v: string | undefined) => /^[1-9][0-9]*$/.test(v ?? '');
+  const base64 = (v: string | undefined) => /^[A-Za-z0-9+/]+={0,2}$/.test(v ?? '');
+  return scheme === 'scrypt' && positive(n) && positive(r) && positive(p) && base64(saltB64) && base64(hashB64) && rest.length === 0;
+}
+
 export async function hashPin(pin: string): Promise<string> {
   const salt = randomBytes(16);
   const key = await derive(pin, salt, COST, KEY_LENGTH);
@@ -25,3 +33,7 @@ export async function verifyPin(pin: string, stored: string): Promise<boolean> {
   const key = await derive(pin, Buffer.from(saltB64, 'base64'), { N: Number(n), r: Number(r), p: Number(p) }, expected.length);
   return timingSafeEqual(key, expected);
 }
+
+// The create code (Q-021) is hashed and checked the same way as PINs.
+export const hashSecret = hashPin;
+export const verifySecret = verifyPin;

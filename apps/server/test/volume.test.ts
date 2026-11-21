@@ -39,15 +39,15 @@ describe('DB on a volume path (DB_PATH) across deploys', { timeout: 30_000 }, ()
   // Like Railway's /data mount: a directory that only holds the DB, at a path the config names.
   const dbPath = () => join(dir, 'volume', 'isekai.sqlite');
 
-  async function deploy(bootstrapInviteCode?: string) {
+  async function deploy() {
     await server?.close();
-    server = await startServer({
-      host: '127.0.0.1',
-      port: 0,
-      dbPath: dbPath(),
-      ...(bootstrapInviteCode ? { bootstrapInviteCode } : {}),
-    });
+    server = await startServer({ host: '127.0.0.1', port: 0, dbPath: dbPath() });
     return server;
+  }
+
+  /** Games are created with POST /api/games (game.test.ts); here one is seeded into the table. */
+  function seedGame(running: RunningServer, inviteCode: string) {
+    running.db.prepare('insert into game (id, invite_code, created_at) values (?, ?, ?)').run(`game-${inviteCode}`, inviteCode, Date.now());
   }
 
   async function postJoin(running: RunningServer, body: unknown) {
@@ -80,12 +80,13 @@ describe('DB on a volume path (DB_PATH) across deploys', { timeout: 30_000 }, ()
   });
 
   it('keeps members and sessions: the token from the old version still logs in after redeploy', async () => {
-    const v1 = await deploy('ab12-cd');
+    const v1 = await deploy();
+    seedGame(v1, 'AB12CD');
     const joined = await postJoin(v1, { inviteCode: 'AB12CD', name: 'Nok', pin: '1234' });
     expect(joined.status).toBe(200);
     const { token, member } = JoinResponse.parse(joined.body);
 
-    const v2 = await deploy('ab12-cd');
+    const v2 = await deploy();
     const after = await me(v2, token);
 
     expect(v2.migrationsApplied).toBe(0);
@@ -97,21 +98,7 @@ describe('DB on a volume path (DB_PATH) across deploys', { timeout: 30_000 }, ()
     expect(count(dbPath(), 'session')).toBe(1);
   });
 
-  it('BOOTSTRAP_INVITE_CODE creates one game, normalised, and never a second one on later starts', async () => {
-    await deploy(' ab12-cd ');
-    await deploy('AB12CD');
-    const running = await deploy('ab-12-cd');
-
-    const joined = await postJoin(running, { inviteCode: 'ab12cd', name: 'Mint', pin: '4321' });
-
-    expect(joined.status).toBe(200);
-    await server?.close();
-    server = undefined;
-    expect(count(dbPath(), 'game')).toBe(1);
-  });
-
-  it('without BOOTSTRAP_INVITE_CODE no game is created', async () => {
-    await deploy();
+  it('creates no game at start (BOOTSTRAP_INVITE_CODE was removed in GEN-025)', async () => {    await deploy();
     await server?.close();
     server = undefined;
     expect(count(dbPath(), 'game')).toBe(0);
