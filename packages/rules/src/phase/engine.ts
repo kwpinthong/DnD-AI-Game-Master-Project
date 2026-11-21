@@ -1,6 +1,7 @@
 import type { Rng } from '../rng.ts';
 import { RULES } from '../resolution/tables.ts';
 import {
+  GAME_DAYS,
   PHASES,
   type NewPlayer,
   type PhaseError,
@@ -61,6 +62,7 @@ function here(state: PhaseState): PhasePoint {
 }
 
 function submit(state: PhaseState, playerId: string, action: PlayerAction): PhaseStepResult {
+  if (ended(state)) return fail('game_ended', `The game is over (${state.status})`);
   if (state.status !== 'collecting') return fail('not_collecting', `Phase is ${state.status}; actions are accepted only while collecting`);
   const player = state.players[playerId];
   if (!player) return fail('unknown_player', `No player "${playerId}"`);
@@ -79,11 +81,49 @@ function closeIfComplete(state: PhaseState, log: PhaseLogEntry[]): { state: Phas
   return { state: { ...state, status: 'resolving' }, log };
 }
 
-function resolved(state: PhaseState, _results: Readonly<Record<string, PlayerResult>>, _rng: Rng): PhaseStepResult {
+function ended(state: PhaseState): boolean {
+  return state.status === 'finale' || state.status === 'game_over';
+}
+
+/** The phase after `at`; null after day 12 Night. */
+export function nextPoint(at: PhasePoint): PhasePoint | null {
+  const index = PHASES.indexOf(at.phase);
+  const phase = PHASES[index + 1];
+  if (phase) return { day: at.day, phase };
+  return at.day >= GAME_DAYS ? null : { day: at.day + 1, phase: PHASES[0] };
+}
+
+function checkResults(state: PhaseState, results: Readonly<Record<string, PlayerResult>>): PhaseError | null {
+  for (const [id, r] of Object.entries(results)) {
+    if (!state.players[id]) return { code: 'unknown_player', message: `Result for unknown player "${id}"` };
+    const bad = (v: number | undefined, max: number) => v !== undefined && (!Number.isInteger(v) || v < 0 || v > max);
+    if (bad(r.hp, state.hpMax)) return { code: 'invalid_result', message: `${id}.hp must be a whole number 0..${state.hpMax}` };
+    if (bad(r.stamina, state.staminaMax)) return { code: 'invalid_result', message: `${id}.stamina must be a whole number 0..${state.staminaMax}` };
+  }
+  return null;
+}
+
+function resolved(state: PhaseState, results: Readonly<Record<string, PlayerResult>>, _rng: Rng): PhaseStepResult {
+  if (ended(state)) return fail('game_ended', `The game is over (${state.status})`);
   if (state.status !== 'resolving') return fail('not_resolving', `Phase is ${state.status}; results are accepted only while resolving`);
-  const index = PHASES.indexOf(state.phase);
-  const nextPhase = PHASES[index + 1];
-  if (!nextPhase) throw new Error('not implemented');
-  const next: PhaseState = { ...state, phase: nextPhase, status: 'collecting', submissions: {} };
-  return { ok: true, state: next, log: [{ type: 'phase_started', at: here(next) }] };
+  const error = checkResults(state, results);
+  if (error) return { ok: false, error };
+
+  const at = here(state);
+  const log: PhaseLogEntry[] = [];
+  const players: Record<string, PlayerPhaseState> = {};
+  for (const id of state.order) {
+    const p = state.players[id]!;
+    const r = results[id] ?? {};
+    players[id] = { ...p, hp: r.hp ?? p.hp, stamina: r.stamina ?? p.stamina };
+  }
+
+  const point = nextPoint(at);
+  if (!point) {
+    log.push({ type: 'finale', at });
+    return { ok: true, state: { ...state, players, status: 'finale' }, log };
+  }
+  const next: PhaseState = { ...state, ...point, players, status: 'collecting', submissions: {} };
+  log.push({ type: 'phase_started', at: point });
+  return { ok: true, state: next, log };
 }

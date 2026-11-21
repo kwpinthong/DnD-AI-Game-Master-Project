@@ -74,6 +74,41 @@ describe('C1 phase closes when every player who can act has submitted', () => {
   });
 });
 
+/** Plays whole phases until the state reaches the given point. */
+function playTo(state: PhaseState, day: number, phase: PhaseState['phase']): PhaseState {
+  let s = state;
+  for (let guard = 0; guard < 100 && !(s.day === day && s.phase === phase); guard++) s = playPhase(s);
+  return s;
+}
+
+describe('C2 after Night comes the next Morning, and Stamina is not reset', () => {
+  it('day 1 Night -> day 2 Morning with Stamina carried over', () => {
+    let s = playTo(start(), 1, 'NIGHT');
+    s = submitAll(s, act('สืบเรื่องลัทธิ'));
+    s = resolve(s, { 'pc-a': { stamina: 12 }, 'pc-b': { stamina: 7 }, 'pc-c': { stamina: 30 } });
+    expect(s.day).toBe(2);
+    expect(s.phase).toBe('MORNING');
+    expect(s.status).toBe('collecting');
+    expect(s.players['pc-a']!.stamina).toBe(12);
+    expect(s.players['pc-b']!.stamina).toBe(7);
+    expect(s.players['pc-c']!.stamina).toBe(30);
+  });
+});
+
+describe('C8 the end of day 12 Night is the finale; there is no day 13', () => {
+  it('enters finale and rejects any further action', () => {
+    let s = playTo(start(), 12, 'NIGHT');
+    expect(s.status).toBe('collecting');
+    const end = ok(phaseStep(submitAll(s), { type: 'resolved', results: {} }, new SeededRng(1)));
+    expect(end.state.status).toBe('finale');
+    expect(end.state.day).toBe(12);
+    expect(end.state.phase).toBe('NIGHT');
+    expect(end.log).toContainEqual(expect.objectContaining({ type: 'finale' }));
+    expect(rejected(phaseStep(end.state, { type: 'submit', playerId: 'pc-a', action: act() }, new SeededRng(1)))).toBe('game_ended');
+    expect(rejected(phaseStep(end.state, { type: 'resolved', results: {} }, new SeededRng(1)))).toBe('game_ended');
+  });
+});
+
 describe('C7 resubmitting before the phase closes replaces the action; during resolve it is rejected', () => {
   it('replaces the earlier action', () => {
     let s = start();
