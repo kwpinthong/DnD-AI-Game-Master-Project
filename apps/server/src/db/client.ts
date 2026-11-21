@@ -9,6 +9,8 @@ import * as schema from './schema.ts';
 export const migrationsFolder = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'drizzle');
 
 export type Db = BetterSQLite3Database<typeof schema>;
+/** A Db or an open transaction on it: helpers that only read/write rows accept either. */
+export type DbOrTx = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
 
 /** The database at `dbPath` cannot be created, opened, written or migrated. */
 export class DatabaseUnavailableError extends Error {

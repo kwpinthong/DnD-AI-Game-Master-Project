@@ -1,6 +1,8 @@
 import { ApiError, CreateGameResponse, GameView, JoinResponse, MeResponse } from '@isekai/protocol';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { defaultScenario } from '@isekai/protocol';
 import { hashPin } from '../src/auth/pin.ts';
+import { getGameScenario, updateGameScenario } from '../src/scenario/store.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
 import { makeTempDir } from './helpers.ts';
 
@@ -387,5 +389,19 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     expect(res.status).toBe(409);
     expect(error(res.body).code).toBe('not_allowed');
     expect(MeResponse.parse((await call('GET', '/api/me', { token: created.token })).body).member.id).toBe(created.member.id);
+  });
+
+  it('Q-070: creating a game copies the default scenario; each game gets its own copy', async () => {
+    await start();
+    const a = await createGame();
+    const b = await createGame({ gameName: 'เกมที่สอง' });
+    const orm = server!.orm;
+    expect(getGameScenario(orm, a.game.id)).toEqual(defaultScenario());
+    expect(getGameScenario(orm, b.game.id)).toEqual(defaultScenario());
+
+    const edited = { ...defaultScenario(), name: 'แก้เฉพาะเกม A' };
+    expect(updateGameScenario(orm, a.game.id, edited).ok).toBe(true);
+    expect(getGameScenario(orm, a.game.id)?.name).toBe('แก้เฉพาะเกม A');
+    expect(getGameScenario(orm, b.game.id)).toEqual(defaultScenario());
   });
 });

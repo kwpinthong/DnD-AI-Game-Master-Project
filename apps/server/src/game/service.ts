@@ -14,6 +14,7 @@ import { isUniqueViolation, openSession, type Clock } from '../auth/join.ts';
 import { hashPin } from '../auth/pin.ts';
 import type { Db } from '../db/client.ts';
 import { character, game, member, session } from '../db/schema.ts';
+import { copyTemplateForGame } from '../scenario/store.ts';
 
 export type GameRow = typeof game.$inferSelect;
 export type MemberRow = typeof member.$inferSelect;
@@ -117,7 +118,8 @@ export interface CreatedGame {
 }
 
 /**
- * Creates the game and its owner in one transaction. The create code is checked by the caller.
+ * Creates the game, its owner and its own copy of the default scenario (Q-070) in one transaction.
+ * The create code is checked by the caller.
  * Human GM on: the owner is the GM (no character, no player slot). Off: the owner is a player.
  */
 export async function createGame(db: Db, input: CreateGameRequest, now: Clock): Promise<CreatedGame> {
@@ -152,6 +154,7 @@ export async function createGame(db: Db, input: CreateGameRequest, now: Clock): 
         .run(),
     );
     tx.insert(member).values(owner).run();
+    copyTemplateForGame(tx, gameId, undefined, t);
     const opened = openSession(tx, owner.id, t);
     return {
       member: { id: owner.id, gameId, name: owner.name },
