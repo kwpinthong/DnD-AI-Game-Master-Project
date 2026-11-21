@@ -15,7 +15,7 @@ backups/
 *.env
 !*.env.example
 
-# Scratch output of the @dnd/rules boundary test
+# Scratch output of the @isekai/rules boundary test
 packages/rules/.boundary-check/
 
 .DS_Store

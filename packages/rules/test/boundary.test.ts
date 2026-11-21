@@ -28,7 +28,7 @@ function compileProbe(name: string, source: string) {
 
 afterAll(() => rmSync(probeDir, { recursive: true, force: true }));
 
-describe('@dnd/rules has no Node dependency', { timeout: 60_000 }, () => {
+describe('@isekai/rules has no Node dependency', { timeout: 60_000 }, () => {
   it('compiles plain rules code', () => {
     const result = compileProbe('plain', "import { rollDie } from '../../src/index.ts';\nexport const n: number = rollDie.length;\n");
     expect(result.stdout + result.stderr).toBe('');

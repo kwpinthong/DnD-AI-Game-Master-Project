@@ -2,5 +2,8 @@ packages:
   - apps/*
   - packages/*
 
-onlyBuiltDependencies:
-  - esbuild
+# better-sqlite3 ships N-API prebuilds (win32-x64, linux-x64, ...) inside the npm package.
+# pnpm only sees binding.gyp and would run node-gyp; skip it so install needs no build tools.
+allowBuilds:
+  esbuild: true
+  better-sqlite3: false

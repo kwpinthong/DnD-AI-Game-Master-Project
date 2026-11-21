@@ -6,14 +6,3 @@ export const HealthResponse = z.object({
   db: z.enum(['connected', 'error']),
 });
 export type HealthResponse = z.infer<typeof HealthResponse>;
-
-/** Socket.IO event names shared by server and web. */
-export const ServerEventName = {
-  presence: 'presence',
-} as const;
-
-/** Payload of the `presence` event: how many clients are connected right now. */
-export const PresenceEvent = z.object({
-  online: z.number().int().nonnegative(),
-});
-export type PresenceEvent = z.infer<typeof PresenceEvent>;
