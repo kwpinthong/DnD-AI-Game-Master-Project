@@ -8,3 +8,6 @@ export const HealthResponse = z.object({
 export type HealthResponse = z.infer<typeof HealthResponse>;
 
 export * from './join.ts';
+
+export * from './scenario.ts';
+export * from './scenario-default.ts';
