@@ -287,6 +287,7 @@ describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () =
     expect(Object.keys(body.fields).sort()).toEqual([`timeline.${at}.day`, `timeline.${at}.phase`, `timeline.${at}.title`]);
     expect(body.fields[`timeline.${at}.day`]).toMatch(/1 ถึง 12/);
     expect(body.fields[`timeline.${at}.title`]).toMatch(/ห้ามว่าง/);
+    expect(body.fields[`timeline.${at}.phase`]).toMatch(/เช้า.*บ่าย.*ค่ำ/);
     expect((await getScenario(gm.token)).scenario).toEqual(defaultScenario());
 
     // Not a scenario at all.

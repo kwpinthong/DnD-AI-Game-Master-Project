@@ -33,7 +33,9 @@ const optionalText = (max: number) => z.string().max(max, `ยาวได้ไ
 /** GM-only note; never sent to players. */
 const GmNote = optionalText(2000);
 
-export const Phase = z.enum(['MORNING', 'AFTERNOON', 'NIGHT']);
+export const Phase = z.enum(['MORNING', 'AFTERNOON', 'NIGHT'], {
+  error: 'ช่วงต้องเป็น เช้า (MORNING), บ่าย (AFTERNOON) หรือ ค่ำ (NIGHT)',
+});
 export type Phase = z.infer<typeof Phase>;
 
 /** Rest recovery at night (Rules Spec §4.1): rough +15, basic +20, inn +25 Stamina. */
