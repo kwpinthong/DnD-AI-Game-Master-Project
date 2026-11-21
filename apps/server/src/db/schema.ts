@@ -66,3 +66,6 @@ export const session = sqliteTable(
   },
   (t) => [index('session_member').on(t.memberId)],
 );
+
+// GEN-038: AI usage lives in its own file so parallel schema work merges cleanly.
+export * from './schema-ai.ts';
