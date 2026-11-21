@@ -3,8 +3,9 @@ import { dirname, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-// The deploy config files are read as text: .railway/railway.ts imports the Railway SDK, which is
-// not a dependency here, and Node has no TOML parser. These checks pin what the Cases rely on.
+// The deploy config files are read as text: .railway/railway.ts is type-checked separately against
+// the Railway SDK (`pnpm run typecheck:infra`), and Node has no TOML parser. These checks pin what
+// the Cases rely on.
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const read = (path: string) => readFileSync(join(repoRoot, path), 'utf8');
 

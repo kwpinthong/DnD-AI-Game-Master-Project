@@ -5,8 +5,8 @@
 // dashboard by hand (docs/deploy.md, step 1). railway.json / railway.toml (Config as Code) is
 // deprecated: new services cannot use it and it stops being read on 2026-12-01.
 //
-// Keys come from the `railway` SDK 3.17.0 types (railway/iac). The SDK is not a dependency of this
-// repo yet, so this file is not type-checked; check it with `railway config plan` before applying.
+// Keys come from the `railway` SDK 3.17.0 types (railway/iac), a root devDependency (Q-064).
+// `pnpm run typecheck:infra` (also part of `pnpm run lint`) type-checks this file.
 //
 // Secrets never go here: values Railway already holds are kept with preserve().
 import { defineRailway, github, preserve, project, service, volume } from 'railway/iac';
