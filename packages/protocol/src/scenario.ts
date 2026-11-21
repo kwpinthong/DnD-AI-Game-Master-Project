@@ -83,6 +83,8 @@ export const ScenarioEvent = z.object({
   kind: z.enum(['event', 'climax', 'finale']).default('event'),
   title: text(120),
   description: optionalText(1000),
+  /** ผลตั้งต้น: what happens when no player steps in (GEN-046). */
+  outcome: optionalText(1000),
   /** Crisis events are the ones that can raise an A-grade NPC to S (Rules Spec §8.3). */
   crisis: z.boolean().default(false),
   locationId: Id.nullable().default(null),

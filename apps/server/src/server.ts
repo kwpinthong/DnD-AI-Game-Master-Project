@@ -12,6 +12,7 @@ import { loadAiConfig, type AiConfig } from './ai/config.ts';
 import { createAiService, type AiService, type BudgetReachedEvent } from './ai/core/service.ts';
 import { createUsageStore } from './ai/core/usage.ts';
 import { providerFor } from './ai/registry.ts';
+import { registerTimelineRoutes } from './timeline/routes.ts';
 
 export interface RunningServer {
   url: string;
@@ -71,6 +72,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   const now = options.now ?? Date.now;
   registerAuthRoutes(app, db, now);
   registerGameRoutes(app, db, now, { ai, ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}) });
+  registerTimelineRoutes(app, db, now);
 
   try {
     await app.listen({ host: config.host, port: config.port });

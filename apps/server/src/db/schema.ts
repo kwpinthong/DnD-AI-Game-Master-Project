@@ -106,3 +106,6 @@ export const character = sqliteTable('character', {
 
 // GEN-038: AI usage lives in its own file so parallel schema work merges cleanly.
 export * from './schema-ai.ts';
+
+// GEN-053: timeline event state, own file for the same reason.
+export * from './schema-timeline.ts';
