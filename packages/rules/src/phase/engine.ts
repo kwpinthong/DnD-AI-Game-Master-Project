@@ -1,9 +1,11 @@
 import { rollRange } from '../random.ts';
 import type { Rng } from '../rng.ts';
+import { rollRescue, wakeAfter, type RescueOutcome } from '../resolution/rescue.ts';
 import { RULES } from '../resolution/tables.ts';
 import {
   GAME_DAYS,
   PHASES,
+  type KnockedOut,
   type NewPlayer,
   type PlayerCondition,
   type RecoveryKind,
@@ -194,6 +196,41 @@ function recover(
   return { player: { ...p, stamina: staminaAfter, hp: hpAfter }, entry };
 }
 
+function samePoint(a: PhasePoint, b: PhasePoint): boolean {
+  return a.day === b.day && a.phase === b.phase;
+}
+
+/** Spec §12.2: wake at the start of the next day's Morning, or the next day's Afternoon after a Night knock-out. */
+function knockOutWake(at: PhasePoint): PhasePoint {
+  return { day: at.day + 1, phase: at.phase === 'NIGHT' ? 'AFTERNOON' : 'MORNING' };
+}
+
+/**
+ * Game over (C6 read with Q-057, no death): every player is unconscious and none wakes before the game ends,
+ * i.e. every wake point is after day 12 Night. Exhausted players always wake next phase, so they never count.
+ */
+function isGameOver(order: readonly string[], players: Readonly<Record<string, PlayerPhaseState>>): boolean {
+  return order.every((id) => {
+    const p = players[id]!;
+    return p.condition === 'unconscious' && p.knockedOut !== null && p.knockedOut.wakeAt.day > GAME_DAYS;
+  });
+}
+
+function wake(p: PlayerPhaseState, ko: KnockedOut, rng: Rng): { player: PlayerPhaseState; entry: Omit<Extract<PhaseLogEntry, { type: 'woke' }>, 'at'> } {
+  let outcome: RescueOutcome = 'rescued';
+  let rescueRoll: { d20: number; score: number } | null = null;
+  if (!ko.rescued) {
+    const roll = rollRescue({ safety: ko.safety, primaryAffinity: ko.primaryAffinity }, rng);
+    outcome = roll.outcome;
+    rescueRoll = { d20: roll.d20, score: roll.score };
+  }
+  const after = wakeAfter(outcome, p.stamina);
+  return {
+    player: { ...p, hp: after.hp, stamina: after.stamina, condition: 'awake', mustSubmit: true, knockedOut: null },
+    entry: { type: 'woke', playerId: p.id, outcome, rescueRoll, hp: after.hp, stamina: after.stamina },
+  };
+}
+
 function resolved(state: PhaseState, results: Readonly<Record<string, PlayerResult>>, rng: Rng): PhaseStepResult {
   if (ended(state)) return fail('game_ended', `The game is over (${state.status})`);
   if (state.status !== 'resolving') return fail('not_resolving', `Phase is ${state.status}; results are accepted only while resolving`);
@@ -210,6 +247,26 @@ function resolved(state: PhaseState, results: Readonly<Record<string, PlayerResu
     const r = results[id] ?? {};
     let p: PlayerPhaseState = { ...before, hp: r.hp ?? before.hp, stamina: r.stamina ?? before.stamina };
 
+    if (before.condition === 'unconscious') {
+      // Damage to an unconscious character is 0 (spec §12.2), so only a rescue changes anything.
+      p = { ...before };
+      if (r.rescued && before.knockedOut && !before.knockedOut.rescued) {
+        p = { ...p, knockedOut: { ...before.knockedOut, rescued: true } };
+        log.push({ type: 'rescued_by_player', at, playerId: id });
+      }
+      players[id] = p;
+      continue;
+    }
+
+    if (p.hp === 0) {
+      // Q-054: lost for the rest of the day; a Night knock-out still loses the next Morning. No rest recovery.
+      const wakeAt = knockOutWake(at);
+      const knockedOut: KnockedOut = { wakeAt, safety: r.safety ?? 'normal', primaryAffinity: r.primaryAffinity ?? 0, rescued: false };
+      log.push({ type: 'knocked_out', at, playerId: id, wakeAt });
+      players[id] = { ...p, condition: 'unconscious', mustSubmit: false, knockedOut };
+      continue;
+    }
+
     const kind = recoveryKind(state, before, r);
     if (kind) {
       const rec = recover(state, p, kind, rng);
@@ -222,6 +279,21 @@ function resolved(state: PhaseState, results: Readonly<Record<string, PlayerResu
     if (exhausted && point) log.push({ type: 'exhausted', at, playerId: id, sleepsAt: point });
     const condition: PlayerCondition = exhausted ? 'exhausted' : 'awake';
     players[id] = { ...p, condition, mustSubmit: condition === 'awake' };
+  }
+
+  if (isGameOver(state.order, players)) {
+    log.push({ type: 'game_over', at, reason: 'all_unconscious' });
+    return { ok: true, state: { ...state, players, status: 'game_over' }, log };
+  }
+
+  if (point) {
+    for (const id of state.order) {
+      const p = players[id]!;
+      if (p.condition !== 'unconscious' || !p.knockedOut || !samePoint(p.knockedOut.wakeAt, point)) continue;
+      const woke = wake(p, p.knockedOut, rng);
+      players[id] = woke.player;
+      log.push({ ...woke.entry, at: point });
+    }
   }
 
   if (!point) {

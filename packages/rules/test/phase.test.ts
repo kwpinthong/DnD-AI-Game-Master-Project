@@ -3,6 +3,8 @@ import {
   SeededRng,
   createPhaseState,
   phaseStep,
+  rollRescue,
+  wakeAfter,
   type PhaseEvent,
   type PhaseState,
   type PhaseStepResult,
@@ -227,6 +229,110 @@ describe('C5 Night rest at the inn: +15..25 + bonus, capped at max', () => {
     const night = playTo(s, 1, 'NIGHT');
     const noRest = act('ไปโรงเตี๊ยม', { restAtInn: true });
     expect(rejected(phaseStep(night, { type: 'submit', playerId: 'pc-a', action: noRest }, new SeededRng(1)))).toBe('invalid_action');
+  });
+});
+
+describe('C6 unconscious players (HP 0, no death: Q-057) are not waited for; all out for good = game over', () => {
+  it('HP 0 in the Morning: locked for the rest of the day, wakes next Morning with the rescue roll', () => {
+    let s = start();
+    const ko = ok(phaseStep(submitAll(s), { type: 'resolved', results: { 'pc-a': { hp: 0, stamina: 0, safety: 'safe', primaryAffinity: 52 } } }, new SeededRng(1)));
+    expect(ko.log).toContainEqual(expect.objectContaining({ type: 'knocked_out', playerId: 'pc-a', wakeAt: { day: 2, phase: 'MORNING' } }));
+    s = ko.state;
+    expect(s.players['pc-a']!.condition).toBe('unconscious');
+    expect(s.players['pc-a']!.mustSubmit).toBe(false);
+    expect(rejected(phaseStep(s, { type: 'submit', playerId: 'pc-a', action: act() }, new SeededRng(1)))).toBe('cannot_act');
+
+    s = submit(s, 'pc-b');
+    const closed = ok(phaseStep(s, { type: 'submit', playerId: 'pc-c', action: act() }, new SeededRng(1)));
+    expect(closed.log).toContainEqual(expect.objectContaining({ type: 'phase_closed', unconscious: ['pc-a'], asleep: [] }));
+    s = resolve(closed.state);
+    expect(s.phase).toBe('NIGHT');
+    expect(s.players['pc-a']!.condition).toBe('unconscious');
+
+    const seed = 9;
+    const woke = ok(phaseStep(submitAll(s), { type: 'resolved', results: {} }, new SeededRng(seed)));
+    const roll = rollRescue({ safety: 'safe', primaryAffinity: 52 }, new SeededRng(seed));
+    const wake = wakeAfter(roll.outcome, 0);
+    expect(woke.log).toContainEqual(
+      expect.objectContaining({ type: 'woke', playerId: 'pc-a', outcome: roll.outcome, rescueRoll: { d20: roll.d20, score: roll.score } }),
+    );
+    expect(woke.state.day).toBe(2);
+    expect(woke.state.players['pc-a']).toMatchObject({ condition: 'awake', mustSubmit: true, hp: wake.hp, stamina: wake.stamina, knockedOut: null });
+  });
+
+  it('HP 0 at Night: wakes at the next Afternoon (spec §12.2) and gets no Night rest', () => {
+    let s = playTo(start(), 1, 'NIGHT');
+    s = submit(s, 'pc-a', act('นอนที่โรงเตี๊ยม', { rest: true, restAtInn: true }));
+    s = playPhase(s, { 'pc-a': { hp: 0, stamina: 4 } });
+    expect(s.day).toBe(2);
+    expect(s.phase).toBe('MORNING');
+    expect(s.players['pc-a']).toMatchObject({ condition: 'unconscious', stamina: 4, knockedOut: { wakeAt: { day: 2, phase: 'AFTERNOON' } } });
+    s = playPhase(s);
+    expect(s.phase).toBe('AFTERNOON');
+    expect(s.players['pc-a']!.condition).toBe('awake');
+  });
+
+  it("another player's DC 8 aid rescues: wakes as rescued with no roll", () => {
+    let s = playPhase(start(), { 'pc-a': { hp: 0, stamina: 12 } });
+    const aided = ok(phaseStep(submitAll(s), { type: 'resolved', results: { 'pc-a': { rescued: true } } }, new SeededRng(1)));
+    expect(aided.log).toContainEqual(expect.objectContaining({ type: 'rescued_by_player', playerId: 'pc-a' }));
+    s = playPhase(aided.state);
+    expect(s.players['pc-a']).toMatchObject({ condition: 'awake', hp: 30, stamina: 20 });
+  });
+
+  it('all unconscious but someone wakes before the end: the game goes on without waiting', () => {
+    let s = playTo(start(), 5, 'MORNING');
+    s = playPhase(s, { 'pc-a': { hp: 0 }, 'pc-b': { hp: 0 }, 'pc-c': { hp: 0 } });
+    expect(s.phase).toBe('AFTERNOON');
+    expect(s.status).toBe('resolving');
+    s = resolve(resolve(s));
+    expect(s.day).toBe(6);
+    expect(s.status).toBe('collecting');
+    expect(IDS.every((id) => s.players[id]!.condition === 'awake')).toBe(true);
+  });
+
+  it('all unconscious with nobody able to wake before the end of day 12: game over', () => {
+    let s = playTo(start(), 12, 'MORNING');
+    s = playPhase(s, { 'pc-a': { hp: 0 }, 'pc-b': { hp: 0 } });
+    expect(s.status).toBe('collecting');
+    const end = ok(phaseStep(submitAll(s), { type: 'resolved', results: { 'pc-c': { hp: 0 } } }, new SeededRng(1)));
+    expect(end.state.status).toBe('game_over');
+    expect(end.log).toContainEqual(expect.objectContaining({ type: 'game_over', reason: 'all_unconscious' }));
+    expect(rejected(phaseStep(end.state, { type: 'submit', playerId: 'pc-a', action: act() }, new SeededRng(1)))).toBe('game_ended');
+  });
+});
+
+describe('purity: (state, event, rng) -> state + log, so a stored game replays', () => {
+  function deepFreeze<T>(value: T): T {
+    if (value && typeof value === 'object') {
+      for (const v of Object.values(value)) deepFreeze(v);
+      Object.freeze(value);
+    }
+    return value;
+  }
+
+  it('never mutates its input and gives the same result for the same events and seeds', () => {
+    const events: PhaseEvent[] = [
+      ...IDS.map((playerId) => ({ type: 'submit' as const, playerId, action: act() })),
+      { type: 'resolved', results: { 'pc-a': { hp: 0 }, 'pc-b': { stamina: 0 } } },
+      ...['pc-c'].map((playerId) => ({ type: 'submit' as const, playerId, action: act('พัก', { rest: true }) })),
+      { type: 'resolved', results: {} },
+      ...['pc-b', 'pc-c'].map((playerId) => ({ type: 'submit' as const, playerId, action: act('นอน', { rest: true, restAtInn: true }) })),
+      { type: 'resolved', results: {} },
+    ];
+    const run = () => {
+      let s = deepFreeze(start());
+      const logs = [];
+      for (const [i, e] of events.entries()) {
+        const r = ok(phaseStep(s, deepFreeze(e), new SeededRng(100 + i)));
+        s = deepFreeze(r.state);
+        logs.push(r.log);
+      }
+      return { s, logs };
+    };
+    const first = run();
+    expect(first.s.day).toBe(2);
+    expect(JSON.parse(JSON.stringify(first))).toEqual(run());
   });
 });
 
