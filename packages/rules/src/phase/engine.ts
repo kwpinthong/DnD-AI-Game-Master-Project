@@ -67,6 +67,10 @@ function submit(state: PhaseState, playerId: string, action: PlayerAction): Phas
   const player = state.players[playerId];
   if (!player) return fail('unknown_player', `No player "${playerId}"`);
 
+  if (action.visibility === 'secret' && player.secretDay === state.day) {
+    return fail('secret_quota_used', `${playerId} already used today's Secret phase (one per day)`);
+  }
+
   const replaced = playerId in state.submissions;
   const next: PhaseState = { ...state, submissions: { ...state.submissions, [playerId]: action } };
   const log: PhaseLogEntry[] = [{ type: 'submitted', at: here(state), playerId, action, replaced }];
@@ -78,7 +82,15 @@ function closeIfComplete(state: PhaseState, log: PhaseLogEntry[]): { state: Phas
   const waiting = state.order.filter((id) => state.players[id]!.mustSubmit && !(id in state.submissions));
   if (waiting.length > 0) return { state, log };
   log.push({ type: 'phase_closed', at: here(state), actions: state.submissions, asleep: [], unconscious: [] });
-  return { state: { ...state, status: 'resolving' }, log };
+  // The Secret quota is used by the action that stands when the phase closes, not by a replaced draft.
+  const players = mapPlayers(state, (p) => (state.submissions[p.id]?.visibility === 'secret' ? { ...p, secretDay: state.day } : p));
+  return { state: { ...state, players, status: 'resolving' }, log };
+}
+
+function mapPlayers(state: PhaseState, f: (p: PlayerPhaseState) => PlayerPhaseState): Record<string, PlayerPhaseState> {
+  const players: Record<string, PlayerPhaseState> = {};
+  for (const id of state.order) players[id] = f(state.players[id]!);
+  return players;
 }
 
 function ended(state: PhaseState): boolean {

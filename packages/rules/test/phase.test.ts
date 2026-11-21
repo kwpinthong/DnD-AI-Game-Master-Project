@@ -38,10 +38,12 @@ function submit(state: PhaseState, playerId: string, action: PlayerAction = act(
   return step(state, { type: 'submit', playerId, action });
 }
 
-/** Every player who must submit sends an action. */
+/** Every player who must submit and has not yet sends an action. */
 function submitAll(state: PhaseState, action: PlayerAction = act()): PhaseState {
   let s = state;
-  for (const id of s.order) if (s.status === 'collecting' && s.players[id]!.mustSubmit) s = submit(s, id, action);
+  for (const id of s.order) {
+    if (s.status === 'collecting' && s.players[id]!.mustSubmit && !(id in s.submissions)) s = submit(s, id, action);
+  }
   return s;
 }
 
@@ -106,6 +108,34 @@ describe('C8 the end of day 12 Night is the finale; there is no day 13', () => {
     expect(end.log).toContainEqual(expect.objectContaining({ type: 'finale' }));
     expect(rejected(phaseStep(end.state, { type: 'submit', playerId: 'pc-a', action: act() }, new SeededRng(1)))).toBe('game_ended');
     expect(rejected(phaseStep(end.state, { type: 'resolved', results: {} }, new SeededRng(1)))).toBe('game_ended');
+  });
+});
+
+describe('C3 one Secret phase per day', () => {
+  const secret = act('แอบขโมยกุญแจ', { visibility: 'secret' });
+
+  it('a Secret in the Morning blocks a Secret in the Afternoon; the next day it is allowed again', () => {
+    let s = start();
+    s = submit(s, 'pc-a', secret);
+    s = resolve(submitAll(s));
+    expect(s.phase).toBe('AFTERNOON');
+
+    const again = phaseStep(s, { type: 'submit', playerId: 'pc-a', action: secret }, new SeededRng(1));
+    expect(rejected(again)).toBe('secret_quota_used');
+    // Other players and Public actions are not affected.
+    s = submit(s, 'pc-b', secret);
+    s = submit(s, 'pc-a', act());
+
+    s = playTo(s, 2, 'MORNING');
+    expect(submit(s, 'pc-a', secret).submissions['pc-a']!.visibility).toBe('secret');
+  });
+
+  it('a Secret replaced by a Public action before the phase closes does not use the quota', () => {
+    let s = start();
+    s = submit(s, 'pc-a', secret);
+    s = submit(s, 'pc-a', act());
+    s = resolve(submitAll(s));
+    expect(submit(s, 'pc-a', secret).submissions['pc-a']!.visibility).toBe('secret');
   });
 });
 
