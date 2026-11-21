@@ -250,6 +250,20 @@ describe('POST /api/join (invite code + name + PIN)', { timeout: 30_000 }, () =>
     expect(ApiError.parse(expired.body).code).toBe('unauthorized');
   });
 
+  it('POST /api/logout ends the session on the server', async () => {
+    const running = await start();
+    seedGame(running, 'K7Q2MX');
+    const joined = JoinResponse.parse((await join(running, { inviteCode: 'K7Q2MX', name: 'นก', pin: '1234' })).body);
+
+    const res = await fetch(`${running.url}/api/logout`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${joined.token}` },
+    });
+
+    expect(res.status).toBe(204);
+    expect((await me(running, joined.token)).status).toBe(401);
+  });
+
   it('C8: the member table holds no plain-text PIN and the session table no plain token', async () => {
     const running = await start();
     seedGame(running, 'K7Q2MX');

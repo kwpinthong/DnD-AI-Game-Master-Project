@@ -105,6 +105,10 @@ export function memberForToken(db: Db, token: string, now: Clock): Member | unde
   return toMember(row.member);
 }
 
+export function endSession(db: Db, token: string) {
+  db.delete(session).where(eq(session.tokenHash, hashToken(token))).run();
+}
+
 /** Drizzle wraps driver errors (DrizzleQueryError), so look through `cause` too. */
 function isUniqueViolation(error: unknown): boolean {
   for (let e = error as { code?: unknown; cause?: unknown } | undefined; e; e = e.cause as typeof e) {
