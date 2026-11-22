@@ -97,6 +97,15 @@ button,
   vertical-align: middle;
 }
 
+/* Touch targets: 44 x 44 on phones (GEN-089 C6); a screen's own rule may relax it from tablet up. */
+@media (max-width: 767px) {
+  button,
+  .btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
 button:hover:not(:disabled) {
   text-decoration: underline;
   text-underline-offset: 3px;

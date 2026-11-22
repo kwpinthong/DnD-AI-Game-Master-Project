@@ -166,3 +166,15 @@ describe('C5 visible focus ring', () => {
     expect(removed).toEqual([]);
   });
 });
+
+describe('C6 tap targets at phone width', () => {
+  it('buttons and .btn are at least 44 x 44 below 768px; the end-page rating radios too', () => {
+    const decl = (css: string, sel: string, prop: string) => declarations(css).filter((d) => d.selector.split(',').map((s) => s.trim()).includes(sel) && d.prop === prop).map((d) => d.value);
+    for (const sel of ['button', '.btn']) {
+      expect(decl(themeCss(), sel, 'min-height')).toContain('44px');
+      expect(decl(themeCss(), sel, 'min-width')).toContain('44px');
+    }
+    expect(themeCss()).toMatch(/@media \(max-width: 767px\)\s*\{\s*button,/);
+    for (const prop of ['min-height', 'min-width']) expect(decl(read('ending.css'), '.rating__score', prop)).toContain('44px');
+  });
+});
