@@ -315,6 +315,7 @@
   align-items: center;
   justify-content: center;
   min-height: 44px;
+  min-width: 44px;
   margin: 0;
   border: var(--line-w) solid var(--muted);
   border-radius: var(--radius-sm);
