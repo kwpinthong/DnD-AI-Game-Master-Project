@@ -128,7 +128,9 @@ describe('C6: migrating a DB from an older version keeps its data and gives new 
         for (const column of now.filter((n) => !oldColumns[table]!.includes(n.name))) {
           const expected = column.dflt_value === null ? null : (sqlite.prepare(`select ${column.dflt_value} as v`).get() as { v: unknown }).v;
           for (const row of after) {
-            if (column.dflt_value === null && column.notnull) expect(row[column.name], `${table}.${column.name}`).not.toBeNull();
+            // GEN-078 (Q-263): the migration numbers existing actions from 1 (migrations-action-seq.test.ts checks the order).
+            if (table === 'phase_action' && column.name === 'seq') expect(row.seq, 'phase_action.seq').toBeGreaterThan(0);
+            else if (column.dflt_value === null && column.notnull) expect(row[column.name], `${table}.${column.name}`).not.toBeNull();
             else expect(row[column.name], `${table}.${column.name}`).toEqual(expected);
           }
         }

@@ -1,15 +1,15 @@
 import type { GameRatingView } from '@isekai/protocol';
 import { restorePhaseState } from '@isekai/rules';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
-import { gamePhase, gameRating, member, phaseAction, rulingVote } from '../db/schema.ts';
+import { gamePhase, gameRating, phaseAction, rulingVote } from '../db/schema.ts';
 import { activeMembers, type MemberRow } from '../game/service.ts';
 
 const PERIOD_ORDER = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
 
 /** One action → result row of the end page: an action that stood, which a 👍 may name by `sourceRef`. */
 export interface Ruling {
-  /** `${day}-${phase}-${turn}-${actionSeq}` (ADR GEN-077); actionSeq = the actor's place in the game's join order, from 1. */
+  /** `${day}-${phase}-${turn}-${actionSeq}` (ADR GEN-077); actionSeq = `phase_action.seq`, the action's number in its game (Q-263). */
   sourceRef: string;
   memberId: string;
   day: number;
@@ -30,39 +30,25 @@ export function gameEnded(db: DbOrTx, gameId: string): boolean {
 /**
  * Every ruling of the game, oldest first: the actions that stood of the players the end page reveals (not
  * removed ones, never the GM). A removed player's Secret action is not revealed, so it is not a ruling.
- * The seq counts every member that ever joined, so a ref never shifts.
  */
 export function rulingsOf(db: DbOrTx, gameId: string): Ruling[] {
-  const members = db
-    .select({ id: member.id, role: member.role, kickedAt: member.kickedAt })
-    .from(member)
-    .where(eq(member.gameId, gameId))
-    .orderBy(asc(member.createdAt), sql`rowid`)
-    .all();
-  const seqOf = new Map(members.map((m, i) => [m.id, i + 1]));
-  const revealed = new Set(members.filter((m) => m.role === 'player' && m.kickedAt === null).map((m) => m.id));
+  const revealed = new Set(activeMembers(db, gameId).filter((m) => m.role === 'player').map((m) => m.id));
   return db
     .select()
     .from(phaseAction)
     .where(eq(phaseAction.gameId, gameId))
     .all()
     .filter((a) => revealed.has(a.memberId))
+    .sort((a, b) => a.day - b.day || PERIOD_ORDER.indexOf(a.phase) - PERIOD_ORDER.indexOf(b.phase) || a.turn - b.turn || a.seq - b.seq)
     .map((a) => ({
-      sourceRef: `${a.day}-${a.phase}-${a.turn}-${seqOf.get(a.memberId)!}`,
+      sourceRef: `${a.day}-${a.phase}-${a.turn}-${a.seq}`,
       memberId: a.memberId,
       day: a.day,
       phase: a.phase,
       turn: a.turn,
       visibility: a.visibility,
       text: a.text,
-    }))
-    .sort(
-      (a, b) =>
-        a.day - b.day ||
-        PERIOD_ORDER.indexOf(a.phase) - PERIOD_ORDER.indexOf(b.phase) ||
-        a.turn - b.turn ||
-        seqOf.get(a.memberId)! - seqOf.get(b.memberId)!,
-    );
+    }));
 }
 
 /** sourceRef → how many current members gave it a 👍 (GEN-081 keeps a ruling from this). */

@@ -211,6 +211,13 @@
       "when": 1795339613553,
       "tag": "0029_game_rating",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1795340969908,
+      "tag": "0030_phase_action_seq",
+      "breakpoints": true
     }
   ]
 }

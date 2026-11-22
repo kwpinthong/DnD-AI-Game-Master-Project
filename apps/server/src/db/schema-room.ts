@@ -36,6 +36,11 @@ export const phaseAction = sqliteTable(
     /** REST / SLEEP this turn (GEN-063). */
     rest: integer('rest', { mode: 'boolean' }).notNull().default(false),
     submittedAt: integer('submitted_at').notNull(),
+    /**
+     * GEN-078 (Q-263): the action's number within its game, from 1, given when the row is first stored
+     * (a resubmit keeps it). The last part of a ruling's `sourceRef`.
+     */
+    seq: integer('seq').notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.gameId, t.day, t.phase, t.turn, t.memberId] })],
 );

@@ -1,6 +1,6 @@
 import type { ActionVisibility, GmFallbackCause, RoomEntryKind } from '@isekai/protocol';
 import { createPhaseState, restorePhaseState, type PhaseState, type TurnPoint } from '@isekai/rules';
-import { and, asc, eq, gt, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, max, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
 import { character, gamePhase, phaseAction, roomEntry, roomEntryRecipient } from '../db/schema.ts';
 import { activeMembers } from '../game/service.ts';
@@ -76,7 +76,9 @@ export function recordAction(
   action: { text: string; visibility: ActionVisibility; rest: boolean },
   now: number,
 ): void {
-  const row = { gameId, day: at.day, phase: at.phase, turn: at.turn, memberId, ...action, submittedAt: now };
+  // GEN-078 (Q-263): the next number of this game; the conflict branch below leaves a resubmit's number alone.
+  const last = db.select({ seq: max(phaseAction.seq) }).from(phaseAction).where(eq(phaseAction.gameId, gameId)).get();
+  const row = { gameId, day: at.day, phase: at.phase, turn: at.turn, memberId, ...action, submittedAt: now, seq: (last?.seq ?? 0) + 1 };
   db.insert(phaseAction)
     .values(row)
     .onConflictDoUpdate({

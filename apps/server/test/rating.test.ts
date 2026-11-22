@@ -239,6 +239,27 @@ describe('GEN-078 rating + 👍 after the end', { timeout: 60_000 }, () => {
     expect(voteRows()).toEqual([{ memberId: t.c.memberId, sourceRef: publicRef }]);
   });
 
+  it('Q-263: actionSeq is the order the game stored its actions in (not the join order); a resubmit keeps its number', async () => {
+    const t = await startedTable(server!, false);
+    const gameId = gameIdOf(t);
+    const turn1 = { day: 1, phase: 'EOSORIA', turn: 1 } as const;
+    const secret = (text: string) => ({ text, visibility: 'secret' as const, rest: false });
+    // C (joined last) sends first, then A; C resubmits; B acts in the next turn.
+    recordAction(server!.orm, gameId, turn1, t.c.memberId, secret('แอบฟังหลังกำแพง'), CLOCK);
+    recordAction(server!.orm, gameId, turn1, t.a.memberId, secret('แอบหยิบถุงเงิน'), CLOCK);
+    recordAction(server!.orm, gameId, turn1, t.c.memberId, secret('แอบฟังหลังกำแพงอีกรอบ'), CLOCK + 1);
+    recordAction(server!.orm, gameId, { day: 1, phase: 'EOSORIA', turn: 2 }, t.b.memberId, secret('แอบตามไป'), CLOCK + 2);
+    endGame(t);
+    expect(await revealedRefs(t, t.a)).toEqual({
+      [t.a.memberId]: ['1-EOSORIA-1-2'],
+      [t.b.memberId]: ['1-EOSORIA-2-3'],
+      [t.c.memberId]: ['1-EOSORIA-1-1'],
+    });
+    // Another game counts from 1 again.
+    const other = await endedTable();
+    expect((await revealedRefs(other, other.a))[other.b.memberId]).toEqual(['1-EOSORIA-1-2']);
+  });
+
   it('C7: a ref that names no ruling of this game is 404 and saves nothing', async () => {
     const t = await endedTable();
     for (const ref of ['1-EOSORIA-1-99', '2-EOSORIA-1-1', '1-MORNING-1-1', 'nonsense', '1-EOSORIA-3-1']) {
