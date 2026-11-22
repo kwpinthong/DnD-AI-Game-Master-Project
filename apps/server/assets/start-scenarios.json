@@ -26,6 +26,10 @@
       "value": 2,
       "condition": "location tag PUBLIC"
     },
+    "illness": {
+      "stat": null,
+      "value": null
+    },
     "note": ""
   },
   {
@@ -53,6 +57,10 @@
       "stat": "Stamina",
       "value": 2,
       "condition": "location tag TAVERN"
+    },
+    "illness": {
+      "stat": null,
+      "value": null
     },
     "note": "เบาะแสข่าวลือกิลด์เป็นเชิงคุณภาพ (ส่งให้ AI)"
   },
@@ -82,6 +90,10 @@
       "value": 2,
       "condition": ""
     },
+    "illness": {
+      "stat": null,
+      "value": null
+    },
     "note": "เบาะแสซิสเตอร์เอเลน่าเป็นเชิงคุณภาพ"
   },
   {
@@ -109,6 +121,10 @@
       "stat": "d20",
       "value": 3,
       "condition": "วันที่ 1-3"
+    },
+    "illness": {
+      "stat": null,
+      "value": null
     },
     "note": "อะดรีนาลิน 3 วันแรก"
   },
@@ -138,6 +154,10 @@
       "value": -1,
       "condition": "location tag OUTDOOR"
     },
+    "illness": {
+      "stat": null,
+      "value": null
+    },
     "note": "ลดการเสีย Stamina กลางแจ้ง"
   },
   {
@@ -165,6 +185,10 @@
       "stat": "d20",
       "value": 2,
       "condition": ""
+    },
+    "illness": {
+      "stat": null,
+      "value": null
     },
     "note": "\"หรือแฝงตัวในฝูงชน\" — เพิ่ม STEALTH + location tag CROWD ได้ถ้าต้องการ"
   },
@@ -195,6 +219,10 @@
       "value": 2,
       "condition": ""
     },
+    "illness": {
+      "stat": null,
+      "value": null
+    },
     "note": "ชีทเดิมเขียน HIDE → ใช้ STEALTH ตาม vocabulary / รู้ทางเข้าตลาดมืด = สิทธิ์เข้า (เชิงคุณภาพ)"
   },
   {
@@ -223,6 +251,10 @@
       "value": 3,
       "condition": "location tag COASTAL"
     },
+    "illness": {
+      "stat": null,
+      "value": null
+    },
     "note": ""
   },
   {
@@ -248,6 +280,10 @@
       "stat": null,
       "value": null,
       "condition": ""
+    },
+    "illness": {
+      "stat": null,
+      "value": null
     },
     "note": "เบาะแส ASTRONOMY เป็นเชิงคุณภาพ"
   },
@@ -277,6 +313,10 @@
       "value": 5,
       "condition": ""
     },
+    "illness": {
+      "stat": null,
+      "value": null
+    },
     "note": ""
   },
   {
@@ -302,6 +342,10 @@
       "stat": null,
       "value": null,
       "condition": ""
+    },
+    "illness": {
+      "stat": "d20",
+      "value": -2
     },
     "note": "โรคเรื้อรัง + เข้าเขตหวงห้าม = กฎพิเศษใน GEN-065"
   },
@@ -332,6 +376,10 @@
       "value": 2,
       "condition": ""
     },
+    "illness": {
+      "stat": null,
+      "value": null
+    },
     "note": ""
   },
   {
@@ -360,6 +408,10 @@
       "value": 3,
       "condition": "location tag LIBRARY"
     },
+    "illness": {
+      "stat": null,
+      "value": null
+    },
     "note": "กุญแจชั้นหนังสือลึกเป็นเชิงคุณภาพ"
   },
   {
@@ -386,6 +438,10 @@
       "value": null,
       "condition": ""
     },
+    "illness": {
+      "stat": null,
+      "value": null
+    },
     "note": "ทางลับ + เบาะแส [RITUAL, BLOOD_MOON] เป็นเชิงคุณภาพ"
   },
   {
@@ -411,6 +467,10 @@
       "stat": null,
       "value": null,
       "condition": ""
+    },
+    "illness": {
+      "stat": null,
+      "value": null
     },
     "note": "กฎพิเศษใน GEN-065 (พบแอสทรา, ต้านคำสาป B)"
   }

@@ -33,10 +33,10 @@ const ctx = (overrides: Partial<MoveContext> = {}): MoveContext => ({
 });
 
 describe('GEN-066 places and travel rules', () => {
-  it('the map has the 14 places in 4 zones plus the Astral Rift, and not the weather rules row', () => {
+  it('the map has the 15 places in 4 zones plus the Astral Rift, and not the weather rules row', () => {
     const zones = new Map<string, string[]>();
     for (const p of map.places) zones.set(p.zone, [...(zones.get(p.zone) ?? []), p.name]);
-    expect(map.places).toHaveLength(15);
+    expect(map.places).toHaveLength(16);
     expect([...zones.keys()].sort()).toEqual(['รูทลับ 1%', 'โซนการค้าทิศตะวันตก', 'โซนที่ราบทิศเหนือ', 'โซนป่าทิศตะวันออก', 'โซนใจกลางเมือง'].sort());
     expect(zones.get('รูทลับ 1%')).toEqual([RIFT]);
     expect(map.places.some((p) => p.name === 'กฎทั้ง 5 สภาพอากาศ')).toBe(false);

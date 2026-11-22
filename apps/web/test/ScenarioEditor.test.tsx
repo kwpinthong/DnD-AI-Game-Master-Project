@@ -313,7 +313,7 @@ describe('Scenario editor (GEN-046)', () => {
 
     await screen.findByText('บันทึกแล้ว');
     const sent = bodyOf(callsTo(fetchMock, 'PUT', '/api/game/scenario')[0]);
-    expect(sent.timeline.map((e) => e.locationIds)).toEqual([null, null, ['temple', 'fountain'], ['temple', 'fountain'], null]);
+    expect(sent.timeline.map((e) => e.locationIds)).toEqual([null, null, ['community', 'temple', 'fountain'], ['temple', 'fountain'], null]);
   });
 
   it('GEN-097 C5: an empty place list is sent and the server refusal shows at the places', async () => {
@@ -331,7 +331,7 @@ describe('Scenario editor (GEN-046)', () => {
     render(<App apiBaseUrl="" />);
     await openEditor();
     const day7 = within(events()[2]!).getByRole('group', { name: 'สถานที่' });
-    fireEvent.click(within(day7).getByLabelText(defaultScenario().locations.find((l) => l.id === 'temple')!.name));
+    for (const id of ['community', 'temple']) fireEvent.click(within(day7).getByLabelText(defaultScenario().locations.find((l) => l.id === id)!.name));
     fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
     expect(await within(events()[2]!).findByText('ต้องมีสถานที่อย่างน้อย 1 แห่ง')).toBeTruthy();
     expect(within(events()[3]!).getByText('ไม่มีสถานที่ id "atlantis"')).toBeTruthy();

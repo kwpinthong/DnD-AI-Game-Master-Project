@@ -241,12 +241,13 @@ describe('GEN-065 start scenarios', { timeout: 60_000 }, () => {
     const playerA = (a: typeof assets) => crossPlayerState(server!.orm, gameId, new Set(), a).players[t.a.memberId]!;
     const illness = (a: typeof assets) => playerA(a).statuses.find((s) => s.label === 'โรคเรื้อรัง');
 
-    // The sheet today has no number for it: the status carries none.
-    expect(assets.startScenarios.find((s) => s.name === 'คุณชาย/คุณหนูขี้โรค')!.illness).toEqual({ stat: null, value: null });
-    expect(illness(assets)!.mods).toEqual([]);
+    // The sheet gives d20 -2 (Q-232): every roll while ill.
+    expect(assets.startScenarios.find((s) => s.name === 'คุณชาย/คุณหนูขี้โรค')!.illness).toEqual({ stat: 'd20', value: -2 });
+    expect(illness(assets)!.mods).toEqual([{ scope: 'all', value: -2 }]);
     expect(playerA(assets).afterActionStamina).toBe(0);
+    // A sheet with no number: the status carries none.
+    expect(illness(withIllness({ stat: null, value: null }))!.mods).toEqual([]);
 
-    // d20 -2: every roll while ill.
     const d20 = withIllness({ stat: 'd20', value: -2 });
     expect(illness(d20)!.mods).toEqual([{ scope: 'all', value: -2 }]);
     expect(playerA(d20).afterActionStamina).toBe(0);

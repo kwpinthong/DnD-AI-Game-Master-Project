@@ -15,7 +15,8 @@
     "weatherVerbBoost": "Clear: [PERSUADE, SHARE] / Rain: [OBSERVE]",
     "connectsTo": [
       "โรงเตี๊ยมและกิลด์นักเดินทาง",
-      "โบสถ์"
+      "โบสถ์",
+      "ย่านชุมชน"
     ],
     "safety": "NORMAL",
     "restQuality": "normal",
@@ -60,7 +61,8 @@
     "connectsTo": [
       "น้ำพุกลางเมือง",
       "โรงเตี๊ยมและกิลด์นักเดินทาง",
-      "โบสถ์ (ชั้นใต้ดิน)"
+      "โบสถ์ (ชั้นใต้ดิน)",
+      "ย่านชุมชน"
     ],
     "safety": "NORMAL",
     "restQuality": "normal",
@@ -85,6 +87,28 @@
     "safety": "RESTRICTED",
     "restQuality": "poor",
     "note": "เข้าได้จากโบสถ์เท่านั้น (ไม่รับการข้ามโซนตรง) / คนนอกลัทธิถูกพบ = ผู้บุกรุก"
+  },
+  {
+    "zone": "โซนใจกลางเมือง (Central Zone)",
+    "name": "ย่านชุมชน",
+    "characteristics": "ย่านบ้านเรือนของชาวเมืองรอบโบสถ์ ตรอกแคบ ร้านเล็กและบ้านไม้เรียงกัน ที่อยู่ของครอบครัวที่ต้องอพยพเมื่อเกิดภัย",
+    "timeAndWeather": "เช้า–บ่าย (แดดจ้า): ชาวบ้านทำงานบ้านและค้าขายเล็กๆ / ฝนตก: ทุกคนอยู่ในบ้าน ตรอกร้าง / ค่ำ: ไฟตะเกียงตามหน้าต่าง ข่าวลือกระจายตามบ้าน / วันที่ 7: ชาวบ้านตื่นตระหนก ต้องการคนช่วยพาไปโบสถ์",
+    "npcsAndBehavior": "ชาวบ้านและเด็ก (B) ตลอดวัน / ซิสเตอร์เอเลน่า (B) วันที่ 7 ช่วยอพยพ",
+    "specialMechanics": "ช่วยเหลือชาวบ้าน (SUPPORT / SHARE) สะสมค่ากรรมฝ่ายดีและ Reputation / เหตุการณ์วันที่ 7 เกิดที่นี่ร่วมกับโบสถ์",
+    "tags": [
+      "RESIDENTIAL",
+      "OUTDOOR",
+      "CROWD",
+      "CENTRAL"
+    ],
+    "weatherVerbBoost": "Clear: [SUPPORT, SHARE] / Rain: [INVESTIGATE] / Night: [PERSUADE]",
+    "connectsTo": [
+      "น้ำพุกลางเมือง",
+      "โบสถ์"
+    ],
+    "safety": "NORMAL",
+    "restQuality": "normal",
+    "note": "ร่าง Claude ตาม Q-247 / Q-283 — Nok ตรวจเนื้อหา (World_Timeline วัน 7 \"ย่านชุมชน & โบสถ์\")"
   },
   {
     "zone": "โซนป่าทิศตะวันออก (Eastern Forest Zone)",

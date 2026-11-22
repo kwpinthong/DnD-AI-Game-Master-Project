@@ -114,11 +114,11 @@ describe('GEN-097 C2: a stored scenario with one locationId', () => {
     opened.sqlite.prepare('update game_scenario set data = ? where game_id = ?').run(JSON.stringify(old), GAME);
 
     const scenario = getGameScenario(opened.db, GAME)!;
-    expect(scenario.timeline.find((e) => e.id === 'd7-kidnapping')!.locationIds).toEqual(['temple']);
+    expect(scenario.timeline.find((e) => e.id === 'd7-kidnapping')!.locationIds).toEqual(['community']);
     expect(scenario.timeline.find((e) => e.id === 'd5-disaster')!.locationIds).toBeNull();
 
     advanceTimeline(opened.db, GAME, { day: 7, phase: 'HESPERION' });
-    expect(buildEventContext(opened.db, GAME, 7, 'HESPERION').active[0]).toMatchObject({ id: 'd7-kidnapping', places: [placeName('temple')] });
+    expect(buildEventContext(opened.db, GAME, 7, 'HESPERION').active[0]).toMatchObject({ id: 'd7-kidnapping', places: [placeName('community')] });
   });
 });
 
