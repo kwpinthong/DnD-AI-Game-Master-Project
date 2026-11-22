@@ -5,11 +5,14 @@ import { memberRowForToken, type Clock } from '../auth/join.ts';
 import type { Db } from '../db/client.ts';
 import { character, game } from '../db/schema.ts';
 import type { MemberRow } from '../game/service.ts';
+import type { GameAssets } from '../assets/load.ts';
 import type { PhaseResolver } from './resolver.ts';
 import { createRoomService, type RoomService } from './service.ts';
 
 export interface RoomOptions {
   resolver: PhaseResolver;
+  /** The game data (GEN-062): places and travel rules (GEN-066). */
+  assets: GameAssets;
   /** WEB_ORIGIN: a browser socket from any other origin is refused before the upgrade. */
   webOrigins: readonly string[];
   log?: (line: string) => void;
@@ -40,7 +43,7 @@ function entryRefusal(db: Db, me: MemberRow): RoomErrorCode | null {
  * `action`s. The token, action text and names are never logged.
  */
 export function registerRoomRoutes(app: FastifyInstance, db: Db, now: Clock, options: RoomOptions): RoomService {
-  const room = createRoomService(db, now, options.resolver, options.log ?? ((line) => console.log(line)));
+  const room = createRoomService(db, now, options.resolver, options.assets, options.log ?? ((line) => console.log(line)));
   // Before the WebSocket plugin closes the sockets, so their close events find no room to update.
   app.addHook('preClose', async () => room.stop());
 
@@ -86,7 +89,9 @@ export function registerRoomRoutes(app: FastifyInstance, db: Db, now: Clock, opt
         }
 
         if (!me) return refuse('unauthorized');
-        reply(message.type === 'whisper' ? room.whisper(socket, message) : room.submit(socket, message));
+        if (message.type === 'whisper') return reply(room.whisper(socket, message));
+        if (message.type === 'move') return reply(room.move(socket, message));
+        reply(room.submit(socket, message));
       });
 
       socket.on('close', () => {

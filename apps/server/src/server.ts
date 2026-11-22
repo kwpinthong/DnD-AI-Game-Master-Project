@@ -99,7 +99,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerGameRoutes(app, db, now, { ai, karmaTiers: assets.karmaTiers, ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}) });
   registerTimelineRoutes(app, db, now);
   registerVisibilityRoutes(app, db, now, assets.karmaTiers);
-  registerRoomRoutes(app, db, now, { resolver: options.phaseResolver ?? placeholderResolver, webOrigins: config.webOrigins ?? [] });
+  registerRoomRoutes(app, db, now, { resolver: options.phaseResolver ?? placeholderResolver, assets, webOrigins: config.webOrigins ?? [] });
 
   try {
     await app.listen({ host: config.host, port: config.port });

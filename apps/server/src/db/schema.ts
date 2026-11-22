@@ -137,3 +137,6 @@ export * from './schema-items.ts';
 
 // GEN-064: Active skill / item uses per game day (Daily_Limit), own file for the same reason.
 export * from './schema-tags.ts';
+
+// GEN-066: a trip that ends when the turn closes, own file for the same reason.
+export * from './schema-travel.ts';

@@ -22,6 +22,11 @@ export interface ClosedAction {
   readonly rest: boolean;
   /** Where the actor was when the turn closed; null = not placed. */
   readonly locationId: string | null;
+  /**
+   * GEN-066: this action is a trip to another zone (place id it arrives at when the turn closes). The trip's
+   * Stamina is already paid; the resolver should not charge it again. null = not travelling.
+   */
+  readonly travelingTo: string | null;
 }
 
 export interface ClosedPhase {

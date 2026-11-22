@@ -7,6 +7,7 @@ import {
   type RoomActionCode,
   type RoomEntry,
   type RoomLockCode,
+  type RoomMoveCode,
   type RoomServerMessage,
   type RoomState,
   type RoomWhisperCode,
@@ -38,6 +39,8 @@ import {
   presencesInGame,
 } from '../visibility/store.ts';
 import { witnessesOf } from '../visibility/views.ts';
+import type { GameAssets } from '../assets/load.ts';
+import { completeTravel, travel, travellingTo, withHazard } from '../travel/service.ts';
 import type { ClosedAction, PhaseResolution, PhaseResolver } from './resolver.ts';
 import {
   ensurePhaseState,
@@ -76,6 +79,11 @@ const NIGHT_SECRET_QUOTA_MESSAGE = 'คืนนี้ใช้ Secret ฟรี
 
 export type SubmitReply = { type: 'action_accepted' } | { type: 'action_rejected'; code: RoomActionCode; message: string };
 export type WhisperReply = { type: 'whisper_accepted' } | { type: 'whisper_rejected'; code: RoomWhisperCode; message: string };
+export type MoveReply =
+  | { type: 'move_accepted'; kind: 'same_zone' | 'cross_zone' | 'rift'; place: PlaceView; arrives: 'now' | 'next_turn' }
+  | { type: 'move_rejected'; code: RoomMoveCode; message: string };
+
+const TRAVELING_ACTION_MESSAGE = 'เทิร์นนี้ใช้ไปกับการเดินทางข้ามโซนแล้ว ส่ง action ได้อีกเมื่อถึงที่หมายเทิร์นถัดไป';
 
 export interface RoomService {
   /** Registers an authenticated socket: replays entries after `afterSeq`, then sends the room and `ready`. */
@@ -84,6 +92,8 @@ export interface RoomService {
   submit(socket: RoomSocket, input: { text: string; visibility: string; rest?: boolean }): SubmitReply;
   /** A Whisper to one ally (GEN-067): stored as a `whisper` entry for sender, target and the Human GM. */
   whisper(socket: RoomSocket, input: { to: string; text: string }): WhisperReply;
+  /** A walk to another place (GEN-066): no weather, start right, password or INFILTRATE from the room yet. */
+  move(socket: RoomSocket, input: { to: string }): MoveReply;
   /** Shutdown: forgets every socket (their close events no longer touch the database), then waits for running resolves. */
   stop(): Promise<void>;
 }
@@ -94,7 +104,7 @@ export interface RoomService {
  * recipients. All database work is synchronous (better-sqlite3), so a replay and the socket registration
  * happen in one tick and no live entry can slip between them.
  */
-export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, log: (line: string) => void): RoomService {
+export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, assets: GameAssets, log: (line: string) => void): RoomService {
   /** gameId → socket → member. */
   const rooms = new Map<string, Map<RoomSocket, MemberRow>>();
   const resolving = new Map<string, Promise<void>>();
@@ -259,7 +269,9 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
         const locations = locationSnapshot(db, gameId);
         const actions: ClosedAction[] = state.order.flatMap((id) => {
           const a = state.submissions[id];
-          return a ? [{ memberId: id, text: a.text, visibility: a.visibility, rest: a.rest === true, locationId: locations.get(id) ?? null }] : [];
+          return a
+            ? [{ memberId: id, text: a.text, visibility: a.visibility, rest: a.rest === true, locationId: locations.get(id) ?? null, travelingTo: travellingTo(db, id) }]
+            : [];
         });
 
         let resolution: PhaseResolution;
@@ -289,14 +301,18 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
               leaveHiddenEvidence(tx, { gameId, locationId: a.locationId, day: at.day, actorMemberId: a.memberId }, t);
             }
           }
-          let step = phaseStep(current, { type: 'resolved', results: withKarma(tx, current, resolution.results ?? {}) }, rng);
+          // GEN-066: a turn spent in the forest / at the sea from day 5 costs Stamina, on top of what the resolver said.
+          const settled = (results: Readonly<Record<string, PlayerResult>>) => withHazard(tx, assets, gameId, current, withKarma(tx, current, results));
+          let step = phaseStep(current, { type: 'resolved', results: settled(resolution.results ?? {}) }, rng);
           if (!step.ok) {
             log(`[room] resolver results refused (game ${gameId}): ${step.error.code}; the turn advances without them`);
-            step = phaseStep(current, { type: 'resolved', results: withKarma(tx, current, {}) }, rng);
+            step = phaseStep(current, { type: 'resolved', results: settled({}) }, rng);
           }
           if (!step.ok) throw new Error(`phase engine refused an empty result: ${step.error.code}`);
           savePhaseState(tx, gameId, step.state, t);
           syncCharacterStats(tx, step.state, t);
+          // GEN-066: trips to another zone arrive, rift visitors go back (after the feed's witnesses were taken).
+          completeTravel(tx, gameId, t);
           return rows;
         });
         if (published === null) return;
@@ -362,6 +378,7 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
       if (problem) return reject(problem.code, problem.message);
       const text = normalizeActionText(input.text);
       const rest = input.rest === true;
+      if (travellingTo(db, me.id) !== null) return reject('traveling', TRAVELING_ACTION_MESSAGE);
 
       const outcome = db.transaction((tx): SubmitReply | PhaseState => {
         const t = now();
@@ -409,6 +426,23 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
       if (typeof published === 'string') return rejectWhisper(published);
       deliver(me.gameId, [published]);
       return { type: 'whisper_accepted' };
+    },
+
+    move(socket, input) {
+      const me = memberOf(socket);
+      if (!me || me.role === 'gm') return { type: 'move_rejected', code: 'cannot_act', message: LOCK_MESSAGE.not_a_player };
+      const outcome = db.transaction((tx) => {
+        const lock = lockOf(me, ensurePhaseState(tx, me.gameId, now()));
+        if (lock) return { ok: false as const, code: 'cannot_act' as const, message: LOCK_MESSAGE[lock] };
+        return travel(tx, assets, me.gameId, me.id, { to: normalizeActionText(input.to) }, now());
+      });
+      if (!outcome.ok) {
+        const code: RoomMoveCode = outcome.code === 'infiltrate_invalid' ? 'cannot_act' : outcome.code;
+        return { type: 'move_rejected', code, message: outcome.message };
+      }
+      broadcastRoom(me.gameId);
+      if (outcome.state.status === 'resolving') startResolving(me.gameId);
+      return { type: 'move_accepted', kind: outcome.kind, place: outcome.place, arrives: outcome.arrives };
     },
 
     async stop() {
