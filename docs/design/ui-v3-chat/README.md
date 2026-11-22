@@ -65,9 +65,13 @@ navy `#0F1A2B` · พื้นลึก `#0B1422` · panel `#16243A` / `#13203A`
 ไฟล์เหล่านี้ตัดพื้นจากภาพ preview จะถูกแทนที่ด้วยไฟล์จริง (ชื่อเดิม) ตาม `HANDOFF-scenario-ui-assets.md`
 `frames/` เป็นโฟลเดอร์ใหม่ ให้เพิ่มแถวในตาราง "โฟลเดอร์" ของ `apps/web/src/assets/README.md` ตอนทำ GEN-122
 
-## ภาพสถานที่ (Nok 2026-11-22)
+## ภาพสถานที่ตามช่วงเวลา (Nok 2026-11-22)
 
-`illustrations/place-<id>.webp` (800px) + `place-<id>@2x.webp` (1600px) ครบ 13 แห่ง: inn, fountain, temple, forest, farmland, theater, manor, market, barracks, sea, dawn-church, clinic, library
-- ใช้ใน: การ์ดสถานที่ในแท็บ "สถานที่" (และพื้นหลังจางของ feed ได้ถ้าต้องการ) เลือกไฟล์จาก `PlaceView.id` ใช้ `srcset` 1x/2x
-- ยังไม่มีภาพ: `church-crypt`, `community`, `astral-rift` → แสดงกรอบว่างพื้น navy + ชื่อสถานที่ (ห้ามแตก)
-- ต้นฉบับ PNG (~43 MB) อยู่ใน `assets/place/` **ห้าม commit** (README ห้ามไฟล์ต้นฉบับใหญ่ใน repo) ให้ย้ายออกหรือใส่ .gitignore
+`illustrations/place-<id>-<phase>.webp` (800px) ครบ 13 แห่ง × 4 ช่วง = 52 ไฟล์
+- id: inn, fountain, temple, forest, farmland, theater, manor, market, barracks, sea, dawn-church, clinic, library
+- phase (ตัวเล็ก): `eosoria` (เช้า), `solarion` (บ่าย), `hesperion` (เย็น), `noctherion` (ค่ำ) ตรงกับ `phase` ใน payload
+- การเลือก: `place-${PlaceView.id}-${room.phase.toLowerCase()}.webp` ทำเป็นตาราง import ที่เดียว (Vite ต้อง import แบบ static: ใช้ `import.meta.glob('./assets/illustrations/place-*.webp', { eager: true, import: 'default' })` แล้วเลือกจาก key)
+- เปลี่ยนช่วงเวลา → ภาพเปลี่ยนตาม (crossfade สั้น ๆ ได้ ถ้าผู้ใช้ไม่ได้ตั้ง prefers-reduced-motion)
+- ไม่มีภาพของช่วงนั้น → ใช้ `eosoria` ของสถานที่เดียวกัน / ไม่มีภาพของสถานที่เลย (church-crypt, community, astral-rift, id ไม่รู้จัก) → กรอบว่างพื้น navy + ชื่อ
+- `loading="lazy"`, alt = ชื่อสถานที่ (+ ช่วงเวลา)
+- ต้นฉบับ PNG อยู่ใน `assets/place/<PHASE>/` (gitignore) ห้าม import
