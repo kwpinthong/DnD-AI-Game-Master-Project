@@ -244,8 +244,8 @@ export const CONTRACT: readonly ContractItem[] = [
   // --- after the end ---
   http('GET', '/api/game/rating', null, 'GameRatingResponse', pending('GEN-078 + GEN-079', 'player', ['ending-rating'])),
   http('PUT', '/api/game/rating', 'GameRatingRequest', 'GameRatingResponse', pending('GEN-078 + GEN-079', 'player', ['ending-rating'])),
-  http('PUT', '/api/game/rating/likes/:seq', null, 'GameRatingResponse', pending('GEN-078 + GEN-081', 'player', ['ending-rating'], '👍 entry `seq` ของ action → ผล')),
-  http('DELETE', '/api/game/rating/likes/:seq', null, 'GameRatingResponse', pending('GEN-078 + GEN-081', 'player', ['ending-rating'])),
+  http('PUT', '/api/game/rating/likes/:sourceRef', null, 'GameRatingResponse', pending('GEN-078 + GEN-081', 'player', ['ending-rating'], '👍 action → ผล ด้วย `sourceRef` (ADR GEN-077)')),
+  http('DELETE', '/api/game/rating/likes/:sourceRef', null, 'GameRatingResponse', pending('GEN-078 + GEN-081', 'player', ['ending-rating'])),
 
   // --- server owner ---
   http('POST', '/api/admin/session', 'AdminSessionRequest', 'AdminSessionResponse', ready('GEN-061', 'any', ['ai-usage', 'learning-library'])),
@@ -295,4 +295,11 @@ export const PENDING_FIELDS: readonly PendingField[] = [
   { schema: 'GameMemorySetting', path: 'enabled', owner: 'GEN-083', screens: ['create-game'], note: 'จะเป็น `CreateGameRequest.memory`' },
   { schema: 'JoinStyleFields', path: 'playerCode', owner: 'GEN-082', screens: ['join'], note: 'จะเป็น `JoinRequest.playerCode` + `noStyle`' },
   { schema: 'GameRevealPlayer', path: 'epilogue', owner: 'new', screens: ['ending'], note: 'ลักษณะ, ฉายาสุดท้าย, บทส่งท้าย (ช่องว่างของ GEN-059)' },
+  {
+    schema: 'GameRevealPlayer',
+    path: 'secretActions[].sourceRef',
+    owner: 'GEN-078',
+    screens: ['ending', 'ending-rating'],
+    note: 'ref ของ action ที่ 👍 ชี้ (ADR GEN-077); action เปิดเผยใน log เต็มก็ต้องมี ref แบบเดียวกัน',
+  },
 ];

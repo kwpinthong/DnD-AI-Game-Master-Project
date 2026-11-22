@@ -218,7 +218,7 @@ const revealPlayer: In<typeof p.GameRevealPlayer> = {
   outcome: 'survived',
   spawn: 'ลูกมือล้างจานประจำร้าน',
   companions: ['โนอา'],
-  secretActions: [{ day: 2, phase: 'HESPERION', turn: 1, text: 'แอบเข้าโบสถ์ชั้นใต้ดิน' }],
+  secretActions: [{ day: 2, phase: 'HESPERION', turn: 1, text: 'แอบเข้าโบสถ์ชั้นใต้ดิน', sourceRef: '2-HESPERION-1-7' }],
   appearance: 'หญิงผ้าคลุมเทา แผลเป็นที่คาง',
   finalTitle: 'ผู้ใจบุญ',
   epilogue: 'ลินยืนดูแสงรุ่งอรุณคืนสู่เมือง',
@@ -250,15 +250,21 @@ const origin: In<typeof p.OriginView> = {
   narration: 'คุณลืมตาขึ้นท่ามกลางกองจานสกปรก…',
 } as const;
 
-const rating: In<typeof p.GameRatingView> = { mine: { score: 9, comment: 'สนุกมาก' }, liked: [12], average: 8.6, raters: 3, members: 4, eligible: true, blocker: null };
-const learningEntry: In<typeof p.LearningEntryView> = {
-  id: 'le-1',
-  kind: 'ruling',
-  source: { gameId: 'g-old', name: 'คืนจันทราโลหิต', score: 8.6, endedAt: '2026-11-20T00:00:00.000Z' },
-  createdAt: '2026-11-20T01:00:00.000Z',
-  text: 'โน้มน้าวทหารยามด้วยเหรียญ สำเร็จ',
-  ruling: { action: 'ยื่นเหรียญให้ทหารยาม', tags: ['PERSUADE', 'GUARD'], rank: null, d20: 12, dc: 11, outcome: 'success' },
-};
+const rating: In<typeof p.GameRatingView> = { mine: { score: 9, comment: 'สนุกมาก' }, liked: ['2-HESPERION-1-7'], average: 8.6, raters: 3, members: 4, eligible: true, blocker: null };
+const learningSource = { sourceGameId: 'g-old', sourceGameName: 'คืนจันทราโลหิต', sourceScore: 8.6, status: 'active', createdAt: 1_795_200_000_000 } as const;
+const learningEntries: In<typeof p.LearningEntryView>[] = [
+  {
+    ...learningSource,
+    id: 'le-1',
+    type: 'ruling',
+    content: 'ผู้เล่นยื่นเหรียญให้ทหารยาม → โน้มน้าวสำเร็จ',
+    tags: ['persuade', 'guard'],
+    detail: { sourceRef: '3-SOLARION-1-4', actionText: 'ผู้เล่นยื่นเหรียญให้ทหารยาม', check: 'ladder', dcLabel: 'ปานกลาง', d20: 12, result: 'success', thumbs: 3, players: 4 },
+  },
+  { ...learningSource, id: 'le-2', type: 'lore', content: 'เมืองรอดเพราะม่านปาฏิหาริย์ โนอากลายเป็นเซราฟิเอล', tags: ['ending_good'], detail: { endingPath: 'good', npcIds: ['noa'] } },
+  { ...learningSource, id: 'le-3', type: 'feedback_note', content: 'อยากให้ AI GM บอกเบาะแสชัดขึ้นตอนวันที่ 7', tags: [], detail: { fromComments: 2 } },
+  { ...learningSource, id: 'le-4', type: 'style', status: 'suspended', content: 'ชอบสังเกตก่อนลงมือ', tags: ['observe'], detail: { topVerbs: ['observe', 'persuade'], secretShare: 0.25 } },
+];
 
 export const CONTRACT_FIXTURES: Fixtures = {
   HealthResponse: [{ ok: true, db: 'connected' }],
@@ -442,8 +448,8 @@ export const CONTRACT_FIXTURES: Fixtures = {
   ],
   LearningLibraryResponse: [
     {
-      entries: [learningEntry, { ...learningEntry, id: 'le-2', kind: 'lore', text: 'เมืองรอดเพราะม่านปาฏิหาริย์', ruling: null }],
-      counts: { lore: 1, feedback_note: 0, ruling: 1, style: 0 },
+      entries: learningEntries,
+      counts: { lore: 1, feedback_note: 1, ruling: 1, style: 1 },
     },
     { entries: [], counts: { lore: 0, feedback_note: 0, ruling: 0, style: 0 } },
   ],

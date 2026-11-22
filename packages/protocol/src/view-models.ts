@@ -219,11 +219,12 @@ export type GameRatingRequest = z.input<typeof GameRatingRequest>;
 /**
  * The rating part of the end page. `average` is the game score (public, not a secret value). Eligible for
  * learning when average > 8 and raters ≥ half the members (Q-163, Q-164); `blocker` says which is missing.
- * `liked`: the entry `seq`s (action → result) this viewer gave a 👍 (GEN-081 rulings).
+ * `liked`: the `sourceRef`s (`${day}-${phase}-${turn}-${actionSeq}`, GEN-077 ADR) of the action → result
+ * rows this viewer gave a 👍 (GEN-081 rulings).
  */
 export const GameRatingView = z.strictObject({
   mine: z.strictObject({ score: z.number().int().min(RATING_MIN).max(RATING_MAX), comment: z.string() }).nullable(),
-  liked: z.array(z.number().int().min(1)),
+  liked: z.array(z.string()),
   average: z.number().nullable(),
   raters: z.number().int().min(0),
   members: z.number().int().min(0),
@@ -232,28 +233,50 @@ export const GameRatingView = z.strictObject({
 });
 export type GameRatingView = z.infer<typeof GameRatingView>;
 
-/** 200 from GET / PUT /api/game/rating and PUT / DELETE /api/game/rating/likes/:seq. */
+/** 200 from GET / PUT /api/game/rating and PUT / DELETE /api/game/rating/likes/:sourceRef. */
 export const GameRatingResponse = z.strictObject({ rating: GameRatingView });
 export type GameRatingResponse = z.infer<typeof GameRatingResponse>;
 
 // --- GEN-084: Learning library (admin) ---
 
-export const LearningEntryKind = z.enum(['lore', 'feedback_note', 'ruling', 'style']);
-export type LearningEntryKind = z.infer<typeof LearningEntryKind>;
+/**
+ * Shapes follow `LearningEntry` of the GEN-077 ADR "Learning Across Games" (proposed): `type`, source game
+ * snapshot, `content`, `tags`, `status`, `detail` per type. The library view leaves out the style entry's
+ * `playerKey` (an HMAC the page has no use for). Rulings carry the difficulty word, never the DC number.
+ */
+export const LearningType = z.enum(['lore', 'feedback_note', 'ruling', 'style']);
+export type LearningType = z.infer<typeof LearningType>;
 
-/** One stored entry. An admin page: numbers (score, d20, DC) may show here. */
-export const LearningEntryView = z.strictObject({
+const LearningBase = z.strictObject({
   id: z.string(),
-  kind: LearningEntryKind,
-  source: z.strictObject({ gameId: z.string(), name: z.string(), score: z.number(), endedAt: z.string() }),
-  createdAt: z.string(),
-  /** The text the AI GM gets (lore, note, style summary, or the ruling's result). */
-  text: z.string(),
-  /** Rulings only (GEN-081): the action, its tags, rank, dice and result. */
-  ruling: z
-    .strictObject({ action: z.string(), tags: z.array(z.string()), rank: z.string().nullable(), d20: z.number().int(), dc: z.number().int(), outcome: RollOutcome })
-    .nullable(),
+  sourceGameId: z.string(),
+  sourceGameName: z.string(),
+  sourceScore: z.number().min(0).max(10),
+  content: z.string(),
+  tags: z.array(z.string()),
+  status: z.enum(['active', 'suspended']),
+  /** epoch ms */
+  createdAt: z.number().int(),
 });
+
+export const LearningEntryView = z.discriminatedUnion('type', [
+  LearningBase.extend({ type: z.literal('lore'), detail: z.strictObject({ endingPath: z.enum(['good', 'evil', 'neutral', 'none']), npcIds: z.array(z.string()) }) }),
+  LearningBase.extend({ type: z.literal('feedback_note'), detail: z.strictObject({ fromComments: z.number().int().min(1) }) }),
+  LearningBase.extend({
+    type: z.literal('ruling'),
+    detail: z.strictObject({
+      sourceRef: z.string(),
+      actionText: z.string(),
+      check: z.enum(['ladder', 'pvp', 'auto', 'none']),
+      dcLabel: z.string().nullable(),
+      d20: z.number().int().min(1).max(20).nullable(),
+      result: z.enum(['crit', 'success', 'fail', 'fumble', 'blocked', 'no_target', 'auto', 'none']),
+      thumbs: z.number().int(),
+      players: z.number().int(),
+    }),
+  }),
+  LearningBase.extend({ type: z.literal('style'), detail: z.strictObject({ topVerbs: z.array(z.string()), secretShare: z.number().min(0).max(1) }) }),
+]);
 export type LearningEntryView = z.infer<typeof LearningEntryView>;
 
 /** 200 from GET /api/admin/learning (and after a delete). */
