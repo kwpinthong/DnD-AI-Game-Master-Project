@@ -44,6 +44,16 @@ export {
 export * from './crossplayer/types.ts';
 export { orderPhaseActions, replayPhaseActions, resolvePhaseActions, validatePhaseActions } from './crossplayer/phase.ts';
 export * from './phase/types.ts';
-export { createPhaseState, phaseStep } from './phase/engine.ts';
+export {
+  REST,
+  createPhaseState,
+  gainStamina,
+  isDrowsy,
+  nextPoint,
+  phaseStep,
+  restorePhaseState,
+  secretQuotaUsed,
+  turnNumber,
+} from './phase/engine.ts';
 export { socialTitle, STARTING_STATS } from './character.ts';
 export { injuryText, NPC_NAME_REVEAL_AFFINITY, revealsNpcName, type InjuryText } from './visibility.ts';
