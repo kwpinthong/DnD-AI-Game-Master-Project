@@ -84,6 +84,12 @@ export interface BudgetReachedEvent {
 export interface AiService {
   ready(): AiReadyState;
   call<T>(trigger: AiTrigger<T>): Promise<AiServiceResult<T>>;
+  /**
+   * Q-221: the ceiling notice for the owner / Human GM while this game's spend this month (stored AI usage) is
+   * at or over the ceiling; null otherwise. Derived on every read, so it survives a restart and clears when the
+   * ceiling is raised or the month turns.
+   */
+  budgetNotice(gameId: string): string | null;
 }
 
 export interface AiServiceDeps {
@@ -124,6 +130,9 @@ export function createAiService(deps: AiServiceDeps): AiService {
 
   return {
     ready,
+    budgetNotice(gameId) {
+      return usage.spentThisMonth(gameId, now()) >= ceilingUsdMicros ? `${budgetMessage()} ระหว่างนี้บรรยายของ AI GM จะเป็นบรรยายสำรองจากระบบ` : null;
+    },
     async call<T>(trigger: AiTrigger<T>): Promise<AiServiceResult<T>> {
       const readiness = ready();
       if (!readiness.ok) return { ok: false, error: new AiServiceError('ai_not_ready', readiness.message, 'owner_gm') };
@@ -212,10 +221,15 @@ export function createAiService(deps: AiServiceDeps): AiService {
     },
   };
 
-  function budgetReached(gameId: string, spent: number, at: number): AiServiceError {
-    const message =
+  function budgetMessage(): string {
+    return (
       `AI GM ของเกมนี้ใช้ครบเพดาน ${usdText(ceilingUsdMicros)} USD ของเดือนนี้แล้ว ` +
-      'จึงหยุดเรียก AI จนถึงเดือนหน้า หรือจนกว่าเจ้าของ server จะปรับเพดาน (AI_GAME_MONTHLY_USD)';
+      'จึงหยุดเรียก AI จนถึงเดือนหน้า หรือจนกว่าเจ้าของ server จะปรับเพดาน (AI_GAME_MONTHLY_USD)'
+    );
+  }
+
+  function budgetReached(gameId: string, spent: number, at: number): AiServiceError {
+    const message = budgetMessage();
     const key = `${gameId}:${monthStartUtc(at)}`;
     if (!notified.has(key)) {
       notified.add(key);

@@ -21,6 +21,8 @@ export interface RoomOptions {
   weather?: WeatherService;
   /** Q-185: after the turn that ends a game is published (the end-of-game backup). */
   onGameEnded?: (gameId: string, status: 'finale' | 'game_over') => void;
+  /** Q-221: the game's AI budget notice for its owner / Human GM, shown as a lasting gmStatus. */
+  budgetNotice?: (gameId: string) => string | null;
 }
 
 /** Close codes (4000-4999 are the application's own). */
@@ -48,7 +50,7 @@ function entryRefusal(db: Db, me: MemberRow): RoomErrorCode | null {
  * `action`s. The token, action text and names are never logged.
  */
 export function registerRoomRoutes(app: FastifyInstance, db: Db, now: Clock, options: RoomOptions): RoomService {
-  const room = createRoomService(db, now, options.resolver, options.assets, options.log ?? ((line) => console.log(line)), options.weather, options.onGameEnded);
+  const room = createRoomService(db, now, options.resolver, options.assets, options.log ?? ((line) => console.log(line)), options.weather, options.onGameEnded, options.budgetNotice);
   // Before the WebSocket plugin closes the sockets, so their close events find no room to update.
   app.addHook('preClose', async () => room.stop());
 

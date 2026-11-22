@@ -137,6 +137,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     webOrigins: config.webOrigins ?? [],
     weather,
     onGameEnded: (gameId, status) => void backups?.gameEnded(gameId, status),
+    budgetNotice: (gameId) => ai.budgetNotice(gameId),
   });
   registerCompanionRoutes(app, db, now, assets);
   registerAdminRoutes(app, db, now, {
