@@ -26,6 +26,8 @@ export interface PlayerState extends ActorState {
 export interface CrossPlayerState {
   readonly players: Readonly<Record<string, PlayerState>>;
   readonly npcs: Readonly<Record<string, NpcState>>;
+  /** GEN-069: `ResolutionInput.publicRepScale` by the location id the actor acts at (the fountain 1.5). */
+  readonly publicRepScale?: Readonly<Record<string, number>>;
 }
 
 /** What A means to do to B. `rescue` and `steal` may target an unconscious player (spec §10.2). */

@@ -159,7 +159,8 @@ export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
   const staminaAfter = clamp(actor.stamina - net - (tagging?.skillStamina ?? 0) - (weather?.stamina ?? 0), 0, RULES.staminaMax);
 
   // Reputation only for Public, or Secret that was caught. Karma always.
-  const repDelta = proposal.visibility === 'public' ? effects.repDelta : caught ? proposal.repDeltaIfCaught : 0;
+  // GEN-069: a Public action at the fountain moves Reputation ×1.5 (toward zero, + 0 turns -0 into 0).
+  const repDelta = proposal.visibility === 'public' ? Math.trunc(effects.repDelta * (input.publicRepScale ?? 1)) + 0 : caught ? proposal.repDeltaIfCaught : 0;
   const rep = change(actor.rep, repDelta);
   const karma = change(actor.karma, effects.karmaDelta);
 

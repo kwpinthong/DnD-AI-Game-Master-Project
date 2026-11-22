@@ -70,6 +70,8 @@ export { orderPhaseActions, replayPhaseActions, resolvePhaseActions, validatePha
 export * from './phase/types.ts';
 export {
   REST,
+  REST_QUALITY_STAMINA,
+  TRAIN,
   createPhaseState,
   gainStamina,
   playerHpMax,

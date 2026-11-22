@@ -168,6 +168,11 @@ export interface ResolutionInput {
   readonly tags?: TagContext;
   /** The period's weather where the actor is (GEN-068): the server applies its d20 and Stamina rules. */
   readonly weather?: ActionWeather;
+  /**
+   * GEN-069: the place scales a Public action's Reputation change (the fountain ×1.5, Location
+   * Special_Mechanics), rounded toward zero like damage ×1.5 (GEN-042). Absent = 1.
+   */
+  readonly publicRepScale?: number;
 }
 
 export type ProposalErrorCode =

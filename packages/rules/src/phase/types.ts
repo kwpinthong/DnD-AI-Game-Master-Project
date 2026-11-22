@@ -99,6 +99,10 @@ export interface PlayerPhaseState {
   readonly knockedOut: KnockedOut | null;
   /** The character's own Max HP (GEN-065 / Q-210); absent (older saved states) = the state's `hpMax`. */
   readonly hpMax?: number;
+  /** GEN-069 (Q-088): the day of the last TRAIN at the guild (once a day); absent = never. */
+  readonly trainedDay?: number;
+  /** GEN-069: the turn of the last REST at the infirmary; turn 1 then turn 2 of one period = HP back to max. */
+  readonly clinicRestAt?: TurnPoint;
 }
 
 /** One action as the player sends it. The AI GM turns it into a ResolutionProposal later (GEN-051). */
@@ -107,9 +111,18 @@ export interface PlayerAction {
   readonly visibility: Visibility;
   /** The player rests (REST / SLEEP) this turn instead of acting (spec §4.1 / §4.2). */
   readonly rest?: boolean;
-  /** Night rest at the inn: Stamina +rollRange(15, 25) + sleepBonus, capped at max. Needs `rest` and NOCTHERION. */
-  readonly restAtInn?: boolean;
+  /**
+   * GEN-069: TRAIN at the guild instead of a plain action (still an action the GM resolves): Max HP +3, once a
+   * day, up to 45 (Q-088). The server checks the place; not with `rest`.
+   */
+  readonly train?: boolean;
 }
+
+/** Q-218: the sheet's Location Rest_Quality, as the scenario stores it. */
+export type RestQuality = 'poor' | 'normal' | 'good' | 'excellent';
+
+/** GEN-069 Location special mechanics for a REST: the inn (paid by the server) and the infirmary. */
+export type RestSite = 'inn' | 'clinic';
 
 export type PhaseStatus = 'collecting' | 'resolving' | 'finale' | 'game_over';
 
@@ -137,8 +150,18 @@ export interface PlayerResult {
   readonly stamina?: number;
   /** -100..100; the player's karma after the turn (decides the Q-087 Evil exception). */
   readonly karma?: number;
-  /** Where the player sleeps tonight is the inn (forced sleep in NOCTHERION; a NOCTHERION `rest` action uses `restAtInn`). */
-  readonly atInn?: boolean;
+  /**
+   * Q-218: Rest_Quality of where the player is: a NOCTHERION sleep (REST or forced) recovers its
+   * `REST_QUALITY_STAMINA`. Absent = poor (the old rough rest).
+   */
+  readonly restQuality?: RestQuality;
+  /** GEN-069: a REST at a place with special mechanics (the inn once the server took its coins, the infirmary). */
+  readonly restSite?: RestSite;
+  /**
+   * Q-209: extra recovery when the player recovers this turn, summed by the server (start scenario REST passives).
+   * Whole numbers >= 0, capped at max like the recovery; nothing when the player does not recover.
+   */
+  readonly restBonus?: { readonly stamina?: number; readonly hp?: number };
   /** Needed only when HP reaches 0. Default `normal` / 0. */
   readonly safety?: Safety;
   readonly primaryAffinity?: number;
@@ -153,7 +176,7 @@ export type PhaseEvent =
 /** Why a player sleeps through a turn. Q-046: the feed labels these turns "ระหว่างคุณหลับ". */
 export type SleepReason = 'exhausted' | 'night_rest';
 
-export type RecoveryKind = 'night_inn' | 'night_rough' | 'day_rest' | 'exhausted_day' | 'exhausted_night_inn' | 'exhausted_night_rough';
+export type RecoveryKind = 'night_rest' | 'day_rest' | 'exhausted_day' | 'exhausted_night';
 
 export type PhaseLogEntry =
   | { readonly type: 'submitted'; readonly at: TurnPoint; readonly playerId: string; readonly action: PlayerAction; readonly replaced: boolean }
@@ -176,11 +199,12 @@ export type PhaseLogEntry =
       readonly at: TurnPoint;
       readonly playerId: string;
       readonly kind: RecoveryKind;
-      /** The rollRange(15, 25) face for an inn rest; null when the gain is fixed. */
-      readonly roll: number | null;
+      readonly site: RestSite | null;
       readonly stamina: { readonly before: number; readonly gain: number; readonly after: number };
       readonly hp: { readonly before: number; readonly gain: number; readonly after: number };
     }
+  /** GEN-069 TRAIN at the guild: Max HP up (HP unchanged). */
+  | { readonly type: 'trained'; readonly at: TurnPoint; readonly playerId: string; readonly hpMax: { readonly before: number; readonly after: number } }
   | { readonly type: 'exhausted'; readonly at: TurnPoint; readonly playerId: string; readonly sleepsAt: TurnPoint }
   | { readonly type: 'knocked_out'; readonly at: TurnPoint; readonly playerId: string; readonly wakeAt: TurnPoint }
   | { readonly type: 'rescued_by_player'; readonly at: TurnPoint; readonly playerId: string }
@@ -205,6 +229,10 @@ export type PhaseErrorCode =
   | 'unknown_player'
   | 'cannot_act'
   | 'secret_quota_used'
+  /** GEN-069 (Q-088): already trained today. */
+  | 'train_used'
+  /** GEN-069 (Q-088): Max HP is at the TRAIN ceiling. */
+  | 'train_cap'
   | 'invalid_action'
   | 'invalid_result';
 

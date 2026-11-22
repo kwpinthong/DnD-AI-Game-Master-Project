@@ -585,6 +585,8 @@ export function createRoomService(
     unknown_player: 'not_a_player',
     cannot_act: null,
     secret_quota_used: 'secret_quota_used',
+    train_used: 'train_used',
+    train_cap: 'train_cap',
     invalid_action: 'invalid_action',
     not_resolving: 'invalid_action',
     invalid_result: 'invalid_action',

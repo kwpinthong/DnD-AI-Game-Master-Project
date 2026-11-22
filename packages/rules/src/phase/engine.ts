@@ -1,4 +1,3 @@
-import { rollRange } from '../random.ts';
 import type { Rng } from '../rng.ts';
 import { rollRescue, wakeAfter, type RescueOutcome } from '../resolution/rescue.ts';
 import { RULES } from '../resolution/tables.ts';
@@ -16,6 +15,7 @@ import {
   type Period,
   type PlayerCondition,
   type RecoveryKind,
+  type RestQuality,
   type SleepReason,
   type PhaseError,
   type PhaseErrorCode,
@@ -31,13 +31,21 @@ import {
 
 /**
  * Sleep recovery per turn (spec §4, §14 `rest.*`).
- * - NOCTHERION rest at the inn: Stamina +rollRange(15, 25) + on_sleep bonus (GDD "พักค่ำ +15..25", GEN-052 C5;
- *   spec §4.1 still lists a fixed inn +25 and needs updating), HP +10.
- * - NOCTHERION rest anywhere else: the spec's `rough` row, +15 + bonus, HP +5, until location rules (GEN-060) say more.
- * - Forced sleep outside NOCTHERION: +15 + bonus (spec §4.3). A `rest` action outside NOCTHERION: +8, no HP (spec §4.2).
+ * - NOCTHERION sleep (REST or forced): Stamina by the place's Rest_Quality (Q-218, `REST_QUALITY_STAMINA`;
+ *   absent = poor) + on_sleep bonus, HP +5 (+10 at the paid inn, +15 at the infirmary).
+ * - Forced sleep outside NOCTHERION: +15 + bonus (spec §4.3). A `rest` action outside NOCTHERION: +8, no HP
+ *   (spec §4.2); +10 at the paid inn, HP +15 at the infirmary (GEN-069 Location Special_Mechanics).
+ * - Infirmary, both turns of one period: HP back to Max HP.
+ * - The server's `restBonus` (Q-209 start passives) on top of any of these.
  * Everything is capped at max (System_Rules: Stamina ceiling 30 for the whole game).
  */
-export const REST = { innMin: 15, innMax: 25, rough: 15, exhaustedDay: 15, day: 8, hpInn: 10, hpRough: 5 } as const;
+export const REST = { exhaustedDay: 15, day: 8, innDay: 10, hpNight: 5, hpInnNight: 10, hpClinic: 15 } as const;
+
+/** Q-218 (Nok's values): night Stamina by Rest_Quality. */
+export const REST_QUALITY_STAMINA: Readonly<Record<RestQuality, number>> = { poor: 15, normal: 20, good: 25, excellent: 30 };
+
+/** GEN-069 TRAIN at the guild (Q-088): Max HP +3, once a day, never above 45. */
+export const TRAIN = { hpMax: 3, hpMaxCap: 45 } as const;
 
 /** A player's own Max HP (GEN-065 / Q-210), else the state's (100 in older saved states). */
 export function playerHpMax(state: Pick<PhaseState, 'hpMax'>, p: Pick<PlayerPhaseState, 'hpMax'>): number {
@@ -162,8 +170,10 @@ function submit(state: PhaseState, playerId: string, action: PlayerAction): Phas
   if (!player) return fail('unknown_player', `No player "${playerId}"`);
 
   if (!player.mustSubmit) return fail('cannot_act', `${playerId} is ${player.condition} this turn; the input is locked`);
-  if (action.restAtInn && (!action.rest || !isNight(state))) {
-    return fail('invalid_action', `restAtInn needs rest: true and is only valid in ${NIGHT_PERIOD}`);
+  if (action.train) {
+    if (action.rest) return fail('invalid_action', 'TRAIN and REST are two different actions');
+    if (player.trainedDay === state.day) return fail('train_used', `${playerId} already trained today (once a day)`);
+    if (playerHpMax(state, player) >= TRAIN.hpMaxCap) return fail('train_cap', `${playerId} is at the TRAIN ceiling (Max HP ${TRAIN.hpMaxCap})`);
   }
   if (action.visibility === 'secret' && secretQuotaUsed(player, state)) {
     return fail(
@@ -216,6 +226,9 @@ function checkResults(state: PhaseState, results: Readonly<Record<string, Player
     const hpMax = playerHpMax(state, state.players[id]!);
     if (bad(r.hp, 0, hpMax)) return { code: 'invalid_result', message: `${id}.hp must be a whole number 0..${hpMax}` };
     if (bad(r.stamina, 0, state.staminaMax)) return { code: 'invalid_result', message: `${id}.stamina must be a whole number 0..${state.staminaMax}` };
+    if (bad(r.restBonus?.stamina, 0, state.staminaMax) || bad(r.restBonus?.hp, 0, hpMax)) {
+      return { code: 'invalid_result', message: `${id}.restBonus must be whole numbers >= 0` };
+    }
     if (bad(r.karma, RULES.rangeMin, RULES.rangeMax)) {
       return { code: 'invalid_result', message: `${id}.karma must be a whole number ${RULES.rangeMin}..${RULES.rangeMax}` };
     }
@@ -224,58 +237,64 @@ function checkResults(state: PhaseState, results: Readonly<Record<string, Player
 }
 
 /** Which recovery a player gets at the end of this turn, if any (spec §4.1-4.3). */
-function recoveryKind(state: PhaseState, p: PlayerPhaseState, r: PlayerResult): RecoveryKind | null {
+function recoveryKind(state: PhaseState, p: PlayerPhaseState): RecoveryKind | null {
   const night = isNight(state);
-  if (p.condition === 'exhausted') {
-    if (!night) return 'exhausted_day';
-    return r.atInn ? 'exhausted_night_inn' : 'exhausted_night_rough';
-  }
+  if (p.condition === 'exhausted') return night ? 'exhausted_night' : 'exhausted_day';
   const action = state.submissions[p.id];
   if (p.condition !== 'awake' || !action?.rest) return null;
-  if (!night) return 'day_rest';
-  return action.restAtInn ? 'night_inn' : 'night_rough';
+  return night ? 'night_rest' : 'day_rest';
 }
 
-function recover(
-  state: PhaseState,
-  p: PlayerPhaseState,
-  kind: RecoveryKind,
-  rng: Rng,
-): { player: PlayerPhaseState; entry: PhaseLogEntry } {
-  let roll: number | null = null;
+/** Infirmary turn 2 right after an infirmary turn 1 of the same period (GEN-069 C2). */
+function clinicSecondTurn(state: PhaseState, p: PlayerPhaseState): boolean {
+  const last = p.clinicRestAt;
+  return state.turn === 2 && last !== undefined && last.day === state.day && last.phase === state.phase && last.turn === 1;
+}
+
+function recover(state: PhaseState, p: PlayerPhaseState, kind: RecoveryKind, r: PlayerResult): { player: PlayerPhaseState; entry: PhaseLogEntry } {
+  const quality: RestQuality = r.restQuality ?? 'poor';
+  // Special mechanics are for a REST action; a forced sleep only takes the place's quality.
+  const site = kind === 'night_rest' || kind === 'day_rest' ? (r.restSite ?? null) : null;
   let stamina: number;
   let hp = 0;
   switch (kind) {
-    case 'night_inn':
-    case 'exhausted_night_inn':
-      roll = rollRange(REST.innMin, REST.innMax, rng);
-      stamina = roll + p.sleepBonus;
-      hp = REST.hpInn;
-      break;
-    case 'night_rough':
-    case 'exhausted_night_rough':
-      stamina = REST.rough + p.sleepBonus;
-      hp = REST.hpRough;
+    case 'night_rest':
+    case 'exhausted_night':
+      stamina = REST_QUALITY_STAMINA[quality] + p.sleepBonus;
+      hp = site === 'inn' ? REST.hpInnNight : REST.hpNight;
       break;
     case 'exhausted_day':
       stamina = REST.exhaustedDay + p.sleepBonus;
       break;
     case 'day_rest':
-      stamina = REST.day;
+      stamina = site === 'inn' ? REST.innDay : REST.day;
       break;
   }
+  if (site === 'clinic') hp = REST.hpClinic;
+  stamina += r.restBonus?.stamina ?? 0;
+  hp += r.restBonus?.hp ?? 0;
+  const hpMax = playerHpMax(state, p);
   const staminaAfter = gainStamina(p.stamina, stamina, state.staminaMax);
-  const hpAfter = Math.min(playerHpMax(state, p), p.hp + hp);
+  const hpAfter = site === 'clinic' && clinicSecondTurn(state, p) ? hpMax : Math.min(hpMax, p.hp + hp);
   const entry: PhaseLogEntry = {
     type: 'recovered',
     at: here(state),
     playerId: p.id,
     kind,
-    roll,
+    site,
     stamina: { before: p.stamina, gain: staminaAfter - p.stamina, after: staminaAfter },
     hp: { before: p.hp, gain: hpAfter - p.hp, after: hpAfter },
   };
-  return { player: { ...p, stamina: staminaAfter, hp: hpAfter }, entry };
+  const next: PlayerPhaseState = { ...p, stamina: staminaAfter, hp: hpAfter, ...(site === 'clinic' ? { clinicRestAt: here(state) } : {}) };
+  return { player: next, entry };
+}
+
+/** GEN-069 C3: a TRAIN that stood raises Max HP (HP unchanged), capped at TRAIN.hpMaxCap. */
+function applyTrain(state: PhaseState, p: PlayerPhaseState, log: PhaseLogEntry[]): PlayerPhaseState {
+  const before = playerHpMax(state, p);
+  const after = Math.min(TRAIN.hpMaxCap, before + TRAIN.hpMax);
+  log.push({ type: 'trained', at: here(state), playerId: p.id, hpMax: { before, after } });
+  return { ...p, hpMax: after, trainedDay: state.day };
 }
 
 function samePoint(a: TurnPoint, b: TurnPoint): boolean {
@@ -382,12 +401,13 @@ function resolved(state: PhaseState, results: Readonly<Record<string, PlayerResu
       continue;
     }
 
-    const kind = recoveryKind(state, before, r);
+    const kind = recoveryKind(state, before);
     if (kind) {
-      const rec = recover(state, p, kind, rng);
+      const rec = recover(state, p, kind, r);
       p = rec.player;
       log.push(rec.entry);
     }
+    if (before.condition === 'awake' && state.submissions[id]?.train) p = applyTrain(state, p, log);
     p = timeRules(state, before, p, at, log);
 
     // Spec §4.3: Stamina 0 at the end of a turn = the next turn is locked and slept through.

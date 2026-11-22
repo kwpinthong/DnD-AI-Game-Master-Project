@@ -224,6 +224,14 @@ export const RoomActionCode = z.enum([
   'game_ended',
   /** GEN-066: this turn is the trip to another zone. */
   'traveling',
+  /** GEN-069: REST at the inn costs 5 coins. */
+  'not_enough_coins',
+  /** GEN-069: TRAIN only at the guild. */
+  'train_not_here',
+  /** GEN-069 (Q-088): TRAIN once a day. */
+  'train_used',
+  /** GEN-069 (Q-088): Max HP is at the TRAIN ceiling (45). */
+  'train_cap',
 ]);
 export type RoomActionCode = z.infer<typeof RoomActionCode>;
 
