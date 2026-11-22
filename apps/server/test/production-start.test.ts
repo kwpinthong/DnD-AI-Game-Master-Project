@@ -74,7 +74,8 @@ describe('production start (NODE_ENV=production, node on src)', { timeout: 60_00
     cleanup();
   });
 
-  it('serves /health on 0.0.0.0:$PORT, survives a hard restart and keeps the DB and sessions', async () => {
+  // Q-169: spawns node twice (start waits ≤ 20 s each); slow under a full parallel `pnpm test`.
+  it('serves /health on 0.0.0.0:$PORT, survives a hard restart and keeps the DB and sessions', { timeout: 60_000 }, async () => {
     const dbPath = join(dir, 'data', 'isekai.sqlite');
     const port = await freePort();
     const base = `http://127.0.0.1:${port}`;
@@ -108,7 +109,7 @@ describe('production start (NODE_ENV=production, node on src)', { timeout: 60_00
     expect(me.status).toBe(200);
   });
 
-  it('exits 1 naming WEB_ORIGIN when it is missing, and nothing listens', async () => {
+  it('exits 1 naming WEB_ORIGIN when it is missing, and nothing listens', { timeout: 60_000 }, async () => {
     const port = await freePort();
     const { WEB_ORIGIN: _omit, ...env } = railwayEnv(join(dir, 'isekai.sqlite'), port);
 

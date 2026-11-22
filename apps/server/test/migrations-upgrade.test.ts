@@ -42,7 +42,8 @@ describe('migrations from the DB deployed on Railway (0000 + 0001)', () => {
     expect(numbers).toEqual(journal.entries.map((_, i) => String(i).padStart(4, '0')));
   });
 
-  it('applies every later migration once and keeps existing game/member/session rows', async () => {
+  // Q-169: starts the real server twice on a migrated file DB; slow under a full parallel `pnpm test`.
+  it('applies every later migration once and keeps existing game/member/session rows', { timeout: 60_000 }, async () => {
     const dbPath = join(dir, 'isekai.sqlite');
     const sqlite = new Database(dbPath);
     migrate(drizzle(sqlite), { migrationsFolder: partialMigrations(dir, 2) });
