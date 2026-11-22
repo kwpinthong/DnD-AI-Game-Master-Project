@@ -21,6 +21,7 @@ function quotaText(loot: LootView): string {
  * offers a strength, a weakness and up to 3 Common skills / items; the player keeps one of each.
  * Rerolls are unlimited (Q-029); the button is disabled only while a request runs or when the
  * server says the quota is used up. A failed AI call keeps the shown set and offers a retry (C5).
+ * The kept set can be changed until the game starts (Q-081).
  */
 export function LootStep({ apiBaseUrl, token, onSessionLost }: { apiBaseUrl: string; token: string; onSessionLost: () => void }) {
   /** undefined while loading. */
@@ -88,17 +89,30 @@ export function LootStep({ apiBaseUrl, token, onSessionLost }: { apiBaseUrl: str
     );
   }
 
-  if (loot.chosen) {
-    const { strength, weakness, skill, item } = loot.chosen;
+  const kept = loot.chosen && (
+    <ul aria-label="ของติดตัวที่เลือก">
+      <li>จุดแข็ง: {loot.chosen.strength.label}</li>
+      <li>จุดอ่อน: {loot.chosen.weakness.label}</li>
+      <li>skill: {summary(loot.chosen.skill)}</li>
+      <li>ไอเท็ม: {summary(loot.chosen.item)}</li>
+    </ul>
+  );
+
+  // Q-081: a kept set can be changed until the game starts (reroll, then choose again).
+  if (loot.chosen && !loot.offer) {
     return (
       <section aria-label="ของติดตัว">
         <h3>ของติดตัว</h3>
-        <ul aria-label="ของติดตัวที่เลือก">
-          <li>จุดแข็ง: {strength.label}</li>
-          <li>จุดอ่อน: {weakness.label}</li>
-          <li>skill: {summary(skill)}</li>
-          <li>ไอเท็ม: {summary(item)}</li>
-        </ul>
+        {kept}
+        {loot.canReroll ? (
+          <button type="button" disabled={busy} onClick={() => void run({ kind: 'roll' })}>
+            เปลี่ยนของติดตัว
+          </button>
+        ) : (
+          <p role="status">เกมเริ่มแล้ว เปลี่ยนของติดตัวไม่ได้</p>
+        )}
+        {busy && <p role="status">AI กำลังวิเคราะห์…</p>}
+        {errorBox}
       </section>
     );
   }
@@ -139,6 +153,12 @@ export function LootStep({ apiBaseUrl, token, onSessionLost }: { apiBaseUrl: str
   return (
     <section aria-label="ของติดตัว">
       <h3>ของติดตัว</h3>
+      {kept && (
+        <>
+          <p>ของติดตัวตอนนี้ (ใช้ชุดนี้ต่อจนกว่าจะยืนยันชุดใหม่)</p>
+          {kept}
+        </>
+      )}
       <form onSubmit={confirm} noValidate>
         <p>
           จุดแข็ง: {offer.strength.label} — {offer.strength.description}

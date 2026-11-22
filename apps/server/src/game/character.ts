@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import type { Clock } from '../auth/join.ts';
 import type { Db } from '../db/client.ts';
 import { character, game } from '../db/schema.ts';
+import { clearLoot } from './loot.ts';
 import type { MemberRow } from './service.ts';
 
 type CharacterRow = typeof character.$inferSelect;
@@ -66,7 +67,10 @@ export function createCharacter(db: Db, me: MemberRow, input: CharacterRequest, 
   });
 }
 
-/** Changes the identity only, and only before the game starts; the stats are not touched. */
+/**
+ * Changes the identity only, and only before the game starts; the stats are not touched. A new
+ * personality clears the loot built from the old one (Q-081); name / appearance keep it.
+ */
 export function updateCharacter(db: Db, me: MemberRow, input: CharacterRequest, now: Clock, karmaTiers: readonly KarmaTier[]): CharacterOutcome {
   return db.transaction((tx) => {
     const existing = tx.select().from(character).where(eq(character.memberId, me.id)).get();
@@ -74,6 +78,7 @@ export function updateCharacter(db: Db, me: MemberRow, input: CharacterRequest, 
     if (gameStarted(tx, me.gameId)) return { kind: 'game_started' };
     const identity = { name: input.name, appearance: input.appearance, personality: input.personality, updatedAt: now() };
     tx.update(character).set(identity).where(eq(character.memberId, me.id)).run();
+    if (input.personality !== existing.personality) clearLoot(tx, me.id, identity.updatedAt);
     return { kind: 'ok', character: toView({ ...existing, ...identity }, false, karmaTiers) };
   });
 }

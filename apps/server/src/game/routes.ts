@@ -280,7 +280,7 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
       case 'game_started':
         return sendError(reply, 409, { code: 'game_started', message: 'เกมเริ่มแล้ว เปลี่ยนของติดตัวไม่ได้' });
       case 'loot_closed':
-        return sendError(reply, 409, { code: 'loot_closed', message: 'เลือกของติดตัวแล้ว สุ่มหรือเลือกใหม่ไม่ได้' });
+        return sendError(reply, 409, { code: 'loot_closed', message: 'สุ่มใหม่ครบโควต้าแล้ว' });
       case 'loot_no_offer':
         return sendError(reply, 409, { code: 'loot_no_offer', message: 'ยังไม่มีตัวเลือก ให้ AI วิเคราะห์บุคลิกก่อน' });
       case 'invalid':

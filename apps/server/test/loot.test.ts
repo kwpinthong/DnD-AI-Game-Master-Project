@@ -5,6 +5,7 @@ import { loadAiConfig } from '../src/ai/config.ts';
 import type { AiCallRequest, AiCallResult, AiProvider } from '../src/ai/provider.ts';
 import { createMockProvider, mockReply, type MockProvider } from '../src/ai/providers/mock.ts';
 import { hashPin } from '../src/auth/pin.ts';
+import { LOOT_AI_FAILED } from '../src/game/loot.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
 import { makeTempDir } from './helpers.ts';
 
@@ -158,7 +159,8 @@ describe('personality-driven loot: AI offers Common skills / items (GEN-048)', {
     const picked = lootOf(await choose(me.token, { skillIds: [skill.id], itemIds: [item.id] }));
 
     expect(picked.offer).toBeNull();
-    expect(picked.canReroll).toBe(false);
+    // Q-081: the choice stays changeable until the game starts.
+    expect(picked.canReroll).toBe(true);
     expect(picked.chosen).toEqual({ strength: offer.strength, weakness: offer.weakness, skill, item });
     expect(picked.chosen!.skill).toMatchObject({ tier: 'Common', buffType: 'Quantitative', effect: { type: 'check_bonus', scope: 'perception', value: 2 } });
     expect(picked.chosen!.item).toMatchObject({ tier: 'Common', buffType: 'Qualitative' });
@@ -446,19 +448,91 @@ describe('personality-driven loot: AI offers Common skills / items (GEN-048)', {
     expect(second.skills.map((s) => s.name)).not.toEqual(first.skills.map((s) => s.name));
   });
 
-  it('C7: after the choice, and after the game starts, the step is closed (canReroll false, 409)', async () => {
+  const putCharacter = (token: string, body: unknown) => call('PUT', '/api/game/character', { token, body });
+  const startGame = (gameId: string) => server!.db.prepare('update game set started_at = ? where id = ?').run(clock, gameId);
+  const pickFirst = (token: string, offer: NonNullable<LootView['offer']>, index = 0) =>
+    choose(token, { skillIds: [offer.skills[index]!.id], itemIds: [offer.items[index]!.id] });
+
+  it('Q-081: after choosing, a reroll + a new choice before the start replace the old choice', async () => {
+    await start([mockReply.ok(analysis('ชุดแรก-')), mockReply.ok(analysis('ชุดสอง-'))]);
+    const me = await playerWithCharacter();
+    const first = lootOf(await rollLoot(me.token)).offer!;
+    const firstChoice = lootOf(await pickFirst(me.token, first)).chosen!;
+
+    const rerolled = lootOf(await rollLoot(me.token));
+    expect(rerolled.offer!.skills[0]!.name).toBe('ชุดสอง-อ่านสีหน้า');
+    // The old choice stays until a new one is made.
+    expect(rerolled.chosen).toEqual(firstChoice);
+    expect(rerolled.canReroll).toBe(true);
+
+    const second = rerolled.offer!;
+    const replaced = lootOf(await pickFirst(me.token, second, 2));
+    expect(replaced.chosen).toEqual({ strength: second.strength, weakness: second.weakness, skill: second.skills[2], item: second.items[2] });
+    expect(replaced.offer).toBeNull();
+    expect(lootOf(await getLoot(me.token)).chosen).toEqual(replaced.chosen);
+    expect(JSON.parse(String(lootRow(me.member.id)!.chosen_json))).toMatchObject({ strength: { label: 'ชุดสอง-ช่างสังเกต' } });
+  });
+
+  it('Q-081: editing the personality clears the offer and the chosen loot', async () => {
+    await start([mockReply.ok(analysis()), mockReply.ok(analysis('ค้าง-'))]);
+    const me = await playerWithCharacter();
+    lootOf(await pickFirst(me.token, lootOf(await rollLoot(me.token)).offer!));
+    lootOf(await rollLoot(me.token)); // an offer is pending too
+
+    const res = await putCharacter(me.token, { ...lin, personality: 'ใจดี ชอบช่วยคน กล้าหาญ' });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+
+    expect(lootOf(await getLoot(me.token))).toMatchObject({ offer: null, chosen: null, canReroll: true });
+    const row = lootRow(me.member.id);
+    expect(row?.offer_json ?? null).toBeNull();
+    expect(row?.chosen_json ?? null).toBeNull();
+  });
+
+  it('Q-081: editing only the name or the appearance keeps the loot', async () => {
     await start([mockReply.ok(analysis())]);
     const me = await playerWithCharacter();
-    const offer = lootOf(await rollLoot(me.token)).offer!;
-    lootOf(await choose(me.token, { skillIds: [offer.skills[0]!.id], itemIds: [offer.items[0]!.id] }));
+    const chosen = lootOf(await pickFirst(me.token, lootOf(await rollLoot(me.token)).offer!)).chosen!;
 
-    const again = await rollLoot(me.token);
-    expect(again.status).toBe(409);
-    expect(ApiError.parse(again.body).code).toBe('loot_closed');
-    expect((await choose(me.token, { skillIds: [offer.skills[1]!.id], itemIds: [offer.items[1]!.id] })).status).toBe(409);
-    expect(mock.requests).toHaveLength(1);
+    expect((await putCharacter(me.token, { ...lin, name: 'ลินดา', appearance: 'หญิงผ้าคลุมดำ' })).status).toBe(200);
 
-    server!.db.prepare('update game set started_at = ? where id = ?').run(clock, me.game.id);
-    expect(lootOf(await getLoot(me.token)).canReroll).toBe(false);
+    expect(lootOf(await getLoot(me.token)).chosen).toEqual(chosen);
+  });
+
+  it('Q-081: a personality edited while the AI is answering drops that answer (retry, no quota used)', async () => {
+    let me: CreateGameResponse | undefined;
+    await start([
+      () => {
+        server!.db.prepare('update character set personality = ? where member_id = ?').run('ใจดี ชอบช่วยคน', me!.member.id);
+        return mockReply.ok(analysis('เก่า-'));
+      },
+    ]);
+    me = await playerWithCharacter();
+
+    const res = await rollLoot(me.token);
+
+    expect(res.status, JSON.stringify(res.body)).toBe(503);
+    expect(ApiError.parse(res.body)).toMatchObject({ code: 'ai_unavailable', message: LOOT_AI_FAILED });
+    expect(lootOf(await getLoot(me.token))).toMatchObject({ offer: null, chosen: null, rerollsUsed: 0 });
+  });
+
+  it('C7 / Q-081: after the game starts, reroll and choose answer 409 game_started and the chosen loot is kept', async () => {
+    await start([mockReply.ok(analysis()), mockReply.ok(analysis('ชุดสอง-'))]);
+    const me = await playerWithCharacter();
+    const chosen = lootOf(await pickFirst(me.token, lootOf(await rollLoot(me.token)).offer!)).chosen!;
+    const pending = lootOf(await rollLoot(me.token)).offer!;
+
+    startGame(me.game.id);
+
+    const reroll = await rollLoot(me.token);
+    expect(reroll.status).toBe(409);
+    expect(ApiError.parse(reroll.body).code).toBe('game_started');
+    const pick = await pickFirst(me.token, pending, 1);
+    expect(pick.status).toBe(409);
+    expect(ApiError.parse(pick.body).code).toBe('game_started');
+    expect(mock.requests).toHaveLength(2);
+
+    const after = lootOf(await getLoot(me.token));
+    expect(after.chosen).toEqual(chosen);
+    expect(after.canReroll).toBe(false);
   });
 });

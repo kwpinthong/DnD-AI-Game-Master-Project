@@ -191,7 +191,8 @@ function toView(row: LootRow | undefined, started: boolean): LootView {
     },
     rerollsUsed,
     rerollLimit: LOOT_REROLL_LIMIT,
-    canReroll: !chosen && !started && (offer === null || quotaLeft),
+    // Q-081: the choice stays changeable (reroll + choose again) until the game starts.
+    canReroll: !started && (offer === null || quotaLeft),
   };
 }
 
@@ -268,9 +269,12 @@ export async function rollLoot(db: Db, ai: AiService, me: MemberRow, now: Clock)
   const offer = checked.offer;
 
   return db.transaction((tx) => {
-    // Checked again: the AI call is slow and the game may have started, or the choice been made.
+    // Checked again: the AI call is slow and the game may have started meanwhile.
     const late = closedReason(tx, me);
     if (late) return late;
+    // An answer for a personality edited meanwhile (Q-081) is dropped; a retry reads the new one.
+    const current = tx.select({ personality: character.personality }).from(character).where(eq(character.memberId, me.id)).get();
+    if (current?.personality !== pre.personality) return { kind: 'ai_error', error: staleAnswer() };
     const existing = lootRow(tx, me.id);
     const t = now();
     if (existing) {
@@ -286,14 +290,16 @@ export async function rollLoot(db: Db, ai: AiService, me: MemberRow, now: Clock)
   });
 }
 
-/** Keeps exactly one skill and one item from the current offer (C4), with the two traits. */
+/**
+ * Keeps exactly one skill and one item from the current offer (C4), with the two traits. A new
+ * choice before the start replaces the old one (Q-081).
+ */
 export function chooseLoot(db: Db, me: MemberRow, input: LootChooseRequest, now: Clock): LootOutcome {
   const pre = precheck(db, me);
   if (isOutcome(pre)) return pre;
   return db.transaction((tx) => {
     if (gameStarted(tx, me.gameId)) return { kind: 'game_started' };
     const row = lootRow(tx, me.id);
-    if (row?.chosenJson) return { kind: 'loot_closed' };
     if (!row?.offerJson) return { kind: 'loot_no_offer' };
     const offer = JSON.parse(row.offerJson) as StoredOffer;
     const skill = offer.skills.find((o) => o.id === input.skillIds[0]);
@@ -315,6 +321,16 @@ export function chooseLoot(db: Db, me: MemberRow, input: LootChooseRequest, now:
 /** The AI answered twice but neither answer fits the rules. */
 function unusableAnswer(): AiServiceError {
   return new AiServiceError('ai_unavailable', LOOT_AI_FAILED, 'room', 'loot answer unusable after repair');
+}
+
+/** The personality changed while the AI was answering. */
+function staleAnswer(): AiServiceError {
+  return new AiServiceError('ai_unavailable', LOOT_AI_FAILED, 'room', 'loot answer for an edited personality');
+}
+
+/** Q-081: editing the personality clears the offer and the choice (the reroll count stays). */
+export function clearLoot(tx: DbOrTx, memberId: string, now: number): void {
+  tx.update(characterLoot).set({ offerJson: null, chosenJson: null, updatedAt: now }).where(eq(characterLoot.memberId, memberId)).run();
 }
 
 export const LOOT_AI_FAILED = 'AI วิเคราะห์บุคลิกไม่สำเร็จ ลองใหม่อีกครั้ง (ไม่เสียโควต้าสุ่มใหม่)';
