@@ -219,7 +219,7 @@ describe('GEN-065 start scenarios', { timeout: 60_000 }, () => {
     const t = await startedTable(server!, false);
     const gameId = gameIdOf(t.a);
     const noEffects = { repDelta: 0, karmaDelta: 0, affinity: [], damage: null, selfDamage: null, heal: null, addStatus: [], removeStatus: [] };
-    const heal = (actionId: string, dc: number): PhaseAction => ({
+    const heal = (actionId: string, dc: 5 | 23): PhaseAction => ({
       actorId: t.a.memberId,
       proposal: {
         actionId,
