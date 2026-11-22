@@ -3,7 +3,7 @@
  * the server allows; the server checks it (repair once, then Clear) and applies the rules itself.
  * The sheet's "กฎทั้ง 5 สภาพอากาศ" row (Location tab, GLOBAL_WEATHER_RULES) wins over the GDD:
  * - แดดจ้า (Clear): a Secret action rolls d20 -2.
- * - ฝนตก (Rain): an outdoor action costs +1 Stamina; a stealth action rolls d20 +2.
+ * - ฝนตก (Rain) and พายุ (Storm, Q-156): an outdoor action costs +1 Stamina; a stealth action rolls d20 +2.
  * - หมอกจัด (Fog): grade S NPCs are easier to find; คืนเดือนมืด (Dark Night): secret passages open and the
  *   Evil side is stronger. Both are qualitative: text for the AI, no number here.
  * - ภัยพิบัติ (Disaster, day 5 on, every period whatever the AI picked): the exits out of town are closed and
@@ -34,6 +34,9 @@ export const WEATHER_RULES = {
   rainStealthD20: 2,
   disasterOutdoorStamina: 2,
 } as const;
+
+/** Weathers with Rain's numbers (Q-156: Storm = Rain: OUTDOOR Stamina +1, STEALTH d20 +2). */
+export const RAIN_LIKE: readonly Weather[] = ['Rain', 'Storm'];
 
 /** The weather of one period: what the AI picked (checked), plus Disaster from day 5. */
 export interface PeriodWeather {
@@ -96,8 +99,9 @@ export function weatherEffects(
   const modifiers: { ref: string; value: number }[] = [];
   let stamina = 0;
   if (w.weather === 'Clear' && action.visibility === 'secret') modifiers.push({ ref: 'Clear:secret', value: WEATHER_RULES.clearSecretD20 });
-  if (w.weather === 'Rain') {
-    if (action.verbTags.includes(STEALTH_VERB) || action.actionTags.includes('stealth')) modifiers.push({ ref: `Rain:${STEALTH_VERB}`, value: WEATHER_RULES.rainStealthD20 });
+  if (RAIN_LIKE.includes(w.weather)) {
+    // The ref keeps the weather's own name ("Storm:STEALTH") so the log says which one applied.
+    if (action.verbTags.includes(STEALTH_VERB) || action.actionTags.includes('stealth')) modifiers.push({ ref: `${w.weather}:${STEALTH_VERB}`, value: WEATHER_RULES.rainStealthD20 });
     if (w.outdoor) stamina += WEATHER_RULES.rainOutdoorStamina;
   }
   if (w.disaster && w.outdoor) stamina += WEATHER_RULES.disasterOutdoorStamina;

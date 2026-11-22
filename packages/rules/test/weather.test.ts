@@ -90,9 +90,23 @@ describe('GEN-068 weather in the resolution engine', () => {
     expect(resolve({ tagging: stealthClaim }, w('Fog')).log.check!.modifiers.some((m) => m.source === 'weather')).toBe(false);
   });
 
-  it('C6: Disaster + OUTDOOR costs 2 more Stamina whatever the weather; Rain adds its own 1', () => {
+  it('Q-156: Storm has the same numbers as Rain (OUTDOOR Stamina +1, STEALTH +2)', () => {
     const base = resolve({}).log.stamina.after;
-    for (const weather of ['Clear', 'Fog', 'Storm', 'Clear Night'] as const) {
+    expect(resolve({}, w('Storm', { outdoor: true })).log.stamina.after).toBe(base - 1);
+    expect(resolve({}, w('Storm', { outdoor: true })).log.weather!.stamina).toBe(1);
+    expect(resolve({}, w('Storm')).log.stamina.after).toBe(base);
+    const stealth = resolve({ tagging: stealthClaim }, w('Storm'));
+    expect(stealth.log.check!.modifiers).toContainEqual({ source: 'weather', ref: 'Storm:STEALTH', value: 2 });
+    expect(resolve({ tags: ['stealth'] }, w('Storm')).log.check!.modifiers).toContainEqual({ source: 'weather', ref: 'Storm:STEALTH', value: 2 });
+    const other = resolve({ tagging: { verbTags: ['OBSERVE'], targetTags: [], activate: [] } }, w('Storm'));
+    expect(other.log.check!.modifiers.some((m) => m.source === 'weather')).toBe(false);
+    expect(resolve({}, w('Storm', { disaster: true, outdoor: true })).log.weather!.stamina).toBe(3);
+    expect(replayResolution(stealth.log)).toEqual(stealth);
+  });
+
+  it('C6: Disaster + OUTDOOR costs 2 more Stamina whatever the weather; Rain / Storm add their own 1', () => {
+    const base = resolve({}).log.stamina.after;
+    for (const weather of ['Clear', 'Fog', 'Clear Night'] as const) {
       const r = resolve({}, w(weather, { disaster: true, outdoor: true }));
       expect(r.log.stamina.after).toBe(base - 2);
       expect(r.log.weather!.stamina).toBe(2);

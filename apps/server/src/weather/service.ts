@@ -53,7 +53,7 @@ const RULES_TEXT = [
   'You are the GM of a 12-day town game. Pick the weather of the period that just opened.',
   'Weathers: Clear (bright sun: Secret actions are harder), Rain (outdoor actions tire more, stealth is easier),',
   'Fog (low visibility, grade S NPCs are easier to meet), Dark Night (secret passages open, the Evil side is stronger),',
-  'Clear Night (a calm night sky), Storm.',
+  'Clear Night (a calm night sky), Storm (like Rain: outdoor actions tire more, stealth is easier).',
   'EOSORIA and SOLARION are daytime: never pick a night weather for them. Disaster is not a weather: the server adds it from day 5.',
   'Answer JSON {"weather": "<one of the allowed values>"}.',
 ].join('\n');
