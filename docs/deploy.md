@@ -28,6 +28,7 @@ browser ──https──> https://<site>.netlify.app        (Netlify: apps/web/
 | Railway | `WEB_ORIGIN` | `https://<site>.netlify.app` | origin ของ web ไม่มี path (มี `/` ท้ายได้) ใส่หลาย origin คั่นด้วย `,` |
 | Railway | `RAILPACK_NODE_VERSION` | `26` | ให้ Railpack ใช้ Node 26 ตรงกับ `engines.node` |
 | Railway | `CREATE_CODE_HASH` | hash ของ create code (`scrypt$...`) ไม่ใช่ตัว code | ต้องมีถึงจะสร้างเกมได้ (Q-021) ทำ hash ตามข้อ 1.4 ไม่มีค่านี้ = หน้าสร้างเกมตอบ "server นี้ยังไม่ได้ตั้ง create code" / ค่าที่ไม่ใช่ hash = server ไม่ start (log บอกชื่อตัวแปร ไม่พิมพ์ค่า) |
+| Railway | `ADMIN_CODE_HASH` | hash ของ admin code ของเจ้าของ server (`scrypt$...`) ไม่ใช่ตัว code | เปิดหน้า AI usage dashboard ที่ `<web>/admin` (GEN-061, Q-058) ทำ hash ตามข้อ 1.5 ไม่มีค่านี้ = ไม่มีใครเปิด dashboard ได้ / ค่าที่ไม่ใช่ hash = server ไม่ start (log บอกชื่อตัวแปร ไม่พิมพ์ค่า) |
 | Railway | `ANTHROPIC_API_KEY` | API key ของ Anthropic (secret) | AI GM (GEN-038) ไม่มีค่านี้ server ยัง start ได้ แต่สร้างเกมและเริ่มเกมไม่ได้ ตอบเหตุผลเป็นภาษาไทย (Q-075) ค่าอื่นของ AI (`AI_PROVIDER`, `AI_MODEL`, เพดาน `AI_GAME_MONTHLY_USD`) ดู `apps/server/server.env.example` |
 | Railway | `PORT` | Railway ใส่เอง | ห้ามตั้งเอง |
 | Railway | `HOST` | ไม่ต้องตั้ง | production ใช้ `0.0.0.0` เป็นค่าเริ่ม |
@@ -66,6 +67,13 @@ create code คือรหัสระดับ server ที่ต้องใ
 3. บอก create code กับคนที่ให้สร้างเกมได้ทางช่องทางส่วนตัว ห้ามใส่ใน repo หรือแชทกลุ่ม
 4. เปลี่ยน code: ทำข้อ 1-2 ใหม่ (Railway redeploy เอง) เกมที่สร้างไว้แล้วไม่กระทบ
 5. ใส่ create code ผิด 10 ครั้งใน 10 นาที (นับรวมทั้ง server) = สร้างเกมไม่ได้ 10 นาที ตัวนับอยู่ใน memory รีสตาร์ทแล้วหาย
+
+### 1.5 Admin code (AI usage dashboard, GEN-061)
+admin code คือรหัสของเจ้าของ server คนเดียว (Q-058) ใช้เปิดหน้า `<web>/admin` ที่ดู token และค่าใช้จ่ายของ AI GM ทุกเกม (ไม่มี narration ชื่อ หรือ action) server เก็บแค่ hash ใน `ADMIN_CODE_HASH` ตั้งให้ต่างจาก create code
+1. รัน `pnpm --silent --filter @isekai/server run admin-code:hash` แล้วพิมพ์ admin code กด Enter ตามด้วย Ctrl+D (PowerShell / cmd: Ctrl+Z แล้ว Enter)
+2. คัดลอกบรรทัด `scrypt$...` ไปใส่ Railway → Variables → `ADMIN_CODE_HASH`
+3. เปิด `<web>/admin` ใส่ admin code → ได้ admin token อายุ 1 ชั่วโมง (เก็บใน sessionStorage ของ tab นั้น ปิด tab = ออก) server เก็บแค่ SHA-256 ของ token ใน memory รีสตาร์ทแล้วต้องใส่ใหม่
+4. ใส่ผิด 10 ครั้งใน 10 นาที = เปิดไม่ได้ 10 นาที (นับรวมทั้ง server เหมือน create code)
 
 **ย้ายจาก GEN-041a:** ถ้า Railway ยังมี `BOOTSTRAP_INVITE_CODE` ให้ลบ `BOOTSTRAP_INVITE_CODE` ออกจาก Variables (server ไม่อ่านค่านี้แล้ว เกมที่เคยสร้างจากค่านี้ยังอยู่และยัง join ได้ด้วยโค้ดเดิม แต่ไม่มีเจ้าของเกม จึงเตะ / ออกโค้ดใหม่ / เริ่มเกมไม่ได้ ให้สร้างเกมใหม่ผ่านหน้าเว็บแทน)
 

@@ -14,6 +14,11 @@ export interface ServerConfig {
    * the server's config. Without it, POST /api/games answers 503 and nobody can create a game.
    */
   createCodeHash?: string;
+  /**
+   * scrypt hash of the server owner's admin code (GEN-061, Q-058): it opens the AI usage dashboard.
+   * Without it the dashboard is closed for everyone (POST /api/admin/session answers 503).
+   */
+  adminCodeHash?: string;
 }
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -60,12 +65,19 @@ export function loadConfig(env: Record<string, string | undefined>): ServerConfi
       'CREATE_CODE_HASH must be a hash from "pnpm --filter @isekai/server run create-code:hash" (scrypt$...), not the create code itself',
     );
   }
+  const adminCodeHash = value('ADMIN_CODE_HASH');
+  if (adminCodeHash !== undefined && !isSecretHash(adminCodeHash)) {
+    throw new Error(
+      'ADMIN_CODE_HASH must be a hash from "pnpm --filter @isekai/server run admin-code:hash" (scrypt$...), not the admin code itself',
+    );
+  }
   return {
     host: value('HOST') ?? (production ? '0.0.0.0' : '127.0.0.1'),
     port,
     dbPath: dbPath ? resolve(dbPath) : resolve(repoRoot, 'data', 'isekai.sqlite'),
     webOrigins,
     ...(createCodeHash ? { createCodeHash } : {}),
+    ...(adminCodeHash ? { adminCodeHash } : {}),
   };
 }
 

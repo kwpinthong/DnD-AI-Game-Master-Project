@@ -22,6 +22,7 @@ import { registerRoomRoutes } from './room/routes.ts';
 import { createWeatherService, type WeatherService } from './weather/service.ts';
 import { DEFAULT_ASSETS_DIR, loadGameAssets, type GameAssets } from './assets/load.ts';
 import { registerCompanionRoutes } from './companions/routes.ts';
+import { registerAdminRoutes } from './admin/routes.ts';
 
 export interface RunningServer {
   url: string;
@@ -108,6 +109,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   const resolver = options.phaseResolver ?? createAiGmResolver({ db, ai, assets, now, log: options.aiLog ?? ((line) => console.log(line)) });
   registerRoomRoutes(app, db, now, { resolver, assets, webOrigins: config.webOrigins ?? [], weather });
   registerCompanionRoutes(app, db, now, assets);
+  registerAdminRoutes(app, db, now, { ai: aiConfig, ...(config.adminCodeHash ? { adminCodeHash: config.adminCodeHash } : {}) });
 
   try {
     await app.listen({ host: config.host, port: config.port });

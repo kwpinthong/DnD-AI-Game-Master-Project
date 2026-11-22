@@ -99,4 +99,13 @@ describe('loadConfig (NODE_ENV=production, Railway)', () => {
     expect(() => loadConfig({ ...production, CREATE_CODE_HASH: 'my-secret-code' })).toThrow(/CREATE_CODE_HASH/);
     expect(() => loadConfig({ ...production, CREATE_CODE_HASH: 'my-secret-code' })).not.toThrow(/my-secret-code/);
   });
+
+  // GEN-061 (Q-058): the server owner's admin code opens the AI usage dashboard.
+  it('reads ADMIN_CODE_HASH when it is a scrypt hash, and refuses the code itself without printing it', () => {
+    const hash = 'scrypt$16384$8$1$c2FsdHNhbHRzYWx0c2FsdA==$aGFzaGhhc2hoYXNoaGFzaGhhc2hoYXNoaGFzaGhhc2g=';
+    expect(loadConfig({ ...production, ADMIN_CODE_HASH: hash }).adminCodeHash).toBe(hash);
+    expect(loadConfig(production)).not.toHaveProperty('adminCodeHash');
+    expect(() => loadConfig({ ...production, ADMIN_CODE_HASH: 'owner-secret' })).toThrow(/ADMIN_CODE_HASH/);
+    expect(() => loadConfig({ ...production, ADMIN_CODE_HASH: 'owner-secret' })).not.toThrow(/owner-secret/);
+  });
 });

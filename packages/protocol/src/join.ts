@@ -98,6 +98,10 @@ export const ApiError = z.discriminatedUnion('code', [
   z.object({ code: z.literal('too_many_attempts'), message: z.string(), retryAt: z.string() }),
   /** 503: the server has no CREATE_CODE_HASH, so nobody can create a game. */
   z.object({ code: z.literal('create_disabled'), message: z.string() }),
+  /** 403 (GEN-061): wrong admin code at POST /api/admin/session. */
+  z.object({ code: z.literal('wrong_admin_code'), message: z.string() }),
+  /** 503 (GEN-061): the server has no ADMIN_CODE_HASH, so nobody can open the AI usage dashboard. */
+  z.object({ code: z.literal('admin_disabled'), message: z.string() }),
   /** 403: only the game's owner may do this. */
   z.object({ code: z.literal('forbidden'), message: z.string() }),
   /** 404: no such member in the caller's game. */
