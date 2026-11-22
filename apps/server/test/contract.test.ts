@@ -217,10 +217,12 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     // --- Socket frames: each passes the schema the contract names for its `type` ---
     const schemaOf = new Map(READY_SERVER_EVENTS.map((i) => [i.type, i.schema]));
     const seenTypes = new Set<string>();
+    const seenEntryKinds = new Set<string>();
     for (const client of [a, b, c, bad]) {
       for (const raw of client.raw) {
         const frame = JSON.parse(raw) as RoomServerMessage;
         seenTypes.add(frame.type);
+        if (frame.type === 'entry') seenEntryKinds.add(frame.entry.kind);
         const name = schemaOf.get(frame.type);
         if (!name) {
           problems.push(`socket ${frame.type}: not a ready event of the contract`);
@@ -232,6 +234,8 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     }
 
     expect(problems).toEqual([]);
+    // GEN-101 C2: every kind of entry the Play page reads came over the real socket and passed `entry` above.
+    expect([...seenEntryKinds].sort()).toEqual(expect.arrayContaining(['feed', 'narration', 'omen', 'whisper']));
     expect([...READY_HTTP.map(key)].filter((r) => !ok.has(r)), 'ready endpoints never answered 2xx').toEqual([]);
     expect([...schemaOf.keys()].filter((type) => !seenTypes.has(type)), 'ready server events never seen').toEqual([]);
   });
