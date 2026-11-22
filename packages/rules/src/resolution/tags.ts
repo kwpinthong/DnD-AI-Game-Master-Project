@@ -5,9 +5,11 @@
  * them into modifiers the resolution engine applies itself:
  * - Passive sources (Daily_Limit 0) work on every matching action, without a quota or a command.
  * - Active sources work only when the proposal activates them, at most Daily_Limit times per game day;
- *   an Active skill also costs 4..6 Stamina, as the proposal states.
+ *   an Active skill also costs 4..6 Stamina, as the proposal states (halved, rounded up, on a crit: Q-133).
  * - The d20 bonus is the source's numeric `dice_bonus` (Q-090), capped by its Rank (Q-114 / Q-122,
- *   exceptions Q-119). Qualitative effects give no number here; the AI reads them as text.
+ *   exceptions Q-119). A source with only qualitative effects gives no number here; the AI may judge one
+ *   as an item / skill modifier within the same cap (Q-130), logged `judged: true`.
+ * - A negative `dice_bonus` goes on the target (Q-131): in a PvP check it lowers DC_pvp.
  * Every value is plain JSON so a log replays.
  */
 import type { ProposalError } from './types.ts';
@@ -45,6 +47,11 @@ export interface TagSource {
   readonly diceBonus: number;
   /** Allowed exception to the Rank cap (Q-119), null = the Rank cap. */
   readonly diceBonusCap: number | null;
+  /**
+   * Negative d20 bonus put on the target (Q-131, e.g. Venom of Despair -3); absent / 0 = none. In a PvP
+   * check it lowers DC_pvp (the target's defence); the user's own roll is never lowered.
+   */
+  readonly targetDiceBonus?: number;
 }
 
 /** What the server knows about the actor for tag matching; plain JSON, kept in the log. */
@@ -83,7 +90,9 @@ export interface TaggingLog {
   readonly targetTags: readonly string[];
   /** Every source that worked on this action, with the number it added to the d20. */
   readonly bonuses: readonly TagBonusLog[];
-  /** Activations with the source's use count for the day after this one. */
+  /** Negative bonuses put on the target (Q-131); in a PvP check they lower DC_pvp. */
+  readonly targetBonuses: readonly { readonly kind: TagSourceKind; readonly ref: string; readonly value: number }[];
+  /** Activations with the Stamina charged (halved on a crit, Q-133) and the use count for the day after this one. */
   readonly activated: readonly { readonly ref: string; readonly stamina: number; readonly usesToday: number }[];
   /** Stamina the activated skills cost, on top of the action's own cost. */
   readonly skillStamina: number;
@@ -110,27 +119,66 @@ export function matchingSources(ctx: TagContext, verbTags: readonly string[], ta
   return ctx.sources.filter((s) => sourceMatches(s, verbTags, targetTags, ctx.locationTags));
 }
 
+/** Highest d20 bonus of a source: its exception (Q-119), else its Rank cap; no Rank = no cap. */
+export function tagBonusCap(source: TagSource): number {
+  return source.diceBonusCap ?? (source.rank === null ? Number.POSITIVE_INFINITY : RANK_DICE_CAP[source.rank]);
+}
+
 /** The d20 bonus a source adds: its numeric bonus, capped by its Rank (or its exception). */
 export function tagBonus(source: TagSource): number {
-  const cap = source.diceBonusCap ?? (source.rank === null ? Number.POSITIVE_INFINITY : RANK_DICE_CAP[source.rank]);
-  return Math.min(source.diceBonus, cap);
+  return Math.min(source.diceBonus, tagBonusCap(source));
+}
+
+/** The penalty a source puts on the target (Q-131), its size capped like a bonus; 0 = none. */
+export function tagTargetBonus(source: TagSource): number {
+  const value = source.targetDiceBonus ?? 0;
+  return value < 0 ? -Math.min(-value, tagBonusCap(source)) : 0;
+}
+
+/**
+ * Q-130: a skill / item whose effect is only qualitative (no numeric d20 bonus for the actor or the target)
+ * may get a d20 bonus the AI judges, within the source's cap. Its log entry says `judged: true`.
+ */
+export function isQualitativeSource(source: TagSource): boolean {
+  return (source.kind === 'skill' || source.kind === 'item') && source.diceBonus === 0 && tagTargetBonus(source) === 0;
 }
 
 const canActivate = (s: TagSource) => s.trigger !== 'passive';
 const worksByItself = (s: TagSource) => s.trigger !== 'active';
 
-/** Problems with the tag part of a proposal; judged item / skill refs are checked so a data source is not also judged. */
-export function validateTagging(
-  ctx: TagContext | undefined,
-  claim: TagClaim | undefined,
-  judgedRefs: readonly { readonly ref: string; readonly path: string }[],
-): ProposalError[] {
+/** A judged item / skill modifier of the proposal; `value` is optional so older callers still work. */
+export interface JudgedRef {
+  readonly ref: string;
+  readonly path: string;
+  readonly value?: unknown;
+}
+
+/**
+ * Problems with the tag part of a proposal. Judged item / skill refs that are tag sources: a source with a
+ * numeric bonus may not also be judged; a qualitative one (Q-130) may, within its cap, and an Active-only
+ * one must be activated in the same claim (it costs its quota and Stamina).
+ */
+export function validateTagging(ctx: TagContext | undefined, claim: TagClaim | undefined, judgedRefs: readonly JudgedRef[]): ProposalError[] {
   const errors: ProposalError[] = [];
   const fail = (code: ProposalError['code'], path: string, message: string) => errors.push({ code, path, message });
 
   if (ctx !== undefined) {
-    for (const { ref, path } of judgedRefs) {
-      if (ctx.sources.some((s) => s.id === ref)) fail('tag_source_judged', path, `${ref} gives its bonus from the game data through tagging; it may not be judged too`);
+    const activated = Array.isArray(claim?.activate) ? claim.activate.map((a) => a?.ref) : [];
+    for (const { ref, path, value } of judgedRefs) {
+      const source = ctx.sources.find((s) => s.id === ref);
+      if (source === undefined) continue;
+      if (!isQualitativeSource(source)) {
+        fail('tag_source_judged', path, `${ref} gives its bonus from the game data through tagging; it may not be judged too`);
+        continue;
+      }
+      const cap = tagBonusCap(source);
+      const valuePath = path.replace(/\.ref$/, '.value');
+      if (typeof value === 'number' && value > cap) {
+        fail('value_over_cap', valuePath, `Rank ${source.rank ?? '-'} ${source.kind} ${ref} gives at most +${cap}, got +${value}`);
+      }
+      if (!worksByItself(source) && !activated.includes(ref)) {
+        fail('not_activated', path, `${ref} is Active: activate it in tagging.activate to use it on this action`);
+      }
     }
   }
   if (claim === undefined) return errors;
@@ -181,17 +229,27 @@ const MAX_TAGS = 4;
 export function applyTagging(ctx: TagContext, claim: TagClaim): TaggingLog {
   const active = new Map(claim.activate.map((a) => [a.ref, a]));
   const bonuses: TagBonusLog[] = [];
+  const targetBonuses: TaggingLog['targetBonuses'][number][] = [];
   for (const source of matchingSources(ctx, claim.verbTags, claim.targetTags)) {
     const activated = active.has(source.id);
     if (!activated && !worksByItself(source)) continue;
     bonuses.push({ kind: source.kind, ref: source.id, trigger: activated ? 'active' : 'passive', value: tagBonus(source) });
+    const onTarget = tagTargetBonus(source);
+    if (onTarget !== 0) targetBonuses.push({ kind: source.kind, ref: source.id, value: onTarget });
   }
   const activated = claim.activate.map((a) => ({ ref: a.ref, stamina: a.stamina ?? 0, usesToday: (ctx.usesToday[a.ref] ?? 0) + 1 }));
   return {
     verbTags: [...claim.verbTags],
     targetTags: [...claim.targetTags],
     bonuses,
+    targetBonuses,
     activated,
     skillStamina: activated.reduce((sum, a) => sum + a.stamina, 0),
   };
+}
+
+/** Q-133: on a crit each activated skill's Stamina is halved, rounded up like the action cost. */
+export function chargeOnCrit(log: TaggingLog): TaggingLog {
+  const activated = log.activated.map((a) => ({ ...a, stamina: Math.ceil(a.stamina / 2) }));
+  return { ...log, activated, skillStamina: activated.reduce((sum, a) => sum + a.stamina, 0) };
 }

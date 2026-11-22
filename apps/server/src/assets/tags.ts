@@ -2,8 +2,9 @@
  * Tag sources from the game data (GEN-064 on top of GEN-062): what the resolution engine's tag
  * matching (@isekai/rules `TagSource`) reads from the Ability / Item / Location / Start_Scenarios
  * rows. Numbers come only from the structured columns (Q-090): a positive `dice_bonus` effect is the
- * d20 bonus; everything else is qualitative and stays text for the AI. A negative `dice_bonus`
- * (Venom of Despair) is put on someone else, so it is no bonus of the actor.
+ * d20 bonus; everything else is qualitative and stays text for the AI, which may judge a d20 bonus for
+ * it within the Rank cap (Q-130). A negative `dice_bonus` (Venom of Despair) is put on the target
+ * (`targetDiceBonus`, Q-131), so it is no bonus of the actor.
  */
 import { ANY_TAG, type TagSource } from '@isekai/rules';
 import type { GameAssets } from './load.ts';
@@ -15,6 +16,8 @@ export const WEATHER_VERB_BOOST = 2;
 const TRIGGER: Readonly<Record<TriggerType, TagSource['trigger']>> = { Active: 'active', Passive: 'passive', 'Passive + Active': 'both' };
 
 const diceBonusOf = (effects: readonly Effect[]) => effects.filter((e) => e.type === 'dice_bonus' && e.value > 0).reduce((sum, e) => sum + e.value, 0);
+/** Q-131: a negative dice_bonus goes on the target (in PvP it lowers DC_pvp). */
+const targetDiceBonusOf = (effects: readonly Effect[]) => effects.filter((e) => e.type === 'dice_bonus' && e.value < 0).reduce((sum, e) => sum + e.value, 0);
 
 /** Every tag the data uses (the only tags a proposal may name), sorted, without ANY. */
 export function tagVocabulary(assets: GameAssets): string[] {
@@ -48,6 +51,7 @@ function recordSource(id: string, kind: 'skill' | 'item', r: AbilityRecord | Ite
     requireLocationTags: [],
     diceBonus: diceBonusOf(r.effects),
     diceBonusCap: DICE_BONUS_EXCEPTIONS[name] ?? null,
+    ...(targetDiceBonusOf(r.effects) < 0 ? { targetDiceBonus: targetDiceBonusOf(r.effects) } : {}),
   };
 }
 
@@ -91,8 +95,12 @@ export function parseWeatherVerbBoost(text: string): { conditions: string[]; ver
   return out;
 }
 
-/** "Night" in the sheet means any night weather (Clear Night, Dark Night); other names must be equal. */
-const weatherFits = (condition: string, weather: string) => condition === weather || (condition === 'Night' && weather.endsWith(' Night'));
+/**
+ * "Night" in the sheet means any night weather (Clear Night, Dark Night); "Clear" also means Clear Morning
+ * and Clear Night (Q-132); other names must be equal.
+ */
+const weatherFits = (condition: string, weather: string) =>
+  condition === weather || (condition === 'Night' && weather.endsWith(' Night')) || (condition === 'Clear' && weather.startsWith('Clear '));
 
 /** The place's Weather_Verb_Boost under `weather` as one `location` source; none without a weather. */
 export function locationSources(location: LocationRecord, weather: string | null): TagSource[] {

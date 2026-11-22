@@ -30,9 +30,9 @@ import { CryptoRng } from '../rng.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { forbiddenKeysIn } from '../visibility/guard.ts';
 import {
+  closeAlliesOf,
   leaveHiddenEvidence,
   locationSnapshot,
-  namesVisibleTo,
   playerBondBetween,
   presenceOf,
   presencesInGame,
@@ -69,6 +69,7 @@ const WHISPER_MESSAGE: Record<RoomWhisperCode, string> = {
   not_a_player: 'GM ไม่มีตัวละคร จึงส่ง Whisper ไม่ได้',
   not_allowed: 'ส่ง Whisper ถึงคนนี้ไม่ได้ ต้องเป็นพันธมิตรที่สนิทกันพอก่อน',
   game_ended: 'เกมจบแล้ว ส่ง Whisper ไม่ได้',
+  unconscious: LOCK_MESSAGE.unconscious,
 };
 
 const SECRET_QUOTA_MESSAGE = 'วันนี้ใช้ Secret ไปแล้ว (ได้วันละ 1 เทิร์น และฟรีอีก 1 เทิร์นในช่วง NOCTHERION) ส่งเป็น Public แทนได้';
@@ -145,10 +146,10 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
     };
   }
 
-  /** Allies `me` may Whisper to and whose real name they see (GEN-067), by their presence ref. */
+  /** Allies `me` may Whisper to and whose real name they see (GEN-067), by their presence ref. A discovered name alone (Q-134) opens no Whisper. */
   function alliesOf(me: MemberRow): { ref: string; name: string }[] {
     if (me.role === 'gm') return [];
-    const visible = namesVisibleTo(db, me.id);
+    const visible = closeAlliesOf(db, me.id);
     if (visible.size === 0) return [];
     const active = new Set(activeMembers(db, me.gameId).map((m) => m.id));
     const presences = new Map(presencesInGame(db, me.gameId).map((p) => [p.memberId, p.ref]));
@@ -397,6 +398,8 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
         const t = now();
         const state = ensurePhaseState(tx, me.gameId, t);
         if (state.status === 'finale' || state.status === 'game_over') return 'game_ended' as const;
+        // Q-136: HP 0 locks Whisper like an action.
+        if (state.players[me.id]?.condition === 'unconscious') return 'unconscious' as const;
         const target = presencesInGame(tx, me.gameId).find((p) => p.ref === input.to);
         const members = activeMembers(tx, me.gameId);
         if (!target || target.memberId === me.id || !members.some((m) => m.id === target.memberId)) return 'not_allowed' as const;

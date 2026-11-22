@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { crossPlayerState } from '../src/crossplayer/phase.ts';
 import type { RunningServer } from '../src/server.ts';
 import { forbiddenKeysIn } from '../src/visibility/guard.ts';
-import { discoverHiddenEvidence, moveCharacter, presenceOf, setPlayerBond } from '../src/visibility/store.ts';
+import { discoverHiddenEvidence, learnName, moveCharacter, presenceOf, setPlayerBond } from '../src/visibility/store.ts';
 import { makeTempDir } from './helpers.ts';
 import { isReady, openRoom, type RoomClient } from './room-client.ts';
 import { CLOCK, startedTable, startTestServer, type Seat, type Table } from './visibility-fixture.ts';
@@ -148,6 +148,64 @@ describe('GEN-067 karma words, Title Mask, Whisper, Hidden Evidence', { timeout:
     expect((await seenBy(t, t.a, t.b))?.name).toBe(t.b.name);
     bond(t.a, t.b, 10, false);
     expect((await seenBy(t, t.a, t.b))?.name).toBeNull();
+  });
+
+  it('Q-134: a discovered name shows to that viewer only, permanently, without opening Whisper', async () => {
+    const t = await table();
+    learnName(server!.orm, t.a.memberId, t.b.memberId, 'discovered', CLOCK);
+
+    const a = await playerView(t, t.a);
+    expect(a.view.people.find((p) => p.appearance === t.b.appearance)?.name).toBe(t.b.name);
+    // Per viewer: B does not learn A's name, and C does not see B's.
+    expect((await seenBy(t, t.b, t.a))?.name).toBeNull();
+    const byC = await playerView(t, t.c);
+    expect(byC.view.people.find((p) => p.appearance === t.b.appearance)?.name).toBeNull();
+    expect(byC.raw).not.toContain(t.b.name);
+
+    // Knowing a name is not an alliance: no Whisper.
+    const roomA = await enter(t.a);
+    expect(roomA.lastRoom()!.you.allies).toEqual([]);
+    expect(await whisperReply(roomA, refOf(t.b), WHISPER)).toMatchObject({ type: 'whisper_rejected', code: 'not_allowed' });
+
+    // Permanent: an alliance that ends does not hide a discovered name (C's name, known only by the alliance, hides again).
+    bond(t.a, t.b, 20);
+    bond(t.a, t.c, 20);
+    bond(t.a, t.b, 20, false);
+    bond(t.a, t.c, 20, false);
+    expect((await seenBy(t, t.a, t.b))?.name).toBe(t.b.name);
+    expect((await seenBy(t, t.a, t.c))?.name).toBeNull();
+  });
+
+  it('Q-134: an introduction alone still hides the name; discovering it later shows it', async () => {
+    const t = await table();
+    learnName(server!.orm, t.a.memberId, t.b.memberId, 'introduced', CLOCK);
+    expect((await seenBy(t, t.a, t.b))?.name).toBeNull();
+    learnName(server!.orm, t.a.memberId, t.b.memberId, 'discovered', CLOCK);
+    expect((await seenBy(t, t.a, t.b))?.name).toBe(t.b.name);
+  });
+
+  it('Q-136: an unconscious player (HP 0) cannot Whisper, with the same lock as an action', async () => {
+    const t = await table();
+    bond(t.a, t.b, 15);
+    const roomA = await enter(t.a);
+    // Knock A out in the stored phase state (as the engine does after HP 0).
+    const row = server!.db.prepare('select state from game_phase where game_id = ?').get(t.gameId) as { state: string };
+    const state = JSON.parse(row.state) as { players: Record<string, Record<string, unknown>> };
+    state.players[t.a.memberId] = { ...state.players[t.a.memberId], hp: 0, condition: 'unconscious', mustSubmit: false };
+    server!.db.prepare('update game_phase set state = ? where game_id = ?').run(JSON.stringify(state), t.gameId);
+    server!.db.prepare('update character set hp = 0 where member_id = ?').run(t.a.memberId);
+
+    const from = roomA.messages.length;
+    roomA.action('ลุกขึ้นสู้', 'public');
+    const actionReply = await roomA.waitFor((m) => m.type === 'action_rejected', from);
+    const whisper = await whisperReply(roomA, refOf(t.b), WHISPER);
+    expect(whisper).toMatchObject({ type: 'whisper_rejected', code: 'unconscious' });
+    expect(actionReply).toMatchObject({ code: 'unconscious' });
+    if (whisper.type === 'whisper_rejected' && actionReply.type === 'action_rejected') expect(whisper.message).toBe(actionReply.message);
+
+    // Nothing reached B.
+    const roomB = await enter(t.b);
+    expect(whisperEntries(roomB)).toEqual([]);
   });
 
   it('C6: a Whisper from A reaches B (and the Human GM), never C, also on replay', async () => {

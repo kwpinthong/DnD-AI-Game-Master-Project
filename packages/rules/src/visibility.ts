@@ -32,7 +32,8 @@ export const PLAYER_NAME_REVEAL_RELATIONSHIP = 9;
 /**
  * Title Mask (GEN-067, sheet Fog of War): another player sees only the Title until the two are allies with
  * relationship > +9; then each sees the other's real name and may Whisper. This replaces GEN-050's
- * "introduced" rule. It is not permanent: a broken alliance or a drop hides the name again.
+ * "introduced" rule. It is not permanent: a broken alliance or a drop hides the name again. A name the
+ * viewer discovered (สืบรู้, Q-134) also shows, for good; the server keeps that per viewer (`known_name`).
  */
 export function revealsPlayerName(bond: { readonly alliance: boolean; readonly relationship: number } | undefined): boolean {
   return bond !== undefined && bond.alliance && bond.relationship > PLAYER_NAME_REVEAL_RELATIONSHIP;

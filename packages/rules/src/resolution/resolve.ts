@@ -25,7 +25,7 @@ import type {
   ResolveResult,
   StatusEffect,
 } from './types.ts';
-import { applyTagging } from './tags.ts';
+import { applyTagging, chargeOnCrit, isQualitativeSource } from './tags.ts';
 import { validateProposal } from './validate.ts';
 
 /** Records every die drawn from an inner Rng so the log can replay it. */
@@ -81,14 +81,19 @@ export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
   const { actor, npcs } = state;
   const dice = new RecordingRng(rng);
   // Tag-matched bonuses (GEN-064): the server's numbers, logged with their source.
-  const tagging = proposal.tagging !== undefined && tags !== undefined ? applyTagging(tags, proposal.tagging) : undefined;
+  let tagging = proposal.tagging !== undefined && tags !== undefined ? applyTagging(tags, proposal.tagging) : undefined;
+  // Q-130: a qualitative tag source the AI judged is logged as judged.
+  const judgedSources = new Set((tags?.sources ?? []).filter(isQualitativeSource).map((s) => s.id));
 
   // Roll.
   let check: CheckLog | null = null;
   let degree: Degree = 'success';
   if (proposal.check.type !== 'none') {
     const modifiers: LoggedModifier[] = [
-      ...proposal.modifiers.map((m) => loggedModifier(actor, proposal, m)),
+      ...proposal.modifiers.map((m) => {
+        const logged = loggedModifier(actor, proposal, m);
+        return logged.ref !== undefined && (m.source === 'item' || m.source === 'skill') && judgedSources.has(logged.ref) ? { ...logged, judged: true as const } : logged;
+      }),
       ...(tagging?.bonuses ?? []).map((b) => ({ source: b.kind, ref: b.ref, value: b.value })),
     ];
     const modifierSum = modifiers.reduce((sum, m) => sum + m.value, 0);
@@ -96,7 +101,9 @@ export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
     const roll = rollDice('1d20', dice);
     const d20 = roll.faces[0]!;
     const total = d20 + modifierTotal;
-    const dc = proposal.check.type === 'pvp' ? pvp!.dc : proposal.check.dc;
+    // Q-131: penalties put on a player target lower their defence, so DC_pvp.
+    const targetPenalty = (tagging?.targetBonuses ?? []).reduce((sum, b) => sum + b.value, 0);
+    const dc = proposal.check.type === 'pvp' ? pvp!.dc + targetPenalty : proposal.check.dc;
     check = { dc, d20, modifiers, modifierSum, modifierTotal, total, margin: total - dc };
     degree = roll.crit ? 'crit' : roll.fumble ? 'fumble' : total >= dc ? 'success' : 'fail';
   }
@@ -136,7 +143,10 @@ export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
 
   // Stamina (spec §3): crit half rounded up, fumble +2, refund after, net >= 1, floor 0.
   let cost = proposal.staminaCost;
-  if (degree === 'crit') cost = Math.ceil(cost / 2);
+  if (degree === 'crit') {
+    cost = Math.ceil(cost / 2);
+    if (tagging !== undefined) tagging = chargeOnCrit(tagging);
+  }
   if (degree === 'fumble') cost += 2;
   const net = cost > 0 ? Math.max(RULES.minNetCost, cost - actor.afterActionStamina) : 0;
   const staminaAfter = clamp(actor.stamina - net - (tagging?.skillStamina ?? 0), 0, RULES.staminaMax);
