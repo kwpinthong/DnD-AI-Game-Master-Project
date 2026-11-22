@@ -30,6 +30,7 @@ import { chosenLootInGame, itemsInGame, skillsInGame, transferItem } from './ite
 import { outdoorLocationIds, recordTagUses, tagContexts, type TaggingOptions } from './tags.ts';
 import { originStatuses, treatChronicIllness } from '../game/origin.ts';
 import { TREATMENT_VERBS } from '../game/start-rules.ts';
+import { publicRepScaleOf, startStaminaCut } from '../game/location-actions.ts';
 
 /** Who a successful HEAL / CLEANSE action treated: its player target, else the actor (self-treatment). */
 export function patientsTreated(outcomes: readonly ActionOutcome[]): string[] {
@@ -170,8 +171,9 @@ export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet
     held.forEach(apply);
     const owned = (o: StoredOption): OwnedRef => ({ id: o.id, tier: tierOf(o) });
 
-    // The start scenario's lasting debuff (the chronic illness, GEN-065).
+    // The start scenario's lasting debuff (the chronic illness, GEN-065) and a cheaper action where it holds (Q-209).
     statuses.push(...originStatuses(db, c.memberId));
+    if (assets) afterActionStamina += startStaminaCut(db, assets, c.memberId, locationId, gameId);
 
     players[c.memberId] = {
       id: c.memberId,
@@ -197,7 +199,9 @@ export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet
   for (const n of getGameScenario(db, gameId)?.npcs ?? []) {
     npcs[n.id] = { id: n.id, grade: n.rank, hp: NPC_HP_MAX[n.rank], locationId: n.locationId, obsTrait: 0, damageReduction: 0 };
   }
-  return { players, npcs };
+  // GEN-069: a Public action at the fountain moves Reputation ×1.5.
+  const publicRepScale = assets ? publicRepScaleOf(db, gameId, assets) : {};
+  return { players, npcs, ...(Object.keys(publicRepScale).length > 0 ? { publicRepScale } : {}) };
 }
 
 /** Who learns something of an action: everyone `witnessesOf` gives, plus a target it changed or who knows who did it. */

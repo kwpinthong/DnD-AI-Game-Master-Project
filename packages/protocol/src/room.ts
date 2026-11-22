@@ -56,13 +56,15 @@ export const Turn = z.number().int().min(1).max(2);
 
 /**
  * This turn's action. A resubmit before the turn closes replaces the earlier one. `rest`: REST / SLEEP
- * this turn (in NOCTHERION it counts as the night's sleep against Drowsy).
+ * this turn (in NOCTHERION it counts as the night's sleep against Drowsy). `train`: TRAIN at the guild
+ * (GEN-069: Max HP +3, once a day, up to 45); not with `rest`.
  */
 export const RoomAction = z.object({
   type: z.literal('action'),
   text: z.string(),
   visibility: z.string(),
   rest: z.boolean().default(false),
+  train: z.boolean().default(false),
 });
 export type RoomAction = z.infer<typeof RoomAction>;
 
@@ -134,7 +136,9 @@ export const RoomYou = z.strictObject({
   /** Your character is Drowsy today (stayed awake through last NOCTHERION): d20 -2, +1 Stamina per action. */
   drowsy: z.boolean(),
   /** Your own action this turn (only you get this). */
-  action: z.strictObject({ text: z.string(), visibility: ActionVisibility, rest: z.boolean() }).nullable(),
+  action: z
+    .strictObject({ text: z.string(), visibility: ActionVisibility, rest: z.boolean(), /** GEN-069: only when it is a TRAIN. */ train: z.literal(true).optional() })
+    .nullable(),
   /** Allies with relationship > +9 (GEN-067): their real name and the `ref` to Whisper to. Empty for the GM. */
   allies: z.array(z.strictObject({ ref: z.string(), name: z.string() })),
 });
