@@ -65,7 +65,19 @@ export const RoomAction = z.object({
 });
 export type RoomAction = z.infer<typeof RoomAction>;
 
-export const RoomClientMessage = z.discriminatedUnion('type', [RoomHello, RoomAction]);
+/**
+ * A private message to one ally (GEN-067, sheet Fog of War). `to` is the ally's `ref` from `you.allies`.
+ * Allowed only while the two are allies with relationship > +9; any place, any phase until the game ends.
+ * Same text rules as an action. Only the sender, the target and the Human GM receive it.
+ */
+export const RoomWhisper = z.object({
+  type: z.literal('whisper'),
+  to: z.string(),
+  text: z.string(),
+});
+export type RoomWhisper = z.infer<typeof RoomWhisper>;
+
+export const RoomClientMessage = z.discriminatedUnion('type', [RoomHello, RoomAction, RoomWhisper]);
 export type RoomClientMessage = z.infer<typeof RoomClientMessage>;
 
 // --- Server → client ---
@@ -106,6 +118,8 @@ export const RoomYou = z.strictObject({
   drowsy: z.boolean(),
   /** Your own action this turn (only you get this). */
   action: z.strictObject({ text: z.string(), visibility: ActionVisibility, rest: z.boolean() }).nullable(),
+  /** Allies with relationship > +9 (GEN-067): their real name and the `ref` to Whisper to. Empty for the GM. */
+  allies: z.array(z.strictObject({ ref: z.string(), name: z.string() })),
 });
 export type RoomYou = z.infer<typeof RoomYou>;
 
@@ -127,8 +141,9 @@ export type RoomState = z.infer<typeof RoomState>;
 /**
  * `feed`: something that happened at a place, sent only to who was there (witnesses, GEN-050).
  * `narration`: private GM text for one player. `place` null = the whole town (feed) or none (narration).
+ * `whisper`: one ally to another (GEN-067); `place` null, `whisper` says who to whom.
  */
-export const RoomEntryKind = z.enum(['feed', 'narration']);
+export const RoomEntryKind = z.enum(['feed', 'narration', 'whisper']);
 export type RoomEntryKind = z.infer<typeof RoomEntryKind>;
 
 export const RoomEntry = z.strictObject({
@@ -140,6 +155,11 @@ export const RoomEntry = z.strictObject({
   turn: Turn,
   place: PlaceView.nullable(),
   text: z.string(),
+  /**
+   * Whisper entries only: the characters' real names (both could see each other's when it was sent) and
+   * whether this viewer sent it.
+   */
+  whisper: z.strictObject({ from: z.string(), to: z.string(), mine: z.boolean() }).optional(),
 });
 export type RoomEntry = z.infer<typeof RoomEntry>;
 
@@ -165,6 +185,15 @@ export const RoomActionAccepted = z.strictObject({ type: z.literal('action_accep
 export const RoomActionRejected = z.strictObject({ type: z.literal('action_rejected'), code: RoomActionCode, message: z.string() });
 
 /**
+ * `not_allowed`: no ally with that ref at relationship > +9 (an unknown ref gets the same answer, so a
+ * Whisper cannot probe who exists).
+ */
+export const RoomWhisperCode = z.enum(['empty', 'too_long', 'not_a_player', 'not_allowed', 'game_ended']);
+export type RoomWhisperCode = z.infer<typeof RoomWhisperCode>;
+export const RoomWhisperAccepted = z.strictObject({ type: z.literal('whisper_accepted') });
+export const RoomWhisperRejected = z.strictObject({ type: z.literal('whisper_rejected'), code: RoomWhisperCode, message: z.string() });
+
+/**
  * The socket cannot be used; the server closes it after this. `no_character`: the web takes the player to
  * character creation (C2). `unauthorized`: back to the join form.
  */
@@ -178,6 +207,8 @@ export const RoomServerMessage = z.discriminatedUnion('type', [
   RoomReady,
   RoomActionAccepted,
   RoomActionRejected,
+  RoomWhisperAccepted,
+  RoomWhisperRejected,
   RoomError,
 ]);
 export type RoomServerMessage = z.infer<typeof RoomServerMessage>;

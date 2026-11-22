@@ -86,7 +86,7 @@ export function registerRoomRoutes(app: FastifyInstance, db: Db, now: Clock, opt
         }
 
         if (!me) return refuse('unauthorized');
-        reply(room.submit(socket, message));
+        reply(message.type === 'whisper' ? room.whisper(socket, message) : room.submit(socket, message));
       });
 
       socket.on('close', () => {

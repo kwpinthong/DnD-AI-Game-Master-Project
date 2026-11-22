@@ -1,4 +1,5 @@
 import {
+  ACTION_MAX_LENGTH,
   ActionVisibility,
   actionTextProblem,
   normalizeActionText,
@@ -8,11 +9,13 @@ import {
   type RoomLockCode,
   type RoomServerMessage,
   type RoomState,
+  type RoomWhisperCode,
 } from '@isekai/protocol';
 import {
   NIGHT_PERIOD,
   isDrowsy,
   phaseStep,
+  revealsPlayerName,
   secretQuotaUsed,
   type PhaseErrorCode,
   type PhaseState,
@@ -21,12 +24,19 @@ import {
 import { eq } from 'drizzle-orm';
 import type { Clock } from '../auth/join.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
-import { game } from '../db/schema.ts';
+import { character, game } from '../db/schema.ts';
 import { activeMembers, type MemberRow } from '../game/service.ts';
 import { CryptoRng } from '../rng.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { forbiddenKeysIn } from '../visibility/guard.ts';
-import { locationSnapshot, presenceOf } from '../visibility/store.ts';
+import {
+  leaveHiddenEvidence,
+  locationSnapshot,
+  namesVisibleTo,
+  playerBondBetween,
+  presenceOf,
+  presencesInGame,
+} from '../visibility/store.ts';
 import { witnessesOf } from '../visibility/views.ts';
 import type { ClosedAction, PhaseResolution, PhaseResolver } from './resolver.ts';
 import {
@@ -53,16 +63,27 @@ const LOCK_MESSAGE: Record<RoomLockCode, string> = {
   game_ended: 'เกมจบแล้ว ส่ง action ไม่ได้',
 };
 
+const WHISPER_MESSAGE: Record<RoomWhisperCode, string> = {
+  empty: 'พิมพ์ข้อความก่อนส่ง Whisper',
+  too_long: `Whisper ยาวได้ไม่เกิน ${ACTION_MAX_LENGTH} ตัวอักษร`,
+  not_a_player: 'GM ไม่มีตัวละคร จึงส่ง Whisper ไม่ได้',
+  not_allowed: 'ส่ง Whisper ถึงคนนี้ไม่ได้ ต้องเป็นพันธมิตรที่สนิทกันพอก่อน',
+  game_ended: 'เกมจบแล้ว ส่ง Whisper ไม่ได้',
+};
+
 const SECRET_QUOTA_MESSAGE = 'วันนี้ใช้ Secret ไปแล้ว (ได้วันละ 1 เทิร์น และฟรีอีก 1 เทิร์นในช่วง NOCTHERION) ส่งเป็น Public แทนได้';
 const NIGHT_SECRET_QUOTA_MESSAGE = 'คืนนี้ใช้ Secret ฟรีของช่วง NOCTHERION ไปแล้ว (ได้คืนละ 1 เทิร์น) ส่งเป็น Public แทนได้';
 
 export type SubmitReply = { type: 'action_accepted' } | { type: 'action_rejected'; code: RoomActionCode; message: string };
+export type WhisperReply = { type: 'whisper_accepted' } | { type: 'whisper_rejected'; code: RoomWhisperCode; message: string };
 
 export interface RoomService {
   /** Registers an authenticated socket: replays entries after `afterSeq`, then sends the room and `ready`. */
   join(socket: RoomSocket, me: MemberRow, afterSeq: number): void;
   leave(socket: RoomSocket): void;
   submit(socket: RoomSocket, input: { text: string; visibility: string; rest?: boolean }): SubmitReply;
+  /** A Whisper to one ally (GEN-067): stored as a `whisper` entry for sender, target and the Human GM. */
+  whisper(socket: RoomSocket, input: { to: string; text: string }): WhisperReply;
   /** Shutdown: forgets every socket (their close events no longer touch the database), then waits for running resolves. */
   stop(): Promise<void>;
 }
@@ -104,7 +125,12 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
     return { id: locationId, name: location?.name ?? locationId };
   }
 
-  function entryView(row: RoomEntryRow): RoomEntry {
+  function characterName(memberId: string | null): string {
+    if (memberId === null) return '';
+    return db.select({ name: character.name }).from(character).where(eq(character.memberId, memberId)).get()?.name ?? '';
+  }
+
+  function entryView(row: RoomEntryRow, viewer: MemberRow): RoomEntry {
     return {
       seq: row.id,
       kind: row.kind,
@@ -113,7 +139,23 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
       turn: row.turn === 2 ? 2 : 1,
       place: placeView(db, row.gameId, row.locationId),
       text: row.text,
+      ...(row.kind === 'whisper'
+        ? { whisper: { from: characterName(row.fromMemberId), to: characterName(row.toMemberId), mine: row.fromMemberId === viewer.id } }
+        : {}),
     };
+  }
+
+  /** Allies `me` may Whisper to and whose real name they see (GEN-067), by their presence ref. */
+  function alliesOf(me: MemberRow): { ref: string; name: string }[] {
+    if (me.role === 'gm') return [];
+    const visible = namesVisibleTo(db, me.id);
+    if (visible.size === 0) return [];
+    const active = new Set(activeMembers(db, me.gameId).map((m) => m.id));
+    const presences = new Map(presencesInGame(db, me.gameId).map((p) => [p.memberId, p.ref]));
+    return [...visible].flatMap((id) => {
+      const ref = presences.get(id);
+      return ref !== undefined && active.has(id) ? [{ ref, name: characterName(id) }] : [];
+    });
   }
 
   function lockOf(me: MemberRow, state: PhaseState): RoomLockCode | null {
@@ -151,6 +193,7 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
         secretUsed: player ? secretQuotaUsed(player, state) : false,
         drowsy: player ? isDrowsy(player, state.day) : false,
         action: mine ? { text: mine.text, visibility: mine.visibility, rest: mine.rest === true } : null,
+        allies: alliesOf(me),
       },
     };
   }
@@ -169,8 +212,7 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
     const sockets = rooms.get(gameId);
     if (!sockets) return;
     for (const { row, recipients } of rows) {
-      const message: RoomServerMessage = { type: 'entry', entry: entryView(row) };
-      for (const [socket, me] of sockets) if (recipients.has(me.id)) send(socket, message);
+      for (const [socket, me] of sockets) if (recipients.has(me.id)) send(socket, { type: 'entry', entry: entryView(row, me) });
     }
   }
 
@@ -241,6 +283,12 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
             const locationId = entry.kind === 'feed' ? entry.locationId : null;
             return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text }, [...recipients], t), recipients };
           });
+          // GEN-067: every Secret action that stood leaves a Hidden Evidence Tag at its place for this game day.
+          for (const a of actions) {
+            if (a.visibility === 'secret' && a.locationId !== null) {
+              leaveHiddenEvidence(tx, { gameId, locationId: a.locationId, day: at.day, actorMemberId: a.memberId }, t);
+            }
+          }
           let step = phaseStep(current, { type: 'resolved', results: withKarma(tx, current, resolution.results ?? {}) }, rng);
           if (!step.ok) {
             log(`[room] resolver results refused (game ${gameId}): ${step.error.code}; the turn advances without them`);
@@ -276,6 +324,10 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
     return { type: 'action_rejected', code, message: text };
   }
 
+  function rejectWhisper(code: RoomWhisperCode): WhisperReply {
+    return { type: 'whisper_rejected', code, message: WHISPER_MESSAGE[code] };
+  }
+
   return {
     join(socket, me, afterSeq) {
       if (stopped) return;
@@ -283,7 +335,7 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
       let sockets = rooms.get(me.gameId);
       if (!sockets) rooms.set(me.gameId, (sockets = new Map()));
       sockets.set(socket, me);
-      for (const row of entriesFor(db, me.gameId, me.id, afterSeq)) send(socket, { type: 'entry', entry: entryView(row) });
+      for (const row of entriesFor(db, me.gameId, me.id, afterSeq)) send(socket, { type: 'entry', entry: entryView(row, me) });
       broadcastRoom(me.gameId);
       const lastSeq = entriesFor(db, me.gameId, me.id, 0).at(-1)?.id ?? 0;
       send(socket, { type: 'ready', lastSeq: Math.max(lastSeq, afterSeq) });
@@ -332,6 +384,31 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
       // Online: closes once every player who must act has sent; Single: that is the one player (C7).
       if (outcome.status === 'resolving') startResolving(me.gameId);
       return { type: 'action_accepted' };
+    },
+
+    whisper(socket, input) {
+      const me = memberOf(socket);
+      if (!me || me.role === 'gm') return rejectWhisper('not_a_player');
+      const text = normalizeActionText(input.text);
+      if (text.length === 0) return rejectWhisper('empty');
+      if ([...text].length > ACTION_MAX_LENGTH) return rejectWhisper('too_long');
+
+      const published = db.transaction((tx) => {
+        const t = now();
+        const state = ensurePhaseState(tx, me.gameId, t);
+        if (state.status === 'finale' || state.status === 'game_over') return 'game_ended' as const;
+        const target = presencesInGame(tx, me.gameId).find((p) => p.ref === input.to);
+        const members = activeMembers(tx, me.gameId);
+        if (!target || target.memberId === me.id || !members.some((m) => m.id === target.memberId)) return 'not_allowed' as const;
+        if (!revealsPlayerName(playerBondBetween(tx, me.id, target.memberId))) return 'not_allowed' as const;
+
+        const recipients = new Set([me.id, target.memberId, ...members.filter((m) => m.role === 'gm').map((m) => m.id)]);
+        const entry = { kind: 'whisper' as const, at: { day: state.day, phase: state.phase, turn: state.turn }, locationId: null, text, fromMemberId: me.id, toMemberId: target.memberId };
+        return { row: insertEntry(tx, me.gameId, entry, [...recipients], t), recipients };
+      });
+      if (typeof published === 'string') return rejectWhisper(published);
+      deliver(me.gameId, [published]);
+      return { type: 'whisper_accepted' };
     },
 
     async stop() {

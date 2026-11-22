@@ -75,6 +75,11 @@ export const CharacterView = z.strictObject({
   stamina: Gauge,
   /** The title for the current Reputation (Rules Spec Social Title), e.g. "คนแปลกหน้า". */
   socialTitle: z.string(),
+  /**
+   * The adjective for your own Karma band (GEN-067, sheet "Karma Tiers"), e.g. "เป็นกลางสุดๆ". Only the
+   * owner gets it (Q-091); never the number, and never another player's.
+   */
+  conduct: z.string(),
   /** Name, appearance and personality can change until the game starts. */
   editable: z.boolean(),
 });

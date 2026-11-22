@@ -9,6 +9,7 @@ import {
   UpdateGameRequest,
   type CreateGameResponse,
 } from '@isekai/protocol';
+import type { KarmaTier } from '@isekai/rules';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { memberRowForToken, type Clock } from '../auth/join.ts';
 import { bearerToken, sendError } from '../auth/routes.ts';
@@ -37,6 +38,8 @@ export interface GameRouteOptions {
    * Q-075); the loot step (GEN-048) calls it.
    */
   ai: AiService;
+  /** Karma bands from the assets (GEN-067): the owner's own Karma word in their character. */
+  karmaTiers: readonly KarmaTier[];
 }
 
 const minutesUntil = (at: number, t: number) => Math.max(1, Math.ceil((at - t) / 60_000));
@@ -242,7 +245,7 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
   app.get('/api/game/character', async (request, reply) => {
     const me = caller(request, reply);
     if (!me) return reply;
-    const body: CharacterResponse = { character: getCharacter(db, me) };
+    const body: CharacterResponse = { character: getCharacter(db, me, options.karmaTiers) };
     return reply.send(body);
   });
 
@@ -251,7 +254,7 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
     if (!me) return reply;
     const input = characterInput(request, reply);
     if (!input) return reply;
-    return sendCharacter(reply, createCharacter(db, me, input, now), 201);
+    return sendCharacter(reply, createCharacter(db, me, input, now, options.karmaTiers), 201);
   });
 
   app.put('/api/game/character', async (request, reply) => {
@@ -259,7 +262,7 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
     if (!me) return reply;
     const input = characterInput(request, reply);
     if (!input) return reply;
-    return sendCharacter(reply, updateCharacter(db, me, input, now), 200);
+    return sendCharacter(reply, updateCharacter(db, me, input, now, options.karmaTiers), 200);
   });
 
   // --- Loot (GEN-048): the caller's own strength / weakness + Common skill / item. ---

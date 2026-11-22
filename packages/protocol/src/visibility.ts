@@ -48,12 +48,25 @@ export const GmCharacterView = z.strictObject({
   socialTitle: z.string(),
   reputationScore: z.number().int(),
   karma: z.number().int(),
+  /** The adjective the owner sees for that Karma (GEN-067). */
+  conduct: z.string(),
   locationId: z.string().nullable(),
-  /** Member ids of the characters whose real name this character knows. */
+  /** Member ids of the characters whose real name this character sees (allies with relationship > +9, GEN-067). */
   knowsNamesOf: z.array(z.string()),
   npcBonds: z.array(z.strictObject({ npcId: z.string(), affinity: z.number().int(), nameRevealed: z.boolean() })),
+  /** Alliance and relationship with each other player that has a bond row (GEN-067). */
+  playerBonds: z.array(z.strictObject({ memberId: z.string(), alliance: z.boolean(), relationship: z.number().int() })),
 });
 export type GmCharacterView = z.infer<typeof GmCharacterView>;
+
+/** A Hidden Evidence Tag as the Human GM sees it (GEN-067): every one in the game, with who left it. */
+export const GmEvidenceView = z.strictObject({
+  id: z.number().int(),
+  locationId: z.string(),
+  day: z.number().int(),
+  actorMemberId: z.string(),
+});
+export type GmEvidenceView = z.infer<typeof GmEvidenceView>;
 
 /**
  * 200 from GET /api/game/surroundings. A player gets their own character, their place and who / which
@@ -67,6 +80,6 @@ export const SurroundingsResponse = z.discriminatedUnion('view', [
     people: z.array(OtherCharacterView),
     npcs: z.array(NpcView),
   }),
-  z.strictObject({ view: z.literal('gm'), characters: z.array(GmCharacterView) }),
+  z.strictObject({ view: z.literal('gm'), characters: z.array(GmCharacterView), evidence: z.array(GmEvidenceView) }),
 ]);
 export type SurroundingsResponse = z.infer<typeof SurroundingsResponse>;

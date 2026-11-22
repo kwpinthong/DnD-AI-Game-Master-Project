@@ -42,6 +42,52 @@ export const knownName = sqliteTable(
 );
 
 /**
+ * Alliance and relationship between two players of one game (GEN-067). One row per pair, stored with
+ * `member_low` < `member_high` so A-B and B-A are the same row: an alliance is mutual. `relationship` runs
+ * -100..+100. Only the AI GM / engine writes it (`setPlayerBond`); no player route changes it.
+ */
+export const playerBond = sqliteTable(
+  'player_bond',
+  {
+    gameId: text('game_id')
+      .notNull()
+      .references(() => game.id, { onDelete: 'cascade' }),
+    memberLow: text('member_low')
+      .notNull()
+      .references(() => member.id, { onDelete: 'cascade' }),
+    memberHigh: text('member_high')
+      .notNull()
+      .references(() => member.id, { onDelete: 'cascade' }),
+    alliance: integer('alliance', { mode: 'boolean' }).notNull().default(false),
+    relationship: integer('relationship').notNull().default(0),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.memberLow, t.memberHigh] }), index('player_bond_game').on(t.gameId)],
+);
+
+/**
+ * Hidden Evidence Tag (GEN-067, sheet Fog of War): a Secret action leaves one at its place for that game
+ * day. Keyed on the day only (not the phase / period), so it outlives any change to how a day is split.
+ * Players never list it; INVESTIGATE at the place on the same day may find it (`discoverHiddenEvidence`).
+ */
+export const hiddenEvidence = sqliteTable(
+  'hidden_evidence',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    gameId: text('game_id')
+      .notNull()
+      .references(() => game.id, { onDelete: 'cascade' }),
+    locationId: text('location_id').notNull(),
+    day: integer('day').notNull(),
+    actorMemberId: text('actor_member_id')
+      .notNull()
+      .references(() => member.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('hidden_evidence_place_day').on(t.gameId, t.locationId, t.day)],
+);
+
+/**
  * One player's bond with one scenario NPC (GEN-050 stores it; GEN-054 changes affinity).
  * `name_revealed` stays true once set, even if affinity drops later (Rules Spec §8.1).
  */

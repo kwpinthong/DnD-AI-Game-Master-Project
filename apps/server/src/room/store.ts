@@ -86,6 +86,9 @@ export interface NewEntry {
   readonly at: TurnPoint;
   readonly locationId: string | null;
   readonly text: string;
+  /** Whisper only (GEN-067). */
+  readonly fromMemberId?: string;
+  readonly toMemberId?: string;
 }
 
 /** Stores an entry with who may receive it; the recipients never change afterwards. */
@@ -100,6 +103,8 @@ export function insertEntry(db: DbOrTx, gameId: string, entry: NewEntry, recipie
       turn: entry.at.turn,
       locationId: entry.locationId,
       text: entry.text,
+      fromMemberId: entry.fromMemberId ?? null,
+      toMemberId: entry.toMemberId ?? null,
       createdAt: now,
     })
     .returning()

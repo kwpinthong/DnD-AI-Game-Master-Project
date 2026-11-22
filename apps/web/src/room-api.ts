@@ -19,12 +19,16 @@ export interface RoomListener {
   entry(entry: RoomEntry): void;
   /** The server answered the last action. */
   actionReply(reply: { ok: true } | { ok: false; message: string }): void;
+  /** The server answered the last Whisper (GEN-067). */
+  whisperReply(reply: { ok: true } | { ok: false; message: string }): void;
   /** The server refused the socket for good (no reconnect). */
   fatal(code: RoomErrorCode, message: string): void;
 }
 
 export interface RoomConnection {
   sendAction(text: string, visibility: ActionVisibility, rest?: boolean): boolean;
+  /** `to`: the ally's ref from `you.allies`. */
+  sendWhisper(to: string, text: string): boolean;
   close(): void;
 }
 
@@ -68,6 +72,10 @@ export function connectRoom(baseUrl: string, token: string, listener: RoomListen
           return listener.actionReply({ ok: true });
         case 'action_rejected':
           return listener.actionReply({ ok: false, message: message.message });
+        case 'whisper_accepted':
+          return listener.whisperReply({ ok: true });
+        case 'whisper_rejected':
+          return listener.whisperReply({ ok: false, message: message.message });
         case 'error':
           stopped = true;
           listener.status('closed');
@@ -87,6 +95,11 @@ export function connectRoom(baseUrl: string, token: string, listener: RoomListen
     sendAction(text, visibility, rest = false) {
       if (!socket || socket.readyState !== WebSocket.OPEN) return false;
       socket.send(JSON.stringify({ type: 'action', text, visibility, rest }));
+      return true;
+    },
+    sendWhisper(to, text) {
+      if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+      socket.send(JSON.stringify({ type: 'whisper', to, text }));
       return true;
     },
     close() {

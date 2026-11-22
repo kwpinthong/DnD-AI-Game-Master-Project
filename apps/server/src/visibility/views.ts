@@ -6,20 +6,31 @@ import type {
   Scenario,
   SurroundingsResponse,
 } from '@isekai/protocol';
-import { injuryText, socialTitle } from '@isekai/rules';
+import { injuryText, karmaTitle, socialTitle, type KarmaTier } from '@isekai/rules';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { character, member } from '../db/schema.ts';
 import { getCharacter } from '../game/character.ts';
 import type { MemberRow } from '../game/service.ts';
 import { getGameScenario } from '../scenario/store.ts';
-import { namesKnownBy, npcBondsOf, presenceOf, presencesInGame, type NpcBondRow, type PresenceRow } from './store.ts';
+import {
+  hiddenEvidenceInGame,
+  namesVisibleTo,
+  npcBondsOf,
+  playerBondsOf,
+  presenceOf,
+  presencesInGame,
+  type NpcBondRow,
+  type PresenceRow,
+} from './store.ts';
 
 /**
- * The visibility layer (GEN-050, GDD §1-§2). Every payload for one viewer is built here, so the HTTP
- * routes and the socket events (GEN-056) share one set of rules:
- * - yourself: everything except Karma and the Reputation number (`CharacterView`)
- * - others at your place: appearance, injury word, Social Title; the real name only once you know it
+ * The visibility layer (GEN-050, GDD §1-§2; Fog of War GEN-067). Every payload for one viewer is built
+ * here, so the HTTP routes and the socket events (GEN-056) share one set of rules:
+ * - yourself: everything except the Karma and Reputation numbers; your own Karma word (`conduct`, Q-091)
+ * - others at your place: appearance, injury word, Social Title (Title Mask); the real name only while you
+ *   are allies with relationship > +9; never their Karma word
+ * - Hidden Evidence: never listed to players (INVESTIGATE finds it, `discoverHiddenEvidence`)
  * - others elsewhere: nothing, not even that they exist or where they are
  * - NPCs at your place: alias until `nameRevealed` for you
  * - the Human GM: everything
@@ -96,8 +107,8 @@ function charactersInGame(db: DbOrTx, gameId: string) {
     .all();
 }
 
-function playerSurroundings(db: Db, me: MemberRow): SurroundingsResponse {
-  const you = getCharacter(db, me);
+function playerSurroundings(db: Db, me: MemberRow, karmaTiers: readonly KarmaTier[]): SurroundingsResponse {
+  const you = getCharacter(db, me, karmaTiers);
   const here = presenceOf(db, me.id);
   if (!you || !here) return { view: 'player', you, place: null, people: [], npcs: [] };
 
@@ -106,7 +117,7 @@ function playerSurroundings(db: Db, me: MemberRow): SurroundingsResponse {
   const others = charactersInGame(db, me.gameId).filter(
     ({ character: c }) => c.memberId !== me.id && presences.get(c.memberId)?.locationId === here.locationId,
   );
-  const known = namesKnownBy(db, me.id, others.map(({ character: c }) => c.memberId));
+  const known = namesVisibleTo(db, me.id);
   const bonds = new Map(npcBondsOf(db, me.id).map((b) => [b.npcId, b]));
 
   return {
@@ -118,7 +129,7 @@ function playerSurroundings(db: Db, me: MemberRow): SurroundingsResponse {
   };
 }
 
-function gmSurroundings(db: DbOrTx, gameId: string): SurroundingsResponse {
+function gmSurroundings(db: DbOrTx, gameId: string, karmaTiers: readonly KarmaTier[]): SurroundingsResponse {
   const presences = new Map(presencesInGame(db, gameId).map((p) => [p.memberId, p]));
   const characters: GmCharacterView[] = charactersInGame(db, gameId).map(({ character: c, playerName }) => ({
     memberId: c.memberId,
@@ -133,14 +144,17 @@ function gmSurroundings(db: DbOrTx, gameId: string): SurroundingsResponse {
     socialTitle: socialTitle(c.reputation),
     reputationScore: c.reputation,
     karma: c.karma,
+    conduct: karmaTitle(c.karma, karmaTiers),
     locationId: presences.get(c.memberId)?.locationId ?? null,
-    knowsNamesOf: [...namesKnownBy(db, c.memberId)],
+    knowsNamesOf: [...namesVisibleTo(db, c.memberId)],
     npcBonds: npcBondsOf(db, c.memberId).map(({ npcId, affinity, nameRevealed }) => ({ npcId, affinity, nameRevealed })),
+    playerBonds: [...playerBondsOf(db, c.memberId)].map(([memberId, bond]) => ({ memberId, ...bond })),
   }));
-  return { view: 'gm', characters };
+  const evidence = hiddenEvidenceInGame(db, gameId).map(({ id, locationId, day, actorMemberId }) => ({ id, locationId, day, actorMemberId }));
+  return { view: 'gm', characters, evidence };
 }
 
 /** GET /api/game/surroundings for `me`: the GM view for the Human GM, the player view for everyone else. */
-export function surroundingsFor(db: Db, me: MemberRow): SurroundingsResponse {
-  return me.role === 'gm' ? gmSurroundings(db, me.gameId) : playerSurroundings(db, me);
+export function surroundingsFor(db: Db, me: MemberRow, karmaTiers: readonly KarmaTier[]): SurroundingsResponse {
+  return me.role === 'gm' ? gmSurroundings(db, me.gameId, karmaTiers) : playerSurroundings(db, me, karmaTiers);
 }

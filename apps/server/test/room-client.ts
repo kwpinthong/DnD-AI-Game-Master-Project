@@ -13,6 +13,7 @@ export interface RoomClient {
   lastRoom(): RoomState | undefined;
   send(message: unknown): void;
   action(text: string, visibility: 'public' | 'secret', rest?: boolean): void;
+  whisper(to: string, text: string): void;
   /** Resolves with the first message (counting from `from`) that matches; rejects after 5 s. */
   waitFor<T extends RoomServerMessage>(match: (m: RoomServerMessage) => m is T, from?: number): Promise<T>;
   waitFor(match: (m: RoomServerMessage) => boolean, from?: number): Promise<RoomServerMessage>;
@@ -82,6 +83,7 @@ export async function openRoom(
     lastRoom: () => messages.filter((m): m is RoomState => m.type === 'room').at(-1),
     send,
     action: (text, visibility, rest) => send({ type: 'action', text, visibility, ...(rest === undefined ? {} : { rest }) }),
+    whisper: (to, text) => send({ type: 'whisper', to, text }),
     waitFor: waitFor as RoomClient['waitFor'],
     closed,
     async close() {

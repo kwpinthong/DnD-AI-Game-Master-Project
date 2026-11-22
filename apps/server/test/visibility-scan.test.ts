@@ -2,8 +2,9 @@ import { defaultScenario } from '@isekai/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { RunningServer } from '../src/server.ts';
 import { forbiddenKeysIn } from '../src/visibility/guard.ts';
-import { learnName, moveCharacter, setNpcAffinity } from '../src/visibility/store.ts';
+import { learnName, leaveHiddenEvidence, moveCharacter, setNpcAffinity, setPlayerBond } from '../src/visibility/store.ts';
 import { makeTempDir } from './helpers.ts';
+import { isReady, openRoom, type RoomClient } from './room-client.ts';
 import { CLOCK, CREATE_CODE, LIN, startedTable, startTestServer, type Seat, type Table } from './visibility-fixture.ts';
 
 interface Request {
@@ -84,6 +85,41 @@ describe('C6: no player-facing payload carries karma (GEN-050)', { timeout: 120_
       setNpcAffinity(server!.orm, seat.memberId, merchant, 12, CLOCK);
     }
     learnName(server!.orm, t.a.memberId, t.b.memberId, 'introduced', CLOCK);
+    // GEN-067: an alliance with a relationship number, and a Hidden Evidence Tag.
+    setPlayerBond(server!.orm, t.a.memberId, t.b.memberId, { alliance: true, relationship: 12 }, CLOCK);
+    setPlayerBond(server!.orm, t.b.memberId, t.c.memberId, { alliance: false, relationship: -7 }, CLOCK);
+    const gameId = (server!.db.prepare('select game_id from member where id = ?').get(t.a.memberId) as { game_id: string }).game_id;
+    leaveHiddenEvidence(server!.orm, { gameId, locationId: merchant.locationId, day: 1, actorMemberId: t.c.memberId }, CLOCK);
+  }
+
+  /** Every frame each player's play-room socket gets while they act, Whisper and read the room (GEN-056 / GEN-067). */
+  async function scanSocketsAsPlayers(t: Table) {
+    const leaks: string[] = [];
+    const seats = [t.a, t.b, t.c];
+    const clients: RoomClient[] = [];
+    try {
+      for (const seat of seats) {
+        const c = await openRoom(server!, { token: seat.token });
+        clients.push(c);
+        await c.waitFor(isReady);
+      }
+      const [a, b, c] = clients as [RoomClient, RoomClient, RoomClient];
+      const ally = a.lastRoom()!.you.allies[0]!;
+      a.whisper(ally.ref, 'กระซิบทดสอบ');
+      await a.waitFor((m) => m.type === 'whisper_accepted');
+      await b.waitFor((m) => m.type === 'entry' && m.entry.kind === 'whisper');
+      a.action('เดินดูตลาด', 'public');
+      b.action('แอบหยิบของ', 'secret');
+      c.action('นั่งพัก', 'public');
+      for (const x of clients) await x.waitFor((m) => m.type === 'room' && m.phase === 'EOSORIA' && m.turn === 2);
+      for (const [i, x] of clients.entries()) {
+        for (const [n, m] of x.messages.entries()) for (const path of forbiddenKeysIn(m)) leaks.push(`socket frame ${n} as ${seats[i]!.name}: ${path}`);
+        for (const frame of x.raw) if (frame.includes('"karma"') || frame.includes('"relationship"')) leaks.push(`socket raw as ${seats[i]!.name}: ${frame}`);
+      }
+    } finally {
+      await Promise.all(clients.map((x) => x.close()));
+    }
+    return leaks;
   }
 
   async function scanAsPlayers(t: Table) {
@@ -114,6 +150,17 @@ describe('C6: no player-facing payload carries karma (GEN-050)', { timeout: 120_
     expect(await scanAsPlayers(t)).toEqual([]);
   });
 
+  it('C2 (GEN-067): every socket frame a player gets, Whisper included, has no karma / relationship key', async () => {
+    server = await startTestServer(dataDir);
+    const t = await startedTable(server, true);
+    seedSecrets(t);
+    // The GM's surroundings do carry the numbers (the scanner is not blind).
+    const gm = await t.call('GET', '/api/game/surroundings', { token: t.gm!.token });
+    expect(forbiddenKeysIn(gm.body)).toEqual(expect.arrayContaining(['characters.0.karma', 'characters.0.playerBonds.0.relationship']));
+
+    expect(await scanSocketsAsPlayers(t)).toEqual([]);
+  });
+
   it('C6: the same holds in a game without a Human GM (A is the owner)', async () => {
     server = await startTestServer(dataDir);
     const t = await startedTable(server, false);
@@ -123,6 +170,7 @@ describe('C6: no player-facing payload carries karma (GEN-050)', { timeout: 120_
 
   it('C6: forbiddenKeysIn finds nested keys and keys inside arrays', () => {
     expect(forbiddenKeysIn({ a: [{ b: { karma: 1 } }], reputationScore: 2, ok: 'karma' })).toEqual(['a.0.b.karma', 'reputationScore']);
+    expect(forbiddenKeysIn({ bonds: [{ relationship: 12 }] })).toEqual(['bonds.0.relationship']);
     expect(forbiddenKeysIn({ socialTitle: 'คนแปลกหน้า', people: [{ name: null }] })).toEqual([]);
   });
 });

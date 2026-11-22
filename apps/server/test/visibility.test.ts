@@ -2,7 +2,7 @@ import { defaultScenario, SurroundingsResponse } from '@isekai/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { RunningServer } from '../src/server.ts';
 import { advanceTimeline } from '../src/timeline/store.ts';
-import { learnName, locationSnapshot, moveCharacter, setNpcAffinity } from '../src/visibility/store.ts';
+import { learnName, locationSnapshot, moveCharacter, setNpcAffinity, setPlayerBond } from '../src/visibility/store.ts';
 import { seesEvent, witnessesOf, type PlaceEvent } from '../src/visibility/views.ts';
 import { makeTempDir } from './helpers.ts';
 import { CLOCK, startedTable, startTestServer, type Seat, type Table } from './visibility-fixture.ts';
@@ -78,11 +78,14 @@ describe('visibility layer: who sees what (GEN-050)', { timeout: 60_000 }, () =>
     expect(view.people.some((p) => p.appearance === t.a.appearance)).toBe(false);
   });
 
-  it('C3: after B introduces themself to A, A sees B\'s name but C still does not', async () => {
+  // GEN-067 replaced "introduced" with the sheet's Title Mask: allies with relationship > +9 see the name.
+  it('C3: an introduction alone no longer shows the name; once A and B are allies at +10 A sees it, C still does not', async () => {
     const t = await table();
 
     learnName(server!.orm, t.a.memberId, t.b.memberId, 'introduced', CLOCK);
+    expect((await playerView(t, t.a)).view.people.find((p) => p.appearance === t.b.appearance)?.name).toBeNull();
 
+    setPlayerBond(server!.orm, t.a.memberId, t.b.memberId, { alliance: true, relationship: 10 }, CLOCK);
     const seenByA = (await playerView(t, t.a)).view.people.find((p) => p.appearance === t.b.appearance);
     expect(seenByA?.name).toBe('ดาริน');
     const byC = await playerView(t, t.c);
