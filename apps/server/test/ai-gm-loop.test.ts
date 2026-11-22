@@ -913,6 +913,15 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       expect(JSON.stringify(place.beats)).not.toContain('แอบเปิดกระเป๋า');
     });
 
+    it('C4: a player whose action is public gets no private line (what is said in front of everyone is in the place feed once)', async () => {
+      await boot({}, withLines((audience) => ('player' in audience ? [{ npcId: 'amnesiac', kind: 'dialogue', text: 'พูดซ้ำอีกรอบ' }] : [])));
+      const { clients } = await atFountain();
+      await playTurn(clients, ['ทักลูเซีย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+      for (const c of clients) expect(npcEntries(c)).toEqual([]);
+      const ctxs = provider.requests.filter(isNarration).map((r) => contextOf<NarrationContext>(r));
+      expect(ctxs.filter((c) => 'player' in c.audience).every((c) => c.privateLines === false)).toBe(true);
+    });
+
     it('C5: an NPC whose name the viewer has not learned shows as its alias, and as its name once the bond reveals it', async () => {
       await boot({}, noRoll);
       const { t, clients } = await atFountain();

@@ -326,6 +326,8 @@ export interface NarrationContext {
    * `bonds`: each cast player's affinity (-/+) and whether they have met.
    */
   npcs: { id: string; alias: string; grade: string; here: boolean; persona: string | null; bonds: { player: string; affinity: number; met: boolean }[] }[];
+  /** GEN-110: private NPC lines (`npcLines` of a player narration) are kept only when this is true: the reader's own action is Secret. */
+  privateLines: boolean;
   /** In the server's order; write one or more segments for each, in the same order. */
   beats: Beat[];
   /** The reader's own journal (Q-153), for a private narration only; null for a place feed. */
@@ -389,7 +391,7 @@ const NARRATOR_TEXT = [
   // GEN-110
   'npcLines = บทพูดของ NPC ที่อยู่ที่นี่ตอนนี้ (npcs ของ context เท่านั้น npcId ต้องตรง) ตอบ [] ได้เสมอ ไม่ต้องพูดทุกเทิร์น',
   '- audience place (ทุกคนอ่านร่วมกัน): kind dialogue = NPC พูดเรื่องที่ beat นั้นทำ / พูดกับผู้ทำ ได้สูงสุด 3 บรรทัดของ NPC เดียว (NPC ที่ beat เล็งถึงด้วย targetNpc) / kind reaction = NPC คนอื่นที่อยู่ที่นั่นตอบสนองคนละ 1 บรรทัด ไม่เกิน 3 คน',
-  '- audience player (อ่านคนเดียว): ใส่เฉพาะสิ่งที่คนอื่นไม่ได้ยิน เช่น NPC กระซิบ หรือรู้ว่าผู้เล่นทำอะไรลับ ไม่เกิน 2 บรรทัด ห้ามซ้ำกับสิ่งที่พูดต่อหน้าทุกคนแล้ว',
+  '- audience player (อ่านคนเดียว): ใส่ npcLines ได้เฉพาะเมื่อ privateLines เป็น true (action ของผู้อ่านเป็นการกระทำลับ) เป็นสิ่งที่ NPC พูดกับผู้อ่านคนเดียว ไม่เกิน 2 บรรทัด นอกนั้นตอบ [] เสมอ (บทพูดต่อหน้าทุกคนอยู่ใน audience place แล้ว ห้ามซ้ำ)',
   '- ช่วงสำคัญ (beat มี targetNpc, ผู้เล่นเจอ NPC ครั้งแรก = bonds met เป็น false, หรือมี beat kind event) ให้พูดมากขึ้น เทิร์นธรรมดาพูดน้อย 0-2 บรรทัด',
   '- แต่ละบรรทัดสั้น ไม่เกิน 120 ตัวอักษร เป็นภาษาไทย พูดตาม persona ของ NPC นั้น และท่าทีต่อผู้เล่นตาม bonds (affinity สูง = เป็นมิตร ต่ำ = ระแวง), karmaBand (-2 โหดร้าย .. +2 ใจบุญ) และ looks / title ของผู้เล่น (NPC รู้จักผู้เล่นแค่รูปลักษณ์กับฉายา ห้ามเรียกชื่อจริง)',
   '- ห้ามเฉลยความลับ ชื่อจริง หรือกรรมเป็นตัวเลข ห้ามพูดถึงสิ่งที่ไม่อยู่ใน beats / ห้ามเล่าเรื่องของ action ลับให้คนอื่นรู้ ใช้ {{p:ref}} / {{n:id}} แทนชื่อ ห้ามใส่ HP / กรรม / เกรด',

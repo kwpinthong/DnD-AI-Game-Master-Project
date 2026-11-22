@@ -367,6 +367,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       // Tokens may still name the NPCs of the scenario place (as before); only the scheduled ones speak.
       return npcPrompt(db, assets, world, world.npcs.filter((n) => hereIds.has(n.id) || n.locationId === placeId), hereIds, members);
     };
+    const secretBy = new Set(order.filter((a) => a.visibility === 'secret').map((a) => a.memberId));
     const targetNpcs = new Map(proposal.actions.map((a) => [a.actionId, a.targetNpc]));
     const audiences = narrationAudiences(world, resolved.log, textOf, start, events.active, evidenceFor, npcsFor, (m) => karmaBand(karmaOf(m)), (id) => targetNpcs.get(id) ?? null);
     // GEN-115: the narrations do not depend on each other, so they run together: the wait is the slowest one, not the sum.
@@ -376,6 +377,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         ...audience.ctx,
         turn: at,
         place: { id: audience.placeId, name: placeName.get(audience.placeId) ?? audience.placeId },
+        privateLines: 'player' in audience.ctx.audience && secretBy.has(audience.readers[0]!),
         journal: 'player' in audience.ctx.audience ? narrationJournal(db, audience.readers[0]!, at.day) : null,
       };
       const saved = stored.narrations[audience.key];
@@ -438,7 +440,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           ? { kind: 'feed', locationId: ctx.place.id, actorMemberId: null, text, ...fallback }
           : { kind: 'narration', memberId: reader, text, ...roll, ...fallback };
       const lines = capTotal(
-        cleanNpcLines(out.npcLines ?? [], {
+        cleanNpcLines(reader !== null && !ctx.privateLines ? [] : (out.npcLines ?? []), {
           present: new Set(ctx.npcs.filter((n) => n.here).map((n) => n.id)),
           audience: reader === null ? 'public' : 'private',
           forbidden: [...forbidden, ...realNpcNames],

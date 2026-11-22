@@ -147,18 +147,15 @@ const RESULT_WORD: Record<string, string> = {
   scene: '',
 };
 
-/** GEN-110 dev marker: `[mock:whisper]` in an action makes its private narration carry a private NPC line. */
-export const MOCK_WHISPER_MARKER = '[mock:whisper]';
-
 /**
  * GEN-110: the Mock GM's NPC lines. A place narration: 2 dialogue lines of the NPC a beat aims at (else the first NPC),
- * then a reaction of each other NPC (up to 3, in order). A player narration: one private line when an action carries `[mock:whisper]`.
+ * then a reaction of each other NPC (up to 3, in order). A player narration: one private line when the reader's action is Secret.
  */
 export function mockNpcLines(all: NarrationContext): GmNpcLine[] {
   const ctx = { ...all, npcs: all.npcs.filter((n) => n.here) };
   if ('player' in ctx.audience) {
     const first = ctx.npcs[0];
-    return first && ctx.beats.some((b) => b.text.includes(MOCK_WHISPER_MARKER)) ? [{ npcId: first.id, kind: 'dialogue', text: 'ข้าเห็นนะว่าเจ้าทำอะไรอยู่ ไว้คุยกันทีหลัง' }] : [];
+    return first && ctx.privateLines ? [{ npcId: first.id, kind: 'dialogue', text: 'ข้าเห็นนะว่าเจ้าทำอะไรอยู่ ไว้คุยกันทีหลัง' }] : [];
   }
   const aimed = ctx.beats.find((b) => b.targetNpc !== null && ctx.npcs.some((n) => n.id === b.targetNpc))?.targetNpc;
   const main = ctx.npcs.find((n) => n.id === aimed) ?? ctx.npcs[0];
