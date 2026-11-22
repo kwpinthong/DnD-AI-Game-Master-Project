@@ -29,6 +29,25 @@ export {
   type StatQuery,
 } from './resolution/tables.ts';
 export { validateProposal } from './resolution/validate.ts';
+export {
+  ACTIVE_SKILL_STAMINA,
+  ANY_TAG,
+  RANK_DICE_CAP,
+  TAG_SOURCE_KINDS,
+  applyTagging,
+  matchingSources,
+  sourceMatches,
+  tagBonus,
+  validateTagging,
+  type Activation,
+  type SourceRank,
+  type TagBonusLog,
+  type TagClaim,
+  type TagContext,
+  type TaggingLog,
+  type TagSource,
+  type TagSourceKind,
+} from './resolution/tags.ts';
 export { ReplayRng, replayResolution, resolveAction } from './resolution/resolve.ts';
 export {
   RESCUE_AID_DC,

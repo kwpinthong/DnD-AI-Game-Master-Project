@@ -25,6 +25,7 @@ import type {
   ResolveResult,
   StatusEffect,
 } from './types.ts';
+import { applyTagging } from './tags.ts';
 import { validateProposal } from './validate.ts';
 
 /** Records every die drawn from an inner Rng so the log can replay it. */
@@ -69,22 +70,27 @@ const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
  * Never mutates the input. On any validation error nothing is rolled and no state is returned.
  */
 export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
-  const errors = validateProposal(input.state, input.proposal);
+  const errors = validateProposal(input.state, input.proposal, input.tags);
   if (input.proposal.check?.type === 'pvp' && input.pvp === undefined) {
     errors.push({ code: 'invalid_field', path: 'check', message: 'a pvp check is resolved per phase against a player target (GEN-060)' });
   }
   if (errors.length > 0) return { ok: false, errors };
 
   const snapshot = copy(input);
-  const { state, proposal, pvp } = copy(input);
+  const { state, proposal, pvp, tags } = copy(input);
   const { actor, npcs } = state;
   const dice = new RecordingRng(rng);
+  // Tag-matched bonuses (GEN-064): the server's numbers, logged with their source.
+  const tagging = proposal.tagging !== undefined && tags !== undefined ? applyTagging(tags, proposal.tagging) : undefined;
 
   // Roll.
   let check: CheckLog | null = null;
   let degree: Degree = 'success';
   if (proposal.check.type !== 'none') {
-    const modifiers = proposal.modifiers.map((m) => loggedModifier(actor, proposal, m));
+    const modifiers: LoggedModifier[] = [
+      ...proposal.modifiers.map((m) => loggedModifier(actor, proposal, m)),
+      ...(tagging?.bonuses ?? []).map((b) => ({ source: b.kind, ref: b.ref, value: b.value })),
+    ];
     const modifierSum = modifiers.reduce((sum, m) => sum + m.value, 0);
     const modifierTotal = clamp(modifierSum, -RULES.modCapTotal, RULES.modCapTotal);
     const roll = rollDice('1d20', dice);
@@ -133,7 +139,7 @@ export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
   if (degree === 'crit') cost = Math.ceil(cost / 2);
   if (degree === 'fumble') cost += 2;
   const net = cost > 0 ? Math.max(RULES.minNetCost, cost - actor.afterActionStamina) : 0;
-  const staminaAfter = clamp(actor.stamina - net, 0, RULES.staminaMax);
+  const staminaAfter = clamp(actor.stamina - net - (tagging?.skillStamina ?? 0), 0, RULES.staminaMax);
 
   // Reputation only for Public, or Secret that was caught. Karma always.
   const repDelta = proposal.visibility === 'public' ? effects.repDelta : caught ? proposal.repDeltaIfCaught : 0;
@@ -208,6 +214,7 @@ export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
     targetObservation,
     interrupted,
     stamina: { before: actor.stamina, cost, net, after: staminaAfter },
+    ...(tagging !== undefined ? { tagging } : {}),
     rep,
     karma,
     affinity,

@@ -168,7 +168,8 @@ export function resolvePhaseActions(input: PhaseActionsInput, rng: Rng): PhaseAc
                 : null,
           };
 
-    const result = resolveAction({ state: { actor, npcs }, proposal, ...(pvp ? { pvp } : {}) }, dice);
+    const tags = snapshot.tags?.[actorId];
+    const result = resolveAction({ state: { actor, npcs }, proposal, ...(pvp ? { pvp } : {}), ...(tags ? { tags } : {}) }, dice);
     if (!result.ok) throw new Error(`action ${proposal.actionId} passed validation but was rejected: ${JSON.stringify(result.errors)}`);
     const { log } = result;
     let nextActor = result.state.actor as PlayerState;
@@ -243,7 +244,7 @@ export function validatePhaseActions(input: PhaseActionsInput): CrossPlayerError
     if (seen.has(actor.id)) fail('duplicate_actor', 'actorId', `${actor.id} has more than one action this phase`);
     seen.add(actor.id);
 
-    for (const e of validateProposal({ actor, npcs }, action.proposal)) errors.push({ ...e, path: `proposal.${e.path}`, action: i });
+    for (const e of validateProposal({ actor, npcs }, action.proposal, input.tags?.[actor.id])) errors.push({ ...e, path: `proposal.${e.path}`, action: i });
     if (action.moveTo !== null && (typeof action.moveTo !== 'string' || action.moveTo === '')) fail('invalid_field', 'moveTo', 'moveTo must be a location id or null');
     if (!(action.awareness in AWARENESS_MOD)) fail('invalid_field', 'awareness', 'awareness must be watch, asleep or normal');
 
