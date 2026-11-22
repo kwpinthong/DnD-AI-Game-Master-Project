@@ -49,6 +49,8 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/game/companions': { method: 'GET', path: '/api/game/companions' },
     'POST /api/game/companions': { method: 'POST', path: '/api/game/companions', body: { ref: merchantRef ?? 'none' } },
     'DELETE /api/game/companions/:ref': { method: 'DELETE', path: '/api/game/companions/not-a-companion' },
+    // GEN-055: the player's own skills, held items and library discoveries (no condition or progress).
+    'GET /api/game/inventory': { method: 'GET', path: '/api/game/inventory' },
     'POST /api/join': { method: 'POST', path: '/api/join', body: { inviteCode: t.inviteCode, name: playerNameOf(t, me), pin: '1111' } },
     'POST /api/games': {
       method: 'POST',
