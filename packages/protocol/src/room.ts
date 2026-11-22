@@ -144,8 +144,9 @@ export type RoomYou = z.infer<typeof RoomYou>;
  * `budget_reached`: the game's monthly AI ceiling (Q-078); no AI call is made until it is raised.
  * `ai_not_ready`: the provider cannot be used (no API key). `message` is Thai, for this viewer
  * (the owner / Human GM get the reason; players get "AI GM ติดขัด").
+ * `awaiting_gm` (GEN-058, Q-030): the turn is resolved and waits for the Human GM to approve it.
  */
-export const RoomGmStatusCode = z.enum(['stuck', 'budget_reached', 'ai_not_ready']);
+export const RoomGmStatusCode = z.enum(['stuck', 'budget_reached', 'ai_not_ready', 'awaiting_gm']);
 export type RoomGmStatusCode = z.infer<typeof RoomGmStatusCode>;
 export const RoomGmStatus = z.strictObject({ code: RoomGmStatusCode, message: z.string(), canRetry: z.boolean() });
 export type RoomGmStatus = z.infer<typeof RoomGmStatus>;

@@ -22,6 +22,7 @@ import {
   type PhaseErrorCode,
   type PhaseState,
   type PlayerResult,
+  type TurnPoint,
 } from '@isekai/rules';
 import { eq } from 'drizzle-orm';
 import type { Clock } from '../auth/join.ts';
@@ -102,9 +103,30 @@ export interface RoomService {
   retry(socket: RoomSocket): void;
   /** A walk to another place (GEN-066): no weather, start right, password or INFILTRATE from the room yet. */
   move(socket: RoomSocket, input: { to: string }): MoveReply;
+  /** GEN-058 (Q-030): the resolved turn of a game with a Human GM, held until the GM approves it; undefined = none. */
+  heldTurn(gameId: string): HeldTurn | undefined;
+  /**
+   * Publishes the held turn as `edit` returns it (the GM's narration / result changes), then goes on with the
+   * game. false = nothing was held, or the publish failed (the room then offers retry).
+   */
+  approve(gameId: string, edit: (turn: HeldTurn) => PhaseResolution): boolean;
+  /** Starts resolving a closed turn nobody works on (after a restart, before anyone entered the room). */
+  wake(gameId: string): void;
   /** Shutdown: forgets every socket (their close events no longer touch the database), then waits for running resolves. */
   stop(): Promise<void>;
 }
+
+/** A resolved turn before it is published. */
+export interface HeldTurn {
+  readonly at: TurnPoint;
+  /** The engine state at the close (status `resolving`). */
+  readonly state: PhaseState;
+  readonly actions: readonly ClosedAction[];
+  readonly resolution: PhaseResolution;
+}
+
+const AWAITING_GM_PLAYER_MESSAGE = 'ผลของเทิร์นนี้รอ GM ตรวจและอนุมัติก่อน แล้วจะส่งให้ทุกคน';
+const AWAITING_GM_MESSAGE = 'ผลของเทิร์นนี้รอคุณตรวจใน GM console แก้ได้ แล้วกดอนุมัติเพื่อส่งให้ผู้เล่น';
 
 /**
  * The play room (GEN-056). Presence lives in memory (who has a socket open); everything players must not
@@ -118,6 +140,8 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, a
   const resolving = new Map<string, Promise<void>>();
   /** Games whose closed turn the resolver could not finish (GEN-057); cleared by `retry` or a restart. */
   const stuck = new Map<string, ResolverStuck>();
+  /** Games with a Human GM whose resolved turn waits for approval (GEN-058); lost on restart, resolved again then. */
+  const held = new Map<string, HeldTurn>();
   const shutdown = new AbortController();
   const rng = new CryptoRng();
   let stopped = false;
@@ -188,6 +212,9 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, a
   }
 
   function gmStatusFor(me: MemberRow, state: PhaseState, ownerMemberId: string | null): RoomGmStatus | null {
+    if (held.has(me.gameId) && state.status === 'resolving') {
+      return { code: 'awaiting_gm', message: me.role === 'gm' ? AWAITING_GM_MESSAGE : AWAITING_GM_PLAYER_MESSAGE, canRetry: false };
+    }
     const s = stuck.get(me.gameId);
     if (!s || state.status !== 'resolving') return null;
     const toOwner = me.role === 'gm' || me.id === ownerMemberId;
@@ -288,42 +315,17 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, a
     return out;
   }
 
-  /** Hands the closed turn to the resolver once, publishes what comes back and opens the next turn. */
-  function startResolving(gameId: string): void {
-    if (resolving.has(gameId)) return;
-    const run = (async () => {
-      for (;;) {
-        const state = ensurePhaseState(db, gameId, now());
-        if (state.status !== 'resolving') return;
-        const locations = locationSnapshot(db, gameId);
-        const actions: ClosedAction[] = state.order.flatMap((id) => {
-          const a = state.submissions[id];
-          return a
-            ? [{ memberId: id, text: a.text, visibility: a.visibility, rest: a.rest === true, locationId: locations.get(id) ?? null, travelingTo: travellingTo(db, id) }]
-            : [];
-        });
+  function hasHumanGm(gameId: string): boolean {
+    return db.select({ humanGm: game.humanGm }).from(game).where(eq(game.id, gameId)).get()?.humanGm === true;
+  }
 
-        let resolution: PhaseResolution;
-        try {
-          const at = { day: state.day, phase: state.phase, turn: state.turn };
-          resolution = await resolver.resolve({ gameId, at, actions, state, signal: shutdown.signal });
-        } catch (error) {
-          // Stays `resolving`; after a restart the next player to enter starts it again, otherwise `retry` does.
-          log(`[room] resolver failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
-          if (!stopped) {
-            stuck.set(gameId, { code: 'stuck', message: GM_STUCK_MESSAGE, ownerMessage: GM_STUCK_MESSAGE });
-            broadcastRoom(gameId);
-          }
-          return;
-        }
-        if (stopped) return;
-        if (resolution.stuck) {
-          stuck.set(gameId, resolution.stuck);
-          broadcastRoom(gameId);
-          return;
-        }
-
-        const publish = () => db.transaction((tx) => {
+  /**
+   * Publishes a resolved turn in one transaction and opens the next turn. false = it is not published: the
+   * turn is no longer the closed one, or the transaction failed (rolled back; the room then offers retry).
+   */
+  function publishTurn(gameId: string, turn: HeldTurn): boolean {
+    const { state, actions, resolution } = turn;
+    const publish = () => db.transaction((tx) => {
           const t = now();
           const current = ensurePhaseState(tx, gameId, t);
           if (current.status !== 'resolving' || current.day !== state.day || current.phase !== state.phase || current.turn !== state.turn) {
@@ -360,31 +362,91 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, a
           else if (next.day !== current.day || next.phase !== current.phase) advanceTimeline(tx, gameId, { day: next.day, phase: next.phase }, t);
           return rows;
         });
-        let published: ReturnType<typeof publish>;
+    let published: ReturnType<typeof publish>;
+    try {
+      published = publish();
+    } catch (error) {
+      // Rolled back as a whole: nothing of the turn is written; the room offers retry.
+      log(`[room] publish failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
+      stuck.set(gameId, { code: 'stuck', message: GM_STUCK_MESSAGE, ownerMessage: GM_STUCK_MESSAGE });
+      broadcastRoom(gameId);
+      return false;
+    }
+    if (published === null) return false;
+    stuck.delete(gameId);
+    deliver(gameId, published);
+    broadcastRoom(gameId);
+    return true;
+  }
+
+  /** Work after a published turn (the day summary); a failure is logged and never blocks the game. */
+  async function afterTurn(gameId: string, resolution: PhaseResolution): Promise<void> {
+    if (!resolution.after) return;
+    try {
+      await resolution.after();
+    } catch (error) {
+      log(`[room] after-turn work failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
+    }
+  }
+
+  /**
+   * Hands the closed turn to the resolver once and publishes what comes back, or (GEN-058) holds it for the
+   * Human GM; `first` runs before (the after-turn work of a turn the GM just approved).
+   */
+  function startResolving(gameId: string, first?: () => Promise<void>): void {
+    if (resolving.has(gameId)) return;
+    const run = (async () => {
+      if (first) await first();
+      for (;;) {
+        if (stopped) return;
+        const state = ensurePhaseState(db, gameId, now());
+        if (state.status !== 'resolving') return;
+        const locations = locationSnapshot(db, gameId);
+        const actions: ClosedAction[] = state.order.flatMap((id) => {
+          const a = state.submissions[id];
+          return a
+            ? [{ memberId: id, text: a.text, visibility: a.visibility, rest: a.rest === true, locationId: locations.get(id) ?? null, travelingTo: travellingTo(db, id) }]
+            : [];
+        });
+
+        const at = { day: state.day, phase: state.phase, turn: state.turn };
+        let resolution: PhaseResolution;
         try {
-          published = publish();
+          resolution = await resolver.resolve({ gameId, at, actions, state, signal: shutdown.signal });
         } catch (error) {
-          // Rolled back as a whole: nothing of the turn is written; the room offers retry.
-          log(`[room] publish failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
-          stuck.set(gameId, { code: 'stuck', message: GM_STUCK_MESSAGE, ownerMessage: GM_STUCK_MESSAGE });
+          // Stays `resolving`; after a restart the next player to enter starts it again, otherwise `retry` does.
+          log(`[room] resolver failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
+          if (!stopped) {
+            stuck.set(gameId, { code: 'stuck', message: GM_STUCK_MESSAGE, ownerMessage: GM_STUCK_MESSAGE });
+            broadcastRoom(gameId);
+          }
+          return;
+        }
+        if (stopped) return;
+        if (resolution.stuck) {
+          stuck.set(gameId, resolution.stuck);
           broadcastRoom(gameId);
           return;
         }
-        if (published === null) return;
-        stuck.delete(gameId);
-        deliver(gameId, published);
-        broadcastRoom(gameId);
-        if (resolution.after) {
-          try {
-            await resolution.after();
-          } catch (error) {
-            log(`[room] after-turn work failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
-          }
+
+        const turn: HeldTurn = { at, state, actions, resolution };
+        // Q-030: with a Human GM the turn waits for approval (`approve`); without one it is published at once (C6).
+        if (hasHumanGm(gameId)) {
+          held.set(gameId, turn);
+          broadcastRoom(gameId);
+          return;
         }
+        if (!publishTurn(gameId, turn)) return;
+        await afterTurn(gameId, resolution);
         // Loop: the next phase may close at once (nobody able to act).
       }
     })().finally(() => resolving.delete(gameId));
     resolving.set(gameId, run);
+  }
+
+  /** A closed turn nobody works on: resolve it, unless it is stuck (waits for `retry`) or held for the GM. */
+  function wakeTurn(gameId: string): void {
+    if (!stuck.has(gameId) && !held.has(gameId)) startResolving(gameId);
   }
 
   const rejectedBy: Record<PhaseErrorCode, RoomActionCode | null> = {
@@ -419,7 +481,26 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, a
       const lastSeq = entriesFor(db, me.gameId, me.id, 0).at(-1)?.id ?? 0;
       send(socket, { type: 'ready', lastSeq: Math.max(lastSeq, afterSeq) });
       // After a restart a phase can be left `resolving` with nobody working on it. A stuck turn waits for `retry`.
-      if (state.status === 'resolving' && !stuck.has(me.gameId)) startResolving(me.gameId);
+      if (state.status === 'resolving') wakeTurn(me.gameId);
+    },
+
+    heldTurn(gameId) {
+      return held.get(gameId);
+    },
+
+    approve(gameId, edit) {
+      const turn = held.get(gameId);
+      if (!turn || stopped) return false;
+      held.delete(gameId);
+      const resolution = edit(turn);
+      if (!publishTurn(gameId, { ...turn, resolution })) return false;
+      // The after-turn work, then the next turn if it closes at once (nobody able to act).
+      startResolving(gameId, () => afterTurn(gameId, resolution));
+      return true;
+    },
+
+    wake(gameId) {
+      if (ensurePhaseState(db, gameId, now()).status === 'resolving') wakeTurn(gameId);
     },
 
     retry(socket) {

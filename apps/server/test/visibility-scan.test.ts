@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { RunningServer } from '../src/server.ts';
 import { forbiddenKeysIn } from '../src/visibility/guard.ts';
 import { learnName, leaveHiddenEvidence, moveCharacter, setNpcAffinity, setPlayerBond } from '../src/visibility/store.ts';
+import { approveHeldTurn } from './gm-console-client.ts';
 import { makeTempDir } from './helpers.ts';
 import { isReady, openRoom, type RoomClient } from './room-client.ts';
 import { CLOCK, CREATE_CODE, LIN, startedTable, startTestServer, type Seat, type Table } from './visibility-fixture.ts';
@@ -49,6 +50,13 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/game/companions': { method: 'GET', path: '/api/game/companions' },
     'POST /api/game/companions': { method: 'POST', path: '/api/game/companions', body: { ref: merchantRef ?? 'none' } },
     'DELETE /api/game/companions/:ref': { method: 'DELETE', path: '/api/game/companions/not-a-companion' },
+    // GEN-058: the Human GM console. Players get 403 (scanned for karma like every other answer).
+    'GET /api/game/gm/console': { method: 'GET', path: '/api/game/gm/console' },
+    'POST /api/game/gm/turn/edit': { method: 'POST', path: '/api/game/gm/turn/edit', body: { reason: 'ทดสอบ', narrations: [{ index: 0, text: 'x' }] } },
+    'POST /api/game/gm/turn/approve': { method: 'POST', path: '/api/game/gm/turn/approve' },
+    'POST /api/game/gm/adjust': { method: 'POST', path: '/api/game/gm/adjust', body: { field: 'karma', memberId: me.memberId, value: 100, reason: 'ทดสอบ' } },
+    'POST /api/game/gm/events': { method: 'POST', path: '/api/game/gm/events', body: { day: 6, phase: 'EOSORIA', title: 'ไฟไหม้ตลาด', reason: 'ทดสอบ' } },
+    'GET /api/game/gm/log': { method: 'GET', path: '/api/game/gm/log' },
     'POST /api/join': { method: 'POST', path: '/api/join', body: { inviteCode: t.inviteCode, name: playerNameOf(t, me), pin: '1111' } },
     'POST /api/games': {
       method: 'POST',
@@ -115,6 +123,8 @@ describe('C6: no player-facing payload carries karma (GEN-050)', { timeout: 120_
       a.action('เดินดูตลาด', 'public');
       b.action('แอบหยิบของ', 'secret');
       c.action('นั่งพัก', 'public');
+      // GEN-058 (Q-030): a game with a Human GM publishes the turn once the GM approves it.
+      if (t.gm) await approveHeldTurn(t.call, t.gm.token);
       for (const x of clients) await x.waitFor((m) => m.type === 'room' && m.phase === 'EOSORIA' && m.turn === 2);
       for (const [i, x] of clients.entries()) {
         for (const [n, m] of x.messages.entries()) for (const path of forbiddenKeysIn(m)) leaks.push(`socket frame ${n} as ${seats[i]!.name}: ${path}`);
@@ -139,6 +149,8 @@ describe('C6: no player-facing payload carries karma (GEN-050)', { timeout: 120_
       for (const [route, request] of Object.entries(requests)) {
         const res = await t.call(request.method, request.path, { token: seat.token, ...(request.body !== undefined ? { body: request.body } : {}) });
         for (const path of forbiddenKeysIn(res.body)) leaks.push(`${route} (${res.status}) as ${seat.name}: ${path}`);
+        // GEN-058 (Q-136): the GM console answers players with 403 only.
+        if (request.path.startsWith('/api/game/gm/') && res.status !== 403) leaks.push(`${route} answered ${res.status} to ${seat.name}`);
         if (JSON.stringify(res.body ?? null).includes('"karma"')) leaks.push(`${route} raw "karma" as ${seat.name}`);
       }
     }

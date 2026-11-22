@@ -21,6 +21,7 @@ import type { PhaseResolver } from './room/resolver.ts';
 import { registerRoomRoutes } from './room/routes.ts';
 import { DEFAULT_ASSETS_DIR, loadGameAssets, type GameAssets } from './assets/load.ts';
 import { registerCompanionRoutes } from './companions/routes.ts';
+import { registerGmConsoleRoutes } from './gm-console/routes.ts';
 
 export interface RunningServer {
   url: string;
@@ -102,8 +103,9 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerTimelineRoutes(app, db, now);
   registerVisibilityRoutes(app, db, now, assets);
   const resolver = options.phaseResolver ?? createAiGmResolver({ db, ai, assets, now, log: options.aiLog ?? ((line) => console.log(line)) });
-  registerRoomRoutes(app, db, now, { resolver, assets, webOrigins: config.webOrigins ?? [] });
+  const room = registerRoomRoutes(app, db, now, { resolver, assets, webOrigins: config.webOrigins ?? [] });
   registerCompanionRoutes(app, db, now, assets);
+  registerGmConsoleRoutes(app, db, now, room, assets);
 
   try {
     await app.listen({ host: config.host, port: config.port });

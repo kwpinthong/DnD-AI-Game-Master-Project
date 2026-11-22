@@ -20,4 +20,5 @@ export * from './loot.ts';
 export * from './visibility.ts';
 
 export * from './room.ts';
+export * from './gm-console.ts';
 export * from './companion.ts';

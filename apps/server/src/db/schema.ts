@@ -145,3 +145,6 @@ export * from './schema-gm.ts';
 
 // GEN-066: a trip that ends when the turn closes, own file for the same reason.
 export * from './schema-travel.ts';
+
+// GEN-058: the Human GM's override log, own file for the same reason.
+export * from './schema-gm-console.ts';
