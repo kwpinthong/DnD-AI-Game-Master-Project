@@ -6,6 +6,7 @@ import { createUsageStore, type UsageRecord } from '../src/ai/core/usage.ts';
 import { hashPin } from '../src/auth/pin.ts';
 import { CREATE_CODE_LIMIT } from '../src/game/create-code.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
+import { approveHeldTurn } from './gm-console-client.ts';
 import { makeTempDir } from './helpers.ts';
 import { isReady, openRoom, type RoomClient } from './room-client.ts';
 import { caller, CLOCK, CREATE_CODE, DARIN, LIN, MEKHA, startedTable, type Call } from './visibility-fixture.ts';
@@ -268,6 +269,8 @@ describe('AI usage dashboard (GEN-061)', { timeout: 60_000 }, () => {
       a.action('เดินดูตลาดอย่างระมัดระวัง', 'public');
       b.action('แอบหยิบเหรียญจากกระเป๋าพ่อค้า', 'secret');
       c.action('นั่งพักใต้ต้นไม้ใหญ่', 'public');
+      // GEN-058 (Q-030): a game with a Human GM publishes the turn only after the GM approves it.
+      await approveHeldTurn(call, t.gm!.token);
       for (const x of clients) await x.waitFor((m) => m.type === 'room' && m.phase === 'EOSORIA' && m.turn === 2);
     } finally {
       await Promise.all(clients.map((x) => x.close()));

@@ -24,6 +24,7 @@ import { DEFAULT_ASSETS_DIR, loadGameAssets, type GameAssets } from './assets/lo
 import { registerCompanionRoutes } from './companions/routes.ts';
 import { registerAdminRoutes } from './admin/routes.ts';
 import { registerInventoryRoutes } from './skills/routes.ts';
+import { registerGmConsoleRoutes } from './gm-console/routes.ts';
 
 export interface RunningServer {
   url: string;
@@ -108,10 +109,11 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerVisibilityRoutes(app, db, now, assets);
   const weather = createWeatherService(db, ai, now, options.aiLog ?? ((line) => console.log(line)));
   const resolver = options.phaseResolver ?? createAiGmResolver({ db, ai, assets, now, log: options.aiLog ?? ((line) => console.log(line)) });
-  registerRoomRoutes(app, db, now, { resolver, assets, webOrigins: config.webOrigins ?? [], weather });
+  const room = registerRoomRoutes(app, db, now, { resolver, assets, webOrigins: config.webOrigins ?? [], weather });
   registerCompanionRoutes(app, db, now, assets);
   registerAdminRoutes(app, db, now, { ai: aiConfig, ...(config.adminCodeHash ? { adminCodeHash: config.adminCodeHash } : {}) });
   registerInventoryRoutes(app, db, now, assets);
+  registerGmConsoleRoutes(app, db, now, room, assets);
 
   try {
     await app.listen({ host: config.host, port: config.port });
