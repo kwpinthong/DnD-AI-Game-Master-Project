@@ -45,6 +45,20 @@
     "weatherVerbBoost": "Clear: [PRAY] / Dark Night: [RITUAL, INFILTRATE]"
   },
   {
+    "zone": "โซนใจกลางเมือง (Central Zone)",
+    "name": "โบสถ์ (ชั้นใต้ดิน)",
+    "characteristics": "ห้องใต้ดินลับใต้วิหารหินของโบสถ์ ที่ตั้งแท่นพิธีของลัทธิ เข้าได้ทางลับจากโบสถ์เท่านั้น (จุดเกิด 29% ศิษย์ฝึกหัดนอกรีต)",
+    "timeAndWeather": "เช้า–บ่าย: เงียบร้าง ทางลับปิด / ค่ำ (คืนเดือนมืด): ลัทธิเปิดทางลับและประกอบพิธีที่แท่นใต้ดิน",
+    "npcsAndBehavior": "อาร์คบิชอป มัลคอล์ม (A) ค่ำคืนเดือนมืด / น็อกทิส (S) ค่ำ (ค่ากรรม < -50)",
+    "specialMechanics": "ลอบเข้าหรือทำพิธีสาย Evil ที่แท่นใต้ดิน ผู้ที่ไม่ใช่คนของลัทธิถูกพบ = ถูกมองเป็นผู้บุกรุก",
+    "tags": [
+      "INDOOR",
+      "UNDERGROUND",
+      "RESTRICTED_AREA"
+    ],
+    "weatherVerbBoost": "Dark Night: [RITUAL, INFILTRATE, STEALTH]"
+  },
+  {
     "zone": "โซนป่าทิศตะวันออก (Eastern Forest Zone)",
     "name": "ป่า",
     "characteristics": "ป่าทึบทิศตะวันออก (จุดเกิด 70%) เต็มไปด้วยสมุนไพร สัตว์อสูร และซากปรักหักพัง",
@@ -211,19 +225,5 @@
       "GLOBAL_WEATHER_RULES"
     ],
     "weatherVerbBoost": "Clear: +Public / Rain: +Stealth -Fire / Fog: +Observe / Dark Night: +Evil / Disaster: +Neutral"
-  },
-  {
-    "zone": "โซนใจกลางเมือง (Central Zone)",
-    "name": "โบสถ์ (ชั้นใต้ดิน)",
-    "characteristics": "ห้องใต้ดินลับใต้วิหารหินของโบสถ์ ที่ตั้งแท่นพิธีของลัทธิ เข้าได้ทางลับจากโบสถ์เท่านั้น (จุดเกิด 29% ศิษย์ฝึกหัดนอกรีต)",
-    "timeAndWeather": "เช้า–บ่าย: เงียบร้าง ทางลับปิด / ค่ำ (คืนเดือนมืด): ลัทธิเปิดทางลับและประกอบพิธีที่แท่นใต้ดิน",
-    "npcsAndBehavior": "อาร์คบิชอป มัลคอล์ม (A) ค่ำคืนเดือนมืด / น็อกทิส (S) ค่ำ (ค่ากรรม < -50)",
-    "specialMechanics": "ลอบเข้าหรือทำพิธีสาย Evil ที่แท่นใต้ดิน ผู้ที่ไม่ใช่คนของลัทธิถูกพบ = ถูกมองเป็นผู้บุกรุก",
-    "tags": [
-      "INDOOR",
-      "UNDERGROUND",
-      "RESTRICTED_AREA"
-    ],
-    "weatherVerbBoost": "Dark Night: [RITUAL, INFILTRATE, STEALTH]"
   }
 ]
