@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CharacterView } from './character.ts';
+import { PlaceZone } from './view-models.ts';
 
 /**
  * Information asymmetry (GEN-050, GDD §1-§2): what each viewer may see. Every schema here is strict so
@@ -36,7 +37,8 @@ export const NpcView = z.strictObject({
 });
 export type NpcView = z.infer<typeof NpcView>;
 
-export const PlaceView = z.strictObject({ id: z.string(), name: z.string() });
+/** `zone`: the place's zone (Screens and Flows v2 4.2; pending GEN-099 gap, see docs/contract.md). */
+export const PlaceView = z.strictObject({ id: z.string(), name: z.string(), zone: PlaceZone.optional() });
 export type PlaceView = z.infer<typeof PlaceView>;
 
 /** A character as the Human GM sees it: every field, Karma, the Reputation number and the place included. */

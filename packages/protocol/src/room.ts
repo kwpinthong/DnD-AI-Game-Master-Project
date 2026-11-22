@@ -3,6 +3,7 @@ import { MemberRole } from './game.ts';
 import { Phase } from './scenario.ts';
 import { PlaceView } from './visibility.ts';
 import { PeriodWeather } from './weather.ts';
+import { AstralView, HitView, PlaceActionId, PlaceActionView, RollView, RoomOmenAccepted, RoomOmenRejected } from './view-models.ts';
 
 /**
  * The play room (GEN-056): one WebSocket per browser tab at `ROOM_PATH`. The browser cannot set an
@@ -63,6 +64,8 @@ export const RoomAction = z.object({
   text: z.string(),
   visibility: z.string(),
   rest: z.boolean().default(false),
+  /** GEN-069: a chip of the place (`you.placeActions`) used as this turn's action (pending, see docs/contract.md). */
+  placeAction: PlaceActionId.optional(),
 });
 export type RoomAction = z.infer<typeof RoomAction>;
 
@@ -116,16 +119,27 @@ export const RoomMember = z.strictObject({
 });
 export type RoomMember = z.infer<typeof RoomMember>;
 
-/** Why this viewer cannot send an action now; null = they can. */
+/** Why this viewer cannot send an action now (the codes the server sends today); null = they can. */
 export const RoomLockCode = z.enum(['not_a_player', 'exhausted', 'unconscious', 'resolving', 'game_ended']);
 export type RoomLockCode = z.infer<typeof RoomLockCode>;
+
+/**
+ * Lock codes the screens need that the server does not send yet (docs/contract.md): `traveling` (this turn
+ * is the trip to another zone, GEN-066 gap), `recovering` (resting at the clinic after HP 0, GEN-070) and
+ * `astral_spirit` (permanent death; `you.astral` has the omen box, GEN-070). The owner moves a code into
+ * `RoomLockCode` when the server sends it.
+ */
+export const RoomLockCodePending = z.enum(['traveling', 'recovering', 'astral_spirit']);
+/** Every lock the web must handle: `RoomYou.lock.code`. */
+export const RoomViewLockCode = z.enum([...RoomLockCode.options, ...RoomLockCodePending.options]);
+export type RoomViewLockCode = z.infer<typeof RoomViewLockCode>;
 
 export const RoomYou = z.strictObject({
   memberId: z.string(),
   role: MemberRole,
   /** Where your character is; null for the Human GM and before the game places you. */
   place: PlaceView.nullable(),
-  lock: z.strictObject({ code: RoomLockCode, message: z.string() }).nullable(),
+  lock: z.strictObject({ code: RoomViewLockCode, message: z.string() }).nullable(),
   /**
    * The Secret quota that applies now is used: today's one Secret turn (Rules Spec §10.4), or in
    * NOCTHERION tonight's free Secret turn (GEN-063).
@@ -137,6 +151,10 @@ export const RoomYou = z.strictObject({
   action: z.strictObject({ text: z.string(), visibility: ActionVisibility, rest: z.boolean() }).nullable(),
   /** Allies with relationship > +9 (GEN-067): their real name and the `ref` to Whisper to. Empty for the GM. */
   allies: z.array(z.strictObject({ ref: z.string(), name: z.string() })),
+  /** GEN-069: the action chips of your place (pending, see docs/contract.md). */
+  placeActions: z.array(PlaceActionView).optional(),
+  /** GEN-070: you are an Astral Spirit; null / absent = you are not (pending, see docs/contract.md). */
+  astral: AstralView.nullable().optional(),
 });
 export type RoomYou = z.infer<typeof RoomYou>;
 
@@ -182,10 +200,21 @@ export type RoomState = z.infer<typeof RoomState>;
 export const RoomEntryKind = z.enum(['feed', 'narration', 'whisper']);
 export type RoomEntryKind = z.infer<typeof RoomEntryKind>;
 
+/**
+ * Entry kinds the screens need that the server does not send yet (docs/contract.md): `hit` = another
+ * player's act landed on you (GEN-060 gap; the pinned card, `RoomEntry.hit` has the details); `omen` = an
+ * Astral Spirit's one-sentence omen to you (GEN-070, Q-193; the sender is not named). The owner moves a kind
+ * into `RoomEntryKind` when the server sends it.
+ */
+export const RoomEntryKindPending = z.enum(['hit', 'omen']);
+/** Every kind the web must handle: `RoomEntry.kind`. */
+export const RoomViewEntryKind = z.enum([...RoomEntryKind.options, ...RoomEntryKindPending.options]);
+export type RoomViewEntryKind = z.infer<typeof RoomViewEntryKind>;
+
 export const RoomEntry = z.strictObject({
   /** Increases within a game; a viewer's entries are a subsequence, so "the last one I have" is enough. */
   seq: z.number().int().min(1),
-  kind: RoomEntryKind,
+  kind: RoomViewEntryKind,
   day: z.number().int(),
   phase: Phase,
   turn: Turn,
@@ -201,6 +230,10 @@ export const RoomEntry = z.strictObject({
    * text was still wrong after a repair). Present only when true; show `FALLBACK_NARRATION_LABEL` with it.
    */
   fallback: z.literal(true).optional(),
+  /** F5: the roll of the reader's own action, on that narration only (pending, see docs/contract.md). */
+  roll: RollView.optional(),
+  /** `hit` entries: who (if known) and what changed for you (pending, see docs/contract.md). */
+  hit: HitView.optional(),
 });
 export type RoomEntry = z.infer<typeof RoomEntry>;
 
@@ -282,5 +315,8 @@ export const RoomServerMessage = z.discriminatedUnion('type', [
   RoomMoveAccepted,
   RoomMoveRejected,
   RoomError,
+  // Pending GEN-070 (docs/contract.md): the answer to a `RoomOmen`.
+  RoomOmenAccepted,
+  RoomOmenRejected,
 ]);
 export type RoomServerMessage = z.infer<typeof RoomServerMessage>;
