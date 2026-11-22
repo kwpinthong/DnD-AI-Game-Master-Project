@@ -1,6 +1,6 @@
 import { defaultScenario, parseScenario, type Scenario, type ScenarioIssue } from '@isekai/protocol';
 import { eq } from 'drizzle-orm';
-import type { Db, DbOrTx } from '../db/client.ts';
+import type { DbOrTx } from '../db/client.ts';
 import { gameScenario } from '../db/schema.ts';
 
 /** A stored copy that no longer parses: the row was edited outside this module. */
@@ -46,7 +46,7 @@ export function getGameScenario(db: DbOrTx, gameId: string): Scenario | null {
 }
 
 /** Replaces the game's copy after validating it. Other games and the template are untouched. */
-export function updateGameScenario(db: Db, gameId: string, input: unknown, now: number = Date.now()): UpdateScenarioResult {
+export function updateGameScenario(db: DbOrTx, gameId: string, input: unknown, now: number = Date.now()): UpdateScenarioResult {
   const parsed = parseScenario(input);
   if (!parsed.ok) {
     const exists = db.select({ gameId: gameScenario.gameId }).from(gameScenario).where(eq(gameScenario.gameId, gameId)).get();

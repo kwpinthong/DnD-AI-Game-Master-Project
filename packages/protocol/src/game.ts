@@ -91,6 +91,11 @@ export const GameView = z.object({
   you: z.object({ memberId: z.string(), role: MemberRole, isOwner: z.boolean() }),
   members: z.array(GameMember),
   players: z.object({ count: z.number().int(), min: z.number().int(), max: z.number().int() }),
+  /**
+   * The caller may open the scenario editor: the Human GM before the start. Games without a Human GM
+   * use the default template and nobody edits it (Q-028); scenario content is never in this view.
+   */
+  canEditScenario: z.boolean(),
   /** Why the owner cannot start yet (Thai, one line each); empty when the game can start. */
   startBlockers: z.array(z.string()),
 });

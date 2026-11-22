@@ -1,6 +1,7 @@
 import { formatInviteCode, type GameMember, type GameView } from '@isekai/protocol';
 import { useEffect, useState } from 'react';
 import { gameCall, type GameAction } from './game-api.ts';
+import { ScenarioEditor } from './ScenarioEditor.tsx';
 
 const modeLabel = { online: 'Online', single: 'เล่นคนเดียว' } as const;
 
@@ -27,6 +28,7 @@ export function Lobby({
   const [game, setGame] = useState<GameView | undefined>(initial);
   const [error, setError] = useState<{ message: string; reasons?: string[] }>();
   const [busy, setBusy] = useState(false);
+  const [scenarioOpen, setScenarioOpen] = useState(false);
 
   async function run(action: GameAction) {
     setBusy(true);
@@ -63,6 +65,14 @@ export function Lobby({
 
   const owner = game.you.isOwner;
   const lobby = game.status === 'lobby';
+  // The Human GM edits before the start (canEditScenario) and can still read it after; nobody else (Q-028).
+  const gmOfGame = game.humanGm && game.you.role === 'gm';
+
+  if (scenarioOpen) {
+    return (
+      <ScenarioEditor apiBaseUrl={apiBaseUrl} token={token} onClose={() => setScenarioOpen(false)} onSessionLost={onSessionLost} />
+    );
+  }
 
   return (
     <section className="lobby" aria-label="ห้องรอ">
@@ -82,6 +92,15 @@ export function Lobby({
         )}
       </p>
       {!lobby && <p role="status">เกมเริ่มแล้ว โหมดและสมาชิกล็อกแล้ว</p>}
+      {(game.canEditScenario || gmOfGame) && (
+        <p>
+          Scenario{' '}
+          <button type="button" onClick={() => setScenarioOpen(true)}>
+            {game.canEditScenario ? 'แก้ scenario' : 'ดู scenario'}
+          </button>{' '}
+          <small>(เฉพาะ GM ผู้เล่นไม่เห็นเนื้อหา)</small>
+        </p>
+      )}
       <p>
         ผู้เล่น {game.players.count}/{game.players.max}
       </p>
