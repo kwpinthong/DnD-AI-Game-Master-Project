@@ -2,6 +2,7 @@ import { ApiError, CharacterResponse, CreateGameResponse, GameView, JoinResponse
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
+import { containsName } from '../src/gm/check.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
 import { makeTempDir, seedChosenLoot } from './helpers.ts';
 
@@ -105,6 +106,31 @@ describe('character: name, appearance, personality + starting values (GEN-047)',
     // The lobby now counts this player as having a character (GEN-025's start check).
     const view = GameView.parse((await call('GET', '/api/game', { token: created.token })).body);
     expect(view.members[0]?.hasCharacter).toBe(true);
+  });
+
+  // GEN-094 (Q-108): NFC, not NFKC, so ำ (U+0E33) is stored whole.
+  it('GEN-094 C1: a name with ำ is stored with U+0E33 and shown as typed', async () => {
+    await start();
+    const created = await createGame();
+    const kham = { name: 'คำแก้ว', appearance: 'ผิวคล้ำ ตาดำ', personality: 'ทำอะไรช้าแต่จำแม่น' };
+
+    const res = await postCharacter(created.token, kham);
+
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(CharacterResponse.parse(res.body).character).toMatchObject(kham);
+    expect(storedRow(created.member.id)).toMatchObject(kham);
+    expect(String(storedRow(created.member.id)?.name)).not.toContain('ํา');
+    expect(CharacterResponse.parse((await getCharacter(created.token)).body).character?.name).toBe('คำแก้ว');
+  });
+
+  it('GEN-094 C5: the real-name check (Q-152) finds the stored name in a narration typed with ำ', async () => {
+    await start();
+    const created = await createGame();
+    await postCharacter(created.token, { ...lin, name: 'คำแก้ว' });
+    const stored = String(storedRow(created.member.id)?.name);
+
+    expect(containsName('คำแก้ว เดินเข้ามาในตลาด', stored)).toBe(true);
+    expect(containsName('คนเฝ้าประตูเดินเข้ามาในตลาด', stored)).toBe(false);
   });
 
   it('C1: Karma and the Reputation number never reach the player, only the Social Title', async () => {
