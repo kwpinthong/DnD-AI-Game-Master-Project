@@ -1,5 +1,5 @@
 import type { ActionVisibility } from '@isekai/protocol';
-import type { PhaseState, PlayerResult, TurnPoint } from '@isekai/rules';
+import type { PeriodWeather, PhaseState, PlayerResult, TurnPoint } from '@isekai/rules';
 
 /**
  * The hand-off to the AI GM phase loop (GEN-057). When a turn closes, the room calls `resolve` once with the
@@ -31,6 +31,11 @@ export interface ClosedPhase {
   readonly actions: readonly ClosedAction[];
   /** The engine state at the close (status `resolving`). */
   readonly state: PhaseState;
+  /**
+   * The period's weather (GEN-068), the same for the whole town; null when the room has no weather service.
+   * Apply it with `weatherTagging` (crossplayer/tags.ts): Weather_Verb_Boost and the d20 / Stamina rules.
+   */
+  readonly weather: PeriodWeather | null;
 }
 
 /**

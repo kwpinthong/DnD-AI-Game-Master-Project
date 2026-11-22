@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { MemberRole } from './game.ts';
 import { Phase } from './scenario.ts';
 import { PlaceView } from './visibility.ts';
+import { PeriodWeather } from './weather.ts';
 
 /**
  * The play room (GEN-056): one WebSocket per browser tab at `ROOM_PATH`. The browser cannot set an
@@ -133,6 +134,8 @@ export const RoomState = z.strictObject({
   phase: Phase,
   turn: Turn,
   status: RoomPhaseStatus,
+  /** The current period's weather (GEN-068), the same for everyone; null until the AI GM has picked it. */
+  weather: PeriodWeather.nullable(),
   members: z.array(RoomMember),
   you: RoomYou,
 });

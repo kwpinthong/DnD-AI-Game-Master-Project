@@ -30,7 +30,12 @@ export function createMockProvider(_config: AiConfig, script?: MockScript): Mock
       requests.push(req);
       if (!steps) {
         const input = estimateTokens([...req.system.map((b) => b.text), ...req.messages.map((m) => m.text)].join('\n'));
-        const json = req.purpose === 'character_analyze' ? cannedLoot(requests.length) : sampleFor(req.output.jsonSchema);
+        const json =
+          req.purpose === 'character_analyze'
+            ? cannedLoot(requests.length)
+            : req.purpose === 'gm_weather'
+              ? cannedWeather(requests.filter((r) => r.purpose === 'gm_weather').length)
+              : sampleFor(req.output.jsonSchema);
         return {
           ok: true,
           json,
@@ -76,6 +81,10 @@ const CANNED_ITEMS = [
   { name: 'ตะเกียงพกพา', description: 'ส่องทางในที่มืด', tier: 'Common', buffType: 'Quantitative', effect: { type: 'check_bonus', scope: 'perception', value: 1 } },
   { name: 'จี้เงินของแม่', description: 'ของที่ระลึกจากบ้านเกิด', tier: 'Common', buffType: 'Qualitative', effect: null },
 ];
+
+/** Weather for offline dev (GEN-068): call n rotates through weathers every period allows, so periods differ. */
+const CANNED_WEATHER = ['Rain', 'Fog', 'Clear', 'Storm'] as const;
+const cannedWeather = (n: number) => ({ weather: CANNED_WEATHER[(n - 1) % CANNED_WEATHER.length] });
 
 function cannedLoot(n: number) {
   const pick = <T>(pool: T[]) => [0, 1, 2].map((i) => pool[(n - 1 + i) % pool.length]!);

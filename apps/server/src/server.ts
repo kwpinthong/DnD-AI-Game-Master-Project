@@ -18,6 +18,7 @@ import { registerVisibilityRoutes } from './visibility/routes.ts';
 import websocket from '@fastify/websocket';
 import { placeholderResolver, type PhaseResolver } from './room/resolver.ts';
 import { registerRoomRoutes } from './room/routes.ts';
+import { createWeatherService, type WeatherService } from './weather/service.ts';
 import { DEFAULT_ASSETS_DIR, loadGameAssets, type GameAssets } from './assets/load.ts';
 
 export interface RunningServer {
@@ -29,6 +30,8 @@ export interface RunningServer {
   orm: Db;
   /** The AI GM boundary (GEN-038): check `ai.ready()` before creating / starting a game. */
   ai: AiService;
+  /** Each period's weather (GEN-068); the room picks it when a period opens. */
+  weather: WeatherService;
   /** `METHOD /url` of every HTTP route (HEAD left out). */
   routes: readonly string[];
   /** Game data from the JSON in apps/server/assets (GEN-062), checked at start; never fetched while running. */
@@ -99,7 +102,8 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerGameRoutes(app, db, now, { ai, karmaTiers: assets.karmaTiers, ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}) });
   registerTimelineRoutes(app, db, now);
   registerVisibilityRoutes(app, db, now, assets.karmaTiers);
-  registerRoomRoutes(app, db, now, { resolver: options.phaseResolver ?? placeholderResolver, webOrigins: config.webOrigins ?? [] });
+  const weather = createWeatherService(db, ai, now, options.aiLog ?? ((line) => console.log(line)));
+  registerRoomRoutes(app, db, now, { resolver: options.phaseResolver ?? placeholderResolver, webOrigins: config.webOrigins ?? [], weather });
 
   try {
     await app.listen({ host: config.host, port: config.port });
@@ -118,10 +122,12 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     db: sqlite,
     orm: db,
     ai,
+    weather,
     routes,
     assets,
     async close() {
       await app.close();
+      await weather.idle();
       if (sqlite.open) sqlite.close();
     },
   };

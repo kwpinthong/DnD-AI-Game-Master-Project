@@ -1,4 +1,4 @@
-import { ACTION_MAX_LENGTH, PHASE_LABEL, actionTextProblem, type ActionVisibility, type RoomEntry, type RoomState } from '@isekai/protocol';
+import { ACTION_MAX_LENGTH, PHASE_LABEL, actionTextProblem, weatherText, type ActionVisibility, type RoomEntry, type RoomState } from '@isekai/protocol';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { connectRoom, type RoomConnection, type RoomConnectionStatus } from './room-api.ts';
 
@@ -148,6 +148,7 @@ export function PlayRoom({
         <>
           <p>{statusLabel[room.status]}</p>
           {you.place && <p>คุณอยู่ที่: {you.place.name}</p>}
+          {room.weather && <p>สภาพอากาศ: {weatherText(room.weather)}</p>}
           {you.drowsy && <p role="note">คุณง่วงซึม (Drowsy) ทั้งวันนี้: ทอย d20 -2 และทุก action เสีย Stamina เพิ่ม 1</p>}
           {room.phase === 'NOCTHERION' && you.role === 'player' && (
             <p>ช่วง NOCTHERION: ส่ง Secret ได้ฟรี 1 เทิร์น และควรนอน (REST / SLEEP) อย่างน้อย 1 เทิร์น ไม่อย่างนั้นวันถัดไปจะง่วงซึม</p>

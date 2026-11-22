@@ -17,6 +17,7 @@ import {
   phaseStep,
   revealsPlayerName,
   secretQuotaUsed,
+  type PeriodWeather,
   type PhaseErrorCode,
   type PhaseState,
   type PlayerResult,
@@ -38,6 +39,7 @@ import {
   presencesInGame,
 } from '../visibility/store.ts';
 import { witnessesOf } from '../visibility/views.ts';
+import { weatherAt, type WeatherService } from '../weather/service.ts';
 import type { ClosedAction, PhaseResolution, PhaseResolver } from './resolver.ts';
 import {
   ensurePhaseState,
@@ -94,10 +96,18 @@ export interface RoomService {
  * recipients. All database work is synchronous (better-sqlite3), so a replay and the socket registration
  * happen in one tick and no live entry can slip between them.
  */
-export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, log: (line: string) => void): RoomService {
+export function createRoomService(
+  db: Db,
+  now: Clock,
+  resolver: PhaseResolver,
+  log: (line: string) => void,
+  weather?: WeatherService,
+): RoomService {
   /** gameId → socket → member. */
   const rooms = new Map<string, Map<RoomSocket, MemberRow>>();
   const resolving = new Map<string, Promise<void>>();
+  /** Weather picks still running (GEN-068), awaited on shutdown. */
+  const picking = new Set<Promise<unknown>>();
   const rng = new CryptoRng();
   let stopped = false;
 
@@ -158,6 +168,40 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
     });
   }
 
+  /** The stored weather of the period `state` is in (GEN-068); null before it is picked. */
+  function weatherView(gameId: string, state: PhaseState): PeriodWeather | null {
+    const stored = weatherAt(db, gameId, state);
+    return stored ? { weather: stored.weather, disaster: stored.disaster } : null;
+  }
+
+  const playing = (state: PhaseState) => state.status === 'collecting' || state.status === 'resolving';
+
+  /** The period's weather, picked on first use; null without a weather service or when the pick failed. */
+  async function weatherFor(gameId: string, state: PhaseState): Promise<PeriodWeather | null> {
+    if (!weather || !playing(state)) return null;
+    const run = weather.ensure(gameId, state);
+    picking.add(run);
+    try {
+      const { weather: w, disaster } = await run;
+      return { weather: w, disaster };
+    } catch (error) {
+      log(`[room] weather pick failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
+      return null;
+    } finally {
+      picking.delete(run);
+    }
+  }
+
+  /** A period just opened (or the room did): pick its weather if it has none yet, then show it to everyone. */
+  function openPeriodWeather(gameId: string): void {
+    if (!weather || stopped) return;
+    const state = ensurePhaseState(db, gameId, now());
+    if (!playing(state) || weatherAt(db, gameId, state) !== null) return;
+    void weatherFor(gameId, state).then((w) => {
+      if (w !== null && !stopped) broadcastRoom(gameId);
+    });
+  }
+
   function lockOf(me: MemberRow, state: PhaseState): RoomLockCode | null {
     if (me.role === 'gm' || !state.players[me.id]) return 'not_a_player';
     if (state.status === 'finale' || state.status === 'game_over') return 'game_ended';
@@ -178,6 +222,7 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
       phase: state.phase,
       turn: state.turn,
       status: state.status,
+      weather: weatherView(me.gameId, state),
       members: members.map((m) => ({
         memberId: m.id,
         name: m.name,
@@ -262,9 +307,12 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
           return a ? [{ memberId: id, text: a.text, visibility: a.visibility, rest: a.rest === true, locationId: locations.get(id) ?? null }] : [];
         });
 
+        // The resolver always gets the period's weather: picked now if the period opened without one.
+        const periodWeather = await weatherFor(gameId, state);
+
         let resolution: PhaseResolution;
         try {
-          resolution = await resolver.resolve({ gameId, at: { day: state.day, phase: state.phase, turn: state.turn }, actions, state });
+          resolution = await resolver.resolve({ gameId, at: { day: state.day, phase: state.phase, turn: state.turn }, actions, state, weather: periodWeather });
         } catch (error) {
           // Stays `resolving`; the next player to enter the room starts it again.
           log(`[room] resolver failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
@@ -302,6 +350,7 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
         if (published === null) return;
         deliver(gameId, published);
         broadcastRoom(gameId);
+        openPeriodWeather(gameId);
         // Loop: the next phase may close at once (nobody able to act).
       }
     })().finally(() => resolving.delete(gameId));
@@ -341,6 +390,7 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
       send(socket, { type: 'ready', lastSeq: Math.max(lastSeq, afterSeq) });
       // After a restart a phase can be left `resolving` with nobody working on it.
       if (state.status === 'resolving') startResolving(me.gameId);
+      else openPeriodWeather(me.gameId);
     },
 
     leave(socket) {
@@ -414,7 +464,7 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
     async stop() {
       stopped = true;
       rooms.clear();
-      while (resolving.size > 0) await Promise.allSettled([...resolving.values()]);
+      while (resolving.size > 0 || picking.size > 0) await Promise.allSettled([...resolving.values(), ...picking]);
     },
   };
 }

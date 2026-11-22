@@ -73,6 +73,7 @@ function roomState(patch: Partial<RoomState> = {}, you: Partial<RoomState['you']
     phase: 'EOSORIA',
     turn: 1,
     status: 'collecting',
+    weather: null,
     members: [
       { memberId: me.id, name: 'นก', role: 'player', online: true, submitted: false },
       { memberId: 'm-bee', name: 'บี', role: 'player', online: false, submitted: false },
@@ -325,5 +326,17 @@ describe('GEN-063 time system (web)', () => {
     socket.receive({ type: 'action_accepted' });
     socket.receive(roomState({ phase: 'NOCTHERION' }, { action: { text: 'นอนที่โรงเตี๊ยม', visibility: 'public', rest: true } }));
     expect(screen.getByText(/ส่งแล้ว \(Public · REST \/ SLEEP\): นอนที่โรงเตี๊ยม/)).toBeTruthy();
+  });
+});
+
+describe('GEN-068 weather (web)', () => {
+  it('C1: the room shows the period weather in Thai, with Disaster from day 5; nothing before it is picked', async () => {
+    const socket = await enterRoom();
+    socket.receive(roomState());
+    expect(screen.queryByText(/สภาพอากาศ/)).toBeNull();
+    socket.receive(roomState({ weather: { weather: 'Rain', disaster: false } }));
+    expect(screen.getByText('สภาพอากาศ: ฝนตก')).toBeTruthy();
+    socket.receive(roomState({ day: 5, weather: { weather: 'Clear', disaster: true } }));
+    expect(screen.getByText('สภาพอากาศ: แดดจ้า · ภัยพิบัติ')).toBeTruthy();
   });
 });

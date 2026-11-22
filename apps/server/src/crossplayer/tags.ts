@@ -1,4 +1,4 @@
-import type { CrossPlayerState, PhaseActionsLog, TagContext, TagSource } from '@isekai/rules';
+import { OUTDOOR_TAG, boostConditions, type CrossPlayerState, type PeriodWeather, type Period, type PhaseActionsLog, type TagContext, type TagSource } from '@isekai/rules';
 import { and, eq, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
 import { tagSourceUse } from '../db/schema.ts';
@@ -22,12 +22,33 @@ export interface TaggingOptions {
   readonly assets: GameAssets;
   /** The game day the phase is on: Daily_Limit counts per day. */
   readonly day: number;
-  /** The current weather (GEN-068 chooses it); null / absent = no Weather_Verb_Boost. */
-  readonly weather?: string | null;
+  /**
+   * The Weather_Verb_Boost conditions the current weather meets, e.g. "Rain" or ["Clear Morning", "Disaster"]
+   * (`boostConditions` of @isekai/rules); null / absent = no Weather_Verb_Boost.
+   */
+  readonly weather?: string | readonly string[] | null;
+  /** The period's weather (GEN-068): the resolution engine applies its d20 / Stamina rules (outdoor = OUTDOOR tag). */
+  readonly periodWeather?: PeriodWeather | null;
   /** Start passives by member id (GEN-065), e.g. from `startPassiveSource`. */
   readonly startPassives?: Readonly<Record<string, readonly TagSource[]>>;
   /** Weather rule sources by member id (GEN-068), kind `weather`. */
   readonly weatherSources?: Readonly<Record<string, readonly TagSource[]>>;
+}
+
+/** Tagging options for a phase under the period's weather (GEN-068); `weather` null = no weather at all. */
+export function weatherTagging(
+  assets: GameAssets,
+  day: number,
+  phase: Period,
+  weather: PeriodWeather | null,
+  patch: Partial<Omit<TaggingOptions, 'assets' | 'day' | 'weather' | 'periodWeather'>> = {},
+): TaggingOptions {
+  return { assets, day, ...patch, weather: weather ? boostConditions(weather, phase) : null, periodWeather: weather };
+}
+
+/** Scenario places whose Location row has the OUTDOOR tag (กลางแจ้ง: Rain and Disaster cost Stamina there). */
+export function outdoorLocationIds(db: DbOrTx, gameId: string, assets: GameAssets): string[] {
+  return (getGameScenario(db, gameId)?.locations ?? []).filter((l) => assets.location(l.name)?.tags.includes(OUTDOOR_TAG)).map((l) => l.id);
 }
 
 /** Activations per source of a member on `day`. */

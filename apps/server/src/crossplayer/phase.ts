@@ -23,7 +23,7 @@ import { getGameScenario } from '../scenario/store.ts';
 import { moveCharacter, namesVisibleTo, npcBondsOf, presencesInGame } from '../visibility/store.ts';
 import { otherCharacterView, witnessesOf } from '../visibility/views.ts';
 import { chosenLootInGame, itemsInGame, transferItem } from './items.ts';
-import { recordTagUses, tagContexts, type TaggingOptions } from './tags.ts';
+import { outdoorLocationIds, recordTagUses, tagContexts, type TaggingOptions } from './tags.ts';
 
 /**
  * Cross-player phase actions on the server (GEN-060, Rules Spec §10). The AI GM phase loop (GEN-057)
@@ -195,6 +195,8 @@ export function applyPhaseActions(
   return db.transaction((tx) => {
     const state = crossPlayerState(tx, gameId);
     const tags = tagging === undefined ? undefined : tagContexts(tx, gameId, state, tagging);
+    const current = tagging?.periodWeather;
+    const weather = current ? { current, outdoorLocationIds: outdoorLocationIds(tx, gameId, tagging.assets) } : undefined;
     const places = new Set((getGameScenario(tx, gameId)?.locations ?? []).map((l) => l.id));
     const errors: PhaseApplyError[] = [
       ...actions.flatMap((a, i) =>
@@ -206,7 +208,7 @@ export function applyPhaseActions(
     ];
     if (errors.length > 0) return { ok: false, errors };
 
-    const result = resolvePhaseActions({ state, actions, ...(tags ? { tags } : {}) }, rng);
+    const result = resolvePhaseActions({ state, actions, ...(tags ? { tags } : {}), ...(weather ? { weather } : {}) }, rng);
     if (!result.ok) return { ok: false, errors: [...result.errors] };
     if (tagging !== undefined) recordTagUses(tx, gameId, result.log, tagging.day, now);
 
