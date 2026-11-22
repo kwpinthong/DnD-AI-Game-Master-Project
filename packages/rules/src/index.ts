@@ -43,3 +43,4 @@ export {
 } from './resolution/rescue.ts';
 export * from './phase/types.ts';
 export { createPhaseState, phaseStep } from './phase/engine.ts';
+export { socialTitle, STARTING_STATS } from './character.ts';

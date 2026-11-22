@@ -1,5 +1,6 @@
 import { formatInviteCode, type GameMember, type GameView } from '@isekai/protocol';
 import { useEffect, useState } from 'react';
+import { CharacterScreen } from './CharacterScreen.tsx';
 import { gameCall, type GameAction } from './game-api.ts';
 import { ScenarioEditor } from './ScenarioEditor.tsx';
 
@@ -29,6 +30,8 @@ export function Lobby({
   const [error, setError] = useState<{ message: string; reasons?: string[] }>();
   const [busy, setBusy] = useState(false);
   const [scenarioOpen, setScenarioOpen] = useState(false);
+  /** Character creation (GEN-047) opens over the lobby; going back reloads the lobby. */
+  const [characterOpen, setCharacterOpen] = useState(false);
 
   async function run(action: GameAction) {
     setBusy(true);
@@ -55,6 +58,20 @@ export function Lobby({
     // Loaded once per token; later loads come from [ รีเฟรช ] and the owner actions.
   }, [apiBaseUrl, token]);
 
+  if (characterOpen) {
+    return (
+      <CharacterScreen
+        apiBaseUrl={apiBaseUrl}
+        token={token}
+        onSessionLost={onSessionLost}
+        onBack={() => {
+          setCharacterOpen(false);
+          void run({ method: 'GET', path: '/api/game' });
+        }}
+      />
+    );
+  }
+
   if (!game) {
     return error ? (
       <p role="alert">โหลดห้องรอไม่ได้: {error.message}</p>
@@ -73,6 +90,7 @@ export function Lobby({
       <ScenarioEditor apiBaseUrl={apiBaseUrl} token={token} onClose={() => setScenarioOpen(false)} onSessionLost={onSessionLost} />
     );
   }
+  const you = game.members.find((m) => m.id === game.you.memberId);
 
   return (
     <section className="lobby" aria-label="ห้องรอ">
@@ -104,6 +122,13 @@ export function Lobby({
       <p>
         ผู้เล่น {game.players.count}/{game.players.max}
       </p>
+      {you?.role === 'player' && (
+        <p>
+          <button type="button" onClick={() => setCharacterOpen(true)}>
+            {you.hasCharacter ? 'ดูตัวละคร' : 'สร้างตัวละคร'}
+          </button>
+        </p>
+      )}
       <ul aria-label="สมาชิก">
         {game.members.map((m) => (
           <li key={m.id}>

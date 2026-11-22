@@ -54,7 +54,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   });
 
   const app = Fastify({ logger: false });
-  // PATCH and DELETE are not in @fastify/cors's default methods; the lobby uses both, the scenario editor PUT.
+  // PUT, PATCH and DELETE are not all in @fastify/cors's default methods; the web uses them.
   await app.register(cors, { origin: config.webOrigins ?? [], methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] });
 
   app.get('/health', async (_req, reply) => {

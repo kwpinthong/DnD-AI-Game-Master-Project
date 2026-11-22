@@ -1,4 +1,14 @@
-import { ApiError, CreateGameResponse, GameView, type CreateGameField, type Member } from '@isekai/protocol';
+import {
+  ApiError,
+  CharacterResponse,
+  CreateGameResponse,
+  GameView,
+  type CharacterField,
+  type CharacterRequest,
+  type CharacterView,
+  type CreateGameField,
+  type Member,
+} from '@isekai/protocol';
 import { apiUrl, fetchWithTimeout } from './session.ts';
 
 const UNREACHABLE = 'ติดต่อ server ไม่ได้ ลองใหม่อีกครั้ง';
@@ -74,5 +84,37 @@ export async function gameCall(baseUrl: string, token: string, action: GameActio
   const error = ApiError.safeParse(answer.json);
   if (!error.success) return { kind: 'error', message: UNREACHABLE };
   if (error.data.code === 'cannot_start') return { kind: 'error', message: error.data.message, reasons: error.data.reasons };
+  return { kind: 'error', message: error.data.message };
+}
+
+/** A character call's result (GEN-047): the character (null = none yet), field errors, or a Thai error. */
+export type CharacterResult =
+  | { kind: 'ok'; character: CharacterView | null }
+  | { kind: 'session_lost' }
+  | { kind: 'invalid'; fields: Partial<Record<CharacterField, string>> }
+  | { kind: 'error'; message: string };
+
+export async function characterCall(
+  baseUrl: string,
+  token: string,
+  method: 'GET' | 'POST' | 'PUT',
+  body?: CharacterRequest,
+): Promise<CharacterResult> {
+  const headers: Record<string, string> = { authorization: `Bearer ${token}` };
+  if (body) headers['content-type'] = 'application/json';
+  const answer = await send(apiUrl(baseUrl, '/api/game/character'), {
+    method,
+    headers,
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  if (!answer) return { kind: 'error', message: UNREACHABLE };
+  if (answer.res.ok) {
+    const parsed = CharacterResponse.safeParse(answer.json);
+    return parsed.success ? { kind: 'ok', character: parsed.data.character } : { kind: 'error', message: UNREACHABLE };
+  }
+  if (answer.res.status === 401) return { kind: 'session_lost' };
+  const error = ApiError.safeParse(answer.json);
+  if (!error.success) return { kind: 'error', message: UNREACHABLE };
+  if (error.data.code === 'invalid_input') return { kind: 'invalid', fields: error.data.fields };
   return { kind: 'error', message: error.data.message };
 }

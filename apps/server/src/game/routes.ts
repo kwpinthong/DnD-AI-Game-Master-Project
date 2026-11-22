@@ -1,6 +1,9 @@
 import {
+  CharacterRequest,
+  characterFieldErrors,
   CreateGameRequest,
   createGameFieldErrors,
+  type CharacterResponse,
   UpdateGameRequest,
   type CreateGameResponse,
 } from '@isekai/protocol';
@@ -10,6 +13,7 @@ import { bearerToken, sendError } from '../auth/routes.ts';
 import type { AiService } from '../ai/core/service.ts';
 import type { Db } from '../db/client.ts';
 import { readScenario, resetScenario, saveScenario, type ScenarioEditOutcome } from '../scenario/editor.ts';
+import { createCharacter, getCharacter, updateCharacter, type CharacterOutcome } from './character.ts';
 import { createCodeChecker } from './create-code.ts';
 import {
   createGame,
@@ -196,5 +200,59 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
     if (!me) return reply;
     if (refuseWithoutAi(reply)) return reply;
     return sendOutcome(reply, startGame(db, me, now));
+  });
+
+  // --- Character (GEN-047): the caller's own character in their game. ---
+
+  function sendCharacter(reply: FastifyReply, outcome: CharacterOutcome, okStatus: number) {
+    switch (outcome.kind) {
+      case 'ok': {
+        const body: CharacterResponse = { character: outcome.character };
+        return reply.code(okStatus).send(body);
+      }
+      case 'gm_has_no_character':
+        return sendError(reply, 403, { code: 'forbidden', message: 'GM ไม่มีตัวละคร' });
+      case 'character_exists':
+        return sendError(reply, 409, { code: 'character_exists', message: 'คุณมีตัวละครในเกมนี้แล้ว (1 คนต่อ 1 ตัว)' });
+      case 'character_not_found':
+        return sendError(reply, 404, { code: 'character_not_found', message: 'ยังไม่ได้สร้างตัวละคร' });
+      case 'game_started':
+        return sendError(reply, 409, { code: 'game_started', message: 'เกมเริ่มแล้ว แก้ตัวตนของตัวละครไม่ได้' });
+    }
+  }
+
+  /** The parsed body, or a 400 naming each wrong field already sent. */
+  function characterInput(request: FastifyRequest, reply: FastifyReply): CharacterRequest | undefined {
+    const parsed = CharacterRequest.safeParse(request.body ?? {});
+    if (parsed.success) return parsed.data;
+    void sendError(reply, 400, {
+      code: 'invalid_input',
+      message: 'ข้อมูลไม่ถูกต้อง',
+      fields: characterFieldErrors(request.body),
+    });
+    return undefined;
+  }
+
+  app.get('/api/game/character', async (request, reply) => {
+    const me = caller(request, reply);
+    if (!me) return reply;
+    const body: CharacterResponse = { character: getCharacter(db, me) };
+    return reply.send(body);
+  });
+
+  app.post('/api/game/character', async (request, reply) => {
+    const me = caller(request, reply);
+    if (!me) return reply;
+    const input = characterInput(request, reply);
+    if (!input) return reply;
+    return sendCharacter(reply, createCharacter(db, me, input, now), 201);
+  });
+
+  app.put('/api/game/character', async (request, reply) => {
+    const me = caller(request, reply);
+    if (!me) return reply;
+    const input = characterInput(request, reply);
+    if (!input) return reply;
+    return sendCharacter(reply, updateCharacter(db, me, input, now), 200);
   });
 }
