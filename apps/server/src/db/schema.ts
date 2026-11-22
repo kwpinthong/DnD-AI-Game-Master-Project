@@ -128,3 +128,6 @@ export * from './schema-loot.ts';
 
 // GEN-050: who is where and who knows whose name, own file for the same reason.
 export * from './schema-visibility.ts';
+
+// GEN-056: the play room (phase state, actions, feed / narration), own file for the same reason.
+export * from './schema-room.ts';

@@ -2,7 +2,7 @@ import { CharacterResponse, CreateGameResponse, JoinResponse } from '@isekai/pro
 import { expect } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
-import { startServer, type RunningServer } from '../src/server.ts';
+import { startServer, type RunningServer, type ServerOptions } from '../src/server.ts';
 
 export const CREATE_CODE = 'ลับเฉพาะ-2026';
 export const CLOCK = Date.UTC(2026, 10, 22, 12, 0, 0);
@@ -40,10 +40,10 @@ export function caller(server: RunningServer): Call {
   };
 }
 
-export async function startTestServer(dataDir: string): Promise<RunningServer> {
+export async function startTestServer(dataDir: string, options: ServerOptions = {}): Promise<RunningServer> {
   return startServer(
     { host: '127.0.0.1', port: 0, dbPath: `${dataDir}/isekai.sqlite`, createCodeHash: await hashPin(CREATE_CODE) },
-    { now: () => CLOCK, ai: loadAiConfig({ AI_PROVIDER: 'mock' }), aiLog: () => {} },
+    { now: () => CLOCK, ai: loadAiConfig({ AI_PROVIDER: 'mock' }), aiLog: () => {}, ...options },
   );
 }
 

@@ -15,6 +15,9 @@ import type { AiProvider } from './ai/provider.ts';
 import { providerFor } from './ai/registry.ts';
 import { registerTimelineRoutes } from './timeline/routes.ts';
 import { registerVisibilityRoutes } from './visibility/routes.ts';
+import websocket from '@fastify/websocket';
+import { placeholderResolver, type PhaseResolver } from './room/resolver.ts';
+import { registerRoomRoutes } from './room/routes.ts';
 
 export interface RunningServer {
   url: string;
@@ -45,6 +48,8 @@ export interface ServerOptions {
   onAiBudgetReached?: (event: BudgetReachedEvent) => void;
   /** Overrides the provider `ai` picks (tests pass a scripted Mock). */
   aiProvider?: AiProvider;
+  /** Resolves a closed phase (GEN-057 plugs in here); default `placeholderResolver`. */
+  phaseResolver?: PhaseResolver;
 }
 
 export async function startServer(config: ServerConfig, options: ServerOptions = {}): Promise<RunningServer> {
@@ -68,6 +73,8 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   });
   // PUT, PATCH and DELETE are not all in @fastify/cors's default methods; the web uses them.
   await app.register(cors, { origin: config.webOrigins ?? [], methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] });
+  // The play room's WebSocket (GEN-056). 16 KiB is far above one action (1000 code points ≈ 4 KB in UTF-8).
+  await app.register(websocket, { options: { maxPayload: 16 * 1024 } });
 
   app.get('/health', async (_req, reply) => {
     let body: HealthResponse;
@@ -85,6 +92,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerGameRoutes(app, db, now, { ai, ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}) });
   registerTimelineRoutes(app, db, now);
   registerVisibilityRoutes(app, db, now);
+  registerRoomRoutes(app, db, now, { resolver: options.phaseResolver ?? placeholderResolver, webOrigins: config.webOrigins ?? [] });
 
   try {
     await app.listen({ host: config.host, port: config.port });

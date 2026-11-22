@@ -64,6 +64,13 @@
       "when": 1795308445549,
       "tag": "0008_visibility",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1795308960500,
+      "tag": "0009_room",
+      "breakpoints": true
     }
   ]
 }

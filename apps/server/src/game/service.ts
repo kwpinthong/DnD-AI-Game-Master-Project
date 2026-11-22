@@ -48,7 +48,7 @@ export const playerLimits = (mode: GameMode) =>
   mode === 'single' ? { min: 1, max: 1 } : { min: ONLINE_MIN_PLAYERS, max: ONLINE_MAX_PLAYERS };
 
 /** Members still in the game (kicked ones are kept only to block their name), oldest first. */
-function activeMembers(db: Db | Tx, gameId: string): MemberRow[] {
+export function activeMembers(db: Db | Tx, gameId: string): MemberRow[] {
   return db
     .select()
     .from(member)
