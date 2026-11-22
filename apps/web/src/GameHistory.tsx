@@ -1,7 +1,11 @@
-import { PHASE_LABEL, type EndingPath, type GameLogResponse, type GameReveal, type RoomEntry } from '@isekai/protocol';
-import { useEffect, useState } from 'react';
+import type { GameLogResponse, RoomEntry } from '@isekai/protocol';
+import { useEffect, useId, useState } from 'react';
+import { EndingReveal, EndingToc, RatingSection, useRating, when as at } from './Ending.tsx';
 import { fetchGameLog } from './history-api.ts';
 import { forgetToken, loadKnownTokens } from './session.ts';
+import { Button } from './ui/Button.tsx';
+import { ErrorState, Skeleton } from './ui/parts.tsx';
+import { endText } from './ui/strings.ts';
 
 /**
  * The game list (GEN-037 C3): every game this browser joined or created, newest first, and a read-only
@@ -9,9 +13,6 @@ import { forgetToken, loadKnownTokens } from './session.ts';
  */
 
 type Loaded = { token: string; log: GameLogResponse } | { token: string; log: 'unreachable' };
-
-const at = (p: { day: number; phase: keyof typeof PHASE_LABEL; turn?: number }) =>
-  `วันที่ ${p.day} · ${PHASE_LABEL[p.phase]}${p.turn === undefined ? '' : ` · เทิร์น ${p.turn}/2`}`;
 
 function statusText(game: GameLogResponse['game']): string {
   if (game.status === 'lobby') return 'ยังไม่เริ่ม';
@@ -24,7 +25,7 @@ const EVENT_STATUS: Record<string, string> = { pending: 'ยังไม่ถ�
 
 export function GameHistory({ apiBaseUrl, onClose }: { apiBaseUrl: string; onClose: () => void }) {
   const [games, setGames] = useState<Loaded[] | null>(null);
-  const [open, setOpen] = useState<GameLogResponse | null>(null);
+  const [open, setOpen] = useState<{ token: string; log: GameLogResponse } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,7 +40,7 @@ export function GameHistory({ apiBaseUrl, onClose }: { apiBaseUrl: string; onClo
     };
   }, [apiBaseUrl]);
 
-  if (open) return <GameLog log={open} onBack={() => setOpen(null)} />;
+  if (open) return <GameLog log={open.log} apiBaseUrl={apiBaseUrl} token={open.token} onBack={() => setOpen(null)} />;
 
   return (
     <section aria-label="รายการเกม">
@@ -48,18 +49,19 @@ export function GameHistory({ apiBaseUrl, onClose }: { apiBaseUrl: string; onClo
       {games !== null && games.length === 0 && <p>ยังไม่มีเกมในเครื่องนี้ เข้าร่วมหรือสร้างเกมก่อน</p>}
       {games !== null && games.length > 0 && (
         <ul aria-label="เกมของฉัน">
-          {games.map((g) =>
-            g.log === 'unreachable' ? (
+          {games.map((g) => {
+            const log = g.log;
+            return log === 'unreachable' ? (
               <li key={g.token}>โหลดเกมนี้ไม่ได้ ลองใหม่ภายหลัง</li>
             ) : (
               <li key={g.token}>
-                <strong>{g.log.game.name}</strong> — {statusText(g.log.game)}{' '}
-                <button type="button" aria-label={`ดูสรุป ${g.log.game.name}`} onClick={() => setOpen(g.log as GameLogResponse)}>
+                <strong>{log.game.name}</strong> — {statusText(log.game)}{' '}
+                <button type="button" aria-label={`ดูสรุป ${log.game.name}`} onClick={() => setOpen({ token: g.token, log })}>
                   ดูสรุป
                 </button>
               </li>
-            ),
-          )}
+            );
+          })}
         </ul>
       )}
       <button type="button" onClick={onClose}>
@@ -69,71 +71,10 @@ export function GameHistory({ apiBaseUrl, onClose }: { apiBaseUrl: string; onClo
   );
 }
 
-const PATH_TEXT: Record<EndingPath, string> = {
-  good: 'เส้นทาง Good: ม่านปาฏิหาริย์เบี่ยงอุกกาบาตปกป้องเมือง',
-  evil: 'เส้นทาง Evil: ดูดซับพลังอุกกาบาตครองโลก',
-  neutral: 'เส้นทาง Neutral: ร่วมกับแอสทราและเซเรน่าลบล้างผลเป็นศูนย์',
-  none: 'ไม่มีเส้นทางใดสำเร็จ: อุกกาบาตชนเมือง',
-};
-const OUTCOME_TEXT = { survived: 'รอดชีวิต', defeated: 'พ่ายแพ้ (Bad Ending)' } as const;
-
-/** GEN-059 C5: the secrets of everyone, only once the game ended (the server sends `reveal` then only). */
-function Reveal({ reveal }: { reveal: GameReveal }) {
+/** Members, timeline and what this viewer received: the read-only log of GEN-037. */
+function FullLog({ log }: { log: GameLogResponse }) {
   return (
-    <section aria-label="ความลับของทุกคน">
-      <h3>ความลับของทุกคน</h3>
-      <p>{reveal.path === null ? 'ไม่มีบันทึกตอนจบ' : PATH_TEXT[reveal.path]}</p>
-      {reveal.players.map((p) => (
-        <article key={p.memberId} aria-label={p.lobbyName}>
-          <h4>{p.lobbyName}</h4>
-          <dl>
-            <dt>ชื่อจริง</dt>
-            <dd>{p.characterName}</dd>
-            <dt>ระดับกรรม</dt>
-            {/* Q-196: the tier word is the label, the number small beside it. */}
-            <dd>
-              <span>{p.karmaTier}</span> <small>({p.karma})</small>
-            </dd>
-            <dt>ตอนจบ</dt>
-            <dd>{p.outcome === null ? 'ไม่มีบันทึก' : OUTCOME_TEXT[p.outcome]}</dd>
-            <dt>จุดเกิด</dt>
-            <dd>{p.spawn ?? 'ไม่มีบันทึก'}</dd>
-            <dt>คู่หู</dt>
-            <dd>{p.companions.length === 0 ? 'ไม่มี' : p.companions.join(', ')}</dd>
-            <dt>Secret action</dt>
-            <dd>
-              {p.secretActions.length === 0 ? (
-                'ไม่มี Secret action'
-              ) : (
-                <ul>
-                  {p.secretActions.map((s, i) => (
-                    <li key={i}>
-                      {at(s)}: {s.text}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </dd>
-          </dl>
-        </article>
-      ))}
-      {/* GEN-077 / GEN-078: the rating form goes here. */}
-      <section aria-label="ให้คะแนนเกม" />
-    </section>
-  );
-}
-
-/** One game, read-only; after the end with the secret reveal (GEN-059). Exported for the dev gallery (GEN-100). */
-export function GameLog({ log, onBack }: { log: GameLogResponse; onBack: () => void }) {
-  return (
-    <section aria-label={`สรุปเกม ${log.game.name}`}>
-      <h2>{log.game.name}</h2>
-      <p>
-        {statusText(log.game)}
-        {log.game.status === 'ended' && log.game.at ? ` · หยุดที่ ${at(log.game.at)}` : ''}
-      </p>
-      {log.reveal && <Reveal reveal={log.reveal} />}
-
+    <>
       <h3>ผู้เล่น</h3>
       <ul aria-label="ผู้เล่น">
         {log.members.map((m, i) => (
@@ -163,10 +104,78 @@ export function GameLog({ log, onBack }: { log: GameLogResponse; onBack: () => v
           </li>
         ))}
       </ul>
+    </>
+  );
+}
 
-      <button type="button" onClick={onBack}>
-        กลับไปรายการเกม
-      </button>
+/**
+ * One game, read-only. After the end it is the end page (GEN-091, Screens and Flows v2 §6): the ending,
+ * everyone's fate and secrets (GEN-059), the game score + 👍 (GEN-078 contract), then the full log.
+ * `apiBaseUrl` + `token` are the session of that game; without them the rating part cannot load.
+ */
+export function GameLog({ log, onBack, apiBaseUrl, token }: { log: GameLogResponse; onBack: () => void; apiBaseUrl?: string; token?: string }) {
+  const ended = log.game.status === 'ended' && log.reveal !== null;
+  const rating = useRating(apiBaseUrl, token, ended);
+  const id = useId();
+  const ids = { ending: `${id}ending`, fates: `${id}fates`, rating: `${id}rating` };
+  return (
+    <section aria-label={`สรุปเกม ${log.game.name}`} className="end">
+      <header className="end__head">
+        <h2 className="end__name">{log.game.name}</h2>
+        <p className="end__status">
+          {statusText(log.game)}
+          {log.game.status === 'ended' && log.game.at ? ` · หยุดที่ ${at(log.game.at)}` : ''}
+        </p>
+      </header>
+      {ended && (
+        <EndingToc
+          parts={[
+            { id: ids.ending, label: endText.ending },
+            { id: ids.fates, label: endText.fates },
+            { id: ids.rating, label: endText.rate },
+          ]}
+        />
+      )}
+      {log.reveal && (
+        <EndingReveal
+          reveal={log.reveal}
+          rating={rating.state.state === 'ready' ? rating.state.rating : null}
+          onToggleLike={(ref, on) => void rating.toggleLike(ref, on)}
+          endingId={ids.ending}
+          fatesId={ids.fates}
+        />
+      )}
+      {ended && <RatingSection rating={rating} id={ids.rating} />}
+
+      {ended ? (
+        <details className="end-log">
+          <summary>{endText.fullLog}</summary>
+          <FullLog log={log} />
+        </details>
+      ) : (
+        <FullLog log={log} />
+      )}
+
+      <div className="end__actions">
+        <Button onClick={onBack}>กลับไปรายการเกม</Button>
+      </div>
     </section>
   );
+}
+
+/** The end page of the game a session belongs to, loaded by itself (the gallery; GEN-103 can open it from the play room). */
+export function GameSummaryPage({ apiBaseUrl, token, onBack }: { apiBaseUrl: string; token: string; onBack: () => void }) {
+  const [log, setLog] = useState<GameLogResponse | 'failed' | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let live = true;
+    setLog(null);
+    void fetchGameLog(apiBaseUrl, token).then((l) => live && setLog(l === null || l === 'unreachable' ? 'failed' : l));
+    return () => {
+      live = false;
+    };
+  }, [apiBaseUrl, token, attempt]);
+  if (log === null) return <Skeleton lines={4} />;
+  if (log === 'failed') return <ErrorState message="โหลดสรุปเกมไม่ได้" onRetry={() => setAttempt((n) => n + 1)} />;
+  return <GameLog log={log} apiBaseUrl={apiBaseUrl} token={token} onBack={onBack} />;
 }

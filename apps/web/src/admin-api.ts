@@ -1,4 +1,4 @@
-import { AdminSessionResponse, AiUsageGameResponse, AiUsageOverviewResponse, ApiError } from '@isekai/protocol';
+import { AdminSessionResponse, AiUsageGameResponse, AiUsageOverviewResponse, ApiError, LearningLibraryResponse } from '@isekai/protocol';
 import { apiUrl, fetchWithTimeout } from './session.ts';
 
 const UNREACHABLE = 'ติดต่อ server ไม่ได้ ลองใหม่อีกครั้ง';
@@ -38,6 +38,19 @@ export function fetchUsageOverview(baseUrl: string, token: string) {
 
 export function fetchGameUsage(baseUrl: string, token: string, gameId: string) {
   return call(baseUrl, `/api/admin/ai-usage/${encodeURIComponent(gameId)}`, { headers: { authorization: `Bearer ${token}` } }, AiUsageGameResponse);
+}
+
+/** GEN-084 contract: the Learning library, the server owner only (Q-168). Every answer is the whole library. */
+export function fetchLearningLibrary(baseUrl: string, token: string) {
+  return call(baseUrl, '/api/admin/learning', { headers: { authorization: `Bearer ${token}` } }, LearningLibraryResponse);
+}
+
+export function deleteLearningEntry(baseUrl: string, token: string, id: string) {
+  return call(baseUrl, `/api/admin/learning/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } }, LearningLibraryResponse);
+}
+
+export function deleteLearningGame(baseUrl: string, token: string, gameId: string) {
+  return call(baseUrl, `/api/admin/learning/games/${encodeURIComponent(gameId)}`, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } }, LearningLibraryResponse);
 }
 
 export async function postAdminLogout(baseUrl: string, token: string): Promise<void> {

@@ -7,7 +7,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EndingPreview, HitPreview, LibraryPreview } from '../src/dev/previews.tsx';
+import { GmConsoleFrame, HitPreview } from '../src/dev/previews.tsx';
+import { GameSummaryPage } from '../src/GameHistory.tsx';
+import { LearningLibrary } from '../src/LearningLibrary.tsx';
 import { mockHttp } from '../src/mock/http.ts';
 import { installMock, MOCK_TOKEN, mockBaseUrl, mockRoom } from '../src/mock/install.ts';
 import { MockRoomServer, type MockPeer } from '../src/mock/room.ts';
@@ -144,25 +146,56 @@ describe('C2 every scenario shows its state', () => {
     expect(screen.getByText(/^สภาพอากาศ:/).textContent).not.toBe(rain);
   });
 
-  it('ended: the game log shows the end and everyone\'s secrets', async () => {
-    render(<EndingPreview apiBaseUrl={mockBaseUrl('ended', `t${++cell}`)} token={MOCK_TOKEN} />);
+  // GEN-091 (Q-253): the end page and the library are the real screens now, not the GEN-100 stand-ins.
+  it('ended: the end page shows the end and everyone\'s secrets, and the rating form sends on the mock', async () => {
+    render(<GameSummaryPage apiBaseUrl={mockBaseUrl('ended', `t${++cell}`)} token={MOCK_TOKEN} onBack={noop} />);
     expect(await screen.findByRole('region', { name: 'ความลับของทุกคน' })).toBeTruthy();
     expect(screen.getByText(/เส้นทาง Good/)).toBeTruthy();
+    const rating = within(screen.getByRole('region', { name: 'ให้คะแนนเกม' }));
+    expect(await rating.findByText(/^รอคะแนนอีก 1 คน/)).toBeTruthy();
+    (await rating.findByRole('radio', { name: '9' })).click();
+    rating.getByRole('button', { name: 'ส่งคะแนน' }).click();
+    expect(await rating.findByText('ส่งแล้ว · แก้ได้')).toBeTruthy();
+    expect(rating.getByText(/^ผ่านเกณฑ์/)).toBeTruthy();
+  });
+
+  it.each([
+    ['ended-rated', /^ผ่านเกณฑ์/],
+    ['ended-low', /^ไม่ผ่านเกณฑ์/],
+  ])('%s: opens as sent with its learning status', async (scenario, status) => {
+    render(<GameSummaryPage apiBaseUrl={mockBaseUrl(scenario, `t${++cell}`)} token={MOCK_TOKEN} onBack={noop} />);
+    const rating = within(await screen.findByRole('region', { name: 'ให้คะแนนเกม' }));
+    expect(await rating.findByText('ส่งแล้ว · แก้ได้')).toBeTruthy();
+    expect(rating.getByText(status)).toBeTruthy();
   });
 
   it('library-empty / library-loading / library-error', async () => {
-    render(<LibraryPreview apiBaseUrl={mockBaseUrl('library-empty', `t${++cell}`)} />);
+    const library = (scenario: string) => render(<LearningLibrary apiBaseUrl={mockBaseUrl(scenario, `t${++cell}`)} token="mock-admin" onForbidden={noop} />);
+    library('library-empty');
     expect(await screen.findByText('ยังไม่มีความรู้ใน library')).toBeTruthy();
     cleanup();
-    render(<LibraryPreview apiBaseUrl={mockBaseUrl('library-loading', `t${++cell}`)} />);
+    library('library-loading');
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.getByRole('status', { name: 'กำลังโหลด…' })).toBeTruthy();
     cleanup();
-    render(<LibraryPreview apiBaseUrl={mockBaseUrl('library-error', `t${++cell}`)} />);
+    library('library-error');
     expect(await screen.findByRole('alert')).toBeTruthy();
     cleanup();
-    render(<LibraryPreview apiBaseUrl={mockBaseUrl('normal', `t${++cell}`)} />);
+    library('normal');
     expect(await screen.findByText('ผู้เล่นยื่นเหรียญให้ทหารยาม → โน้มน้าวสำเร็จ')).toBeTruthy();
+  });
+
+  it('gm / gm-finale / gm-budget: the console shows the held turn, the held finale, the budget status', async () => {
+    const consoleOf = (scenario: string) => render(<GmConsoleFrame apiBaseUrl={mockBaseUrl(scenario, `t${++cell}`)} token={MOCK_TOKEN} />);
+    consoleOf('gm');
+    expect(await screen.findByRole('region', { name: 'ผลของเทิร์นที่รออนุมัติ' })).toBeTruthy();
+    expect((await screen.findByRole('status', { name: 'สถานะ AI GM' })).textContent).toContain('รอคุณอนุมัติ');
+    cleanup();
+    consoleOf('gm-finale');
+    expect(await screen.findByRole('region', { name: 'ตอนจบที่รออนุมัติ' })).toBeTruthy();
+    cleanup();
+    consoleOf('gm-budget');
+    expect((await screen.findByRole('status', { name: 'สถานะ AI GM' })).textContent).toContain('ถึงเพดานงบ AI');
   });
 });
 

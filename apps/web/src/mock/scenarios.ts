@@ -91,7 +91,11 @@ const noCharacterGame: GameView = {
   startBlockers: ['ยังไม่สร้างตัวละคร: นก, ต้น'],
 };
 
-const ALL_SCREENS = CONTRACT_SCREENS.map((s) => s.id);
+/** GEN-091: the held finale (Q-215) and a rated game whose average is 8 or lower (Q-223), both from the fixtures. */
+const FINALE_TURN = F.GmPendingTurn.find((t) => t.finale)!;
+const LOW_RATING = { rating: { ...F.GameRatingResponse[0]!.rating, mine: { score: 6, comment: 'ช่วงกลางเกมช้าไปหน่อย' }, average: 7.4, eligible: false, blocker: 'score_too_low' } };
+
+const ALL_SCREENS =CONTRACT_SCREENS.map((s) => s.id);
 const room = (state: RoomState, script: readonly MockStep[] = [], entries: readonly RoomEntry[] = START_ENTRIES) => ({ state, entries, script });
 
 export const SCENARIOS: readonly MockScenario[] = [
@@ -213,12 +217,48 @@ export const SCENARIOS: readonly MockScenario[] = [
     room: room(gmRoom),
   },
   {
+    id: 'gm-finale',
+    title: 'Human GM: ตอนจบรออนุมัติ',
+    note: 'เทิร์นที่ค้างคือฉากจบ แก้ได้เฉพาะข้อความ (Q-215)',
+    session: 'gm',
+    screens: ['gm-console'],
+    http: { 'GET /api/game': ok(gmGame), 'GET /api/game/gm/console': ok({ ...F.GmConsoleResponse[0], at: FINALE_TURN.at, status: 'finale', pending: FINALE_TURN }) },
+    room: room(gmRoom),
+  },
+  {
+    id: 'gm-budget',
+    title: 'Human GM: ถึงเพดานงบ AI',
+    note: 'AI GM หยุดเพราะใช้ครบงบของเดือน (Q-221)',
+    session: 'gm',
+    screens: ['gm-console'],
+    http: { 'GET /api/game': ok(gmGame), 'GET /api/game/gm/console': ok({ ...F.GmConsoleResponse[0], status: 'resolving', pending: null }) },
+    room: room({ ...gmRoom, status: 'resolving', gmStatus: { code: 'budget_reached', message: 'ใช้ครบงบ AI ของเดือนนี้แล้ว AI GM จะกลับมาเมื่อขึ้นเดือนใหม่หรือเมื่อปรับเพดาน', canRetry: false } }),
+  },
+  {
     id: 'ended',
-    title: 'จบเกม',
-    note: 'ฉากจบ เปิดความลับของทุกคน',
+    title: 'จบเกม ยังไม่ให้คะแนน',
+    note: 'ฉากจบ เปิดความลับของทุกคน ส่งคะแนนแล้วฟอร์มเปลี่ยนเป็น "ส่งแล้ว"',
     session: 'player',
-    screens: ['ending', 'home', 'play-lock'],
+    screens: ['ending', 'ending-rating', 'home', 'play-lock'],
+    http: { 'GET /api/game/log': ok(F.GameLogResponse[1]), 'GET /api/game/rating': ok(F.GameRatingResponse[1]) },
+    room: room(endedRoom),
+  },
+  {
+    id: 'ended-rated',
+    title: 'จบเกม ให้คะแนนแล้ว ผ่านเกณฑ์',
+    note: 'คะแนนเฉลี่ยเกิน 8 และคนให้คะแนนครบครึ่ง',
+    session: 'player',
+    screens: ['ending-rating'],
     http: { 'GET /api/game/log': ok(F.GameLogResponse[1]) },
+    room: room(endedRoom),
+  },
+  {
+    id: 'ended-low',
+    title: 'จบเกม คะแนนไม่ผ่านเกณฑ์',
+    note: 'คะแนนเฉลี่ยไม่เกิน 8: ไม่ถูกใช้เป็นความทรงจำ',
+    session: 'player',
+    screens: ['ending-rating'],
+    http: { 'GET /api/game/log': ok(F.GameLogResponse[1]), 'GET /api/game/rating': ok(LOW_RATING), 'PUT /api/game/rating': ok(LOW_RATING) },
     room: room(endedRoom),
   },
   {

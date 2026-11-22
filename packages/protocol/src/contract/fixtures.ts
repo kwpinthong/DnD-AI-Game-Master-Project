@@ -177,13 +177,33 @@ const gmCharacter: In<typeof p.GmCharacterView> = {
   knowsNamesOf: [],
   npcBonds: [{ npcId: 'merchant', affinity: 52, nameRevealed: true }],
   playerBonds: [],
-  curses: [],
+  curses: [{ label: 'หวาดกลัว', source: 'Venom of Despair', value: -3, turnsLeft: 2 }],
 };
 const gmTimelineEvent: In<typeof p.GmTimelineEvent> = { id: 'ev-5', day: 5, phase: 'EOSORIA', title: 'ภัยพิบัติเริ่ม', status: 'pending', outcome: null, outcomeSource: null };
 const gmPendingTurn: In<typeof p.GmPendingTurn> = {
   at: AT,
   entries: [{ index: 0, kind: 'narration', memberId: ME, locationId: null, text: 'คุณสังเกตว่า…', edited: false }],
   results: [{ memberId: ME, before: { hp: 22, stamina: 18, karma: 3 }, after: { hp: 22, stamina: 16, karma: 3 }, edited: false }],
+  checks: [
+    {
+      memberId: ME,
+      text: 'ตามนักบวช',
+      visibility: 'secret',
+      tags: ['OBSERVE', 'PRIEST'],
+      dc: 14,
+      modifiers: [{ label: 'Glare of Truth', value: 2 }, { label: 'ฝน', value: 1 }],
+      d20: 14,
+      total: 17,
+      outcome: 'success',
+    },
+  ],
+};
+/** Q-215: the held turn is the game's ending (narration only). */
+const gmFinaleTurn: In<typeof p.GmPendingTurn> = {
+  at: { day: 12, phase: 'NOCTHERION', turn: 2 },
+  entries: [{ index: 0, kind: 'feed', memberId: null, locationId: null, text: 'ม่านปาฏิหาริย์กางออกเหนือเมือง…', edited: false }],
+  results: [],
+  finale: true,
 };
 const gmOverride = {
   id: 1,
@@ -415,10 +435,11 @@ export const CONTRACT_FIXTURES: Fixtures = {
       legendaries: defaultScenario().legendaries,
       pending: gmPendingTurn,
       fallbacks: [{ at: AT, kind: 'narration', memberId: ME, locationId: null, cause: 'timeout' }],
+      npcs: [{ npcId: 'merchant', name: 'พ่อค้าเร่', curses: [{ label: 'มึนงง', source: 'Mist of Confusion', value: -2, turnsLeft: 1 }] }],
     },
   ],
   GmTurnEditRequest: [{ reason: 'ปรับถ้อยคำ', narrations: [{ index: 0, text: 'คุณเห็นนักบวช…' }], results: [{ memberId: ME, hp: 20 }] }],
-  GmPendingTurn: [gmPendingTurn],
+  GmPendingTurn: [gmPendingTurn, gmFinaleTurn],
   GmApproveResponse: [{ approved: AT }],
   GmAdjustRequest: [{ field: 'hp', memberId: ME, value: 25, reason: 'แก้ผล' }, { field: 'affinity', memberId: ME, npcId: 'merchant', value: 30, reason: 'แก้ผล' }],
   GmAdjustResponse: [{ override: gmOverride }],

@@ -294,6 +294,8 @@ export const PENDING_FIELDS: readonly PendingField[] = [
   { schema: 'GameView', path: 'memory', owner: 'GEN-083', screens: ['lobby'], note: 'Lobby บอกสถานะความทรงจำ' },
   { schema: 'GameMemorySetting', path: 'enabled', owner: 'GEN-083', screens: ['create-game'], note: 'จะเป็น `CreateGameRequest.memory`' },
   { schema: 'JoinStyleFields', path: 'playerCode', owner: 'GEN-082', screens: ['join'], note: 'จะเป็น `JoinRequest.playerCode` + `noStyle`' },
+  { schema: 'GmConsoleResponse', path: 'npcs', owner: 'new', screens: ['gm-console'], note: 'คำสาปบน NPC พร้อมตัวเลข + เทิร์นที่เหลือ (Q-252, ช่องว่างของ GEN-095)' },
+  { schema: 'GmPendingTurn', path: 'checks', owner: 'new', screens: ['gm-console'], note: 'ผลทอยของเทิร์นที่รออนุมัติ: tags, DC, modifier, d20, total (ช่องว่างของ GEN-058)' },
   { schema: 'GameRevealPlayer', path: 'epilogue', owner: 'new', screens: ['ending'], note: 'ลักษณะ, ฉายาสุดท้าย, บทส่งท้าย (ช่องว่างของ GEN-059)' },
   {
     schema: 'GameRevealPlayer',

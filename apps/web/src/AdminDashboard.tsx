@@ -1,6 +1,8 @@
 import type { AiUsageGameResponse, AiUsageOverviewResponse, UsageCeiling, UsageFailure, UsageTotals } from '@isekai/protocol';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { fetchGameUsage, fetchUsageOverview, postAdminLogout, postAdminSession } from './admin-api.ts';
+import { LearningLibrary } from './LearningLibrary.tsx';
+import { libraryText } from './ui/strings.ts';
 
 /**
  * The server owner's AI usage dashboard at <web>/admin (GEN-061, Q-058). Numbers and purposes only:
@@ -79,6 +81,8 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
     return token ? { state: 'dashboard', token } : { state: 'login' };
   });
 
+  const [page, setPage] = useState<'usage' | 'library'>('usage');
+
   function signedIn(token: string) {
     saveAdminToken(token);
     setView({ state: 'dashboard', token });
@@ -90,20 +94,37 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
   }
 
   return (
-    <main>
-      <h1>Isekai Chronicles: การใช้ AI GM</h1>
+    <main className="admin">
+      <h1>Isekai Chronicles: ผู้ดูแล</h1>
       {view.state === 'login' ? (
         <AdminLogin apiBaseUrl={apiBaseUrl} onSignedIn={signedIn} {...(view.message ? { notice: view.message } : {})} />
       ) : (
-        <Dashboard
-          apiBaseUrl={apiBaseUrl}
-          token={view.token}
-          onForbidden={signedOut}
-          onLogout={() => {
-            void postAdminLogout(apiBaseUrl, view.token);
-            signedOut();
-          }}
-        />
+        <>
+          {/* GEN-091: both pages sit behind the same admin code (Q-168). */}
+          <nav className="admin__nav" aria-label="ผู้ดูแล">
+            {(['usage', 'library'] as const).map((p) => (
+              <button key={p} type="button" aria-pressed={page === p} onClick={() => setPage(p)}>
+                {libraryText.adminNav[p]}
+              </button>
+            ))}
+          </nav>
+          {page === 'usage' ? (
+            <Dashboard
+              apiBaseUrl={apiBaseUrl}
+              token={view.token}
+              onForbidden={signedOut}
+              onLogout={() => {
+                void postAdminLogout(apiBaseUrl, view.token);
+                signedOut();
+              }}
+            />
+          ) : (
+            <section aria-label={libraryText.title}>
+              <h2>{libraryText.title}</h2>
+              <LearningLibrary apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
+            </section>
+          )}
+        </>
       )}
     </main>
   );

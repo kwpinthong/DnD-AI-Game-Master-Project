@@ -4,13 +4,14 @@ import { AdminDashboard } from '../AdminDashboard.tsx';
 import { App } from '../App.tsx';
 import { CharacterScreen } from '../CharacterScreen.tsx';
 import { CreateGameForm } from '../CreateGameForm.tsx';
-import { GmConsole } from '../GmConsole.tsx';
+import { GameSummaryPage } from '../GameHistory.tsx';
 import { InventoryPanel } from '../Inventory.tsx';
 import { JoinForm } from '../JoinForm.tsx';
+import { LearningLibrary } from '../LearningLibrary.tsx';
 import { Lobby } from '../Lobby.tsx';
 import { PlayRoom } from '../PlayRoom.tsx';
 import { ScenarioEditor } from '../ScenarioEditor.tsx';
-import { EndingPreview, HitPreview, LibraryPreview } from './previews.tsx';
+import { GmConsoleFrame, HitPreview } from './previews.tsx';
 
 /**
  * What the gallery renders for each contract screen (GEN-100): the page that exists today (pre-v2) or a
@@ -35,6 +36,18 @@ const playRoom = ({ baseUrl, token }: FrameContext) => (
 );
 const PLAY: ScreenView = { page: 'PlayRoom', socket: true, render: playRoom };
 const NONE: ScreenView = { page: '', socket: false, render: null };
+/** The end page (GEN-091): the reveal and the rating are two parts of the same page. */
+const END: ScreenView = {
+  page: 'GameSummaryPage',
+  socket: false,
+  render: ({ baseUrl, token }) => (
+    <div className="preview">
+      <GameSummaryPage apiBaseUrl={baseUrl} token={token} onBack={noop} />
+    </div>
+  ),
+};
+/** The mock admin routes answer any token; the real page gets one from the admin code (AdminDashboard). */
+const MOCK_ADMIN_TOKEN = 'mock-admin';
 
 export const SCREEN_VIEWS: Record<ScreenId, ScreenView> = {
   home: { page: 'App', socket: false, render: ({ baseUrl }) => <App apiBaseUrl={baseUrl} /> },
@@ -63,10 +76,26 @@ export const SCREEN_VIEWS: Record<ScreenId, ScreenView> = {
   'play-action': PLAY,
   'play-lock': PLAY,
   'play-astral': PLAY,
-  'gm-console': { page: 'GmConsole', socket: false, render: ({ baseUrl, token }) => <GmConsole apiBaseUrl={baseUrl} token={token} refreshKey="mock" /> },
-  ending: { page: 'GameLog (ตัวแทน)', socket: false, render: ({ baseUrl, token }) => <EndingPreview apiBaseUrl={baseUrl} token={token} /> },
-  'ending-rating': NONE,
-  'learning-library': { page: 'LibraryPreview (ตัวแทน)', socket: false, render: ({ baseUrl }) => <LibraryPreview apiBaseUrl={baseUrl} /> },
+  'gm-console': {
+    page: 'GmConsole',
+    socket: false,
+    render: ({ baseUrl, token }) => (
+      <div className="preview">
+        <GmConsoleFrame apiBaseUrl={baseUrl} token={token} />
+      </div>
+    ),
+  },
+  ending: END,
+  'ending-rating': END,
+  'learning-library': {
+    page: 'LearningLibrary',
+    socket: false,
+    render: ({ baseUrl }) => (
+      <div className="preview">
+        <LearningLibrary apiBaseUrl={baseUrl} token={MOCK_ADMIN_TOKEN} onForbidden={noop} />
+      </div>
+    ),
+  },
   'ai-usage': { page: 'AdminDashboard', socket: false, render: ({ baseUrl }) => <AdminDashboard apiBaseUrl={baseUrl} /> },
   'my-style': NONE,
 };
