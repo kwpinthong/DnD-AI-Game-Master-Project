@@ -67,8 +67,8 @@ export function validateProposal(state: ResolutionState, proposal: ResolutionPro
   const check = p.check as { type?: unknown; dc?: unknown } | null | undefined;
   if (check?.type === 'dc') {
     if (!(DC_LADDER as readonly unknown[]).includes(check.dc)) fail('dc_not_on_ladder', 'check.dc', `DC ${JSON.stringify(check.dc)} is not on the ladder ${DC_LADDER.join('/')}`);
-  } else if (check?.type !== 'none') {
-    fail('unknown_check', 'check', 'check must be { type: "dc", dc } or { type: "none" }');
+  } else if (check?.type !== 'none' && check?.type !== 'pvp') {
+    fail('unknown_check', 'check', 'check must be { type: "dc", dc }, { type: "pvp" } or { type: "none" }');
   }
 
   // Target.

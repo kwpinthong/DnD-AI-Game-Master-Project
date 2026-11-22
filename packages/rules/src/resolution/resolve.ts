@@ -70,32 +70,50 @@ const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
  */
 export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
   const errors = validateProposal(input.state, input.proposal);
+  if (input.proposal.check?.type === 'pvp' && input.pvp === undefined) {
+    errors.push({ code: 'invalid_field', path: 'check', message: 'a pvp check is resolved per phase against a player target (GEN-060)' });
+  }
   if (errors.length > 0) return { ok: false, errors };
 
   const snapshot = copy(input);
-  const { state, proposal } = copy(input);
+  const { state, proposal, pvp } = copy(input);
   const { actor, npcs } = state;
   const dice = new RecordingRng(rng);
 
   // Roll.
   let check: CheckLog | null = null;
   let degree: Degree = 'success';
-  if (proposal.check.type === 'dc') {
+  if (proposal.check.type !== 'none') {
     const modifiers = proposal.modifiers.map((m) => loggedModifier(actor, proposal, m));
     const modifierSum = modifiers.reduce((sum, m) => sum + m.value, 0);
     const modifierTotal = clamp(modifierSum, -RULES.modCapTotal, RULES.modCapTotal);
     const roll = rollDice('1d20', dice);
     const d20 = roll.faces[0]!;
     const total = d20 + modifierTotal;
-    const dc = proposal.check.dc;
+    const dc = proposal.check.type === 'pvp' ? pvp!.dc : proposal.check.dc;
     check = { dc, d20, modifiers, modifierSum, modifierTotal, total, margin: total - dc };
     degree = roll.crit ? 'crit' : roll.fumble ? 'fumble' : total >= dc ? 'success' : 'fail';
   }
 
-  // Secret: caught on a fumble, or when the highest-grade witness out-rolls the total (tie = unseen).
+  // Secret: caught on a fumble, or when the target player (GEN-060) or the highest-grade witness
+  // out-rolls the total (tie = unseen). A target who notices interrupts the action: success -> fail.
   let caught = false;
+  let interrupted = false;
   let observation: ResolutionLog['observation'] = null;
-  if (proposal.visibility === 'secret' && check !== null) {
+  let targetObservation: ResolutionLog['targetObservation'] = null;
+  if (proposal.visibility === 'secret' && check !== null && degree !== 'fumble' && pvp?.observeModifier != null) {
+    const d20 = rollDice('1d20', dice).faces[0]!;
+    const total = d20 + pvp.observeModifier;
+    targetObservation = { d20, modifier: pvp.observeModifier, total, noticed: total > check.total };
+    if (targetObservation.noticed) {
+      caught = true;
+      if (degree === 'success' || degree === 'crit') {
+        degree = 'fail';
+        interrupted = true;
+      }
+    }
+  }
+  if (proposal.visibility === 'secret' && check !== null && !caught) {
     if (degree === 'fumble') caught = true;
     else {
       const witness = highestGrade(proposal.witnessNpcIds.map((id) => npcs[id]!));
@@ -187,6 +205,8 @@ export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
     degree,
     caught,
     observation,
+    targetObservation,
+    interrupted,
     stamina: { before: actor.stamina, cost, net, after: staminaAfter },
     rep,
     karma,

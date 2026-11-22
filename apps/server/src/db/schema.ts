@@ -131,3 +131,6 @@ export * from './schema-visibility.ts';
 
 // GEN-056: the play room (phase state, actions, feed / narration), own file for the same reason.
 export * from './schema-room.ts';
+
+// GEN-060: items that changed hands between players, own file for the same reason.
+export * from './schema-items.ts';

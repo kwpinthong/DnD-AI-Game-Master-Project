@@ -4,6 +4,7 @@ import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
 import { advanceTimeline, getTimeline, setEventOutcome } from '../src/timeline/store.ts';
+import { moveCharacter } from '../src/visibility/store.ts';
 import { makeTempDir } from './helpers.ts';
 
 const CREATE_CODE = 'ลับเฉพาะ-2026';
@@ -73,6 +74,8 @@ describe('timeline over the API: start = day 1 Morning, players see no future ev
     }
     const started = await call('POST', '/api/game/start', { token: created.token });
     expect(started.status, started.text).toBe(200);
+    // Q-080 (GEN-060): players see only events at their place; d1-bread is at the market.
+    moveCharacter(server!.orm, players[0]!.member.id, 'market', Date.now());
     return { gameId: created.member.gameId, gm: created.token, player: players[0]!.token };
   }
 
