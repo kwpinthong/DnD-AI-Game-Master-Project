@@ -4,7 +4,10 @@ import type { AiCallRequest, AiCallResult, AiErrorKind, AiProvider, AiTokenUsage
 
 /**
  * Claude through the official SDK (default provider, Q-018 claude-sonnet-5-5).
- * - Structured outputs (`output_config.format`), never forced `tool_choice` (400 on Sonnet 5.5).
+ * - The answer's JSON schema goes into the prompt and the answer comes back as JSON text (Q-285). The real API
+ *   refused the GM schemas as structured output (`output_config.format`: no `maxItems`, at most 16 union-typed
+ *   parameters, "the compiled grammar is too large") and refuses a forced `tool_choice` on Sonnet 5.5. The
+ *   AI service checks every answer with the zod schema, so a wrong answer is a `schema_mismatch` it retries.
  * - Thinking left at the model default (Sonnet 5.5 rejects `disabled`); depth via `output_config.effort`.
  * - `stop_reason` checked before content: `refusal` / `max_tokens` are failures the service retries.
  * - Server-side refusal fallback (`fallbacks: "default"`) on models that support it.
@@ -58,7 +61,7 @@ export function createAnthropicProvider(config: AiConfig): AiProvider {
 
       const text = response.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('');
       try {
-        return { ok: true, json: fromStructuredOutput(req.output.jsonSchema, JSON.parse(text)), usage, model: response.model, latencyMs: latency() };
+        return { ok: true, json: parseAnswer(text), usage, model: response.model, latencyMs: latency() };
       } catch {
         return failure('invalid_json', `not JSON (${text.length} chars, stop ${response.stop_reason})`, usage, true, latency());
       }
@@ -66,97 +69,40 @@ export function createAnthropicProvider(config: AiConfig): AiProvider {
   };
 }
 
-/**
- * Schema keywords the Messages API refuses in `output_config.format.schema` (400 "For 'array' type, property
- * 'maxItems' is not supported", GEN-059 Q-234): sizes and ranges, plus annotations it has no use for.
- */
-const UNSUPPORTED_KEYWORDS = new Set(['$schema', 'maxItems', 'minLength', 'maxLength', 'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf', 'pattern', 'default']);
-/** Keywords whose value is a map of name → schema: the names are the caller's, never keywords. */
-const SCHEMA_MAPS = new Set(['properties', '$defs', 'definitions']);
-/** Keywords whose value is data, not a schema. */
-const DATA_KEYWORDS = new Set(['enum', 'const', 'required']);
-
-type Json = Record<string, unknown>;
-const isObject = (v: unknown): v is Json => v !== null && typeof v === 'object' && !Array.isArray(v);
-
-/**
- * Q-279: the API takes at most 16 union-typed parameters (GmTurnProposal has 25). A nullable enum
- * (`anyOf: [enum, null]`) is sent as the enum plus this value, and this value comes back as null.
- */
-const NULL_VALUE = 'none';
-
-/** The values of a nullable string enum that can take NULL_VALUE; undefined for anything else (also an enum that already has that value). */
-function nullableEnum(schema: unknown): string[] | undefined {
-  if (!isObject(schema) || !Array.isArray(schema.anyOf) || schema.anyOf.length !== 2) return undefined;
-  const values = schema.anyOf.find((b): b is Json => isObject(b) && Array.isArray(b.enum))?.enum as unknown[] | undefined;
-  if (!values || !schema.anyOf.some((b) => isObject(b) && b.type === 'null')) return undefined;
-  return values.every((v): v is string => typeof v === 'string' && v !== NULL_VALUE) ? values : undefined;
-}
-
-/** Whether `value` is of the object branch `branch` of a union: its literal and enum properties agree. */
-function fits(branch: unknown, value: unknown): boolean {
-  if (!isObject(branch) || !isObject(branch.properties) || !isObject(value)) return false;
-  return Object.entries(branch.properties).every(([key, p]) => {
-    if (!isObject(p)) return true;
-    if ('const' in p) return value[key] === p.const;
-    return Array.isArray(p.enum) ? p.enum.includes(value[key]) : true;
-  });
-}
-
-/**
- * The answer as the caller's schema means it: NULL_VALUE becomes null wherever `schema` (the one given to
- * `forStructuredOutput`) has a nullable enum, at any depth. Everything else is returned as it came.
- * shortcut: follows inline schemas only (what z.toJSONSchema writes here), upgrade when a schema uses $ref.
- */
-export function fromStructuredOutput(schema: unknown, value: unknown): unknown {
-  if (nullableEnum(schema)) return value === NULL_VALUE ? null : value;
-  if (!isObject(schema)) return value;
-  if (Array.isArray(schema.anyOf)) {
-    const branch = schema.anyOf.find((b) => fits(b, value));
-    return branch ? fromStructuredOutput(branch, value) : value;
+/** The JSON of an answer: the text itself, or the object inside a code fence or a sentence around it. Throws when there is none. */
+function parseAnswer(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
   }
-  if (Array.isArray(value)) return value.map((v) => fromStructuredOutput(schema.items, v));
-  const properties = schema.properties;
-  if (!isObject(value) || !isObject(properties)) return value;
-  return Object.fromEntries(Object.entries(value).map(([key, v]) => [key, key in properties ? fromStructuredOutput(properties[key], v) : v]));
 }
 
-/**
- * The JSON schema as the API takes it: the same shape (types, required, enum, anyOf, additionalProperties)
- * without the size / range constraints. Those rules are not lost: the AI service parses every answer with the
- * full zod schema, so a breach is a `schema_mismatch` and the call is retried.
- */
-export function forStructuredOutput(schema: unknown): unknown {
-  if (Array.isArray(schema)) return schema.map(forStructuredOutput);
-  if (schema === null || typeof schema !== 'object') return schema;
-  const values = nullableEnum(schema);
-  if (values) return { type: 'string', enum: [...values, NULL_VALUE] };
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(schema)) {
-    if (UNSUPPORTED_KEYWORDS.has(key)) continue;
-    // "At least one" is the only array size the API takes.
-    if (key === 'minItems' && value !== 0 && value !== 1) continue;
-    if (DATA_KEYWORDS.has(key)) out[key] = value;
-    else if (SCHEMA_MAPS.has(key) && value !== null && typeof value === 'object') {
-      out[key] = Object.fromEntries(Object.entries(value).map(([name, sub]) => [name, forStructuredOutput(sub)]));
-    } else out[key] = forStructuredOutput(value);
-  }
-  return out;
+/** The last system block (after the caller's, so their cache breakpoints stand): what the answer must be. */
+function answerFormat(output: AiCallRequest['output']): string {
+  const { $schema: _drop, ...schema } = output.jsonSchema;
+  return [
+    `Answer with one JSON object only (${output.name}): no text before or after it, no code fence.`,
+    'It must follow this JSON Schema exactly: every required property, no property the schema does not name, null where the schema allows null.',
+    JSON.stringify(schema),
+  ].join('\n');
 }
 
 function toParams(req: AiCallRequest): Anthropic.Beta.MessageCreateParamsNonStreaming {
   const cachedIndexes = req.system.flatMap((block, i) => (block.cache ? [i] : [])).slice(-MAX_CACHE_BREAKPOINTS);
-  const schema = forStructuredOutput(req.output.jsonSchema) as Record<string, unknown>;
   return {
     model: req.model,
     max_tokens: req.maxOutputTokens,
-    system: req.system.map((block, i) => ({
-      type: 'text' as const,
-      text: block.text,
-      ...(cachedIndexes.includes(i) ? { cache_control: { type: 'ephemeral' as const } } : {}),
-    })),
+    system: [
+      ...req.system.map((block, i) => ({
+        type: 'text' as const,
+        text: block.text,
+        ...(cachedIndexes.includes(i) ? { cache_control: { type: 'ephemeral' as const } } : {}),
+      })),
+      { type: 'text' as const, text: answerFormat(req.output) },
+    ],
     messages: req.messages.map((message) => ({ role: message.role, content: message.text })),
-    output_config: { effort: req.effort, format: { type: 'json_schema', schema } },
+    output_config: { effort: req.effort },
     ...(supportsFallback(req.model) ? { betas: [FALLBACK_BETA], fallbacks: 'default' as const } : {}),
   };
 }
