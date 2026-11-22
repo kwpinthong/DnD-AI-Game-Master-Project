@@ -1,4 +1,4 @@
-import { PHASES, weatherText, type BondView, type HitChange, type Phase, type RollOutcome, type RollView, type RoomEntry, type RoomState, type RoomViewLockCode } from '@isekai/protocol';
+import { PHASES, weatherText, type BondView, type HitChange, type Phase, type RollOutcome, type RollView, type RoomEntry, type RoomState, type RoomViewLockCode, type TurnChange } from '@isekai/protocol';
 import { playText } from './ui/strings.ts';
 
 /**
@@ -16,6 +16,7 @@ const SECTION: Record<RoomEntry['kind'], EntrySection> = {
   whisper: 'private',
   omen: 'private',
   hit: 'pin',
+  changes: 'private',
 };
 export const entrySection = (entry: Pick<RoomEntry, 'kind'>): EntrySection => SECTION[entry.kind];
 
@@ -137,6 +138,14 @@ export function hitChangeText(change: HitChange): string {
   const label = playText.hit[change.stat];
   if ('delta' in change) return `${label} ${change.delta > 0 ? '+' : ''}${change.delta}`;
   return `${label}: ${change.name}`;
+}
+
+/** GEN-114: one line of the turn log: "แรง -3 · เดินทางข้ามโซน". Karma is only the word the status bar shows. */
+export function turnChangeText(change: TurnChange): string {
+  const label = playText.changes.stat[change.stat];
+  const what =
+    'delta' in change ? `${label} ${change.delta > 0 ? '+' : ''}${change.delta}` : change.stat === 'conduct' ? `${label} ${change.from} → ${change.to}` : `${label}: ${change.name}`;
+  return `${what} · ${change.reason}`;
 }
 
 export interface TurnGroup {

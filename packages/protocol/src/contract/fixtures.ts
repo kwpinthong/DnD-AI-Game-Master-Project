@@ -93,6 +93,13 @@ const roll: In<typeof p.RollView> = {
 };
 const hit: In<typeof p.HitView> = { actor: null, changes: [{ stat: 'coins', delta: -12 }, { stat: 'item_lost', name: 'Prism of Truth' }] };
 
+const turnChanges: In<typeof p.TurnChange>[] = [
+  { stat: 'stamina', delta: -3, reason: 'เดินทางข้ามโซน' },
+  { stat: 'hp', delta: -5, reason: 'ถูกโจมตี' },
+  { stat: 'coins', delta: -5, reason: 'ค่าที่พักโรงเตี๊ยม' },
+  { stat: 'conduct', from: 'เป็นกลาง', to: 'ใจดี', reason: 'การกระทำของคุณ' },
+  { stat: 'status_gained', name: 'ง่วงซึม', reason: 'อดนอน' },
+];
 const narration: In<typeof p.RoomEntry> = { seq: 12, kind: 'narration', ...AT, place: null, text: 'คุณสังเกตว่านักบวชแจกขนมปังเฉพาะบ้านที่มีเด็ก', roll };
 const entries: In<typeof p.RoomEntry>[] = [
   { seq: 10, kind: 'feed', ...AT, place: FOUNTAIN_ZONED, text: 'ชายผมแดงตะโกนขายยาสมุนไพรเสียงดัง' },
@@ -102,6 +109,7 @@ const entries: In<typeof p.RoomEntry>[] = [
   { seq: 14, kind: 'whisper', ...AT, place: null, text: 'คืนนี้เจอกันที่โบสถ์', whisper: { from: 'ลิน', to: 'ต้น', mine: true } },
   { seq: 15, kind: 'narration', ...AT, place: null, text: 'ระบบบรรยายแทน AI GM', fallback: true },
   { seq: 16, kind: 'omen', day: 6, phase: 'NOCTHERION', turn: 1, place: null, text: 'เงาใต้แท่นบูชากำลังรอคืนจันทราโลหิต' },
+  { seq: 17, kind: 'changes', ...AT, place: null, text: 'ลิน', changes: turnChanges },
 ];
 
 const you: In<typeof p.RoomYou> = {
@@ -411,6 +419,7 @@ export const CONTRACT_FIXTURES: Fixtures = {
   RoomEntryMessage: entries.map((entry) => ({ type: 'entry', entry }) as const),
   RoomEntry: entries,
   RollView: [roll, { d20: 20, difficulty: 'แทบเป็นไปไม่ได้', outcome: 'critical_success', factors: [] }],
+  TurnChange: turnChanges,
   HitView: [hit, { actor: 'ชายผมแดง ผ้าพันแผล', changes: [{ stat: 'hp', delta: -8 }] }],
   PlaceActionView: [{ id: 'train', label: 'ฝึก TRAIN (วันนี้เหลือ 1)', costCoins: null, usesLeftToday: 1, blocked: null }],
   AstralView: [astral],

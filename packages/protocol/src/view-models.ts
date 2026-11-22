@@ -69,6 +69,23 @@ export type HitChange = z.infer<typeof HitChange>;
 export const HitView = z.strictObject({ actor: z.string().nullable(), changes: z.array(HitChange) });
 export type HitView = z.infer<typeof HitView>;
 
+/**
+ * GEN-114: one change to your own values in a turn, with why (the numbers come from the server's own before / after,
+ * never from the narration). Same stats as `HitChange` plus `reason`. Karma is never a number: `conduct` is the word the
+ * status bar shows, from the old word to the new one, and only when the word changed.
+ */
+export const TurnChange = z.discriminatedUnion('stat', [
+  z.strictObject({ stat: z.literal('hp'), delta: z.number().int(), reason: z.string() }),
+  z.strictObject({ stat: z.literal('stamina'), delta: z.number().int(), reason: z.string() }),
+  z.strictObject({ stat: z.literal('coins'), delta: z.number().int(), reason: z.string() }),
+  z.strictObject({ stat: z.literal('conduct'), from: z.string(), to: z.string(), reason: z.string() }),
+  z.strictObject({ stat: z.literal('item_gained'), name: z.string(), reason: z.string() }),
+  z.strictObject({ stat: z.literal('item_lost'), name: z.string(), reason: z.string() }),
+  z.strictObject({ stat: z.literal('status_gained'), name: z.string(), reason: z.string() }),
+  z.strictObject({ stat: z.literal('status_lost'), name: z.string(), reason: z.string() }),
+]);
+export type TurnChange = z.infer<typeof TurnChange>;
+
 // --- F4: companion bond as a word + a 6-step bar ---
 
 export const BOND_STEPS = [

@@ -4,6 +4,7 @@ import {
   OMEN_MAX_LENGTH,
   actionTextProblem,
   normalizeActionText,
+  type HitChange,
   type PlaceView,
   type RoomActionCode,
   type RoomGmStatus,
@@ -34,6 +35,7 @@ import { game } from '../db/schema.ts';
 import { activeMembers, type MemberRow } from '../game/service.ts';
 import { CryptoRng } from '../rng.ts';
 import { characterNameOf, entryViewOf, placeViewOf } from './entry-view.ts';
+import { moveChangesOf, nameOf, snapshotsOf, turnChangesOf } from './turn-changes.ts';
 import { forbiddenKeysIn } from '../visibility/guard.ts';
 import {
   ASTRAL_PLANE,
@@ -412,7 +414,9 @@ export function createRoomService(
             return null;
           }
           const at = { day: current.day, phase: current.phase, turn: current.turn };
-          const rows = (resolution.entries ?? []).map((entry) => {
+          // GEN-114: what each player's own values were before this turn's effects.
+          const s0 = snapshotsOf(tx, assets, gameId, current, current.order);
+          const rows =(resolution.entries ?? []).map((entry) => {
             const recipients = recipientsOf(tx, gameId, current, entry);
             const locationId = entry.kind === 'feed' ? entry.locationId : null;
             const fallback = entry.fallback ? { fallback: entry.fallback } : {};
@@ -432,6 +436,10 @@ export function createRoomService(
             }
           }
           resolution.apply?.(tx);
+          const s1 = snapshotsOf(tx, assets, gameId, current, current.order);
+          // Stamina each player loses to a hazard place this turn (read before trips arrive).
+          const hazard = new Map<string, number>();
+          for (const [id, r] of Object.entries(withHazard(tx, assets, gameId, current, {}))) hazard.set(id, (current.players[id]?.stamina ?? 0) - (r.stamina ?? 0));
           // GEN-066: a turn spent in the forest / at the sea from day 5 costs Stamina, on top of what the resolver said.
           // GEN-055: on the period's last turn, end_of_period restores of skills / items (capped at max).
           // GEN-069 / Q-209 / Q-218: where each player rests (Rest_Quality, the inn / infirmary, REST passives).
@@ -460,6 +468,17 @@ export function createRoomService(
           completeTravel(tx, gameId, t);
           // The timeline follows each turn (GEN-053, GEN-096): events starting on the next turn become active for it.
           const next = step.state;
+          // GEN-114: the player's own log of the turn: numbers from the server's before / after, reasons from the engine's log.
+          const s2 = snapshotsOf(tx, assets, gameId, next, current.order);
+          const hits = new Map<string, readonly HitChange[]>((resolution.hits ?? []).map((h) => [h.memberId, h.hit.changes]));
+          for (const id of current.order) {
+            const [b0, b1, b2] = [s0.get(id), s1.get(id), s2.get(id)];
+            if (!b0 || !b1 || !b2) continue;
+            const changes = turnChangesOf(id, b0, b1, b2, { log: step.log, hazard, hits });
+            if (changes.length === 0) continue;
+            const recipients = new Set([id, ...gmIds]);
+            rows.push({ row: insertEntry(tx, gameId, { kind: 'changes', at, locationId: null, text: nameOf(tx, id), meta: { changes } }, [...recipients], t), recipients });
+          }
           if (isEnded(next)) {
             advanceTimeline(tx, gameId, 'end', t);
             // The one place a game ends (GEN-052 engine → finale / game_over). Q-185 hooks its backup after commit.
@@ -821,12 +840,24 @@ export function createRoomService(
       const outcome = db.transaction((tx) => {
         const lock = lockOf(me, ensurePhaseState(tx, me.gameId, now()));
         if (lock) return { ok: false as const, code: 'cannot_act' as const, message: LOCK_MESSAGE[lock] };
-        return travel(tx, assets, me.gameId, me.id, { to: normalizeActionText(input.to) }, now());
+        const turnState = ensurePhaseState(tx, me.gameId, now());
+        const before = snapshotsOf(tx, assets, me.gameId, turnState, [me.id]).get(me.id);
+        const moved = travel(tx, assets, me.gameId, me.id, { to: normalizeActionText(input.to) }, now());
+        if (!moved.ok || !before) return { ...moved, changed: null };
+        // GEN-114: what the trip cost, in the mover's own log right now (the turn's close adds the rest).
+        const after = snapshotsOf(tx, assets, me.gameId, moved.state, [me.id]).get(me.id);
+        const changes = after ? moveChangesOf(before, after, moved.kind) : [];
+        if (changes.length === 0) return { ...moved, changed: null };
+        const recipients = new Set([me.id, ...activeMembers(tx, me.gameId).filter((m) => m.role === 'gm').map((m) => m.id)]);
+        const at = { day: turnState.day, phase: turnState.phase, turn: turnState.turn };
+        const row = insertEntry(tx, me.gameId, { kind: 'changes', at, locationId: null, text: nameOf(tx, me.id), meta: { changes } }, [...recipients], now());
+        return { ...moved, changed: { row, recipients } };
       });
       if (!outcome.ok) {
         const code: RoomMoveCode = outcome.code === 'infiltrate_invalid' ? 'cannot_act' : outcome.code;
         return { type: 'move_rejected', code, message: outcome.message };
       }
+      if (outcome.changed) deliver(me.gameId, [outcome.changed]);
       broadcastRoom(me.gameId);
       if (outcome.state.status === 'resolving') startResolving(me.gameId);
       return { type: 'move_accepted', kind: outcome.kind, place: placeView(me.gameId, outcome.place.id) ?? outcome.place, arrives: outcome.arrives };

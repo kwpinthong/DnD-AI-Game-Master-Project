@@ -3,7 +3,7 @@ import { MemberRole } from './game.ts';
 import { Phase } from './scenario.ts';
 import { PlaceView } from './visibility.ts';
 import { PeriodWeather } from './weather.ts';
-import { AstralView, HitView, PlaceActionId, PlaceActionView, RollView, RoomOmen, RoomOmenAccepted, RoomOmenRejected } from './view-models.ts';
+import { AstralView, HitView, PlaceActionId, PlaceActionView, RollView, RoomOmen, TurnChange, RoomOmenAccepted, RoomOmenRejected } from './view-models.ts';
 
 /**
  * The play room (GEN-056): one WebSocket per browser tab at `ROOM_PATH`. The browser cannot set an
@@ -202,7 +202,7 @@ export type RoomState = z.infer<typeof RoomState>;
  * `whisper`: one ally to another (GEN-067); `place` null, `whisper` says who to whom.
  * `omen`: an Astral Spirit's one-sentence omen to you (GEN-070, Q-193); `place` null, the sender is not named.
  */
-export const RoomEntryKind = z.enum(['feed', 'narration', 'whisper', 'omen', 'hit']);
+export const RoomEntryKind = z.enum(['feed', 'narration', 'whisper', 'omen', 'hit', 'changes']);
 export type RoomEntryKind = z.infer<typeof RoomEntryKind>;
 /** `hit` (Q-229, GEN-060): another player's act landed on you (the pinned card; `RoomEntry.hit` has the details). */
 export const RoomViewEntryKind = RoomEntryKind;
@@ -231,6 +231,8 @@ export const RoomEntry = z.strictObject({
   roll: RollView.optional(),
   /** `hit` entries: who (if known) and what changed for you (Q-229). */
   hit: HitView.optional(),
+  /** `changes` entries (GEN-114): what changed in your own HP / Stamina / coins / conduct word / items / statuses, and why. `text` = the character's name. */
+  changes: z.array(TurnChange).optional(),
 });
 export type RoomEntry = z.infer<typeof RoomEntry>;
 

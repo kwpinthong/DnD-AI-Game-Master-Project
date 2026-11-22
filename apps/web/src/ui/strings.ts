@@ -332,6 +332,13 @@ export const playText = {
     acknowledged: 'เกิดกับคุณ (รับทราบแล้ว)',
   },
   hit: { hp: 'HP', stamina: 'แรง', coins: 'เหรียญ', item_lost: 'ของที่หาย', skill_lost: 'ความสามารถที่เสีย', status: 'สถานะ' },
+  // GEN-114: your own log of what changed in a turn.
+  changes: {
+    label: 'ค่าที่เปลี่ยนในเทิร์นนี้',
+    none: 'ไม่มีค่าเปลี่ยน',
+    kind: 'ค่าที่เปลี่ยน',
+    stat: { hp: 'HP', stamina: 'แรง', coins: 'เหรียญ', conduct: 'ความประพฤติ', item_gained: 'ได้ของ', item_lost: 'ของหาย', status_gained: 'ติดสถานะ', status_lost: 'พ้นสถานะ' },
+  },
   whisper: {
     form: 'ส่ง Whisper',
     to: 'ถึง',

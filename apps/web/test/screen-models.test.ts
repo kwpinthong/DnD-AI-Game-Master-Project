@@ -1,13 +1,20 @@
 import { RoomViewLockCode } from '@isekai/protocol';
 import { CONTRACT_FIXTURES } from '@isekai/protocol/contract';
 import { describe, expect, it } from 'vitest';
-import { bondBar, entrySection, injuryWord, lockTitle, nextTurn, omenBlocked, rollLine, secretQuota, staminaWord, topBar, turnName } from '../src/screen-models.ts';
+import { bondBar, entrySection, injuryWord, lockTitle, nextTurn, omenBlocked, rollLine, secretQuota, staminaWord, topBar, turnChangeText, turnName } from '../src/screen-models.ts';
 
 // GEN-099: the web reads the contract's fixtures through its own view-models (the mock layer of GEN-100 uses the same).
 describe('screen view-models over the contract fixtures', () => {
   it('UI-I3: every entry kind goes to its section (feed → place, narration / whisper / omen → private, hit → pin)', () => {
     const sections = CONTRACT_FIXTURES.RoomEntry.map((e) => [e.kind, entrySection(e)]);
-    expect(Object.fromEntries(sections)).toEqual({ feed: 'place', narration: 'private', whisper: 'private', omen: 'private', hit: 'pin' });
+    expect(Object.fromEntries(sections)).toEqual({ feed: 'place', narration: 'private', whisper: 'private', omen: 'private', hit: 'pin', changes: 'private' });
+  });
+
+  it('GEN-114: a turn change reads "what +/-n · why"; karma only as the status bar word', () => {
+    expect(turnChangeText({ stat: 'stamina', delta: -3, reason: 'เดินทางข้ามโซน' })).toBe('แรง -3 · เดินทางข้ามโซน');
+    expect(turnChangeText({ stat: 'coins', delta: 5, reason: 'x' })).toBe('เหรียญ +5 · x');
+    expect(turnChangeText({ stat: 'conduct', from: 'เป็นกลาง', to: 'ใจดี', reason: 'x' })).toBe('ความประพฤติ เป็นกลาง → ใจดี · x');
+    expect(turnChangeText({ stat: 'item_lost', name: 'Dagger', reason: 'ถูกแย่งไป' })).toBe('ของหาย: Dagger · ถูกแย่งไป');
   });
 
   it('top bar: day, the current period with its turn dots, weather words and "ส่งแล้ว n/m" (none in Single)', () => {

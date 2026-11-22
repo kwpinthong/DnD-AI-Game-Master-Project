@@ -50,7 +50,7 @@ const BASE_ROOM = ROOM_STATES[0]!;
 const lockState = (code: string) => ROOM_STATES.find((s) => s.you.lock?.code === code)!;
 
 /** The entries a player has at the start: everything but the hit (it arrives live) and the omen (Astral only). */
-const START_ENTRIES = ENTRIES.filter((e) => e.kind !== 'hit' && e.kind !== 'omen');
+const START_ENTRIES = ENTRIES.filter((e) => e.kind !== 'hit' && e.kind !== 'omen' && e.kind !== 'changes');
 /** The pinned hit of the fixtures, sent by the `hit` op. */
 export const HIT_ENTRY = ENTRIES.find((e) => e.kind === 'hit')!;
 /** The whisper of the fixtures: the sender's name for a Whisper the player sends. */

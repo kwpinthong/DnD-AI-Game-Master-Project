@@ -1,4 +1,4 @@
-import type { ActionVisibility, GmFallbackCause, HitView, RollView, RoomEntryKind } from '@isekai/protocol';
+import type { ActionVisibility, GmFallbackCause, HitView, RollView, RoomEntryKind, TurnChange } from '@isekai/protocol';
 import { createPhaseState, restorePhaseState, type PhaseState, type TurnPoint } from '@isekai/rules';
 import { and, asc, eq, gt, inArray, max, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
@@ -106,6 +106,8 @@ export type RoomEntryRow = typeof roomEntry.$inferSelect;
 export interface EntryMeta {
   readonly roll?: RollView;
   readonly hit?: HitView;
+  /** GEN-114: a `changes` entry's list (own values that changed in a turn, with reasons). */
+  readonly changes?: readonly TurnChange[];
   readonly finale?: true;
 }
 
