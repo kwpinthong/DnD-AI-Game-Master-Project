@@ -33,6 +33,11 @@ export function placeUnplacedCharacters(db: DbOrTx, gameId: string, locationId: 
   }
 }
 
+/** Places one character at `locationId` (its start scenario, GEN-065) unless it has a place already. */
+export function placeCharacter(db: DbOrTx, gameId: string, memberId: string, locationId: string, now: number): void {
+  db.insert(characterPresence).values({ memberId, gameId, ref: newRef(), locationId, updatedAt: now }).onConflictDoNothing().run();
+}
+
 /** Moves a placed character. Returns false when the character has no place yet. */
 export function moveCharacter(db: DbOrTx, memberId: string, locationId: string, now: number): boolean {
   const result = db

@@ -28,6 +28,17 @@ import { isLegacyOption, type StoredOption } from '../game/loot.ts';
 import type { GameAssets } from '../assets/load.ts';
 import { chosenLootInGame, itemsInGame, skillsInGame, transferItem } from './items.ts';
 import { outdoorLocationIds, recordTagUses, tagContexts, type TaggingOptions } from './tags.ts';
+import { originStatuses, treatChronicIllness } from '../game/origin.ts';
+import { TREATMENT_VERBS } from '../game/start-rules.ts';
+
+/** Who a successful HEAL / CLEANSE action treated: its player target, else the actor (self-treatment). */
+export function patientsTreated(outcomes: readonly ActionOutcome[]): string[] {
+  return outcomes.flatMap((o) => {
+    if (o.status !== 'resolved' || (o.log.degree !== 'success' && o.log.degree !== 'crit')) return [];
+    if (!(o.log.tagging?.verbTags ?? []).some((v) => TREATMENT_VERBS.includes(v))) return [];
+    return [o.target?.playerId ?? o.actorId];
+  });
+}
 
 /**
  * Cross-player phase actions on the server (GEN-060, Rules Spec §10). The AI GM phase loop (GEN-057)
@@ -159,11 +170,16 @@ export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet
     held.forEach(apply);
     const owned = (o: StoredOption): OwnedRef => ({ id: o.id, tier: tierOf(o) });
 
+    // The start scenario's lasting debuff (the chronic illness, GEN-065).
+    statuses.push(...originStatuses(db, c.memberId));
+
     players[c.memberId] = {
       id: c.memberId,
       seat,
       locationId,
       hp: c.hp,
+      // Q-210: the engine caps HP at the character's own Max HP (the start scenario's).
+      hpMax: c.hpMax,
       stamina: c.stamina,
       rep: c.reputation,
       karma: c.karma,
@@ -230,12 +246,15 @@ export function applyPhaseActions(
     const result = resolvePhaseActions({ state, actions, ...(tags ? { tags } : {}), ...(weather ? { weather } : {}) }, rng);
     if (!result.ok) return { ok: false, errors: [...result.errors] };
     if (tagging !== undefined) recordTagUses(tx, gameId, result.log, tagging.day, now);
+    // A successful HEAL / CLEANSE on a chronically ill player counts as one treatment (GEN-065).
+    for (const memberId of patientsTreated(result.log.outcomes)) treatChronicIllness(tx, memberId);
 
     for (const after of Object.values(result.state.players)) {
       const before = state.players[after.id]!;
       if (after.hp !== before.hp || after.stamina !== before.stamina || after.rep !== before.rep || after.karma !== before.karma) {
+        // HP stays within the character's own Max HP (the start scenario's, GEN-065).
         tx.update(character)
-          .set({ hp: after.hp, stamina: after.stamina, reputation: after.rep, karma: after.karma, updatedAt: now })
+          .set({ hp: sql`min(${after.hp}, ${character.hpMax})`, stamina: after.stamina, reputation: after.rep, karma: after.karma, updatedAt: now })
           .where(eq(character.memberId, after.id))
           .run();
       }

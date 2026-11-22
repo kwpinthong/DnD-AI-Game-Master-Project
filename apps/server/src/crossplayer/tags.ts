@@ -6,6 +6,7 @@ import type { GameAssets } from '../assets/load.ts';
 import { abilitySource, itemSource, locationSources, tagVocabulary } from '../assets/tags.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { itemsInGame, skillsInGame } from './items.ts';
+import { startPassivesInGame } from '../game/origin.ts';
 
 /**
  * Tag matching on the server (GEN-064): builds each player's `TagContext` from what they hold and
@@ -29,7 +30,7 @@ export interface TaggingOptions {
   readonly weather?: string | readonly string[] | null;
   /** The period's weather (GEN-068): the resolution engine applies its d20 / Stamina rules (outdoor = OUTDOOR tag). */
   readonly periodWeather?: PeriodWeather | null;
-  /** Start passives by member id (GEN-065), e.g. from `startPassiveSource`. */
+  /** Start passives by member id (GEN-065); default each player's stored start scenario (`startPassivesInGame`). */
   readonly startPassives?: Readonly<Record<string, readonly TagSource[]>>;
   /** Weather rule sources by member id (GEN-068), kind `weather`. */
   readonly weatherSources?: Readonly<Record<string, readonly TagSource[]>>;
@@ -64,6 +65,8 @@ export function tagContexts(db: DbOrTx, gameId: string, state: CrossPlayerState,
   const skills = skillsInGame(db, gameId);
   const items = [...itemsInGame(db, gameId).values()];
   const places = new Map((getGameScenario(db, gameId)?.locations ?? []).map((l) => [l.id, assets.location(l.name)]));
+  // Each player's start passive from their stored start scenario (GEN-065) unless the caller gives its own.
+  const startPassives = options.startPassives ?? startPassivesInGame(db, gameId, assets, options.day);
 
   const contexts: Record<string, TagContext> = {};
   for (const player of Object.values(state.players)) {
@@ -79,7 +82,7 @@ export function tagContexts(db: DbOrTx, gameId: string, state: CrossPlayerState,
       }),
       ...(place ? locationSources(place, options.weather ?? null) : []),
       ...(options.weatherSources?.[player.id] ?? []),
-      ...(options.startPassives?.[player.id] ?? []),
+      ...(startPassives[player.id] ?? []),
     ];
     contexts[player.id] = { vocabulary, sources, usesToday: usesOnDay(db, player.id, options.day), locationTags: place?.tags ?? [] };
   }

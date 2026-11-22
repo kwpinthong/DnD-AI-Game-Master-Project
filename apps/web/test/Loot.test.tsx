@@ -49,6 +49,7 @@ const saved: CharacterView = {
   personality: 'ช่างสังเกต กลัวความมืด',
   hp: { current: 100, max: 100 },
   stamina: { current: 30, max: 30 },
+  coins: 0,
   socialTitle: 'คนแปลกหน้า',
   conduct: 'เป็นกลางสุดๆ',
   editable: true,

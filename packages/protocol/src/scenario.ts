@@ -151,7 +151,7 @@ const OriginWeight = z.number().int('น้ำหนักต้องเป็�
 
 export const SpawnPoint = z.object({ id: Id, label: text(120), locationId: Id });
 
-const spawnTier = <K extends 'standard' | 'special'>(kind: K) =>
+const spawnTier = <K extends 'standard' | 'special' | 'secret'>(kind: K) =>
   z.object({
     id: Id,
     kind: z.literal(kind),
@@ -160,10 +160,16 @@ const spawnTier = <K extends 'standard' | 'special'>(kind: K) =>
     spawnPoints: z.array(SpawnPoint).min(1, 'ต้องมีจุดเกิดอย่างน้อย 1 จุด'),
   });
 
-/** One row of the d100 origin table (GDD §6.1, Rules Spec §11). */
+/**
+ * One row of the d100 origin table (GDD §6.1, Rules Spec §11): standard 70 / special 29 / secret 1 (the
+ * Astral Rift, sheet Start_Scenarios "รูทลับ 1%"). `pocket` is the GEN-045 Pocket Dimension, cut by Q-093 /
+ * Q-101: still parsed so a stored scenario of an older game loads, never in the template, and a game rolls
+ * it as the secret route (GEN-065).
+ */
 export const OriginTier = z.discriminatedUnion('kind', [
   spawnTier('standard'),
   spawnTier('special'),
+  spawnTier('secret'),
   z.object({
     id: Id,
     kind: z.literal('pocket'),

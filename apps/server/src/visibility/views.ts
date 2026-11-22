@@ -5,13 +5,13 @@ import type {
   Scenario,
   SurroundingsResponse,
 } from '@isekai/protocol';
-import { injuryText, karmaTitle, socialTitle, type KarmaTier } from '@isekai/rules';
+import { injuryText, karmaTitle, type KarmaTier } from '@isekai/rules';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
 import { npcViewsAt } from '../companions/store.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { character, member } from '../db/schema.ts';
-import { getCharacter } from '../game/character.ts';
+import { getCharacter, titleOf } from '../game/character.ts';
 import type { MemberRow } from '../game/service.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import {
@@ -44,7 +44,7 @@ export function otherCharacterView(subject: CharacterRow, presence: PresenceRow,
     ref: presence.ref,
     appearance: subject.appearance,
     injury: injuryText(subject.hp, subject.hpMax),
-    socialTitle: socialTitle(subject.reputation),
+    socialTitle: titleOf(subject),
     name: knowsName ? subject.name : null,
   };
 }
@@ -135,7 +135,7 @@ function gmSurroundings(db: DbOrTx, gameId: string, karmaTiers: readonly KarmaTi
     hp: { current: c.hp, max: c.hpMax },
     stamina: { current: c.stamina, max: c.staminaMax },
     injury: injuryText(c.hp, c.hpMax),
-    socialTitle: socialTitle(c.reputation),
+    socialTitle: titleOf(c),
     reputationScore: c.reputation,
     karma: c.karma,
     conduct: karmaTitle(c.karma, karmaTiers),

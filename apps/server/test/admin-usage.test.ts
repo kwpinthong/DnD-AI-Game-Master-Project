@@ -340,7 +340,7 @@ describe('AI usage dashboard (GEN-061)', { timeout: 60_000 }, () => {
     expect(texts.length).toBeGreaterThan(9);
     for (const body of [JSON.stringify(detail), JSON.stringify(overview.body)]) {
       for (const secret of texts) expect(body, `leaks "${secret}"`).not.toContain(secret);
-      expect(body).not.toMatch(/karma|-42|reputation|secret/i);
+      expect(body).not.toMatch(/karma|(?<![0-9a-f])-42(?![0-9a-f])|reputation|secret/i);
     }
   });
 

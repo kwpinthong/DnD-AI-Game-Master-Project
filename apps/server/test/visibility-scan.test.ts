@@ -1,4 +1,5 @@
 import { defaultScenario } from '@isekai/protocol';
+import { SeededRng } from '@isekai/rules';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { RunningServer } from '../src/server.ts';
 import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
@@ -30,6 +31,8 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/game/surroundings': { method: 'GET', path: '/api/game/surroundings' },
     // GEN-037: the read-only summary + log (timeline + every entry this player got).
     'GET /api/game/log': { method: 'GET', path: '/api/game/log' },
+    // GEN-065: the player's own start scenario and crossing narration.
+    'GET /api/game/origin': { method: 'GET', path: '/api/game/origin' },
     // GEN-056: the play room's WebSocket (a plain GET is 404, no body). Its events are scanned in room.test.ts.
     'GET /api/game/room': { method: 'GET', path: '/api/game/room' },
     'GET /api/game/scenario': { method: 'GET', path: '/api/game/scenario' },
@@ -179,7 +182,8 @@ describe('C6: no player-facing payload carries karma (GEN-050)', { timeout: 120_
   }
 
   it('C6: every route, called by every player of a game with a Human GM, has no karma / reputation / affinity', async () => {
-    server = await startTestServer(dataDir);
+    // GEN-065: with start scenarios rolled, so GET /api/game/origin answers with a real one.
+    server = await startTestServer(dataDir, { rng: new SeededRng(65) });
     const t = await startedTable(server, true);
     seedSecrets(t);
 
@@ -202,7 +206,7 @@ describe('C6: no player-facing payload carries karma (GEN-050)', { timeout: 120_
   });
 
   it('C6: the same holds in a game without a Human GM (A is the owner)', async () => {
-    server = await startTestServer(dataDir);
+    server = await startTestServer(dataDir, { rng: new SeededRng(65) });
     const t = await startedTable(server, false);
     seedSecrets(t);
     expect(await scanAsPlayers(t)).toEqual([]);

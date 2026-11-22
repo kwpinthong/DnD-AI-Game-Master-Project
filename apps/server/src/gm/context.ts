@@ -1,10 +1,11 @@
 import type { ActionVisibility, Phase } from '@isekai/protocol';
-import { karmaBand, socialTitle, type CrossPlayerState, type PeriodWeather, type TagContext, type Turn } from '@isekai/rules';
+import { karmaBand, type CrossPlayerState, type PeriodWeather, type TagContext, type Turn } from '@isekai/rules';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
 import type { PromptBlock } from '../ai/provider.ts';
 import { itemsInGame, skillsInGame } from '../crossplayer/items.ts';
 import { isLegacyOption, type StoredOption } from '../game/loot.ts';
+import { titleOf } from '../game/character.ts';
 import type { DbOrTx } from '../db/client.ts';
 import { character, member } from '../db/schema.ts';
 import { getGameScenario } from '../scenario/store.ts';
@@ -86,7 +87,7 @@ export function loadWorld(db: DbOrTx, gameId: string, assets: GameAssets): GmWor
   for (const { c } of rows) {
     const p = presences.get(c.memberId);
     if (!p) continue;
-    players.set(c.memberId, { memberId: c.memberId, ref: p.ref, name: c.name, appearance: c.appearance, socialTitle: socialTitle(c.reputation), locationId: p.locationId });
+    players.set(c.memberId, { memberId: c.memberId, ref: p.ref, name: c.name, appearance: c.appearance, socialTitle: titleOf(c), locationId: p.locationId });
   }
   const npcs = (scenario?.npcs ?? []).map((n) => ({ id: n.id, name: n.name, alias: n.alias, rank: n.rank, locationId: n.locationId }));
   const places = (scenario?.locations ?? []).map((l) => ({ id: l.id, name: l.name, safety: l.safety, tags: [...(assets.location(l.name)?.tags ?? [])] }));

@@ -41,7 +41,9 @@ export function createMockProvider(config: AiConfig, script?: MockScript, answer
             ? cannedLoot(req, requests.length)
             : req.purpose === 'gm_weather'
               ? cannedWeather(requests.filter((r) => r.purpose === 'gm_weather').length)
-              : ((await answer?.(req)) ?? sampleFor(req.output.jsonSchema));
+              : req.output.name === 'origin_narration'
+                ? cannedOrigin(req)
+                : ((await answer?.(req)) ?? sampleFor(req.output.jsonSchema));
         return {
           ok: true,
           json,
@@ -77,6 +79,14 @@ export const mockReply = {
 /** Weather for offline dev (GEN-068): call n rotates through weathers every period allows, so periods differ. */
 const CANNED_WEATHER = ['Rain', 'Fog', 'Clear', 'Storm'] as const;
 const cannedWeather = (n: number) => ({ weather: CANNED_WEATHER[(n - 1) % CANNED_WEATHER.length] });
+
+/** A readable crossing narration for offline dev (GEN-065): the player's token + the start scenario line. */
+function cannedOrigin(req: AiCallRequest) {
+  const prompt = req.messages.map((m) => m.text).join('\n');
+  const token = /\{\{p:[^}]+\}\}/.exec(prompt)?.[0] ?? 'คุณ';
+  const arrival = /^จุดเกิด: (.*)$/m.exec(prompt)?.[1] ?? 'ที่ไหนสักแห่ง';
+  return { narration: `แสงสีขาวกลืน ${token} หายไปจากโลกเดิม เมื่อลืมตาขึ้นอีกครั้ง คุณคือ${arrival}` };
+}
 
 function cannedLoot(req: AiCallRequest, n: number) {
   const lines = req.system.flatMap((b) => b.text.split('\n'));

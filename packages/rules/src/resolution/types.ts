@@ -53,6 +53,8 @@ export interface ActorState {
   readonly id: string;
   readonly locationId: string;
   readonly hp: number;
+  /** The character's own Max HP (its start scenario's, GEN-065 / Q-210); absent = RULES.hpMax (100). */
+  readonly hpMax?: number;
   readonly stamina: number;
   readonly rep: number;
   /** Hidden from clients (spec §6). */

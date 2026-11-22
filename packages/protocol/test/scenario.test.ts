@@ -51,13 +51,13 @@ describe('default scenario template (GDD §5-6)', () => {
   });
 
   // C2
-  it('C2: origin weights are 70 / 29 / 1 (total 100) and the Pocket Dimension lasts 3 days', () => {
+  it('C2: origin weights are 70 / 29 / 1 (total 100); the 1% is the Astral Rift (no Pocket Dimension, Q-093)', () => {
     const { origins } = defaultScenario();
 
     expect(origins.map((o) => [o.kind, o.weight])).toEqual([
       ['standard', 70],
       ['special', 29],
-      ['pocket', 1],
+      ['secret', 1],
     ]);
     expect(origins.reduce((sum, o) => sum + o.weight, 0)).toBe(100);
 
@@ -67,11 +67,9 @@ describe('default scenario template (GDD §5-6)', () => {
     expect(standard?.kind === 'standard' && standard.spawnPoints).toHaveLength(10);
     expect(special?.kind === 'special' && special.spawnPoints).toHaveLength(4);
 
-    const pocket = origins.find((o) => o.kind === 'pocket');
-    if (pocket?.kind !== 'pocket') throw new Error('no pocket tier');
-    expect(pocket.durationDays).toBe(3);
-    expect(pocket.onSuccess.legendaryRewards).toBe(1);
-    expect(pocket.onFailure.reputation).toBe(-100);
+    const secret = origins.find((o) => o.kind === 'secret');
+    expect(secret?.kind === 'secret' && secret.spawnPoints).toEqual([{ id: 'astral-drifter', label: 'ผู้หลงทางเหนือกาลเวลา', locationId: 'astral-rift' }]);
+    expect(origins.some((o) => o.kind === 'pocket')).toBe(false);
   });
 
   it('carries the starting roster by grade, the 7 Social Titles of GEN-042 and a secret Legendary', () => {

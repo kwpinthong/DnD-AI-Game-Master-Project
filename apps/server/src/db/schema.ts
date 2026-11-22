@@ -115,6 +115,10 @@ export const character = sqliteTable('character', {
   reputation: integer('reputation').notNull().default(0),
   karma: integer('karma').notNull().default(0),
   updatedAt: integer('updated_at'),
+  // --- GEN-065: the start scenario sets these (and hp / hpMax / stamina / karma) at game start ---
+  coins: integer('coins').notNull().default(0),
+  /** Initial_Title of the start scenario; null before the start (the Social Title of Reputation then). */
+  initialTitle: text('initial_title'),
 });
 
 // GEN-038: AI usage lives in its own file so parallel schema work merges cleanly.
@@ -154,3 +158,5 @@ export * from './schema-skills.ts';
 export * from './schema-gm-console.ts';
 // GEN-059: how the game ended, own file for the same reason.
 export * from './schema-finale.ts';
+// GEN-065: each character's start scenario (origin), own file for the same reason.
+export * from './schema-origin.ts';

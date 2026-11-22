@@ -34,7 +34,8 @@ describe('timeline over the API: start = day 1 Morning, players see no future ev
   async function start() {
     server = await startServer(
       { host: '127.0.0.1', port: 0, dbPath: `${dataDir}/isekai.sqlite`, createCodeHash },
-      { ai: MOCK_AI, aiLog: () => {} },
+      // rng null: no start scenarios (GEN-065); these tests place the players themselves.
+      { ai: MOCK_AI, aiLog: () => {}, rng: null },
     );
     return server;
   }

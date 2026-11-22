@@ -19,6 +19,9 @@ import { membersWithLootChoice } from './loot.ts';
 import { copyTemplateForGame, getGameScenario } from '../scenario/store.ts';
 import { advanceTimeline } from '../timeline/store.ts';
 import { placeUnplacedCharacters } from '../visibility/store.ts';
+import type { Rng } from '@isekai/rules';
+import type { GameAssets } from '../assets/load.ts';
+import { rollOrigins } from './origin.ts';
 
 export type GameRow = typeof game.$inferSelect;
 export type MemberRow = typeof member.$inferSelect;
@@ -232,7 +235,7 @@ export function updateGame(db: Db, actor: MemberRow, change: UpdateGameRequest):
   });
 }
 
-export function startGame(db: Db, actor: MemberRow, now: Clock): OwnerActionOutcome {
+export function startGame(db: Db, actor: MemberRow, now: Clock, assets: GameAssets, rng: Rng | null): OwnerActionOutcome {
   return asOwner(db, actor, (tx, row) => {
     if (row.startedAt !== null) return { kind: 'game_started' };
     const members = activeMembers(tx, row.id);
@@ -240,7 +243,10 @@ export function startGame(db: Db, actor: MemberRow, now: Clock): OwnerActionOutc
     if (reasons.length > 0) return { kind: 'cannot_start', reasons };
     const t = now();
     tx.update(game).set({ startedAt: t }).where(eq(game.id, row.id)).run();
-    // Everyone starts at the scenario's first place until origins / spawn points place them (GEN-050).
+    // Each player's start scenario is rolled once here and stored (a restart never rolls again): it sets the
+    // starting stats and places the character at its spawn place (GEN-065).
+    if (rng !== null) rollOrigins(tx, row.id, assets, rng, t);
+    // Anyone the roll did not place (no spawn table) starts at the scenario's first place (GEN-050).
     const start = getGameScenario(tx, row.id)?.locations[0];
     if (start) placeUnplacedCharacters(tx, row.id, start.id, t);
     // The game starts at day 1 Morning: its events become active (GEN-053), after placing, so each

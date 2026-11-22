@@ -27,6 +27,8 @@ import { registerInventoryRoutes } from './skills/routes.ts';
 import { registerGmConsoleRoutes } from './gm-console/routes.ts';
 import { startBackupSchedule, type BackupSchedule } from './backup/schedule.ts';
 import { registerHistoryRoutes } from './history/routes.ts';
+import type { Rng } from '@isekai/rules';
+import { CryptoRng } from './rng.ts';
 
 export interface RunningServer {
   url: string;
@@ -69,6 +71,12 @@ export interface ServerOptions {
   assetsDir?: string;
   /** Backup job log lines (default console.log): file, size, time only. */
   backupLog?: (line: string) => void;
+  /**
+   * Source of the start-scenario rolls at game start (GEN-065, default CryptoRng); tests pass a scripted or
+   * seeded Rng. `null` = no start scenarios: everyone starts at the scenario's first place with the GEN-047
+   * starting stats (the test fixtures written before GEN-065 use it).
+   */
+  rng?: Rng | null;
 }
 
 export async function startServer(config: ServerConfig, options: ServerOptions = {}): Promise<RunningServer> {
@@ -110,7 +118,13 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
 
   const now = options.now ?? Date.now;
   registerAuthRoutes(app, db, now);
-  registerGameRoutes(app, db, now, { ai, karmaTiers: assets.karmaTiers, assets, ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}) });
+  registerGameRoutes(app, db, now, {
+    ai,
+    karmaTiers: assets.karmaTiers,
+    assets,
+    rng: options.rng === undefined ? new CryptoRng() : options.rng,
+    ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}),
+  });
   registerTimelineRoutes(app, db, now);
   registerVisibilityRoutes(app, db, now, assets);
   const weather = createWeatherService(db, ai, now, options.aiLog ?? ((line) => console.log(line)));

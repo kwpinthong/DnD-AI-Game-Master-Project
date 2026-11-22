@@ -28,3 +28,6 @@ export * from './inventory.ts';
 
 // GEN-037: the read-only game summary / log, own file so parallel protocol work merges cleanly.
 export * from './history.ts';
+
+// GEN-065: the start scenario (origin) and its private narration, own file for the same reason.
+export * from './origin.ts';

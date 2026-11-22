@@ -18,6 +18,8 @@ import { travelPending } from '../db/schema.ts';
 import { CryptoRng } from '../rng.ts';
 import { ensurePhaseState, karmaOf, recordAction, savePhaseState, syncCharacterStats } from '../room/store.ts';
 import { getGameScenario } from '../scenario/store.ts';
+import { originOf } from '../game/origin.ts';
+import { START_RULES } from '../game/start-rules.ts';
 import { locationSnapshot, moveCharacter, presenceOf } from '../visibility/store.ts';
 import { hazardStaminaLoss, npcsAt, placeMap, planMove, type MoveKind, type MoveRefusal, type Place, type PlaceMap } from './rules.ts';
 
@@ -26,7 +28,7 @@ export interface TravelRequest {
   readonly to: string;
   /** Default none (GEN-068 decides the weather later). */
   readonly weather?: Weather | null;
-  /** The player's Start_Scenarios `name` (GEN-065); default none = no right to a restricted place. */
+  /** The player's Start_Scenarios `name` (GEN-065); default the stored start scenario; null = none. */
   readonly startScenario?: string | null;
   readonly blackMarketPassword?: boolean;
   /** INFILTRATE: the resolution engine rolls this; success / crit lets the player into a restricted place. */
@@ -75,7 +77,10 @@ export function travel(db: DbOrTx, assets: GameAssets, gameId: string, memberId:
     stamina = Math.max(0, stamina - (rolled.log.stamina.before - rolled.log.stamina.after));
   }
 
-  const spawnPlace = request.startScenario ? (assets.startScenarios.find((s) => s.name === request.startScenario)?.location ?? null) : null;
+  // The player's stored start scenario (GEN-065) unless the caller names one.
+  const startScenario = request.startScenario !== undefined ? request.startScenario : (originOf(db, memberId)?.startScenario ?? null);
+  const spawnPlace = startScenario ? (assets.startScenarios.find((s) => s.name === startScenario)?.location ?? null) : null;
+  const restrictedAccess = startScenario ? START_RULES[startScenario]?.restrictedAccess === true : false;
   const plan = planMove(map, from, request.to, {
     day: state.day,
     phase: state.phase,
@@ -83,6 +88,7 @@ export function travel(db: DbOrTx, assets: GameAssets, gameId: string, memberId:
     karma: karmaOf(db, [memberId]).get(memberId) ?? 0,
     weather: request.weather ?? null,
     spawnPlace,
+    restrictedAccess,
     blackMarketPassword: request.blackMarketPassword === true,
     ...(infiltration ? { infiltration: infiltration.degree } : {}),
   });

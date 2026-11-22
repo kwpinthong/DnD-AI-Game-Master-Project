@@ -10,6 +10,15 @@ import type { MemberRow } from './service.ts';
 type CharacterRow = typeof character.$inferSelect;
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
+/**
+ * The title others and the player see (GEN-065): the start scenario's Initial_Title while Reputation is still in
+ * the band it starts in, then the Social Title of the Reputation (Rules Spec §5).
+ */
+export function titleOf(row: Pick<CharacterRow, 'reputation' | 'initialTitle'>): string {
+  const title = socialTitle(row.reputation);
+  return row.initialTitle !== null && title === socialTitle(0) ? row.initialTitle : title;
+}
+
 /** What the player sees of their own character: no Karma or Reputation number; their own Karma word (GEN-067). */
 function toView(row: CharacterRow, gameStarted: boolean, karmaTiers: readonly KarmaTier[]): CharacterView {
   return {
@@ -18,7 +27,8 @@ function toView(row: CharacterRow, gameStarted: boolean, karmaTiers: readonly Ka
     personality: row.personality,
     hp: { current: row.hp, max: row.hpMax },
     stamina: { current: row.stamina, max: row.staminaMax },
-    socialTitle: socialTitle(row.reputation),
+    coins: row.coins,
+    socialTitle: titleOf(row),
     conduct: karmaTitle(row.karma, karmaTiers),
     editable: !gameStarted,
   };
@@ -61,6 +71,9 @@ export function createCharacter(db: Db, me: MemberRow, input: CharacterRequest, 
       appearance: input.appearance,
       personality: input.personality,
       ...STARTING_STATS,
+      // The start scenario sets the real starting numbers and title at game start (GEN-065).
+      coins: 0,
+      initialTitle: null,
     };
     tx.insert(character).values(row).run();
     return { kind: 'ok', character: toView(row, false, karmaTiers) };

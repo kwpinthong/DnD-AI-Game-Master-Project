@@ -73,7 +73,12 @@ export const CharacterView = z.strictObject({
   personality: z.string(),
   hp: Gauge,
   stamina: Gauge,
-  /** The title for the current Reputation (Rules Spec Social Title), e.g. "คนแปลกหน้า". */
+  /** Coins the character holds (the start scenario's Start_Coins, GEN-065; 0 before the game starts). */
+  coins: z.number().int(),
+  /**
+   * The title for the current Reputation (Rules Spec Social Title), e.g. "คนแปลกหน้า". From the start the
+   * start scenario's Initial_Title stands while Reputation is still in the starting band (GEN-065).
+   */
   socialTitle: z.string(),
   /**
    * The adjective for your own Karma band (GEN-067, sheet "Karma Tiers"), e.g. "เป็นกลางสุดๆ". Only the
