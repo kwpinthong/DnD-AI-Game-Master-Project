@@ -144,6 +144,8 @@ export function createRoomService(
   assets: GameAssets,
   log: (line: string) => void,
   weather?: WeatherService,
+  /** Q-185: called once, after the publish that ends the game (finale / game_over) committed. */
+  onGameEnded?: (gameId: string, status: 'finale' | 'game_over') => void,
 ): RoomService {
   /** gameId → socket → member. */
   const rooms = new Map<string, Map<RoomSocket, MemberRow>>();
@@ -350,7 +352,9 @@ export function createRoomService(
    */
   function publishTurn(gameId: string, turn: HeldTurn): boolean {
     const { state, actions, resolution } = turn;
+    const outcome: { ended: 'finale' | 'game_over' | null } = { ended: null };
     const publish = () => db.transaction((tx) => {
+          outcome.ended = null;
           const t = now();
           const current = ensurePhaseState(tx, gameId, t);
           if (current.status !== 'resolving' || current.day !== state.day || current.phase !== state.phase || current.turn !== state.turn) {
@@ -388,8 +392,11 @@ export function createRoomService(
           completeTravel(tx, gameId, t);
           // The timeline follows the period (GEN-053): events of the new period become active for the next turn.
           const next = step.state;
-          if (next.status === 'finale' || next.status === 'game_over') advanceTimeline(tx, gameId, 'end', t);
-          else if (next.day !== current.day || next.phase !== current.phase) advanceTimeline(tx, gameId, { day: next.day, phase: next.phase }, t);
+          // The one place a game ends (GEN-052 engine → finale / game_over). Q-185 hooks its backup here, after commit.
+          if (next.status === 'finale' || next.status === 'game_over') {
+            advanceTimeline(tx, gameId, 'end', t);
+            outcome.ended = next.status;
+          } else if (next.day !== current.day || next.phase !== current.phase) advanceTimeline(tx, gameId, { day: next.day, phase: next.phase }, t);
           return rows;
         });
     let published: ReturnType<typeof publish>;
@@ -406,6 +413,13 @@ export function createRoomService(
     stuck.delete(gameId);
     deliver(gameId, published);
     broadcastRoom(gameId);
+    if (outcome.ended !== null) {
+      try {
+        onGameEnded?.(gameId, outcome.ended);
+      } catch (error) {
+        log(`[room] game-end hook failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
+      }
+    }
     return true;
   }
 
