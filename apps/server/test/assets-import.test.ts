@@ -132,6 +132,24 @@ describe('convertSheet (GEN-062)', () => {
     expect(result.warnings.filter((w) => w.tab === 'Ability').map(formatIssue)).toEqual([]);
   });
 
+  // Q-122: Rank F cap = +1.
+  it('Q-122: a Rank F d20 dice_bonus above +1 is a warning; +1 is not', () => {
+    const csv = requiredOnly();
+    const rankF = (value: string) => {
+      let ability = setCell(csv.Ability!, 3, 'Rank', 'F');
+      for (const [header, cell] of [['Effect_Type', 'dice_bonus'], ['Stat', 'd20'], ['Value', value], ['Duration', '1 period']] as const) {
+        ability = setCell(ability, 3, header, cell);
+      }
+      return convertSheet({ ...csv, Ability: ability });
+    };
+
+    const over = rankF('2');
+    expect(over.ok).toBe(true);
+    expect(over.warnings).toContainEqual(expect.objectContaining({ tab: 'Ability', row: 3, column: 'Value' }));
+    expect(over.warnings.map(formatIssue).join('\n')).toMatch(/Rank F.*\+1/);
+    expect(rankF('1').warnings.filter((w) => w.tab === 'Ability').map(formatIssue)).toEqual([]);
+  });
+
   it('Q-119: Prism of Truth (B) +3 is an allowed exception to the cap', () => {
     const csv = requiredOnly();
     let item = setCell(csv.Item!, 3, 'Item Name', 'Prism of Truth (ปริซึมทดสอบ)');

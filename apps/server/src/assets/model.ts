@@ -52,8 +52,8 @@ export const EFFECT_TYPES = [
   'nullify',
 ] as const;
 
-/** Highest d20 `dice_bonus` per Rank (Q-114); above it the import warns. F has no cap set. */
-export const DICE_BONUS_CAP: Readonly<Partial<Record<Rank, number>>> = { B: 2, A: 3, S: 5, SS: 5 };
+/** Highest d20 `dice_bonus` per Rank (Q-114, F from Q-122); above it the import warns. */
+export const DICE_BONUS_CAP: Readonly<Record<Rank, number>> = { F: 1, B: 2, A: 3, S: 5, SS: 5 };
 /** Allowed exceptions to DICE_BONUS_CAP (Q-119), by Ability name / Item English name. */
 export const DICE_BONUS_EXCEPTIONS: Readonly<Record<string, number>> = { 'Prism of Truth': 3 };
 
