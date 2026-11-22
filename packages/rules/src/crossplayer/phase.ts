@@ -169,7 +169,9 @@ export function resolvePhaseActions(input: PhaseActionsInput, rng: Rng): PhaseAc
           };
 
     const tags = snapshot.tags?.[actorId];
-    const result = resolveAction({ state: { actor, npcs }, proposal, ...(pvp ? { pvp } : {}), ...(tags ? { tags } : {}) }, dice);
+    const w = snapshot.weather;
+    const weather = w ? { ...w.current, outdoor: w.outdoorLocationIds.includes(actor.locationId) } : undefined;
+    const result = resolveAction({ state: { actor, npcs }, proposal, ...(pvp ? { pvp } : {}), ...(tags ? { tags } : {}), ...(weather ? { weather } : {}) }, dice);
     if (!result.ok) throw new Error(`action ${proposal.actionId} passed validation but was rejected: ${JSON.stringify(result.errors)}`);
     const { log } = result;
     let nextActor = result.state.actor as PlayerState;
