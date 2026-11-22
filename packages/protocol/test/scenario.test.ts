@@ -21,10 +21,10 @@ function expectInvalid(input: unknown): ScenarioIssue[] {
 
 describe('default scenario template (GDD §5-6)', () => {
   // C1
-  it('C1: has the 7 GDD timeline events on days 1, 2, 3, 5, 7, 10, 12 and day 12 is the finale', () => {
+  it('C1 (GEN-071): has the 5 World_Timeline events on days 1, 5, 7, 10, 12 and day 12 is the finale', () => {
     const { timeline } = defaultScenario();
 
-    expect(timeline.map((e) => e.day)).toEqual([1, 2, 3, 5, 7, 10, 12]);
+    expect(timeline.map((e) => e.day)).toEqual([1, 5, 7, 10, 12]);
     for (const event of timeline) expect(['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION']).toContain(event.phase);
     const finale = timeline.filter((e) => e.kind === 'finale');
     expect(finale).toHaveLength(1);
@@ -63,7 +63,8 @@ describe('default scenario template (GDD §5-6)', () => {
 
     const standard = origins.find((o) => o.kind === 'standard');
     const special = origins.find((o) => o.kind === 'special');
-    expect(standard?.kind === 'standard' && standard.spawnPoints).toHaveLength(3);
+    // GEN-071: the sheet Start_Scenarios rows of each tier.
+    expect(standard?.kind === 'standard' && standard.spawnPoints).toHaveLength(10);
     expect(special?.kind === 'special' && special.spawnPoints).toHaveLength(4);
 
     const pocket = origins.find((o) => o.kind === 'pocket');
@@ -104,7 +105,7 @@ describe('scenario validation', () => {
   // C4
   it.each([
     ['an event on day 0', (s: Record<string, any>) => (s.timeline[0].day = 0), 'timeline.0.day'],
-    ['an event on day 13', (s: Record<string, any>) => (s.timeline[5].day = 13), 'timeline.5.day'],
+    ['an event on day 13', (s: Record<string, any>) => (s.timeline[3].day = 13), 'timeline.3.day'],
     ['origin weights totalling 99', (s: Record<string, any>) => (s.origins[0].weight = 69), 'origins'],
     ['origin weights totalling 101', (s: Record<string, any>) => (s.origins[2].weight = 2), 'origins'],
     ['a duplicate NPC id', (s: Record<string, any>) => s.npcs.splice(3, 0, { ...s.npcs[0] }), 'npcs.3.id'],
@@ -116,7 +117,10 @@ describe('scenario validation', () => {
       'origins.1.spawnPoints.0.id',
     ],
     ['an NPC in an unknown location', (s: Record<string, any>) => (s.npcs[0].locationId = 'nowhere'), 'npcs.0.locationId'],
-    ['a finale before day 12', (s: Record<string, any>) => (s.timeline[6].day = 11), 'timeline.6.kind'],
+    ['a finale before day 12', (s: Record<string, any>) => (s.timeline[4].day = 11), 'timeline.4.kind'],
+    ['an event range that ends before it starts', (s: Record<string, any>) => (s.timeline[2].endPhase = 'SOLARION'), 'timeline.2.endPhase'],
+    ['an event range ending in a period that does not exist', (s: Record<string, any>) => (s.timeline[2].endPhase = 'EVENING'), 'timeline.2.endPhase'],
+    ['foreshadowing after its event began', (s: Record<string, any>) => (s.timeline[1].foreshadowAt = { day: 5, phase: 'EOSORIA' }), 'timeline.1.foreshadowAt'],
     ['a Social Title band that moved', (s: Record<string, any>) => (s.socialTitles[3].max = 12), 'socialTitles.3.max'],
     ['a Legendary target of 13 days', (s: Record<string, any>) => (s.legendaries[0].target = 13), 'legendaries.0.target'],
   ])('C4: rejects %s and names the field', (_label, edit, path) => {
@@ -157,7 +161,9 @@ describe('older template versions', () => {
       delete event.crisis;
       delete event.npcIds;
       delete event.locationId;
+      for (const key of ['endPhase', 'interventionEffects', 'foreshadowing', 'foreshadowAt', 'strategyIds']) delete event[key];
     }
+    for (const npc of old.npcs) delete npc.otherNames;
 
     const result = parseScenario(old);
     if (!result.ok) throw new Error(JSON.stringify(result.errors));
@@ -170,8 +176,14 @@ describe('older template versions', () => {
     expect(result.scenario.timeline.every((e) => !e.crisis && e.npcIds.length === 0 && e.locationId === null)).toBe(
       true,
     );
+    expect(
+      result.scenario.timeline.every(
+        (e) => e.endPhase === null && e.interventionEffects === '' && e.foreshadowAt === null && e.strategyIds.length === 0,
+      ),
+    ).toBe(true);
+    expect(result.scenario.npcs.every((n) => n.otherNames.length === 0)).toBe(true);
     // fields the old template did have are kept as they were
-    expect(result.scenario.timeline.map((e) => e.day)).toEqual([1, 2, 3, 5, 7, 10, 12]);
+    expect(result.scenario.timeline.map((e) => e.day)).toEqual([1, 5, 7, 10, 12]);
   });
 
   it('rejects a template from a newer schema version than this server knows', () => {

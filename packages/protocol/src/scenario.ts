@@ -93,23 +93,42 @@ export const ScenarioNpc = z.object({
   personality: optionalText(500),
   /** `npcObsTrait` of Rules Spec §10.4. */
   obsTrait: z.number().int().min(-2).max(2).default(0),
+  /** Short forms of `name` the event text uses ("มัลคอล์ม"); the AI GM gets them as the NPC token too. */
+  otherNames: z.array(text(60)).default([]),
   gmNote: GmNote,
 });
 
+const Day = z
+  .number({ error: 'วันต้องเป็นตัวเลข' })
+  .int('วันต้องเป็นจำนวนเต็ม')
+  .min(1, `วันต้องอยู่ระหว่าง 1 ถึง ${SCENARIO_DAYS}`)
+  .max(SCENARIO_DAYS, `วันต้องอยู่ระหว่าง 1 ถึง ${SCENARIO_DAYS}`);
+
+/** A Day10_Strategies `Strategy_ID` of the asset sheet (GEN-072), e.g. `D10-S1`. */
+const StrategyId = z
+  .string({ error: 'ต้องเป็นรหัสแผน' })
+  .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/, 'รหัสแผนใช้ได้เฉพาะ A-Z, a-z, 0-9, _ และ -');
+
 export const ScenarioEvent = z.object({
   id: Id,
-  day: z
-    .number({ error: 'วันต้องเป็นตัวเลข' })
-    .int('วันต้องเป็นจำนวนเต็ม')
-    .min(1, `วันต้องอยู่ระหว่าง 1 ถึง ${SCENARIO_DAYS}`)
-    .max(SCENARIO_DAYS, `วันต้องอยู่ระหว่าง 1 ถึง ${SCENARIO_DAYS}`),
-  /** The event is active for both turns of this period. */
+  day: Day,
+  /** The period the event starts in; it is active for both turns of each of its periods. */
   phase: EventPhase,
+  /** Last period of the event on the same day (World_Timeline "HESPERION ถึง NOCTHERION"); null = only `phase`. */
+  endPhase: EventPhase.nullable().default(null),
   kind: z.enum(['event', 'climax', 'finale']).default('event'),
   title: text(120),
   description: optionalText(1000),
-  /** ผลตั้งต้น: what happens when no player steps in (GEN-046). */
+  /** ผลตั้งต้น: what happens when no player steps in (GEN-046) = World_Drift_If_Ignored of the sheet. */
   outcome: optionalText(1000),
+  /** Player_Intervention_Effects: what stepping in can change, for the AI GM. */
+  interventionEffects: optionalText(1000),
+  /** Foreshadowing text the AI GM weaves into the narration at `foreshadowAt`. */
+  foreshadowing: optionalText(1000),
+  /** Foreshadowing_Trigger: the day + period whose context carries `foreshadowing`; null = none. */
+  foreshadowAt: z.object({ day: Day, phase: Phase }).nullable().default(null),
+  /** Day10_Strategies the players may run against this event (GEN-072); a missing one = drift. */
+  strategyIds: z.array(StrategyId).default([]),
   /** Crisis events are the ones that can raise an A-grade NPC to S (Rules Spec §8.3). */
   crisis: z.boolean().default(false),
   locationId: Id.nullable().default(null),
@@ -223,6 +242,12 @@ function crossCheck(s: Shape, ctx: Ctx) {
   s.npcs.forEach((n, i) => place(n.locationId, ['npcs', i, 'locationId']));
   s.timeline.forEach((e, i) => {
     place(e.locationId, ['timeline', i, 'locationId']);
+    if (e.endPhase !== null && order(e.endPhase) < order(e.phase)) {
+      ctx.addIssue({ code: 'custom', path: ['timeline', i, 'endPhase'], message: 'ช่วงสิ้นสุดต้องไม่อยู่ก่อนช่วงเริ่ม' });
+    }
+    if (e.foreshadowAt !== null && pointRank(e.foreshadowAt) >= pointRank(e)) {
+      ctx.addIssue({ code: 'custom', path: ['timeline', i, 'foreshadowAt'], message: 'เวลาปูเรื่องต้องอยู่ก่อนเหตุการณ์เริ่ม' });
+    }
     e.npcIds.forEach((id, j) => {
       if (!npcIds.has(id)) ctx.addIssue({ code: 'custom', path: ['timeline', i, 'npcIds', j], message: `ไม่มี NPC id "${id}"` });
     });
@@ -291,6 +316,16 @@ export function parseScenario(input: unknown): ScenarioParseResult {
 }
 
 const order = (p: Phase) => PHASES.indexOf(p);
+const pointRank = (p: { day: number; phase: Phase }) => (p.day - 1) * PHASES.length + order(p.phase);
+
+/** Turns in each period (System_Rules "Time System", GEN-063). */
+export const TURNS_PER_PERIOD = 2;
+
+/** The periods an event is active in, `phase` through `endPhase` on its day. */
+export function eventPeriods(event: { phase: Phase; endPhase: Phase | null }): Phase[] {
+  const end = event.endPhase ?? event.phase;
+  return PHASES.filter((p) => order(p) >= order(event.phase) && order(p) <= order(end));
+}
 
 /** The timeline in play order: by day, then EOSORIA → SOLARION → HESPERION → NOCTHERION; ties keep their order. */
 export function sortTimeline<T extends Pick<Scenario, 'timeline'>>(scenario: T): T {

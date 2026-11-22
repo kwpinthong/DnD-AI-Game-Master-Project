@@ -1,193 +1,260 @@
 import { Scenario, type ScenarioInput } from './scenario.ts';
 
 /*
- * Default scenario "เมืองก่อนอุกกาบาต" from the GDD (Google Drive "Isekai Chronicles - Game Design &
- * System Architecture Specification.md" §4.2, §5, §6) and the GEN-042 Rules Spec (§4.1, §5, §11, §12.2).
+ * Default scenario "เมืองก่อนอุกกาบาต" (GEN-071). The sheet "Asset Isekai v1.0" is the source of truth
+ * (Nok 2026-11-22): the timeline is its World_Timeline tab, the roster its NPC tab, and every place
+ * is a row of its Location tab by name (Q-129). apps/server/test/scenario-sheet.test.ts checks this
+ * file against the imported JSON in apps/server/assets, so a sheet change shows up as a failing test.
+ * Social titles, origin weights and the Legendary still come from the GDD + GEN-042 Rules Spec.
  * Games without a Human GM use this template only (Q-028).
  *
- * PLACEHOLDER marks content the GDD does not give (names, phases, places beyond the ones it names).
- * Place names marked "GEN-044" come from the scenario editor wireframe, not the GDD.
+ * PLACEHOLDER marks what the sheet does not give (ids, rest quality, safety, routes between places,
+ * the town's name).
  */
 const template: ScenarioInput = {
   schemaVersion: 1,
   id: 'default',
   name: 'เมืองก่อนอุกกาบาต', // GEN-044 wireframe
   town: {
-    name: 'เมืองก่อนอุกกาบาต', // PLACEHOLDER: the GDD names no town
+    name: 'เมืองก่อนอุกกาบาต', // PLACEHOLDER: the sheet names no town
     mood: 'เมืองแฟนตาซีที่ลัทธิค่อย ๆ แทรกซึม เหลือเวลา 12 วันก่อนอุกกาบาตหมูเด้งพุ่งชนโลก',
     taboos: [],
   },
+  // Sheet Location tab, by Location_Name. Rest quality, safety and routes are PLACEHOLDERS: each zone's
+  // places link to each other and the fountain is the hub. The first place is where players start.
   locations: [
     {
-      id: 'inn', // GEN-044
-      name: 'โรงเตี๊ยมหมีหลับ',
+      id: 'inn',
+      name: 'โรงเตี๊ยมและกิลด์นักเดินทาง',
       restQuality: 'inn',
       safety: 'safe',
-      connects: ['market'],
-      description: 'โรงเตี๊ยมกลางเมือง ที่พักที่ดีที่สุด',
+      connects: ['fountain', 'market'],
+      description: 'โซนใจกลางเมือง ที่พักและจุดรับงานของนักเดินทาง',
     },
     {
-      id: 'market', // GEN-044
-      name: 'ลานตลาด',
+      id: 'fountain',
+      name: 'น้ำพุกลางเมือง',
       restQuality: 'rough',
       safety: 'normal',
-      connects: ['inn', 'temple', 'alley', 'clinic', 'manor', 'mage-tower', 'gate', 'jail'],
-      description: 'ลานกลางเมือง ชาวเมืองมารวมตัวกัน',
+      connects: ['inn', 'temple', 'market', 'barracks', 'theater', 'manor', 'farmland', 'clinic', 'library', 'dawn-church'],
+      description: 'โซนใจกลางเมือง ลานกลางแจ้งที่ชาวเมืองมารวมตัวกัน',
     },
     {
-      id: 'alley', // GEN-044 "ตรอกหลังวิหาร"; GDD origin "ถังขยะในตรอก"
-      name: 'ตรอกหลังวิหาร',
+      id: 'temple',
+      name: 'โบสถ์',
+      restQuality: 'basic',
+      safety: 'normal',
+      connects: ['fountain', 'church-crypt'],
+      description: 'โซนใจกลางเมือง โบสถ์ของเมือง',
+    },
+    {
+      id: 'church-crypt',
+      name: 'โบสถ์ (ชั้นใต้ดิน)',
       restQuality: 'rough',
       safety: 'danger',
-      connects: ['market', 'temple'],
-      description: 'ตรอกแคบมีถังขยะ คนไม่ค่อยผ่าน',
+      connects: ['temple', 'market'],
+      description: 'โซนใจกลางเมือง ชั้นใต้ดินของโบสถ์ เขตหวงห้าม',
     },
     {
-      id: 'temple', // GEN-044
-      name: 'วิหารแสงรุ่ง',
+      id: 'forest',
+      name: 'ป่า',
+      restQuality: 'rough',
+      safety: 'danger',
+      connects: ['farmland'],
+      description: 'โซนป่าทิศตะวันออก',
+    },
+    {
+      id: 'farmland',
+      name: 'แปลงเกษตรกรรม',
+      restQuality: 'rough',
+      safety: 'normal',
+      connects: ['fountain', 'forest'],
+      description: 'โซนป่าทิศตะวันออก',
+    },
+    {
+      id: 'theater',
+      name: 'โรงละคร',
+      restQuality: 'basic',
+      safety: 'normal',
+      connects: ['fountain', 'manor'],
+      description: 'โซนป่าทิศตะวันออก',
+    },
+    {
+      id: 'manor',
+      name: 'เคหาสน์เจ้าเมือง',
+      restQuality: 'basic',
+      safety: 'normal',
+      connects: ['fountain', 'theater'],
+      description: 'โซนป่าทิศตะวันออก เขตหวงห้าม',
+    },
+    {
+      id: 'market',
+      name: 'ย่านการค้า-ตลาดมืด',
+      restQuality: 'rough',
+      safety: 'danger',
+      connects: ['fountain', 'inn', 'barracks', 'sea', 'church-crypt'],
+      description: 'โซนการค้าทิศตะวันตก ตลาดและตรอกหลังร้าน',
+    },
+    {
+      id: 'barracks',
+      name: 'ค่ายทหารป้องกันเมือง',
+      restQuality: 'basic',
+      safety: 'normal',
+      connects: ['fountain', 'market'],
+      description: 'โซนการค้าทิศตะวันตก เขตหวงห้าม',
+    },
+    {
+      id: 'sea',
+      name: 'ทะเล',
+      restQuality: 'rough',
+      safety: 'normal',
+      connects: ['market'],
+      description: 'โซนการค้าทิศตะวันตก ชายฝั่งและหน้าผาหิน',
+    },
+    {
+      id: 'dawn-church',
+      name: 'โบสถ์แห่งรุ่งอรุณ',
       restQuality: 'basic',
       safety: 'safe',
-      connects: ['market', 'alley'],
-      description: 'วิหารของเมือง',
+      connects: ['fountain', 'library'],
+      description: 'โซนที่ราบทิศเหนือ',
     },
     {
-      id: 'forest', // GEN-044 + GDD origin "ป่าหลังเมือง"
-      name: 'ป่าหลังเมือง',
-      restQuality: 'rough',
-      safety: 'danger',
-      connects: ['gate', 'cult-altar'],
-      description: 'ป่าทึบนอกกำแพงเมือง',
-    },
-    {
-      id: 'clinic', // GDD origin "สถานพยาบาล"
-      name: 'สถานพยาบาล',
+      id: 'clinic',
+      name: 'สถานพยาบาลกลาง',
       restQuality: 'basic',
       safety: 'safe',
-      connects: ['market'],
-      description: 'ที่รักษาคนเจ็บของเมือง',
+      connects: ['fountain', 'library'],
+      description: 'โซนที่ราบทิศเหนือ ที่รักษาคนเจ็บของเมือง',
     },
     {
-      id: 'cult-altar', // GDD Pocket Dimension failure "แท่นบูชาของลัทธิเถื่อน"
-      name: 'แท่นบูชาของลัทธิเถื่อน',
-      restQuality: 'rough',
-      safety: 'danger',
-      connects: ['forest'],
-      description: 'ที่ทำพิธีของลัทธิ ซ่อนอยู่ในป่า', // PLACEHOLDER: where the altar is
-    },
-    {
-      id: 'manor', // PLACEHOLDER: GDD origin "ร่างป่วยของชนชั้นสูง" needs a noble house
-      name: 'คฤหาสน์ขุนนาง',
+      id: 'library',
+      name: 'หอสมุดหลวง',
       restQuality: 'basic',
-      safety: 'normal',
-      connects: ['market'],
+      safety: 'safe',
+      connects: ['fountain', 'clinic', 'dawn-church'],
+      description: 'โซนที่ราบทิศเหนือ',
     },
     {
-      id: 'mage-tower', // PLACEHOLDER: GDD origin "นักเวทย์ฝึกหัดอัญเชิญผิดพลาด" needs a place
-      name: 'หอนักเวทย์',
-      restQuality: 'basic',
-      safety: 'normal',
-      connects: ['market'],
-    },
-    {
-      id: 'gate', // PLACEHOLDER: the way out the day 5 disaster cuts
-      name: 'ประตูเมือง',
+      id: 'astral-rift',
+      name: 'มิติพิศวง (The Astral Rift)',
       restQuality: 'rough',
-      safety: 'normal',
-      connects: ['market', 'forest'],
-    },
-    {
-      id: 'jail', // PLACEHOLDER: home of the GDD grade F "นักโทษ"
-      name: 'คุกเมือง',
-      restQuality: 'rough',
-      safety: 'danger',
-      connects: ['market'],
+      safety: 'safe',
+      connects: [],
+      description: 'รูทลับ 1% ไม่มีทางเดินเข้าจากเมือง',
     },
   ],
-  // Starting roster by grade from the GDD §5 examples. Every real name is a PLACEHOLDER.
+  // Sheet NPC tab: every row, by its starting grade. SS forms are not here: they only evolve (GDD §5).
+  // `name` is the real name; grade B keeps it hidden behind `alias` until affinity +9.
   npcs: [
-    { id: 'beggar', name: 'โนอา', alias: 'ขอทานใกล้ตาย', rank: 'F', locationId: 'alley' },
-    { id: 'orphan', name: 'มิว', alias: 'เด็กกำพร้า', rank: 'F', locationId: 'market' },
-    { id: 'prisoner', name: 'การ์ม', alias: 'นักโทษ', rank: 'F', locationId: 'jail' },
-    { id: 'merchant', name: 'ทอร์บิน', alias: 'พ่อค้า', rank: 'B', locationId: 'market' },
-    { id: 'guard', name: 'เฮเลน', alias: 'ทหารยาม', rank: 'B', locationId: 'gate' },
+    { id: 'beggar', name: 'โนอา', alias: 'เด็กขอทานตาบอดข้างหนึ่ง', rank: 'F', locationId: 'fountain' },
+    { id: 'amnesiac', name: 'ลูเซีย', alias: 'หญิงสาวความจำเสื่อมที่พกนาฬิกาพกตาย', rank: 'F', locationId: 'fountain' },
+    { id: 'nun', name: 'ซิสเตอร์เอเลน่า', alias: 'แม่ชีผู้เหนื่อยล้าแห่งโบสถ์เก่า', rank: 'B', locationId: 'temple' },
+    { id: 'guard', name: 'จ่าสิบเอกการ์เร็ต', otherNames: ['การ์เร็ต'], alias: 'ทหารยามหน้าตาบึ้งตึง', rank: 'B', locationId: 'barracks' },
+    { id: 'cloaked-man', name: 'วิคเตอร์', alias: 'ชายชุดคลุมมอมแมมในตรอกมืด', rank: 'B', locationId: 'market' },
+    { id: 'merchant', name: 'มาร์คัส', alias: 'พ่อค้าเร่ผู้สวมแว่นหนา', rank: 'B', locationId: 'market' },
     {
-      id: 'cult-acolyte',
-      name: 'ซิลาส',
-      alias: 'นักบวชแจกขนมปัง',
-      rank: 'B',
-      locationId: 'market',
-      gmNote: 'นักบวชชั้นล่างของลัทธิ ตัวแทนเหตุการณ์วันที่ 1',
-    },
-    { id: 'noble', name: 'ลอร์ดอัลเดน', alias: 'ขุนนางใจดี', rank: 'A', locationId: 'manor' },
-    {
-      id: 'spy',
-      name: 'เวสเปอร์',
-      alias: 'นักเดินทางท่าทางมีพิรุธ',
+      id: 'noble',
+      name: 'ลอร์ดจูเลียน แวนเดอร์บิลต์',
+      otherNames: ['ลอร์ดจูเลียน', 'จูเลียน'],
+      alias: 'ขุนนางผู้มาเยือน',
       rank: 'A',
-      locationId: 'market',
-      gmNote: 'สายสืบปลอมตัว',
+      locationId: 'manor',
     },
-    { id: 'high-priest', name: 'เซเลสต์', alias: 'นักบวชชั้นสูง', rank: 'A', locationId: 'temple' },
-    { id: 'cult-leader', name: 'โมรัก', alias: 'ชายสวมผ้าคลุมแดง', rank: 'A', locationId: 'cult-altar', gmNote: 'แกนนำลัทธิ' },
-    { id: 'light-spirit', name: 'ลูเมีย', alias: 'ภูตผู้นำพาแสงสว่าง', rank: 'S', locationId: 'temple' },
-    { id: 'dark-spirit', name: 'นอกซ์', alias: 'ภูตรับใช้แห่งความมืด', rank: 'S', locationId: 'cult-altar' },
+    {
+      id: 'archbishop',
+      name: 'อาร์คบิชอป มัลคอล์ม',
+      otherNames: ['มัลคอล์ม'],
+      alias: 'อาร์คบิชอปประจำเมือง',
+      rank: 'A',
+      locationId: 'temple',
+      gmNote: 'ผู้นำนักบวชลัทธิประจำเมือง',
+    },
+    { id: 'archivist', name: 'เลดี้เซเรน่า', otherNames: ['เซเรน่า'], alias: 'ผู้ดูแลหอคอยนักปราชญ์', rank: 'A', locationId: 'library' },
+    { id: 'light-spirit', name: 'ออเรเลีย', alias: 'ภูตผู้นำพาแสงสว่าง', rank: 'S', locationId: 'dawn-church' },
+    { id: 'dark-spirit', name: 'น็อกทิส', alias: 'ภูตรับใช้แห่งความมืด', rank: 'S', locationId: 'church-crypt' },
+    { id: 'horizon-watcher', name: 'แอสทรา', alias: 'ผู้เฝ้ามองเส้นขอบฟ้า', rank: 'S', locationId: 'sea' },
   ],
-  // GDD §6.2: these always happen; players can change the outcome. Phases are PLACEHOLDERS except day 10 (night).
-  // GEN-063: the GEN-045 phases mapped by LEGACY_PHASES (MORNING -> EOSORIA, AFTERNOON -> SOLARION, NIGHT -> HESPERION).
+  // Sheet World_Timeline tab, word for word: Event_Name = title, Player_Intervention_Effects =
+  // interventionEffects, World_Drift_If_Ignored = outcome (what happens if nobody steps in),
+  // Foreshadowing = foreshadowing at its Foreshadowing_Trigger morning. Town-wide events have no place
+  // (Q-080); an event the sheet puts in two places uses the first one that is a Location.
   timeline: [
     {
       id: 'd1-bread',
       day: 1,
       phase: 'EOSORIA',
-      title: 'นักบวชลัทธิแจกจ่ายขนมปังให้ชาวเมือง',
-      description: 'จุดเริ่มต้นการแทรกซึมของลัทธิ',
-      locationId: 'market',
-      npcIds: ['cult-acolyte'],
+      title: 'พิธีแจกขนมปังแห่งความเมตตา',
+      interventionEffects:
+        'Good: ช่วยซิสเตอร์เอเลน่าเปิดโปงหรือแจก Blessed Loaf แข่ง / Evil: ช่วยมัลคอล์มแจกขนมปังต้องสาปหรือผสม Vial of Black Ash',
+      outcome: 'ชาวเมืองติดคำสาปจำนวนมาก ฐานมวลชนลัทธิในเมืองเพิ่มขึ้น +30% ส่งผลให้วันที่ 7 และ 10 รับมือยากขึ้น',
+      // "Starts at once": the day 1 morning itself, so no earlier trigger.
+      foreshadowing: 'เริ่มต้นแคมเปญทันที (ป้ายประกาศเชิญชวนร่วมพิธีแจกทาน)',
+      locationId: 'fountain',
+      npcIds: ['nun', 'archbishop'],
     },
-    {
-      id: 'd2-first-companion',
-      day: 2,
-      phase: 'SOLARION',
-      title: 'พบ NPC คู่หูคนแรก (เกรด F)',
-      npcIds: ['beggar', 'orphan', 'prisoner'],
-    },
-    { id: 'd3-cult-clue', day: 3, phase: 'HESPERION', title: 'ล่วงรู้เบาะแสแผนการร้ายเบื้องหลังของลัทธิ' },
     {
       id: 'd5-disaster',
       day: 5,
       phase: 'EOSORIA',
-      title: 'ภัยพิบัติทางธรรมชาติ/เวทมนตร์ ตัดขาดเส้นทางออกจากเมือง',
-      description: 'ออกจากเมืองและขอความช่วยเหลือจากภายนอกไม่ได้อีก',
-      locationId: 'gate',
+      title: 'ภัยพิบัติหมอกพิษปิดเมือง',
+      interventionEffects: 'Good/Neutral: อพยพชาวนาและขนสมุนไพรเข้าสถานพยาบาล / Evil: กักตุนเสบียงปั่นราคาตลาดมืดหรือลอบสังหารในหมอก',
+      outcome: 'ป่าและชายฝั่งถูกหมอกพิษปิดตาย (ฝืนเข้าเสีย Stamina -10/เทิร์น) ราคาอาหารและยาแพงขึ้น 2 เท่าตลอดวันที่ 5–9',
+      foreshadowing: 'เช้าวันที่ 4: ข่าวลือสัตว์ป่าอพยพหนีออกจากป่าทิศตะวันออก',
+      foreshadowAt: { day: 4, phase: 'EOSORIA' },
+      crisis: true,
+      locationId: null, // ทั่วทั้งเมือง / ป่า / ชายฝั่ง
     },
     {
       id: 'd7-kidnapping',
       day: 7,
       phase: 'HESPERION',
-      title: 'ลัทธิก่อความวุ่นวายครั้งใหญ่ ลักพาตัวชาวบ้านไปเตรียมเป็นเครื่องสังเวย',
+      title: 'คืนแห่งการลักพาตัวเงียบ',
+      interventionEffects:
+        'Good: ร่วมมือกับลอร์ดจูเลียนและการ์เร็ตสกัดจับขบวนลักพาตัว (ปลดล็อกเลื่อนเกรดจูเลียนเป็น S) / Evil: ร่วมมือกับมัลคอล์มและน็อกทิสจับเครื่องสังเวยครบจำนวน',
+      outcome: 'ลัทธิได้เครื่องสังเวยครบ พิธีกรรมวันที่ 10 รับบัพเต็มขั้น (ความยากในการขัดขวาง +5) และจูเลียนบาดเจ็บหนัก',
+      foreshadowing: 'เช้าวันที่ 6: ประกาศเตือนคนหายปริศนาในตรอกเมือง',
+      foreshadowAt: { day: 6, phase: 'EOSORIA' },
       crisis: true,
+      locationId: 'temple', // ย่านชุมชน & โบสถ์
+      npcIds: ['noble', 'guard', 'archbishop', 'dark-spirit'],
     },
     {
       id: 'd10-summoning',
       day: 10,
-      phase: 'HESPERION',
+      phase: 'NOCTHERION',
       kind: 'climax',
-      title: 'คืนจันทร์ดับ ลัทธิทำพิธีอัญเชิญเทพมารจันทราโลหิต (ระดับ SS)',
-      description: 'พิธีเพื่อทำลายล้างโลก (Climax 1)',
+      title: 'คืนจันทราโลหิต (สงครามความเชื่อ)',
+      interventionEffects:
+        'ตัดสินตามแผนการในแท็บ Day10_Strategies (Holy Crusade, Silent Rescue, Crimson Offering, หรือ Absolute Zero Law ลบล้างเวทมนตร์ทั้งหมด)',
+      // Same as the Day10_Strategies D10-DRIFT row: no plan run, or every plan failed.
+      outcome: 'ลัทธิอัญเชิญเทพมารจันทราโลหิตสำเร็จ เมืองตกอยู่ใต้ความมืดมิดตลอด 2 วันสุดท้าย (ฝ่าย Good ติดดีบัพหนัก)',
+      foreshadowing: 'เช้าวันที่ 9: ดวงจันทร์เริ่มเปลี่ยนเป็นสีแดงฉานและลัทธิระดมพล',
+      foreshadowAt: { day: 9, phase: 'EOSORIA' },
+      strategyIds: ['D10-S1', 'D10-S2', 'D10-S3', 'D10-S4'],
       crisis: true,
-      locationId: 'cult-altar',
-      npcIds: ['cult-leader'],
+      locationId: 'temple', // โบสถ์ / น้ำพุกลางเมือง
+      npcIds: ['archbishop', 'dark-spirit'],
     },
     {
       id: 'd12-meteor',
       day: 12,
       phase: 'HESPERION',
+      endPhase: 'NOCTHERION',
       kind: 'finale',
-      title: 'อุกกาบาตหมูเด้งพุ่งชนโลก',
-      description: 'ฉากจบ ผลขึ้นอยู่กับการกระทำตลอด 12 วันและระดับพลังของปาร์ตี้/คู่หู',
+      title: 'วันพิพากษา: อุกกาบาตหมูเด้งจุติ',
+      interventionEffects:
+        'Good: สร้างม่านปาฏิหาริย์เบี่ยงวิถีอุกกาบาตปกป้องเมือง / Evil: ดูดซับพลังอุกกาบาตครองโลก / Neutral: ร่วมกับแอสทราและเซเรน่าลบล้างผลกระทบเป็นศูนย์',
+      outcome:
+        'อุกกาบาตหมูเด้งพุ่งชนเมือง! ผู้เล่นที่ไม่มีบัพป้องกันระดับสูงหรือไม่อยู่ในจุดหลบภัยจะพ่ายแพ้ (Bad Ending) เหลือรอดเฉพาะผู้ถือบัพ S/SS',
+      foreshadowing: 'เช้าวันที่ 11: ท้องฟ้าเปลี่ยนเป็นสีม่วงอมชมพูและเกิดเสียงคำรามบนชั้นบรรยากาศ',
+      foreshadowAt: { day: 11, phase: 'EOSORIA' },
+      locationId: null, // ท้องฟ้าเหนือเมือง / โบสถ์แห่งรุ่งอรุณ / ทะเล
+      npcIds: ['horizon-watcher', 'archivist'],
     },
   ],
-  // GDD §6.1 / Rules Spec §11: d100 1-70 standard, 71-99 special, 100 Pocket Dimension.
+  // GDD §6.1 / Rules Spec §11: d100 1-70 standard, 71-99 special, 100 Pocket Dimension. Spawn points are
+  // the sheet Start_Scenarios rows of each tier.
   origins: [
     {
       id: 'standard',
@@ -195,9 +262,16 @@ const template: ScenarioInput = {
       label: 'จุดเกิดมาตรฐาน',
       weight: 70,
       spawnPoints: [
-        { id: 'forest-edge', label: 'ป่าหลังเมือง', locationId: 'forest' },
-        { id: 'alley-bin', label: 'ถังขยะในตรอก', locationId: 'alley' },
-        { id: 'clinic-bed', label: 'สถานพยาบาล', locationId: 'clinic' },
+        { id: 'busker', label: 'นักดนตรีพเนจรตกอับ', locationId: 'fountain' },
+        { id: 'dishwasher', label: 'ลูกมือล้างจานประจำร้าน', locationId: 'inn' },
+        { id: 'candle-orphan', label: 'เด็กกำพร้าผู้เฝ้าเชิงเทียน', locationId: 'temple' },
+        { id: 'slime-survivor', label: 'ผู้รอดชีวิตจากท้องสไลม์', locationId: 'forest' },
+        { id: 'farmhand', label: 'คนงานรับจ้างต่างถิ่น', locationId: 'farmland' },
+        { id: 'extra', label: 'ตัวประกอบละครเวที', locationId: 'theater' },
+        { id: 'new-thief', label: 'หัวขโมยหน้าใหม่หลังตรอก', locationId: 'market' },
+        { id: 'shipwreck', label: 'ผู้รอดชีวิตจากเรืออับปาง', locationId: 'sea' },
+        { id: 'stargazer', label: 'ผู้ดูแลหอดูดาวร้าง', locationId: 'dawn-church' },
+        { id: 'amnesiac-patient', label: 'คนไข้ความจำเสื่อม', locationId: 'clinic' },
       ],
     },
     {
@@ -206,10 +280,10 @@ const template: ScenarioInput = {
       label: 'จุดเกิดพิเศษ',
       weight: 29,
       spawnPoints: [
-        { id: 'apprentice-summon', label: 'ถูกนักเวทย์ฝึกหัดอัญเชิญผิดพลาด', locationId: 'mage-tower' },
-        { id: 'cult-summon-failed', label: 'พิธีอัญเชิญเทพมารของลัทธิล้มเหลว', locationId: 'cult-altar' },
-        { id: 'slime-spit', label: 'ถูกสไลม์กลืนแล้วคายออกมา', locationId: 'forest' }, // PLACEHOLDER: place
-        { id: 'noble-body', label: 'เข้าสิงร่างป่วยใกล้ตายของชนชั้นสูง', locationId: 'manor' },
+        { id: 'sickly-heir', label: 'คุณชาย/คุณหนูขี้โรค', locationId: 'manor' },
+        { id: 'conscript', label: 'ทหารเกณฑ์ประจำป้อม', locationId: 'barracks' },
+        { id: 'archive-assistant', label: 'ผู้ช่วยบรรณารักษ์เขตต้องห้าม', locationId: 'library' },
+        { id: 'heretic-apprentice', label: 'ศิษย์ฝึกหัดนอกรีต', locationId: 'church-crypt' },
       ],
     },
     {
@@ -220,8 +294,8 @@ const template: ScenarioInput = {
       description: 'ติดอยู่ในมิติปิดตาย 3 วัน',
       durationDays: 3,
       escapeDc: 20,
-      onSuccess: { legendaryRewards: 1, warpToLocationId: 'market' }, // PLACEHOLDER: where "เข้าสู่เมือง" lands
-      onFailure: { reputation: -100, warpToLocationId: 'cult-altar' },
+      onSuccess: { legendaryRewards: 1, warpToLocationId: 'fountain' }, // PLACEHOLDER: where "เข้าสู่เมือง" lands
+      onFailure: { reputation: -100, warpToLocationId: 'church-crypt' }, // the cult's altar is under the church
     },
   ],
   // GEN-042 Rules Spec §5 (bands fixed, text editable).

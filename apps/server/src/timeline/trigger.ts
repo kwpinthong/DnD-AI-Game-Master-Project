@@ -1,6 +1,7 @@
 import { EventOutcomeText, type PhasePoint } from '@isekai/protocol';
 import { z } from 'zod';
 import type { AiService, AiServiceResult } from '../ai/core/service.ts';
+import type { GameAssets } from '../assets/load.ts';
 import type { Db } from '../db/client.ts';
 import { buildEventContext, eventContextBlock } from './context.ts';
 import { advanceTimeline, type AdvanceResult } from './store.ts';
@@ -25,12 +26,12 @@ export interface PhaseEventsResult {
  * is GEN-057, which replaces this call with its own `gm_adjudicate` carrying the same block.
  */
 export async function startPhaseEvents(
-  deps: { db: Db; ai: Pick<AiService, 'call'> },
+  deps: { db: Db; ai: Pick<AiService, 'call'>; assets?: Pick<GameAssets, 'day10Strategies'> },
   gameId: string,
   point: PhasePoint,
 ): Promise<PhaseEventsResult> {
   const timeline = advanceTimeline(deps.db, gameId, point);
-  const context = buildEventContext(deps.db, gameId, point.day, point.phase);
+  const context = buildEventContext(deps.db, gameId, point.day, point.phase, deps.assets);
   const ai = await deps.ai.call({
     gameId,
     purpose: 'gm_adjudicate',

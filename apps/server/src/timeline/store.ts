@@ -19,8 +19,10 @@ import { witnessesOf } from '../visibility/views.ts';
  * Timeline event state machine (GEN-053, GDD §6.2). Every scenario event happens at its day + period
  * (`phase`, GEN-063):
  * - `pending` until the game reaches that point,
- * - `active` for both turns of that period (the AI GM may set its outcome then: `setEventOutcome`),
- * - `resolved` once the game moves past it, keeping the AI's outcome or else the scenario's ผลตั้งต้น.
+ * - `active` for both turns of each of its periods, `phase` through `endPhase` (GEN-071; the AI GM may
+ *   set its outcome then: `setEventOutcome`),
+ * - `resolved` once the game moves past its last period, keeping the AI's outcome or else the scenario's
+ *   ผลตั้งต้น (World_Drift_If_Ignored: outcomeSource `default` = nobody stepped in).
  * The game's point moves forward only through `advanceTimeline` (start of game = day 1 EOSORIA).
  *
  * How later work uses this:
@@ -36,6 +38,19 @@ import { witnessesOf } from '../visibility/views.ts';
 const rank = (p: PhasePoint) => (p.day - 1) * PHASES.length + PHASES.indexOf(p.phase);
 /** After day 12 NOCTHERION. */
 const END_RANK = SCENARIO_DAYS * PHASES.length;
+
+/** First and last period of an event (`phase` through `endPhase`, GEN-071), as ranks. */
+export function spanOf(event: Pick<Scenario['timeline'][number], 'day' | 'phase' | 'endPhase'>): { first: number; last: number } {
+  const first = rank(event);
+  return { first, last: event.endPhase === null ? first : rank({ day: event.day, phase: event.endPhase }) };
+}
+
+/** Is `event` running at day + period? */
+export const isDuring = (event: Pick<Scenario['timeline'][number], 'day' | 'phase' | 'endPhase'>, at: PhasePoint) => {
+  const { first, last } = spanOf(event);
+  const r = rank(at);
+  return first <= r && r <= last;
+};
 
 /** Events by day, then EOSORIA → SOLARION → HESPERION → NOCTHERION; ties keep scenario order. */
 export function inPlayOrder<T extends PhasePoint>(events: readonly T[]): T[] {
@@ -142,8 +157,8 @@ export function advanceTimeline(db: DbOrTx, gameId: string, to: PhasePoint | 'en
   for (const event of scenario.timeline) {
     const row = rows.get(event.id);
     const status = row?.status ?? 'pending';
-    const at = rank(event);
-    if (at < target && status !== 'resolved') {
+    const { first, last } = spanOf(event);
+    if (last < target && status !== 'resolved') {
       const chosen = row?.outcomeSource === 'ai' && row.outcome !== null;
       const values = {
         status: 'resolved' as const,
@@ -160,7 +175,7 @@ export function advanceTimeline(db: DbOrTx, gameId: string, to: PhasePoint | 'en
         .onConflictDoUpdate({ target: [gameEventState.gameId, gameEventState.eventId], set: values })
         .run();
       resolved.push(event.id);
-    } else if (at === target && status === 'pending') {
+    } else if (first <= target && target <= last && status === 'pending') {
       const values = { status: 'active' as const, activatedAt: now, witnesses: witnessesAtStart(event, locations), updatedAt: now };
       db.insert(gameEventState)
         .values({ gameId, eventId: event.id, ...values })
