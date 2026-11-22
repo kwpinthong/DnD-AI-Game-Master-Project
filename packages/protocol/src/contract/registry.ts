@@ -72,6 +72,8 @@ export const CONTRACT_SCHEMAS = {
   InventoryEntry: p.InventoryEntry,
   GameLogResponse: p.GameLogResponse,
   GameRevealPlayer: p.GameRevealPlayer,
+  ResponseVoteRequest: p.ResponseVoteRequest,
+  ResponseVoteResponse: p.ResponseVoteResponse,
   GameRatingRequest: p.GameRatingRequest,
   GameRatingResponse: p.GameRatingResponse,
   RoomClientMessage: p.RoomClientMessage,
@@ -244,6 +246,9 @@ export const CONTRACT: readonly ContractItem[] = [
   http('POST', '/api/game/gm/adjust', 'GmAdjustRequest', 'GmAdjustResponse', ready('GEN-058', 'gm', ['gm-console'])),
   http('POST', '/api/game/gm/events', 'GmInsertEventRequest', 'GmInsertEventResponse', ready('GEN-058', 'gm', ['gm-console'])),
   http('GET', '/api/game/gm/log', null, 'GmLogResponse', ready('GEN-058', 'gm', ['gm-console'])),
+
+  // --- rate the AI GM while playing (GEN-107) ---
+  http('PUT', '/api/game/entries/:seq/vote', 'ResponseVoteRequest', 'ResponseVoteResponse', ready('GEN-107', 'player', ['play-action'], '👍/👎 ข้อความของ AI GM (`RoomEntry.myVote` ≠ undefined = มีปุ่ม); `vote: null` = ยกเลิก; ไม่ใช่ผู้เล่น / ไม่ใช่ผู้รับ entry 403; id ไม่มี/ไม่ใช่ข้อความ AI = 404 `response_not_found`; ใช้ได้หลังเกมจบ')),
 
   // --- after the end ---
   http('GET', '/api/game/rating', null, 'GameRatingResponse', ready('GEN-078', 'player', ['ending-rating'], 'หลังเกมจบเท่านั้น (ก่อนจบ 409); ไม่ใช่สมาชิก 403; `eligible` / `blocker` เป็นของ GEN-079')),

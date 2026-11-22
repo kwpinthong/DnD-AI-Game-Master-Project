@@ -4,4 +4,5 @@ export { Field, type FieldControl } from './Field.tsx';
 export { MaskIcon } from './MaskIcon.tsx';
 export { Stepper } from './Stepper.tsx';
 export { EmptyState, ErrorState, HitCard, Meter, Panel, Skeleton, StepBar, Toast, VisibilityBadge, type Visibility } from './parts.tsx';
-export { playText, uiText } from './strings.ts';
+export { VoteButtons, type VoteButtonsProps } from './VoteButtons.tsx';
+export { playText, uiText, voteText } from './strings.ts';

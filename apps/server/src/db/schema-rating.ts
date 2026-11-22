@@ -41,3 +41,24 @@ export const rulingVote = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.gameId, t.memberId, t.sourceRef] })],
 );
+
+/**
+ * GEN-107: a member's 👍 / 👎 on one AI-written room entry during play (and after). `source_ref` is
+ * `entry-${room_entry.id}` (the response id); the row exists = a vote, cancelling deletes it, so a member
+ * has at most one per entry. Kept per game for learning (the counts are not sent to players).
+ */
+export const responseVote = sqliteTable(
+  'response_vote',
+  {
+    gameId: text('game_id')
+      .notNull()
+      .references(() => game.id, { onDelete: 'cascade' }),
+    memberId: text('member_id')
+      .notNull()
+      .references(() => member.id, { onDelete: 'cascade' }),
+    sourceRef: text('source_ref').notNull(),
+    vote: text('vote', { enum: ['up', 'down'] }).notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.gameId, t.memberId, t.sourceRef] })],
+);

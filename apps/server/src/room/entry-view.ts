@@ -1,4 +1,4 @@
-import type { PlaceView, RoomEntry } from '@isekai/protocol';
+import { isVotableEntry, type PlaceView, type RoomEntry } from '@isekai/protocol';
 import { eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
 import { character } from '../db/schema.ts';
@@ -7,6 +7,7 @@ import { ASTRAL_PLANE } from '../visibility/store.ts';
 import type { GameAssets } from '../assets/load.ts';
 import { placeMap, placeOfPresence, zoneView } from '../travel/rules.ts';
 import type { EntryMeta, RoomEntryRow } from './store.ts';
+import { myVoteOf } from './vote.ts';
 
 /** A scenario place as players see it (id + name + its zone when it is a Location row); null for no place (an Astral Spirit has none, GEN-070). */
 export function placeViewOf(db: DbOrTx, gameId: string, locationId: string | null, assets: GameAssets): PlaceView | null {
@@ -22,7 +23,7 @@ export function characterNameOf(db: DbOrTx, memberId: string | null): string {
 }
 
 /** A stored feed / narration / whisper / hit entry as `viewer` receives it, live, on replay and in the game log (GEN-037). */
-export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string }, assets: GameAssets): RoomEntry {
+export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string; role: string }, assets: GameAssets): RoomEntry {
   const meta = row.meta === null ? {} : (JSON.parse(row.meta) as EntryMeta);
   return {
     seq: row.id,
@@ -41,5 +42,7 @@ export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string 
       : {}),
     // Q-177: players learn only that it is the template, never why.
     ...(row.fallback !== null ? { fallback: true as const } : {}),
+    // GEN-107: only a player sees the buttons, and only on what the AI GM wrote.
+    ...(viewer.role === 'player' && isVotableEntry(row) ? { myVote: myVoteOf(db, row.gameId, viewer.id, row.id) } : {}),
   };
 }
