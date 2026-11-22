@@ -55,7 +55,7 @@ export const GameRevealPlayer = z.strictObject({
       sourceRef: z.string().optional(),
     }),
   ),
-  /** Screens and Flows v2 §6 (pending, see docs/contract.md): appearance, the last Social Title, the AI epilogue. */
+  /** Screens and Flows v2 §6 (Q-229): appearance, the last Social Title, the ending the GM told this player (null = not told yet). */
   appearance: z.string().optional(),
   finalTitle: z.string().optional(),
   epilogue: z.string().nullable().optional(),

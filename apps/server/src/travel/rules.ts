@@ -6,6 +6,7 @@
  * A place's id is its Location `name` (the sheet has no id column; `GameAssets.location(name)` already
  * looks places up by it).
  */
+import type { DestinationTag, PlaceZone, TravelResponse, TravelZoneGroup } from '@isekai/protocol';
 import type { Degree, Period } from '@isekai/rules';
 import type { GameAssets } from '../assets/load.ts';
 import type { NpcScheduleRecord, Weather } from '../assets/model.ts';
@@ -139,6 +140,53 @@ export function planMove(map: PlaceMap, from: Place | null, toId: string, ctx: M
 
 function affordable(plan: Extract<MovePlan, { ok: true }>, ctx: MoveContext): MovePlan {
   return ctx.stamina < plan.staminaCost ? refuse('not_enough_stamina') : plan;
+}
+
+export type ScenarioPlaces = { readonly locations: readonly { readonly id: string; readonly name: string }[] } | null | undefined;
+
+/** A presence id as a Location name, else as a scenario place whose name is a Location name; null = unknown. */
+export function placeOfPresence(map: PlaceMap, scenario: ScenarioPlaces, locationId: string): Place | null {
+  const name = scenario?.locations.find((l) => l.id === locationId)?.name;
+  return map.place(locationId) ?? (name === undefined ? undefined : map.place(name)) ?? null;
+}
+
+/** The zone of a place as players see it (Q-229): the Thai zone name is its id too. */
+export const zoneView = (place: Place): PlaceZone => ({ id: place.zone, name: place.zone });
+
+/**
+ * The travel sheet from `from` (Q-229): every other place by zone with what going costs, from the same
+ * `planMove` the room's `move` uses. The first group is the zone `from` is in. The rift's own group arrives now.
+ * Every refusal but the first (`restricted`, a roll away) leaves no button; its Thai reason is the note.
+ */
+export function travelSheet(map: PlaceMap, from: Place | null, ctx: MoveContext): TravelResponse {
+  const groups = new Map<string, TravelZoneGroup>();
+  for (const to of map.places) {
+    if (to.id === from?.id) continue;
+    const plan = planMove(map, from, to.id, ctx);
+    const tags: DestinationTag[] = [];
+    if (hazardStaminaLoss(to, ctx.day) > 0) tags.push('hazard');
+    if (plan.ok ? plan.kind === 'rift' : plan.code === 'rift_closed' || plan.code === 'rift_gateway') tags.push('rift');
+    if (!plan.ok && plan.code === 'restricted') tags.push('restricted');
+    if (!plan.ok && plan.code === 'black_market_closed') tags.push('password');
+    if (tags.length === 0 && to.tags.includes('SAFE_ZONE')) tags.push('safe');
+    const action = plan.ok ? 'go' : plan.code === 'restricted' ? 'infiltrate' : null;
+    const note = plan.ok ? null : plan.code === 'restricted' ? 'ต้องมีสิทธิ์ หรือแทรกซึม (ทอย)' : plan.message;
+
+    const rift = to.tags.includes(PLACE_TAG.rift);
+    const sameZone = from !== null && from.zone === to.zone;
+    const group = groups.get(to.zone) ?? {
+      zone: zoneView(to),
+      sameZone,
+      staminaCost: sameZone ? TRAVEL.sameZoneStamina : rift ? TRAVEL.riftStamina : TRAVEL.crossZoneStamina,
+      arrives: sameZone || rift ? ('now' as const) : ('next_turn' as const),
+      destinations: [],
+    };
+    groups.set(to.zone, { ...group, destinations: [...group.destinations, { id: to.id, name: to.name, tags, note, action }] });
+  }
+  return {
+    from: from ? { id: from.id, name: from.name, zone: zoneView(from) } : null,
+    zones: [...groups.values()].sort((a, b) => Number(b.sameZone) - Number(a.sameZone)),
+  };
 }
 
 /** Stamina a turn spent at `place` costs on game day `day` (HAZARD_DAY5 from day 5). */

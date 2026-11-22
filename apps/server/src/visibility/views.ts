@@ -15,6 +15,7 @@ import { getCharacter, titleOf } from '../game/character.ts';
 import type { MemberRow } from '../game/service.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { gmCursesOf } from '../statuses/curses.ts';
+import { placeMap, placeOfPresence, zoneView } from '../travel/rules.ts';
 import {
   hiddenEvidenceInGame,
   namesVisibleTo,
@@ -87,9 +88,10 @@ export function seesPlace(viewerLocationId: string | null, eventLocationId: stri
 
 // --- Whole payloads ---
 
-function placeOf(scenario: Scenario | null, locationId: string): PlaceView {
+function placeOf(scenario: Scenario | null, locationId: string, assets: GameAssets): PlaceView {
   const location = scenario?.locations.find((l) => l.id === locationId);
-  return { id: locationId, name: location?.name ?? locationId };
+  const zone = placeOfPresence(placeMap(assets), scenario, locationId);
+  return { id: locationId, name: location?.name ?? locationId, ...(zone ? { zone: zoneView(zone) } : {}) };
 }
 
 /** Characters of the game's active members, oldest member first. */
@@ -118,7 +120,7 @@ function playerSurroundings(db: Db, me: MemberRow, assets: GameAssets): Surround
   return {
     view: 'player',
     you,
-    place: placeOf(scenario, here.locationId),
+    place: placeOf(scenario, here.locationId, assets),
     people: others.map(({ character: c }) => otherCharacterView(c, presences.get(c.memberId)!, known.has(c.memberId))),
     npcs: npcViewsAt(db, assets, me.id, me.gameId, here.locationId),
   };

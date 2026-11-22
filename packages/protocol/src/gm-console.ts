@@ -51,8 +51,7 @@ export const GmPendingResult = z.strictObject({ memberId: z.string(), before: Gm
 export type GmPendingResult = z.infer<typeof GmPendingResult>;
 
 /**
- * One resolved action of the held turn with every number of its roll (Screens and Flows v2 §5; pending, see
- * docs/contract.md). The GM is the only viewer who gets the DC, the modifiers and the total.
+ * One resolved action of the held turn with every number of its roll (Screens and Flows v2 §5, Q-229). The GM is the only viewer who gets the DC, the modifiers and the total.
  */
 export const GmCheckView = z.strictObject({
   memberId: z.string(),
@@ -75,7 +74,7 @@ export const GmPendingTurn = z.strictObject({
   results: z.array(GmPendingResult),
   /** GEN-059 (Q-205): this is the game's ending (narration only; results cannot be edited). */
   finale: z.boolean().optional(),
-  /** The rolls behind the held turn, in resolve order (pending, see docs/contract.md). */
+  /** The rolls behind the held turn, in resolve order (Q-229). */
   checks: z.array(GmCheckView).optional(),
 });
 export type GmPendingTurn = z.infer<typeof GmPendingTurn>;
@@ -99,7 +98,7 @@ export const GmFallbackView = z.strictObject({
 });
 export type GmFallbackView = z.infer<typeof GmFallbackView>;
 
-/** Q-252: an NPC as the Human GM sees it, with the timed curses on it (pending, see docs/contract.md). */
+/** Q-252: an NPC as the Human GM sees it, with the timed curses on it (Q-229). */
 export const GmNpcView = z.strictObject({ npcId: z.string(), name: z.string(), curses: z.array(GmCurseView) });
 export type GmNpcView = z.infer<typeof GmNpcView>;
 
@@ -119,7 +118,7 @@ export const GmConsoleResponse = z.strictObject({
   pending: GmPendingTurn.nullable(),
   /** Q-177: every published template narration, oldest first, with its cause. */
   fallbacks: z.array(GmFallbackView),
-  /** Q-252: NPCs that carry a curse now; absent until the backend sends it (pending, see docs/contract.md). */
+  /** Q-252: NPCs that carry a curse now (Q-229); an empty list = none. */
   npcs: z.array(GmNpcView).optional(),
 });
 export type GmConsoleResponse = z.infer<typeof GmConsoleResponse>;

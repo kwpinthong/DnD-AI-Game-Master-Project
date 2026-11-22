@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setNpcFlag } from '../src/companions/store.ts';
 import { crossPlayerState } from '../src/crossplayer/phase.ts';
 import { tagContexts } from '../src/crossplayer/tags.ts';
+import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
 import { getGameScenario, updateGameScenario } from '../src/scenario/store.ts';
 import type { RunningServer } from '../src/server.ts';
 import {
@@ -169,6 +170,24 @@ describe('GEN-055 skills and items from the Asset sheet', { timeout: 60_000 }, (
     expect(grantSkill(db(), assets(), t.b.memberId, 'Aegis of Faith', at(1))).toMatchObject({ ok: false, error: { code: 'not_unlocked' } });
     setKarma(t.b, 35);
     expect(grantSkill(db(), assets(), t.b.memberId, 'Aegis of Faith', at(1))).toMatchObject({ ok: true, source: 'unlock' });
+  });
+
+  it('Q-229 C5: usesLeftToday counts the limit down on use, resets on a new day, and is null without a limit', async () => {
+    const t = await table();
+    const gameId = gameIdOf(t.a);
+    const insert = (name: string) => server!.db.prepare("insert into owned_skill (member_id, game_id, name, source, day, created_at) values (?, ?, ?, 'test', 1, ?)").run(t.a.memberId, gameId, name, CLOCK);
+    insert('Grace of Dawn');
+    const limited = async () => (await inventory(t, t.a)).view.skills.find((s) => s.name === 'Grace of Dawn')!;
+    expect(await limited()).toMatchObject({ dailyLimit: 1, usesLeftToday: 1 });
+    const id = (await limited()).id;
+    server!.db.prepare("insert into tag_source_use (game_id, member_id, source_id, day, uses, updated_at) values (?, ?, ?, 1, 1, ?)").run(gameId, t.a.memberId, id, CLOCK);
+    expect((await limited()).usesLeftToday).toBe(0);
+    const state = ensurePhaseState(db(), gameId, CLOCK);
+    savePhaseState(db(), gameId, { ...state, day: 2 }, CLOCK);
+    expect((await limited()).usesLeftToday).toBe(1);
+    insert('Ward of Light');
+    const unlimited = (await inventory(t, t.a)).view.skills.find((s) => s.name === 'Ward of Light')!;
+    expect(unlimited).toMatchObject({ dailyLimit: 0, usesLeftToday: null });
   });
 
   it('C7: the inventory API shows skills and items but no condition, flag or progress', async () => {

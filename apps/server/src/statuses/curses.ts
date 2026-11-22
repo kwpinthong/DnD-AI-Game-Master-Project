@@ -1,4 +1,4 @@
-import type { GmCurseView } from '@isekai/protocol';
+import type { GmCurseView, GmNpcView } from '@isekai/protocol';
 import { PERIODS, TURNS_PER_PERIOD, restorePhaseState, type Period, type PhaseActionsLog, type StatusEffect, type Turn } from '@isekai/rules';
 import { and, eq } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
@@ -86,6 +86,12 @@ export function recordCurses(db: DbOrTx, gameId: string, log: PhaseActionsLog, a
   }
 }
 
+/** Q-229: the labels of the curses `outcome` puts on its player target (what `recordCurses` will write), for their hit card. */
+export function castCurseLabels(db: DbOrTx, gameId: string, assets: GameAssets, outcome: PhaseActionsLog['outcomes'][number]): string[] {
+  if (outcome.status !== 'resolved' || outcome.target === null || (outcome.log.degree !== 'success' && outcome.log.degree !== 'crit')) return [];
+  return (outcome.log.tagging?.targetBonuses ?? []).flatMap(({ ref }) => curseOfRef(db, gameId, assets, outcome.actorId, ref)?.label ?? []);
+}
+
 type StatusRow = typeof gameStatus.$inferSelect;
 
 /** Rows working on the game's current turn. */
@@ -136,6 +142,16 @@ export function activeCurses(db: DbOrTx, gameId: string): ActiveCurses {
 /** What the player sees of their own curses: the words only. */
 export function curseLabelsOf(db: DbOrTx, gameId: string, memberId: string): string[] {
   return activeRows(db, gameId, { kind: 'player', id: memberId }).map(({ row }) => row.label);
+}
+
+/** Q-252: the NPCs that carry a curse now, with each curse's number and turns left, for the Human GM. `names`: scenario NPC id → name. */
+export function gmNpcCurses(db: DbOrTx, gameId: string, names: ReadonlyMap<string, string>): GmNpcView[] {
+  const byNpc = new Map<string, GmCurseView[]>();
+  for (const { row, turnsLeft } of activeRows(db, gameId)) {
+    if (row.holderKind !== 'npc') continue;
+    byNpc.set(row.holderId, [...(byNpc.get(row.holderId) ?? []), { label: row.label, source: row.source, value: row.value, turnsLeft }]);
+  }
+  return [...byNpc].map(([npcId, curses]) => ({ npcId, name: names.get(npcId) ?? npcId, curses }));
 }
 
 /** What the Human GM sees of a player's curses. */

@@ -209,7 +209,7 @@ export const CONTRACT: readonly ContractItem[] = [
   // --- play ---
   http('GET', '/api/game/timeline', null, 'GameTimelineResponse', ready('GEN-053', 'player', ['play-feed', 'gm-console'])),
   http('GET', '/api/game/surroundings', null, 'SurroundingsResponse', ready('GEN-050 + GEN-067', 'player', ['play-place', 'play-self', 'gm-console'])),
-  http('GET', '/api/game/travel', null, 'TravelResponse', pending('new', 'player', ['play-place'], 'แผ่นเดินทาง: โซน + ปลายทาง + ป้าย (ช่องว่างของ GEN-066)')),
+  http('GET', '/api/game/travel', null, 'TravelResponse', ready('GEN-105', 'player', ['play-place'], 'แผ่นเดินทาง: โซน + ปลายทาง + ป้าย (กฎเดียวกับ move ของ GEN-066)')),
   http('GET', '/api/game/companions', null, 'CompanionsResponse', ready('GEN-054', 'player', ['play-companions'])),
   http('POST', '/api/game/companions', 'SaveCompanionRequest', 'CompanionsResponse', ready('GEN-054', 'player', ['play-companions', 'play-place'])),
   http('DELETE', '/api/game/companions/:ref', null, 'CompanionsResponse', ready('GEN-054', 'player', ['play-companions'])),
@@ -280,19 +280,9 @@ export interface PendingField {
 }
 
 export const PENDING_FIELDS: readonly PendingField[] = [
-  { schema: 'RoomEntry', path: 'roll', owner: 'new', screens: ['play-private'], note: 'F5 ผลทอย: d20 + คำความยาก + ลูกศรปัจจัย (ช่องว่างของ GEN-057 / GEN-064)' },
-  { schema: 'RoomEntry', path: 'kind', value: 'hit', owner: 'new', screens: ['play-hit'], note: 'การ์ด "เกิดกับคุณ" (ช่องว่างของ GEN-060)' },
-  { schema: 'RoomEntry', path: 'hit', owner: 'new', screens: ['play-hit'], note: 'ผู้ทำ (ลักษณะ หรือ null) + ค่าของเราที่เปลี่ยน' },
-  { schema: 'RoomState', path: 'you.lock.code', value: 'traveling', owner: 'new', screens: ['play-lock'], note: '4c เทิร์นนี้คือการเดินทางข้ามโซน (ช่องว่างของ GEN-066)' },
   { schema: 'RoomState', path: 'you.placeActions', owner: 'GEN-069', screens: ['play-action'], note: 'ชิป action ของสถานที่' },
   { schema: 'RoomAction', path: 'placeAction', owner: 'GEN-069', screens: ['play-action'], note: 'ใช้ชิปของสถานที่เป็น action ของเทิร์น' },
-  { schema: 'PlaceView', path: 'zone', owner: 'new', screens: ['play-place'], note: 'โซนของสถานที่ (ช่องว่างของ GEN-066)' },
-  { schema: 'CompanionView', path: 'bond', owner: 'new', screens: ['play-companions'], note: 'F4 คำ + แถบ 6 ขั้น (ช่องว่างของ GEN-054)' },
-  { schema: 'InventoryEntry', path: 'usesLeftToday', owner: 'new', screens: ['play-inventory'], note: '"วันนี้เหลือ n" (ช่องว่างของ GEN-055 / GEN-064)' },
   { schema: 'GameView', path: 'memory', owner: 'GEN-083', screens: ['lobby'], note: 'Lobby บอกสถานะความทรงจำ' },
   { schema: 'GameMemorySetting', path: 'enabled', owner: 'GEN-083', screens: ['create-game'], note: 'จะเป็น `CreateGameRequest.memory`' },
   { schema: 'JoinStyleFields', path: 'playerCode', owner: 'GEN-082', screens: ['join'], note: 'จะเป็น `JoinRequest.playerCode` + `noStyle`' },
-  { schema: 'GmConsoleResponse', path: 'npcs', owner: 'new', screens: ['gm-console'], note: 'คำสาปบน NPC พร้อมตัวเลข + เทิร์นที่เหลือ (Q-252, ช่องว่างของ GEN-095)' },
-  { schema: 'GmPendingTurn', path: 'checks', owner: 'new', screens: ['gm-console'], note: 'ผลทอยของเทิร์นที่รออนุมัติ: tags, DC, modifier, d20, total (ช่องว่างของ GEN-058)' },
-  { schema: 'GameRevealPlayer', path: 'epilogue', owner: 'new', screens: ['ending'], note: 'ลักษณะ, ฉายาสุดท้าย, บทส่งท้าย (ช่องว่างของ GEN-059)' },
 ];

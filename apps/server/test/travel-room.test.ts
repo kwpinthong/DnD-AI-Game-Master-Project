@@ -1,4 +1,4 @@
-import type { RoomServerMessage } from '@isekai/protocol';
+import { TravelResponse, type RoomServerMessage } from '@isekai/protocol';
 import type { PhaseState, ResolutionInput, Rng } from '@isekai/rules';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { character } from '../src/db/schema.ts';
@@ -89,13 +89,51 @@ describe('GEN-066 travel in the play room', { timeout: 60_000 }, () => {
   const turnIs = (day: number, phase: string, turn: number) => (m: RoomServerMessage) =>
     m.type === 'room' && m.day === day && m.phase === phase && m.turn === turn && m.status === 'collecting';
 
+  it('Q-229 C4: the travel sheet lists destinations by zone with the Stamina cost; the place carries its zone; a trip locks as traveling', async () => {
+    const t = await startedTable(server!, false);
+    put(t.a.memberId, FOUNTAIN);
+    expect((await t.call('GET', '/api/game/travel')).status).toBe(401);
+    const sheet = async () => {
+      const res = await t.call('GET', '/api/game/travel', { token: t.a.token });
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      return TravelResponse.parse(res.body);
+    };
+    const central = { id: 'โซนใจกลางเมือง', name: 'โซนใจกลางเมือง' };
+    const first = await sheet();
+    expect(first.from).toEqual({ id: FOUNTAIN, name: FOUNTAIN, zone: central });
+    const here = first.zones.find((z) => z.sameZone)!;
+    expect(here).toMatchObject({ zone: central, staminaCost: 1, arrives: 'now' });
+    expect(here.destinations.map((d) => d.name)).toEqual(expect.arrayContaining([CHURCH, 'โรงเตี๊ยมและกิลด์นักเดินทาง']));
+    expect(here.destinations.map((d) => d.name)).not.toContain(FOUNTAIN);
+    expect(here.destinations.find((d) => d.name === 'โรงเตี๊ยมและกิลด์นักเดินทาง')).toMatchObject({ tags: ['safe'], action: 'go' });
+    expect(here.destinations.find((d) => d.name === 'โบสถ์ (ชั้นใต้ดิน)')).toMatchObject({ tags: ['restricted'], action: 'infiltrate' });
+    const away = first.zones.filter((z) => !z.sameZone && z.destinations.some((d) => d.name === FOREST))[0]!;
+    expect(away).toMatchObject({ staminaCost: 3, arrives: 'next_turn' });
+    expect(away.destinations.find((d) => d.name === FOREST)).toMatchObject({ id: FOREST, tags: [], action: 'go' });
+    // The rift opens only from the library on a clear night: closed here, with no way to press go.
+    const rift = first.zones.flatMap((z) => z.destinations).find((d) => d.id === RIFT)!;
+    expect(rift).toMatchObject({ tags: ['rift'], action: null });
+    // The sea's HAZARD tag shows from day 5 only.
+    editState(t, (s) => ({ ...s, day: 5 }));
+    expect((await sheet()).zones.flatMap((z) => z.destinations).find((d) => d.id === SEA)!.tags).toEqual(['hazard']);
+    editState(t, (s) => ({ ...s, day: 1 }));
+
+    const a = await enter(t.a);
+    expect(a.lastRoom()!.you.place).toMatchObject({ id: FOUNTAIN, zone: central });
+    expect(a.lastRoom()!.you.lock).toBeNull();
+    const from = a.messages.length;
+    expect(await move(a, FOREST)).toMatchObject({ type: 'move_accepted', kind: 'cross_zone', place: { name: FOREST, zone: { name: 'โซนป่าทิศตะวันออก' } } });
+    const locked = await a.waitFor((m) => m.type === 'room' && m.you.lock?.code === 'traveling', from);
+    expect(locked.type === 'room' && locked.you.lock?.message).toBeTruthy();
+  });
+
   it('C1: fountain -> church (same zone): there now, Stamina -1, and the player still sends this turn an action', async () => {
     const t = await startedTable(server!, false);
     put(t.a.memberId, FOUNTAIN);
     const a = await enter(t.a);
 
     const before = a.messages.length;
-    expect(await move(a, CHURCH)).toEqual({ type: 'move_accepted', kind: 'same_zone', place: { id: SCENARIO_ID.church, name: CHURCH }, arrives: 'now' });
+    expect(await move(a, CHURCH)).toMatchObject({ type: 'move_accepted', kind: 'same_zone', place: { id: SCENARIO_ID.church, name: CHURCH }, arrives: 'now' });
     expect(placeOf(t.a.memberId)).toBe(SCENARIO_ID.church);
     expect(staminaOf(t, t.a.memberId)).toBe(29);
     await a.waitFor((m) => m.type === 'room' && m.you.place?.id === SCENARIO_ID.church, before);
@@ -107,7 +145,7 @@ describe('GEN-066 travel in the play room', { timeout: 60_000 }, () => {
     put(t.a.memberId, FOUNTAIN);
     const [a, b, c] = [await enter(t.a), await enter(t.b), await enter(t.c)];
 
-    expect(await move(a, FOREST)).toEqual({ type: 'move_accepted', kind: 'cross_zone', place: { id: SCENARIO_ID.forest, name: FOREST }, arrives: 'next_turn' });
+    expect(await move(a, FOREST)).toMatchObject({ type: 'move_accepted', kind: 'cross_zone', place: { id: SCENARIO_ID.forest, name: FOREST }, arrives: 'next_turn' });
     expect(placeOf(t.a.memberId)).toBe(FOUNTAIN);
     expect(staminaOf(t, t.a.memberId)).toBe(27);
     expect(state(t).submissions[t.a.memberId]?.text).toContain(FOREST);

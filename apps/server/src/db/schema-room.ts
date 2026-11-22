@@ -57,7 +57,7 @@ export const roomEntry = sqliteTable(
       .notNull()
       .references(() => game.id, { onDelete: 'cascade' }),
     /** `omen` (GEN-070): an Astral Spirit's omen; `from` / `to` like a whisper, the receiver never sees the sender. */
-    kind: text('kind', { enum: ['feed', 'narration', 'whisper', 'omen'] }).notNull(),
+    kind: text('kind', { enum: ['feed', 'narration', 'whisper', 'omen', 'hit'] }).notNull(),
     day: integer('day').notNull(),
     phase: text('phase', { enum: PHASES }).notNull(),
     turn: integer('turn').notNull().default(1),
@@ -72,6 +72,8 @@ export const roomEntry = sqliteTable(
     toMemberId: text('to_member_id'),
     /** Q-177: why this text is the server template (null = the AI GM's own text). Players see only that it is one. */
     fallback: text('fallback', { enum: ['timeout', 'budget', 'invalid', 'error'] }),
+    /** GEN-105 (Q-229): JSON `{ roll?, hit?, finale? }` of the viewer's own roll / the hit's details / an ending narration; null = none. */
+    meta: text('meta'),
     createdAt: integer('created_at').notNull(),
   },
   (t) => [index('room_entry_game').on(t.gameId, t.id)],

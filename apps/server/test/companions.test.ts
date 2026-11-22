@@ -144,6 +144,17 @@ describe('NPC companions from the sheet NPC tab (GEN-054)', { timeout: 60_000 },
     expect((await save(t, t.b, r.marcus!)).body).toMatchObject({ code: 'npc_not_found' });
   });
 
+  it('Q-229 C3: a companion carries its bond as a word + a step of 6, never the affinity number', async () => {
+    const t = await table();
+    const r = await refs(t, t.a);
+    await save(t, t.a, r.noa!);
+    expect((await companions(t, t.a))[0]!.bond).toEqual({ word: 'ห่างเหิน', step: 3 });
+    raiseAffinity(t.a, 'noa', 45);
+    const res = await t.call('GET', '/api/game/companions', { token: t.a.token });
+    expect(CompanionsResponse.parse(res.body).companions[0]!.bond).toEqual({ word: 'สนิท', step: 5 });
+    expect(JSON.stringify(res.body)).not.toMatch(/affinity|45/);
+  });
+
   it('C1: the main companion is the one with the highest affinity; on a tie, the one saved first', async () => {
     const t = await table();
     const r = await refs(t, t.a);

@@ -1,4 +1,4 @@
-import type { ActionVisibility, GmFallbackCause, RoomEntryKind } from '@isekai/protocol';
+import type { ActionVisibility, GmFallbackCause, HitView, RollView, RoomEntryKind } from '@isekai/protocol';
 import { createPhaseState, restorePhaseState, type PhaseState, type TurnPoint } from '@isekai/rules';
 import { and, asc, eq, gt, inArray, max, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
@@ -102,8 +102,16 @@ export function syncCharacterStats(db: DbOrTx, state: PhaseState, now: number): 
 
 export type RoomEntryRow = typeof roomEntry.$inferSelect;
 
+/** What an entry carries besides its text (`room_entry.meta`): `finale` marks the ending told after the last turn. */
+export interface EntryMeta {
+  readonly roll?: RollView;
+  readonly hit?: HitView;
+  readonly finale?: true;
+}
+
 export interface NewEntry {
-  readonly kind: RoomEntryKind;
+  readonly kind: RoomEntryKind | 'hit';
+  readonly meta?: EntryMeta;
   readonly at: TurnPoint;
   readonly locationId: string | null;
   readonly text: string;
@@ -129,6 +137,7 @@ export function insertEntry(db: DbOrTx, gameId: string, entry: NewEntry, recipie
       fromMemberId: entry.fromMemberId ?? null,
       toMemberId: entry.toMemberId ?? null,
       fallback: entry.fallback ?? null,
+      meta: entry.meta ? JSON.stringify(entry.meta) : null,
       createdAt: now,
     })
     .returning()

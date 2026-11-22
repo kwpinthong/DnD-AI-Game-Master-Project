@@ -211,7 +211,8 @@ describe('visibility layer: who sees what (GEN-050)', { timeout: 60_000 }, () =>
   it('every character is placed when the game starts, so players at the same start place see each other', async () => {
     const t = await table();
     const { view } = await playerView(t, t.a);
-    expect(view.place).toEqual({ id: defaultScenario().locations[0]!.id, name: defaultScenario().locations[0]!.name });
+    // Q-229: the place carries its zone (the inn is in the central zone).
+    expect(view.place).toEqual({ id: defaultScenario().locations[0]!.id, name: defaultScenario().locations[0]!.name, zone: { id: 'โซนใจกลางเมือง', name: 'โซนใจกลางเมือง' } });
     expect(view.people.map((p) => p.appearance).sort()).toEqual([t.b.appearance, t.c.appearance].sort());
   });
 

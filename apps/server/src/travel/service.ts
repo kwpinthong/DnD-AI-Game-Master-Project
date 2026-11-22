@@ -9,6 +9,7 @@
  * scenario place whose name is a Location name; a move into a place the scenario has under a Location name
  * stores the scenario's id, anything else stores the Location name.
  */
+import type { TravelResponse } from '@isekai/protocol';
 import { phaseStep, resolveAction, type PhaseState, type PlayerResult, type ResolutionInput, type ResolutionLog, type Rng } from '@isekai/rules';
 import { eq } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
@@ -20,8 +21,8 @@ import { ensurePhaseState, karmaOf, recordAction, savePhaseState, syncCharacterS
 import { getGameScenario } from '../scenario/store.ts';
 import { originOf } from '../game/origin.ts';
 import { START_RULES } from '../game/start-rules.ts';
-import { locationSnapshot, moveCharacter, presenceOf } from '../visibility/store.ts';
-import { hazardStaminaLoss, npcsAt, placeMap, planMove, type MoveKind, type MoveRefusal, type Place, type PlaceMap } from './rules.ts';
+import { ASTRAL_PLANE, locationSnapshot, moveCharacter, presenceOf } from '../visibility/store.ts';
+import { hazardStaminaLoss, npcsAt, placeMap, placeOfPresence, planMove, travelSheet, type MoveContext, type MoveKind, type MoveRefusal, type Place, type ScenarioPlaces } from './rules.ts';
 
 export interface TravelRequest {
   /** A place id (Location name). */
@@ -77,21 +78,7 @@ export function travel(db: DbOrTx, assets: GameAssets, gameId: string, memberId:
     stamina = Math.max(0, stamina - (rolled.log.stamina.before - rolled.log.stamina.after));
   }
 
-  // The player's stored start scenario (GEN-065) unless the caller names one.
-  const startScenario = request.startScenario !== undefined ? request.startScenario : (originOf(db, memberId)?.startScenario ?? null);
-  const spawnPlace = startScenario ? (assets.startScenarios.find((s) => s.name === startScenario)?.location ?? null) : null;
-  const restrictedAccess = startScenario ? START_RULES[startScenario]?.restrictedAccess === true : false;
-  const plan = planMove(map, from, request.to, {
-    day: state.day,
-    phase: state.phase,
-    stamina,
-    karma: karmaOf(db, [memberId]).get(memberId) ?? 0,
-    weather: request.weather ?? null,
-    spawnPlace,
-    restrictedAccess,
-    blackMarketPassword: request.blackMarketPassword === true,
-    ...(infiltration ? { infiltration: infiltration.degree } : {}),
-  });
+  const plan = planMove(map, from, request.to, { ...moveContext(db, assets, state, memberId, stamina, request), ...(infiltration ? { infiltration: infiltration.degree } : {}) });
   if (!plan.ok) {
     if (stamina !== player.stamina) saveStamina(db, gameId, state, memberId, stamina, now);
     return no(plan.code, plan.message, infiltration);
@@ -125,17 +112,38 @@ export function travel(db: DbOrTx, assets: GameAssets, gameId: string, memberId:
   };
 }
 
-const CANNOT_ACT_MESSAGE = 'ตอนนี้ย้ายที่ไม่ได้';
+/** What `planMove` needs of the player now (before any INFILTRATE roll). */
+function moveContext(db: DbOrTx, assets: GameAssets, state: PhaseState, memberId: string, stamina: number, request: Pick<TravelRequest, 'weather' | 'startScenario' | 'blackMarketPassword'>): MoveContext {
+  // The player's stored start scenario (GEN-065) unless the caller names one.
+  const startScenario = request.startScenario !== undefined ? request.startScenario : (originOf(db, memberId)?.startScenario ?? null);
+  return {
+    day: state.day,
+    phase: state.phase,
+    stamina,
+    karma: karmaOf(db, [memberId]).get(memberId) ?? 0,
+    weather: request.weather ?? null,
+    spawnPlace: startScenario ? (assets.startScenarios.find((s) => s.name === startScenario)?.location ?? null) : null,
+    restrictedAccess: startScenario ? START_RULES[startScenario]?.restrictedAccess === true : false,
+    blackMarketPassword: request.blackMarketPassword === true,
+  };
+}
+
+/**
+ * Q-229: the travel sheet of a placed player, with the same rules and the same context as their next `move`
+ * (no weather yet); null = nowhere to go from (not placed before the start, or an Astral Spirit).
+ */
+export function travelSheetOf(db: DbOrTx, assets: GameAssets, gameId: string, memberId: string, now: number): TravelResponse | null {
+  const presence = presenceOf(db, memberId);
+  if (!presence || presence.gameId !== gameId || presence.locationId === ASTRAL_PLANE) return null;
+  const state = ensurePhaseState(db, gameId, now);
+  const map = placeMap(assets);
+  const stamina = state.players[memberId]?.stamina ?? 0;
+  return travelSheet(map, placeOfPresence(map, getGameScenario(db, gameId), presence.locationId), moveContext(db, assets, state, memberId, stamina, {}));
+}
+
+const CANNOT_ACT_MESSAGE ='ตอนนี้ย้ายที่ไม่ได้';
 const TRAVELING_MESSAGE = 'กำลังเดินทาง เทิร์นนี้ใช้ไปกับการเดินทางแล้ว';
 const NOT_PLACED_MESSAGE = 'ตัวละครยังไม่อยู่ในเมือง';
-
-type ScenarioPlaces = { readonly locations: readonly { readonly id: string; readonly name: string }[] } | null | undefined;
-
-/** A presence id as a Location name, else as a scenario place whose name is a Location name; null = unknown. */
-function placeOfPresence(map: PlaceMap, scenario: ScenarioPlaces, locationId: string): Place | null {
-  const name = scenario?.locations.find((l) => l.id === locationId)?.name;
-  return map.place(locationId) ?? (name === undefined ? undefined : map.place(name)) ?? null;
-}
 
 /** What the presence stores for `place`: the scenario's own id when it has the place under its name. */
 function storedId(scenario: ScenarioPlaces, place: Place): string {

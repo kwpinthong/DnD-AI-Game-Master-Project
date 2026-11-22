@@ -28,6 +28,7 @@ import type { HeldTurn, RoomService } from '../room/service.ts';
 import { ensurePhaseState, karmaOf, savePhaseState } from '../room/store.ts';
 import { CryptoRng } from '../rng.ts';
 import { getGameScenario, updateGameScenario } from '../scenario/store.ts';
+import { gmNpcCurses } from '../statuses/curses.ts';
 import { activateCurrentEvent, getTimeline, isBefore, timelinePoint } from '../timeline/store.ts';
 import { surroundingsFor } from '../visibility/views.ts';
 
@@ -167,6 +168,7 @@ function pendingView(db: DbOrTx, gameId: string, turn: HeldTurn): GmPendingTurn 
   return {
     ...(turn.finale ? { finale: true } : {}),
     at: turn.at,
+    ...(edited.checks ? { checks: [...edited.checks] } : {}),
     entries: (edited.entries ?? []).map((e, index) => ({
       index,
       kind: e.kind,
@@ -243,6 +245,7 @@ export function consoleView(db: Db, room: RoomService, assets: GameAssets, gm: M
     legendaries: getGameScenario(db, gm.gameId)?.legendaries ?? [],
     pending: turn ? pendingView(db, gm.gameId, turn) : null,
     fallbacks: fallbacksOf(db, gm.gameId),
+    npcs: gmNpcCurses(db, gm.gameId, new Map((getGameScenario(db, gm.gameId)?.npcs ?? []).map((n) => [n.id, n.name]))),
   };
 }
 
@@ -255,7 +258,7 @@ function fallbacksOf(db: DbOrTx, gameId: string): GmFallbackView[] {
     .orderBy(asc(roomEntry.id))
     .all();
   return rows.flatMap(({ e }) => {
-    if (e.fallback === null || e.kind === 'whisper' || e.kind === 'omen') return [];
+    if (e.fallback === null || e.kind === 'whisper' || e.kind === 'omen' || e.kind === 'hit') return [];
     const reader =
       e.kind === 'narration'
         ? (db

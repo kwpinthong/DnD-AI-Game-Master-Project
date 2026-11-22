@@ -43,7 +43,7 @@ export function registerHistoryRoutes(app: FastifyInstance, db: Db, now: Clock, 
       you: { memberId: me.id, role: me.role },
       members: activeMembers(db, me.gameId).map((m) => ({ name: m.name, role: m.role })),
       timeline: timelineFor(db, me),
-      entries: entriesFor(db, me.gameId, me.id, 0).map((entry) => entryViewOf(db, entry, me)),
+      entries: entriesFor(db, me.gameId, me.id, 0).map((entry) => entryViewOf(db, entry, me, assets)),
       // GEN-059 spoiler rule: the secrets only once the game ended.
       reveal: ended ? revealFor(db, assets, me.gameId) : null,
     };
