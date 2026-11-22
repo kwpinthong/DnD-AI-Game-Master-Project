@@ -272,7 +272,7 @@ const origin: In<typeof p.OriginView> = {
   narration: 'คุณลืมตาขึ้นท่ามกลางกองจานสกปรก…',
 } as const;
 
-const rating: In<typeof p.GameRatingView> = { mine: { score: 9, comment: 'สนุกมาก' }, liked: ['2-HESPERION-1-7'], average: 8.6, raters: 3, members: 4, eligible: true, blocker: null };
+const rating: In<typeof p.GameRatingView> = { mine: { score: 9, comment: 'สนุกมาก' }, liked: ['2-HESPERION-1-7'], thumbs: { '2-HESPERION-1-7': 3 }, average: 8.6, raters: 3, members: 4, eligible: true, blocker: null };
 const learningSource = { sourceGameId: 'g-old', sourceGameName: 'คืนจันทราโลหิต', sourceScore: 8.6, status: 'active', createdAt: 1_795_200_000_000 } as const;
 const learningEntries: In<typeof p.LearningEntryView>[] = [
   {
