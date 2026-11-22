@@ -231,7 +231,7 @@ describe('timeline over the API: start = day 1 Morning, players see no future ev
       await start();
       const { members } = await startedGame((gameId) => {
         const scenario = getGameScenario(server!.orm, gameId)!;
-        const timeline = scenario.timeline.map((e) => (e.id === 'd1-bread' ? { ...e, locationId: scenario.locations[0]!.id } : e));
+        const timeline = scenario.timeline.map((e) => (e.id === 'd1-bread' ? { ...e, locationIds: [scenario.locations[0]!.id] } : e));
         expect(updateGameScenario(server!.orm, gameId, { ...scenario, timeline }).ok).toBe(true);
       });
       const [a, b, c] = members;

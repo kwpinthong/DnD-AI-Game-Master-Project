@@ -290,6 +290,54 @@ describe('Scenario editor (GEN-046)', () => {
     expect(bodyOf(callsTo(fetchMock, 'PUT', '/api/game/scenario')[0]).timeline[2]!.startTurn).toBe(3);
   });
 
+  it('GEN-097: the GM picks several places for an event, or the whole town, and it is sent', async () => {
+    const fetchMock = loggedIn(view(), {
+      'PUT /api/game/scenario': (_url, init) => Response.json({ scenario: JSON.parse(String(init!.body)), locked: false }),
+    });
+    render(<App apiBaseUrl="" />);
+    await openEditor();
+    const placeName = (id: string) => defaultScenario().locations.find((l) => l.id === id)!.name;
+    const day10 = within(events()[3]!).getByRole('group', { name: 'สถานที่' });
+    expect((within(day10).getByLabelText(placeName('temple')) as HTMLInputElement).checked).toBe(true);
+    expect((within(day10).getByLabelText(placeName('fountain')) as HTMLInputElement).checked).toBe(true);
+    expect((within(day10).getByLabelText(placeName('market')) as HTMLInputElement).checked).toBe(false);
+
+    const day7 = within(events()[2]!).getByRole('group', { name: 'สถานที่' });
+    fireEvent.click(within(day7).getByLabelText(placeName('fountain')));
+    const day5 = within(events()[1]!).getByRole('group', { name: 'สถานที่' });
+    expect((within(day5).getByLabelText('ทั้งเมือง') as HTMLInputElement).checked).toBe(true);
+    expect((within(day5).getByLabelText(placeName('temple')) as HTMLInputElement).disabled).toBe(true);
+    const day1 = within(events()[0]!).getByRole('group', { name: 'สถานที่' });
+    fireEvent.click(within(day1).getByLabelText('ทั้งเมือง'));
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
+
+    await screen.findByText('บันทึกแล้ว');
+    const sent = bodyOf(callsTo(fetchMock, 'PUT', '/api/game/scenario')[0]);
+    expect(sent.timeline.map((e) => e.locationIds)).toEqual([null, null, ['temple', 'fountain'], ['temple', 'fountain'], null]);
+  });
+
+  it('GEN-097 C5: an empty place list is sent and the server refusal shows at the places', async () => {
+    const fetchMock = loggedIn(view(), {
+      'PUT /api/game/scenario': () =>
+        Response.json(
+          {
+            code: 'invalid_input',
+            message: 'scenario ไม่ถูกต้อง',
+            fields: { 'timeline.2.locationIds': 'ต้องมีสถานที่อย่างน้อย 1 แห่ง', 'timeline.3.locationIds.1': 'ไม่มีสถานที่ id "atlantis"' },
+          },
+          { status: 400 },
+        ),
+    });
+    render(<App apiBaseUrl="" />);
+    await openEditor();
+    const day7 = within(events()[2]!).getByRole('group', { name: 'สถานที่' });
+    fireEvent.click(within(day7).getByLabelText(defaultScenario().locations.find((l) => l.id === 'temple')!.name));
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
+    expect(await within(events()[2]!).findByText('ต้องมีสถานที่อย่างน้อย 1 แห่ง')).toBeTruthy();
+    expect(within(events()[3]!).getByText('ไม่มีสถานที่ id "atlantis"')).toBeTruthy();
+    expect(bodyOf(callsTo(fetchMock, 'PUT', '/api/game/scenario')[0]).timeline[2]!.locationIds).toEqual([]);
+  });
+
   it('back to the lobby', async () => {
     loggedIn(view());
     render(<App apiBaseUrl="" />);

@@ -128,6 +128,51 @@ export function ScenarioEditor({
     );
   }
 
+  /**
+   * GEN-097: the event's places, any number of them, or the whole town (null). An empty list is sent as is
+   * so the server's refusal names the field; errors of single places (`locationIds.1`) show here too.
+   */
+  const placesInput = (e: Event, i: number) => {
+    const p = `timeline.${i}.locationIds`;
+    const townWide = e.locationIds === null;
+    const chosen = e.locationIds ?? [];
+    const toggle = (id: string, on: boolean) =>
+      setAt('timeline', i, { locationIds: on ? [...chosen, id] : chosen.filter((x) => x !== id) });
+    const errors = Object.entries(fields).filter(([path]) => path === p || path.startsWith(`${p}.`));
+    return (
+      <fieldset>
+        <legend>สถานที่</legend>
+        <label>
+          <input
+            type="checkbox"
+            checked={townWide}
+            disabled={locked}
+            onChange={(x) => setAt('timeline', i, { locationIds: x.target.checked ? null : [] })}
+          />{' '}
+          ทั้งเมือง
+        </label>
+        {draft!.locations.map((l) => (
+          <label key={l.id}>
+            {' '}
+            <input
+              type="checkbox"
+              checked={chosen.includes(l.id)}
+              disabled={locked || townWide}
+              onChange={(x) => toggle(l.id, x.target.checked)}
+            />{' '}
+            {l.name}
+          </label>
+        ))}
+        {errors.map(([path, message]) => (
+          <small key={path} className="field-error">
+            {' '}
+            {message}
+          </small>
+        ))}
+      </fieldset>
+    );
+  };
+
   const eventRow = (e: Event, i: number) => {
     const p = `timeline.${i}`;
     const kindNote = e.kind === 'finale' ? ' (ฉากจบ)' : e.kind === 'climax' ? ' (จุดไคลแมกซ์)' : '';
@@ -176,6 +221,7 @@ export function ScenarioEditor({
         ))}
         {hint && numberInput(`${e.id}-hint-day`, 'ปูเรื่องวัน', `${p}.foreshadowAt.day`, hint.day, (day) => setHint({ day }))}
         {hint && select(`${e.id}-hint-phase`, 'ปูเรื่องช่วง', `${p}.foreshadowAt.phase`, hint.phase, PHASES, (phase) => setHint({ phase }))}
+        {placesInput(e, i)}
         {field(`${e.id}-crisis`, 'วิกฤต (NPC เกรด A ขึ้น S ได้)', `${p}.crisis`, (id) => (
           <input id={id} type="checkbox" checked={e.crisis} disabled={locked} onChange={(x) => setAt('timeline', i, { crisis: x.target.checked })} />
         ))}
@@ -269,7 +315,7 @@ export function ScenarioEditor({
             foreshadowAt: null,
             strategyIds: [],
             crisis: false,
-            locationId: null,
+            locationIds: null,
             npcIds: [],
             gmNote: '',
           },

@@ -77,11 +77,28 @@ describe('GEN-071 default scenario from the sheet', () => {
       expect(event.outcome).toBe(row.driftIfIgnored);
       expect(event.foreshadowing).toBe(row.foreshadowing);
       expect(event.foreshadowAt).toEqual(sheetTrigger(row.foreshadowing));
-      if (event.locationId !== null) expect(row.location).toContain(places.get(event.locationId));
+      for (const id of event.locationIds ?? []) expect(row.location).toContain(places.get(id));
     });
     expect(scenario.timeline.map((e) => e.day)).toEqual([1, 5, 7, 10, 12]);
     expect(scenario.timeline.filter((e) => e.kind === 'finale').map((e) => e.day)).toEqual([12]);
     expect(scenario.timeline.at(-1)).toMatchObject({ day: 12, phase: 'HESPERION', endPhase: 'NOCTHERION', kind: 'finale' });
+  });
+
+  it('GEN-097 C6: an event at places gets every sheet Location its World_Timeline Location names, in sheet order', () => {
+    const scenario = defaultScenario();
+    const idOf = new Map(scenario.locations.map((l) => [l.name, l.id]));
+    /** "A & B" / "A / B" → the ids of the parts that are Location names (the scenario's name → id). */
+    const sheetPlaces = (text: string) => text.split(/\s*[&/]\s*/).flatMap((name) => (idOf.has(name) ? [idOf.get(name)!] : []));
+    scenario.timeline.forEach((event, i) => {
+      if (event.locationIds !== null) expect(event.locationIds, event.id).toEqual(sheetPlaces(assets.worldTimeline[i]!.location));
+    });
+    const byDay = new Map(scenario.timeline.map((e) => [e.day, e.locationIds]));
+    expect(byDay.get(10)).toEqual(sheetPlaces(assets.worldTimeline.find((r) => r.day === 10)!.location));
+    expect(byDay.get(10)).toHaveLength(2);
+    expect(byDay.get(7)).toEqual(sheetPlaces(assets.worldTimeline.find((r) => r.day === 7)!.location));
+    // Town-wide (Q-080): the disaster of day 5 and the finale.
+    expect(byDay.get(5)).toBeNull();
+    expect(byDay.get(12)).toBeNull();
   });
 
   it('C1 / Q-129: every place of the default scenario is a sheet Location, by name', () => {

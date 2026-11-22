@@ -566,7 +566,7 @@ function narrationAudiences(
   log: PhaseActionsLog,
   textOf: ReadonlyMap<string, string>,
   start: ReadonlyMap<string, string>,
-  activeEvents: readonly { id: string; title: string; place: string | null }[],
+  activeEvents: readonly { id: string; title: string; places: readonly string[] | null }[],
   evidenceFor: (o: ActionOutcome) => Beat[],
 ): Audience[] {
   const ref = (memberId: string) => world.players.get(memberId)!.ref;
@@ -603,10 +603,12 @@ function narrationAudiences(
     }
     if (o.status !== 'skipped' && o.visibility === 'public') push(placeBeats, o.locationId, { ...base, kind: 'public_action' });
   }
+  // GEN-097: an event at several places is a beat of each of their feeds; a town-wide one of none.
   for (const e of activeEvents) {
-    if (e.place === null) continue;
-    const placeId = world.places.find((p) => p.name === e.place)?.id;
-    if (placeId) push(placeBeats, placeId, { actionId: `event:${e.id}`, kind: 'event', actor: null, text: e.title, result: 'scene', target: null, moved: null, items: [] });
+    for (const place of e.places ?? []) {
+      const placeId = world.places.find((p) => p.name === place)?.id;
+      if (placeId) push(placeBeats, placeId, { actionId: `event:${e.id}`, kind: 'event', actor: null, text: e.title, result: 'scene', target: null, moved: null, items: [] });
+    }
   }
 
   const castOf = (beats: Beat[], extra: string[], self: string | null) => {

@@ -25,7 +25,8 @@ export interface ActiveEventContext {
   /** What the AI GM already set this period, or null. */
   chosenOutcome: string | null;
   crisis: boolean;
-  place: string | null;
+  /** Names of the event's places (GEN-097); null = the whole town. */
+  places: string[] | null;
   npcs: string[];
   /** The Day10_Strategies rows the event names that exist in the assets; none = the drift outcome stands (C7). */
   strategies: StrategyContext[];
@@ -143,7 +144,7 @@ export function buildEventContext(
         defaultOutcome: clean(event.outcome),
         chosenOutcome: s.outcome === null ? null : clean(s.outcome),
         crisis: event.crisis,
-        place: event.locationId === null ? null : (places.get(event.locationId) ?? null),
+        places: event.locationIds === null ? null : event.locationIds.flatMap((id) => places.get(id) ?? []),
         npcs: event.npcIds.map(npcToken),
         strategies: strategiesOf(event, assets).map((st) => ({ ...st, requiredNpcs: clean(st.requiredNpcs) })),
       });

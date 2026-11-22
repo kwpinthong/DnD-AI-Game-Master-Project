@@ -425,7 +425,8 @@ export function insertEvent(db: Db, gm: MemberRow, input: unknown, now: number):
     foreshadowAt: null,
     strategyIds: [],
     crisis: false,
-    locationId: req.locationId,
+    // The console adds an event at one place or the whole town (GEN-097 lists stay a scenario-editor thing).
+    locationIds: req.locationId === null ? null : [req.locationId],
     npcIds: [],
     gmNote: '',
   };
@@ -434,7 +435,7 @@ export function insertEvent(db: Db, gm: MemberRow, input: unknown, now: number):
     const updated = updateGameScenario(tx, gm.gameId, { ...scenario, timeline: [...scenario.timeline, event] }, now);
     if (!updated.ok) return updated;
     activateCurrentEvent(tx, gm.gameId, event.id, now);
-    const after = { day: event.day, phase: event.phase, title: event.title, description: event.description, outcome: event.outcome, locationId: event.locationId };
+    const after = { day: event.day, phase: event.phase, title: event.title, description: event.description, outcome: event.outcome, locationId: req.locationId };
     logOverride(tx, gm, { kind: 'event', at: pointOf(state), target: `event:${event.id}`, before: null, after, reason: req.reason }, now);
     return updated;
   });

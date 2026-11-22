@@ -179,7 +179,8 @@ const template: ScenarioInput = {
   // Sheet World_Timeline tab, word for word: Event_Name = title, Player_Intervention_Effects =
   // interventionEffects, World_Drift_If_Ignored = outcome (what happens if nobody steps in),
   // Foreshadowing = foreshadowing at its Foreshadowing_Trigger morning. Town-wide events have no place
-  // (Q-080); an event the sheet puts in two places uses the first one that is a Location.
+  // (Q-080); otherwise `locationIds` = every part of the sheet's Location ("A & B", "A / B") that is a
+  // Location row, in sheet order (GEN-097, Q-160).
   timeline: [
     {
       id: 'd1-bread',
@@ -191,7 +192,7 @@ const template: ScenarioInput = {
       outcome: 'ชาวเมืองติดคำสาปจำนวนมาก ฐานมวลชนลัทธิในเมืองเพิ่มขึ้น +30% ส่งผลให้วันที่ 7 และ 10 รับมือยากขึ้น',
       // "Starts at once": the day 1 morning itself, so no earlier trigger.
       foreshadowing: 'เริ่มต้นแคมเปญทันที (ป้ายประกาศเชิญชวนร่วมพิธีแจกทาน)',
-      locationId: 'fountain',
+      locationIds: ['fountain'],
       npcIds: ['nun', 'archbishop'],
     },
     {
@@ -204,7 +205,7 @@ const template: ScenarioInput = {
       foreshadowing: 'เช้าวันที่ 4: ข่าวลือสัตว์ป่าอพยพหนีออกจากป่าทิศตะวันออก',
       foreshadowAt: { day: 4, phase: 'EOSORIA' },
       crisis: true,
-      locationId: null, // ทั่วทั้งเมือง / ป่า / ชายฝั่ง
+      locationIds: null, // ทั่วทั้งเมือง / ป่า / ชายฝั่ง
     },
     {
       id: 'd7-kidnapping',
@@ -217,7 +218,8 @@ const template: ScenarioInput = {
       foreshadowing: 'เช้าวันที่ 6: ประกาศเตือนคนหายปริศนาในตรอกเมือง',
       foreshadowAt: { day: 6, phase: 'EOSORIA' },
       crisis: true,
-      locationId: 'temple', // ย่านชุมชน & โบสถ์
+      // ย่านชุมชน & โบสถ์: ย่านชุมชน is not a Location row of the sheet yet (open question for Nok).
+      locationIds: ['temple'],
       npcIds: ['noble', 'guard', 'archbishop', 'dark-spirit'],
     },
     {
@@ -234,7 +236,7 @@ const template: ScenarioInput = {
       foreshadowAt: { day: 9, phase: 'EOSORIA' },
       strategyIds: ['D10-S1', 'D10-S2', 'D10-S3', 'D10-S4'],
       crisis: true,
-      locationId: 'temple', // โบสถ์ / น้ำพุกลางเมือง
+      locationIds: ['temple', 'fountain'], // โบสถ์ / น้ำพุกลางเมือง
       npcIds: ['archbishop', 'dark-spirit'],
     },
     {
@@ -250,7 +252,7 @@ const template: ScenarioInput = {
         'อุกกาบาตหมูเด้งพุ่งชนเมือง! ผู้เล่นที่ไม่มีบัพป้องกันระดับสูงหรือไม่อยู่ในจุดหลบภัยจะพ่ายแพ้ (Bad Ending) เหลือรอดเฉพาะผู้ถือบัพ S/SS',
       foreshadowing: 'เช้าวันที่ 11: ท้องฟ้าเปลี่ยนเป็นสีม่วงอมชมพูและเกิดเสียงคำรามบนชั้นบรรยากาศ',
       foreshadowAt: { day: 11, phase: 'EOSORIA' },
-      locationId: null, // ท้องฟ้าเหนือเมือง / โบสถ์แห่งรุ่งอรุณ / ทะเล
+      locationIds: null, // ท้องฟ้าเหนือเมือง / โบสถ์แห่งรุ่งอรุณ / ทะเล (the whole town)
       npcIds: ['horizon-watcher', 'archivist'],
     },
   ],
