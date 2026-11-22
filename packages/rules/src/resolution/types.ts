@@ -123,7 +123,16 @@ export interface Effects {
   readonly removeStatus: readonly string[];
 }
 
-export type Check = { readonly type: 'dc'; readonly dc: Dc } | { readonly type: 'none' };
+/** `pvp`: the target is a player and the server computes DC_pvp (spec §10.3); needs `ResolutionInput.pvp`. */
+export type Check = { readonly type: 'dc'; readonly dc: Dc } | { readonly type: 'pvp' } | { readonly type: 'none' };
+
+/** Set by the cross-player rules (GEN-060) when the action targets a player. */
+export interface PvpContext {
+  /** DC_pvp = 11 + clamp(stat(B, 'defense') + defense(B), -10, +10). */
+  readonly dc: number;
+  /** clamp(stat(B, 'observe') + awareness + perception(B), -10, +10) when B rolls to notice a Secret; null = B does not roll. */
+  readonly observeModifier: number | null;
+}
 
 /** What the AI GM proposes for one action, before any die is rolled (spec §13, single-action subset). */
 export interface ResolutionProposal {
@@ -147,6 +156,8 @@ export interface ResolutionProposal {
 export interface ResolutionInput {
   readonly state: ResolutionState;
   readonly proposal: ResolutionProposal;
+  /** Only for an action that targets a player (GEN-060). */
+  readonly pvp?: PvpContext;
 }
 
 export type ProposalErrorCode =
@@ -190,7 +201,8 @@ export interface LoggedModifier {
 }
 
 export interface CheckLog {
-  readonly dc: Dc;
+  /** A ladder DC, or DC_pvp for a player target. */
+  readonly dc: number;
   readonly d20: number;
   readonly modifiers: readonly LoggedModifier[];
   readonly modifierSum: number;
@@ -223,6 +235,10 @@ export interface ResolutionLog {
   readonly degree: Degree;
   readonly caught: boolean;
   readonly observation: { readonly npcId: string; readonly d20: number; readonly total: number } | null;
+  /** The target player's roll to notice a Secret (GEN-060): rolled after the action d20, before any NPC witness. */
+  readonly targetObservation: { readonly d20: number; readonly modifier: number; readonly total: number } | null;
+  /** The target player noticed, so a success / crit became a fail (spec §10.4). */
+  readonly interrupted: boolean;
   readonly stamina: { readonly before: number; readonly cost: number; readonly net: number; readonly after: number };
   readonly rep: ChangeLog;
   readonly karma: ChangeLog;
