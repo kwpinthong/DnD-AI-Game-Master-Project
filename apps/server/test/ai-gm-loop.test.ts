@@ -77,11 +77,15 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     cleanup();
   });
 
+  const logs: string[] = [];
+
   async function boot(env: Record<string, string> = {}, handler?: Handler): Promise<void> {
     provider = gmProvider(handler);
+    logs.length = 0;
     server = await startTestServer(dataDir, {
       aiProvider: provider,
       ai: loadAiConfig({ AI_PROVIDER: 'mock', AI_MAX_RETRIES: '0', AI_RETRY_DELAY_MS: '0', ...env }),
+      aiLog: (line) => logs.push(line),
     });
   }
 
@@ -249,6 +253,51 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(lastUserText(forA[1]!)).toContain('name_leak');
     expect(JSON.stringify(clients[0]!.entries())).not.toContain(DARIN.name);
     expect(turnEntries(clients[0]!, 1, 'EOSORIA', 1).filter((e) => e.kind === 'narration')).toHaveLength(1);
+  });
+
+  it('Q-151: a narration still wrong after its repair gets the server template per beat and the game goes on', async () => {
+    let refA = '';
+    const BAD = 'ข้อความเสียของเอไอ';
+    await boot({}, (req, n) => {
+      if (!isNarration(req)) return noRoll(req, n);
+      const audience = narrationFor(req);
+      const broken = ('player' in audience && audience.player === refA) || ('place' in audience && audience.place === 'inn');
+      return broken ? mockReply.ok({ segments: [{ actionId: 'act-made-up', text: `${BAD} กับ${DARIN.name}` }] }) : undefined;
+    });
+    const t = await startedTable(server!, false);
+    refA = refOf(t.a);
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    const texts = ['เช็ดโต๊ะในโรงเตี๊ยม', 'สั่งน้ำชาร้อน', 'ซ่อมเก้าอี้'];
+    // The game is not stuck: the next turn opens for everyone.
+    await playTurn(clients, texts, { day: 1, phase: 'EOSORIA', turn: 2 });
+    expect(turnRows()).toEqual([expect.objectContaining({ status: 'applied' })]);
+
+    // A's private narration and the inn feed: one first try + one repair each, then the template.
+    const isBroken = (r: AiCallRequest) => {
+      if (!isNarration(r)) return false;
+      const a = narrationFor(r);
+      return ('player' in a && a.player === refA) || ('place' in a && a.place === 'inn');
+    };
+    expect(provider.requests.filter(isBroken)).toHaveLength(4);
+    const mine = turnEntries(clients[0]!, 1, 'EOSORIA', 1).filter((e) => e.kind === 'narration');
+    expect(mine).toHaveLength(1);
+    expect(mine[0]!.text).toContain(texts[0]);
+    expect(mine[0]!.text).toContain('คุณ');
+    expect(mine[0]!.text).toMatch(/สำเร็จ|พลาด/);
+    // The inn feed tells each Public action of the inn, from the validated outcome.
+    const feed = turnEntries(clients[1]!, 1, 'EOSORIA', 1).filter((e) => e.kind === 'feed');
+    expect(feed.some((e) => texts.every((x) => e.text.includes(x)))).toBe(true);
+    for (const c of clients) {
+      expect(JSON.stringify(c.entries())).not.toContain(BAD);
+    }
+    // A does not know B's real name: the template uses how B looks.
+    expect(JSON.stringify(clients[0]!.entries())).not.toContain(DARIN.name);
+    // The fallback is logged (which audience, not the text).
+    const fallbackLines = logs.filter((l) => l.includes('fallback'));
+    expect(fallbackLines).toHaveLength(2);
+    for (const line of logs) {
+      for (const secret of [...texts, BAD, LIN.name, DARIN.name, MEKHA.name]) expect(line).not.toContain(secret);
+    }
   });
 
   it('C4: a constraint the AI sets stays in activeConstraints every turn until the AI releases it with a reason', async () => {

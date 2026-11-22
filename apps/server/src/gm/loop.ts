@@ -138,6 +138,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     maxOutputTokens: number;
     budget: number;
     check: (value: T) => GmError[];
+    /** Q-151: what to use when the answer is still wrong after the repair (narration only); without it → stuck. */
+    fallback?: { label: string; make: () => T };
     signal?: AbortSignal;
   }): Promise<T> {
     const first: { role: 'user' | 'assistant'; text: string }[] = [{ role: 'user', text: JSON.stringify(opts.context) }];
@@ -165,6 +167,10 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         { role: 'assistant' as const, text: JSON.stringify(result.value) },
         { role: 'user' as const, text: JSON.stringify({ errors, instruction: 'แก้ทุกข้อแล้วตอบใหม่ทั้งก้อนในรูปแบบเดิม' }) },
       ];
+    }
+    if (opts.fallback) {
+      log(`[gm] game=${opts.gameId} purpose=${opts.purpose} audience=${opts.fallback.label} fallback: server template`);
+      return opts.fallback.make();
     }
     return stuck(`still invalid after repair (${opts.purpose})`, opts.gameId);
   }
@@ -293,6 +299,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           maxOutputTokens: 1_500,
           budget: 'player' in ctx.audience ? CONTEXT_BUDGET.narrate_player : CONTEXT_BUDGET.narrate_place,
           check: (n) => checkNarration(ctx, n, forbidden),
+          fallback: { label: audience.key, make: () => templateNarration(ctx) },
           ...(signal ? { signal } : {}),
         }));
       if (!saved) saveNarration(db, gameId, at, audience.key, out, now());
@@ -450,6 +457,32 @@ function narrationAudiences(
     out.push({ key: `player:${p.ref}`, placeId, readers: [memberId], ctx: { audience: { player: p.ref }, cast: castOf(beats, [p.ref], p.ref), npcs: npcsAt(placeId), beats } });
   }
   return out;
+}
+
+const TEMPLATE_RESULT: Record<string, string> = {
+  crit: 'สำเร็จอย่างงดงาม',
+  success: 'สำเร็จ',
+  fail: 'พลาด',
+  fumble: 'พลาดอย่างหนัก',
+  no_target: 'แต่เป้าหมายไม่อยู่ตรงนั้นแล้ว',
+  skipped: 'แต่ไม่ได้ลงมือ',
+  blocked: 'แต่ทำไม่ได้',
+};
+
+/**
+ * Q-151 (ADR §2 step 8): the server's own text, one segment per beat, when the AI narration is still wrong
+ * after its repair. Built only from the audience's beats (the validated outcome), with tokens for people,
+ * so it never names someone the reader does not know nor tells what happened elsewhere.
+ */
+export function templateNarration(ctx: Pick<NarrationContext, 'beats'>): GmNarration {
+  return {
+    segments: ctx.beats.map((b) => {
+      const who = b.actor === null ? '' : `{{p:${b.actor}}}`;
+      const outcome = TEMPLATE_RESULT[b.result] ?? '';
+      const text = [who, b.text, outcome].filter((s) => s.length > 0).join(' ');
+      return { actionId: b.actionId, text: (text.length > 0 ? text : 'มีบางอย่างเกิดขึ้น').slice(0, 800) };
+    }),
+  };
 }
 
 /** Real names (players and NPCs) at least one reader does not know (GEN-050 / GEN-067). */
