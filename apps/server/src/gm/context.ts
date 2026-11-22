@@ -155,7 +155,7 @@ export interface TurnContext {
   npcs: { id: string; alias: string; rank: string; place: string; curses: string[] }[];
   /** Every verb / target tag the game data has (GEN-064). */
   tagVocabulary: string[];
-  events: Pick<EventContext, 'active' | 'past'>;
+  events: { active: Omit<EventContext['active'][number], 'defaultOutcome'>[]; past: EventContext['past'] };
   memory: { saga: string | null; yesterday: string | null; today: string[] };
 }
 
@@ -235,7 +235,9 @@ export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnConte
     places: world.places,
     npcs: world.npcs.map((n) => ({ id: n.id, alias: n.alias, rank: n.rank, place: n.locationId, curses: (state.npcs[n.id]?.statuses ?? []).filter((st) => st.origin === 'curse').map((st) => st.label) })),
     tagVocabulary: [...input.vocabulary],
-    events: { active: events.active, past: events.past },
+    // GEN-111: the drift outcome describes what comes after (e.g. "วันที่ 7 และ 10"); an active event hands the AI only what it
+    // happens now, so the narration cannot run ahead of the day.
+    events: { active: events.active.map(({ defaultOutcome: _ahead, ...now }) => now), past: events.past },
     memory: memoryContext(db, world.gameId, at),
   };
 }
