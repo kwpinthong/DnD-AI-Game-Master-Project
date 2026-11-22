@@ -86,10 +86,12 @@ describe('NPC companions (GEN-054, sheet NPC tab)', () => {
     expect(validateProposal(baseState(), proposed).map((e) => [e.code, e.path])).toEqual([['out_of_range', 'onSuccess.affinity[0].delta']]);
   });
 
-  it('C3 (Q-103): only grade B hides its real name until revealed; F / A / S show it from the start', () => {
-    expect(npcNameShown('B', false)).toBe(false);
-    expect(npcNameShown('B', true)).toBe(true);
-    for (const grade of ['F', 'A', 'S', 'SS'] as const) expect(npcNameShown(grade, false)).toBe(true);
+  it('C3 (Q-103 + Q-219): grades B and S hide their real name until revealed; F / A (and an evolved SS) show it from the start', () => {
+    for (const grade of ['B', 'S'] as const) {
+      expect(npcNameShown(grade, false)).toBe(false);
+      expect(npcNameShown(grade, true)).toBe(true);
+    }
+    for (const grade of ['F', 'A', 'SS'] as const) expect(npcNameShown(grade, false)).toBe(true);
   });
 
   it('C4: Noa at affinity +70 with karma +70 takes the Good path, karma -70 the Evil path; +69 on either stays F', () => {

@@ -25,7 +25,7 @@ export interface SheetNpc {
   readonly key: string;
   readonly record: NpcRecord;
   readonly grade: Rank;
-  /** What players call a grade B NPC before the reveal. */
+  /** What players call a grade B / S NPC before the reveal: the sheet's Public_Alias (else the short name). */
   readonly hiddenName: string;
   /** The real name (from the true-name cell for grade B; the short name otherwise). */
   readonly realName: string;
@@ -70,7 +70,8 @@ function readNpc(assets: GameAssets, record: NpcRecord): SheetNpc {
     key,
     record,
     grade: record.grade,
-    hiddenName: key,
+    // Grade B's Public_Alias is its short name; grade S's is the description it goes by (Q-219).
+    hiddenName: record.publicAlias || key,
     realName: record.grade === 'B' ? (trueNames[0]?.name ?? key) : key,
     revealAffinity: reveal ? Number(reveal[1]) : null,
     rewards: record.rewards.split(' / ').map((segment) => rewardSegment(assets, record.grade, segment)),

@@ -114,6 +114,21 @@ describe('GEN-071 default scenario from the sheet', () => {
     expect(npcs.find((n) => n.id === 'noble')!.alias).toBe('ลอร์ดจูเลียน แวนเดอร์บิลต์ (ขุนนางผู้มาเยือน)');
   });
 
+  it('Q-220: grade F / A aliases are the sheet Public_Alias word for word; grade S goes by its Public_Alias too (Q-219)', () => {
+    const aliases = Object.fromEntries(defaultScenario().npcs.filter((n) => n.rank !== 'B').map((n) => [n.id, n.alias]));
+    expect(aliases).toEqual({
+      beggar: 'โนอา — เด็กขอทานตาบอดข้างหนึ่ง',
+      amnesiac: 'ลูเซีย — หญิงสาวผู้พกนาฬิกาพกตาย',
+      noble: 'ลอร์ดจูเลียน แวนเดอร์บิลต์ (ขุนนางผู้มาเยือน)',
+      archbishop: 'อาร์คบิชอป มัลคอล์ม (นักบวชผู้ใจบุญประจำเมือง)',
+      archivist: 'เลดี้เซเรน่า แห่งหอจดหมายเหตุ',
+      'light-spirit': 'ภูตแห่งแสงในแท่นบูชา',
+      'dark-spirit': 'เงาในรอยแยกใต้แท่นพิธี',
+      'horizon-watcher': 'ผู้เฝ้ามองเส้นขอบฟ้า',
+    });
+    for (const n of defaultScenario().npcs) expect(n.alias, n.id).toBe(assets.npc(n.name)!.publicAlias);
+  });
+
   it('C1: the finale lasts both of its periods (4 turns) and resolves only at the end of the game', () => {
     advanceTimeline(opened.db, GAME, { day: 12, phase: 'HESPERION' });
     expect(statusOf('d12-meteor').status).toBe('active');

@@ -143,7 +143,8 @@ export function rollOrigins(db: DbOrTx, gameId: string, assets: GameAssets, rng:
     }
     placeCharacter(db, gameId, memberId, chance.locationId, now);
     const met = rule?.meetsNpc ? scenario.npcs.find((n) => n.name === rule.meetsNpc) : undefined;
-    if (met) db.insert(npcBond).values({ memberId, npcId: met.id, updatedAt: now }).onConflictDoNothing().run();
+    // Met from the start: the name is known (Q-219: a grade S NPC hides it until met).
+    if (met) db.insert(npcBond).values({ memberId, npcId: met.id, nameRevealed: true, updatedAt: now }).onConflictDoNothing().run();
   }
 }
 

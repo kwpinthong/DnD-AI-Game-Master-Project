@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AiCallRequest, AiCallResult, AiProvider } from '../src/ai/provider.ts';
 import { mockReply } from '../src/ai/providers/mock.ts';
 import { loadGameAssets } from '../src/assets/load.ts';
+import { npcStateFor } from '../src/companions/store.ts';
 import { applyPhaseActions, crossPlayerState } from '../src/crossplayer/phase.ts';
 import { tagContexts } from '../src/crossplayer/tags.ts';
 import { rollSpawn, spawnTable, treatChronicIllness } from '../src/game/origin.ts';
@@ -187,6 +188,9 @@ describe('GEN-065 start scenarios', { timeout: 60_000 }, () => {
     // Met แอสทรา (scenario NPC horizon-watcher): the GEN-054 bond row exists for C only.
     expect(dbRow('select npc_id from npc_bond where member_id = ? and npc_id = ?', t.c.memberId, 'horizon-watcher')).toBeDefined();
     expect(dbRow('select npc_id from npc_bond where member_id = ? and npc_id = ?', t.a.memberId, 'horizon-watcher')).toBeUndefined();
+    // Q-219: grade S hides its real name until met; C has met her, so C knows "แอสทรา" and A does not.
+    expect(npcStateFor(server!.orm, assets, t.c.memberId, 'horizon-watcher')).toMatchObject({ name: 'แอสทรา', nameRevealed: true });
+    expect(npcStateFor(server!.orm, assets, t.a.memberId, 'horizon-watcher')).toMatchObject({ name: 'ผู้เฝ้ามองเส้นขอบฟ้า', nameRevealed: false });
 
     for (const other of [t.a, t.b]) {
       for (const path of ['/api/game/origin', '/api/game/surroundings', '/api/game/character']) {

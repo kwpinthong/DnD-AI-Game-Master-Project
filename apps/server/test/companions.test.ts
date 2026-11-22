@@ -194,14 +194,38 @@ describe('NPC companions from the sheet NPC tab (GEN-054)', { timeout: 60_000 },
     expect((await npcsSeenBy(t, t.b)).find((n) => n.ref === r.elena)).toMatchObject({ name: 'แม่ชีผู้เหนื่อยล้าแห่งโบสถ์เก่า', nameRevealed: false });
   });
 
-  it('C3 (Q-103): grades F / A / S show their sheet name from the start', async () => {
+  it('C3 (Q-103 / Q-220): grades F / A show their sheet name from the start; B its alias', async () => {
     const t = await table();
     const r = await refs(t, t.a);
     const byRef = new Map((await npcsSeenBy(t, t.a)).map((n) => [n.ref, n]));
     expect(byRef.get(r.noa!)).toEqual({ ref: r.noa, name: 'โนอา', nameRevealed: true });
+    expect(byRef.get(r.lucia!)).toEqual({ ref: r.lucia, name: 'ลูเซีย', nameRevealed: true });
     expect(byRef.get(r.julian!)).toEqual({ ref: r.julian, name: 'ลอร์ดจูเลียน แวนเดอร์บิลต์', nameRevealed: true });
-    expect(byRef.get(r.astra!)).toEqual({ ref: r.astra, name: 'แอสทรา', nameRevealed: true });
+    expect(byRef.get(r.serena!)).toEqual({ ref: r.serena, name: 'เลดี้เซเรน่า แห่งหอจดหมายเหตุ', nameRevealed: true });
     expect(byRef.get(r.garrett!)).toMatchObject({ name: 'ทหารยามหน้าตาบึ้งตึง', nameRevealed: false });
+  });
+
+  it('Q-219: grade S shows its sheet Public_Alias until met / awakened; awakening reveals the real name to that player only', async () => {
+    const t = await table();
+    const r = await refs(t, t.a);
+    const seen = async (who: Seat, ref: string) => (await npcsSeenBy(t, who)).find((n) => n.ref === ref);
+    expect(await seen(t.a, r.aurelia!)).toEqual({ ref: r.aurelia, name: 'ภูตแห่งแสงในแท่นบูชา', nameRevealed: false });
+    expect(await seen(t.a, r.noctis!)).toEqual({ ref: r.noctis, name: 'เงาในรอยแยกใต้แท่นพิธี', nameRevealed: false });
+    expect(await seen(t.a, r.astra!)).toEqual({ ref: r.astra, name: 'ผู้เฝ้ามองเส้นขอบฟ้า', nameRevealed: false });
+    expect(state(t.a, 'aurelia')).toMatchObject({ name: 'ภูตแห่งแสงในแท่นบูชา', nameRevealed: false });
+    // Affinity alone (the grade B rule) does not reveal a grade S name.
+    raiseAffinity(t.a, 'astra', 20);
+    expect(await seen(t.a, r.astra!)).toMatchObject({ name: 'ผู้เฝ้ามองเส้นขอบฟ้า', nameRevealed: false });
+
+    // Awakened (Aurelia: karma +50 and the prayer at the secret altar): the real name, and the narration
+    // reveal flag (npc_bond.name_revealed) for this player.
+    setKarma(t.a, 50);
+    setNpcFlag(server!.orm, server!.assets, t.a.memberId, 'aurelia', 'prayed_at_secret_altar', at(3));
+    expect(state(t.a, 'aurelia')).toMatchObject({ evolved: true });
+    expect(await seen(t.a, r.aurelia!)).toEqual({ ref: r.aurelia, name: 'ออเรเลีย', nameRevealed: true });
+    expect(npcBondsOf(server!.orm, t.a.memberId).find((b) => b.npcId === 'aurelia')?.nameRevealed).toBe(true);
+    const rB = await refs(t, t.b);
+    expect(await seen(t.b, rB.aurelia!)).toEqual({ ref: rB.aurelia, name: 'ภูตแห่งแสงในแท่นบูชา', nameRevealed: false });
   });
 
   it('C4: Noa at +70 with karma +70 becomes Seraphiel (SS), karma -70 Malakor; +69 on either stays F', async () => {
