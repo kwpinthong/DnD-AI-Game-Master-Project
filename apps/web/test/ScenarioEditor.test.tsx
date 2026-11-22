@@ -89,17 +89,17 @@ describe('Scenario editor (GEN-046)', () => {
     fireEvent.change(within(added).getByLabelText('วัน'), { target: { value: '4' } });
     fireEvent.change(within(added).getByLabelText('ช่วง'), { target: { value: 'NOCTHERION' } });
     fireEvent.change(within(added).getByLabelText('หัวข้อ'), { target: { value: 'คาราวานมาถึง' } });
-    fireEvent.change(within(added).getByLabelText('ผลตั้งต้น'), { target: { value: 'ถูกปล้นตอนค่ำ' } });
+    fireEvent.change(within(added).getByLabelText('ผลถ้าไม่มีใครแทรกแซง'), { target: { value: 'ถูกปล้นตอนค่ำ' } });
     fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
 
     expect(await screen.findByText('บันทึกแล้ว')).toBeTruthy();
     const sent = bodyOf(callsTo(fetchMock, 'PUT', '/api/game/scenario')[0]);
     expect(sent.timeline.at(-1)).toMatchObject({ day: 4, phase: 'NOCTHERION', title: 'คาราวานมาถึง', outcome: 'ถูกปล้นตอนค่ำ' });
     expect(sent.timeline.at(-1)!.id).toMatch(/^[a-z0-9][a-z0-9-]*$/);
-    // Shown in day order now: the new event sits between day 3 and day 5.
+    // Shown in day order now: the new event sits between day 1 and day 5.
     const titles = events().map((g) => (within(g).getByLabelText('หัวข้อ') as HTMLInputElement).value);
     const at = titles.indexOf('คาราวานมาถึง');
-    expect((within(events()[at - 1]!).getByLabelText('วัน') as HTMLInputElement).value).toBe('3');
+    expect((within(events()[at - 1]!).getByLabelText('วัน') as HTMLInputElement).value).toBe('1');
     expect((within(events()[at + 1]!).getByLabelText('วัน') as HTMLInputElement).value).toBe('5');
   });
 
@@ -161,7 +161,7 @@ describe('Scenario editor (GEN-046)', () => {
           {
             code: 'invalid_input',
             message: 'scenario ไม่ถูกต้อง',
-            fields: { 'timeline.7.day': 'วันต้องอยู่ระหว่าง 1 ถึง 12', 'timeline.7.title': 'ห้ามว่าง' },
+            fields: { 'timeline.5.day': 'วันต้องอยู่ระหว่าง 1 ถึง 12', 'timeline.5.title': 'ห้ามว่าง' },
           },
           { status: 400 },
         ),
@@ -171,7 +171,7 @@ describe('Scenario editor (GEN-046)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'เพิ่มเหตุการณ์' }));
     fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
 
-    const added = events()[7]!;
+    const added = events()[5]!;
     expect(await within(added).findByText('วันต้องอยู่ระหว่าง 1 ถึง 12')).toBeTruthy();
     expect(within(added).getByText('ห้ามว่าง')).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toMatch(/บันทึกไม่ได้/);
@@ -206,6 +206,53 @@ describe('Scenario editor (GEN-046)', () => {
     );
     expect(callsTo(fetchMock, 'POST', '/api/game/scenario/reset')).toHaveLength(1);
     expect(confirm).toHaveBeenCalled();
+  });
+
+  it('GEN-071 C5: each sheet event shows its period range and turns; the GM sets an end period and it is sent', async () => {
+    const fetchMock = loggedIn(view(), {
+      'PUT /api/game/scenario': (_url, init) => Response.json({ scenario: JSON.parse(String(init!.body)), locked: false }),
+    });
+    render(<App apiBaseUrl="" />);
+    await openEditor();
+    expect(events()).toHaveLength(5);
+    expect(events().map((g) => g.querySelector('legend')!.textContent)).toEqual([
+      expect.stringMatching(/วัน 1 EOSORIA.* · 2 เทิร์น$/),
+      expect.stringMatching(/วัน 5 EOSORIA.* · 2 เทิร์น$/),
+      expect.stringMatching(/วัน 7 HESPERION.* · 2 เทิร์น$/),
+      expect.stringMatching(/วัน 10 NOCTHERION.* · 2 เทิร์น \(จุดไคลแมกซ์\)$/),
+      expect.stringMatching(/วัน 12 HESPERION.* ถึง NOCTHERION.* · 4 เทิร์น \(ฉากจบ\)$/),
+    ]);
+    const day5 = events()[1]!;
+    expect((within(day5).getByLabelText('ผลถ้าไม่มีใครแทรกแซง') as HTMLTextAreaElement).value).toBe(defaultScenario().timeline[1]!.outcome);
+    expect((within(day5).getByLabelText('ปูเรื่อง (ลางบอกเหตุ)') as HTMLTextAreaElement).value).toBe(defaultScenario().timeline[1]!.foreshadowing);
+    expect((within(day5).getByLabelText('ปูเรื่องวัน') as HTMLInputElement).value).toBe('4');
+
+    const day7 = events()[2]!;
+    expect((within(day7).getByLabelText('ถึงช่วง') as HTMLSelectElement).value).toBe('');
+    fireEvent.change(within(day7).getByLabelText('ถึงช่วง'), { target: { value: 'NOCTHERION' } });
+    expect(day7.querySelector('legend')!.textContent).toMatch(/ถึง NOCTHERION.* · 4 เทิร์น$/);
+    fireEvent.change(within(day7).getByLabelText('ผลที่ผู้เล่นแทรกแซงได้'), { target: { value: 'ช่วยชาวบ้านหนีทัน' } });
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
+
+    await screen.findByText('บันทึกแล้ว');
+    const sent = bodyOf(callsTo(fetchMock, 'PUT', '/api/game/scenario')[0]);
+    expect(sent.timeline[2]).toMatchObject({ endPhase: 'NOCTHERION', interventionEffects: 'ช่วยชาวบ้านหนีทัน' });
+    expect(sent.timeline[1]).toMatchObject({ endPhase: null, foreshadowAt: { day: 4, phase: 'EOSORIA' } });
+  });
+
+  it('GEN-071 C5: the server refusing an end period shows the message at that field', async () => {
+    loggedIn(view(), {
+      'PUT /api/game/scenario': () =>
+        Response.json(
+          { code: 'invalid_input', message: 'scenario ไม่ถูกต้อง', fields: { 'timeline.2.endPhase': 'ช่วงสิ้นสุดต้องไม่อยู่ก่อนช่วงเริ่ม' } },
+          { status: 400 },
+        ),
+    });
+    render(<App apiBaseUrl="" />);
+    await openEditor();
+    fireEvent.change(within(events()[2]!).getByLabelText('ถึงช่วง'), { target: { value: 'SOLARION' } });
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
+    expect(await within(events()[2]!).findByText('ช่วงสิ้นสุดต้องไม่อยู่ก่อนช่วงเริ่ม')).toBeTruthy();
   });
 
   it('back to the lobby', async () => {

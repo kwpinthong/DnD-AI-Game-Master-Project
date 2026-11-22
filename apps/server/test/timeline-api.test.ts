@@ -63,8 +63,8 @@ describe('timeline over the API: start = day 1 Morning, players see no future ev
       .run(memberId, gameId, `ref-${memberId}`, locationId, Date.now());
 
   /**
-   * An Online game with a Human GM and three players, started. The first player is at the market when
-   * the game starts, so it witnesses d1-bread (market, day 1 Morning); the others start at the inn.
+   * An Online game with a Human GM and three players, started. The first player is at the fountain when
+   * the game starts, so it witnesses d1-bread (fountain, day 1 Morning); the others start at the inn.
    */
   async function startedGame(beforeStart: (gameId: string) => void = () => {}) {
     const created = CreateGameResponse.parse(
@@ -83,7 +83,7 @@ describe('timeline over the API: start = day 1 Morning, players see no future ev
       seedCharacter(joined.member.id);
       players.push(joined);
     }
-    seedPresence(players[0]!.member.id, gameId, 'market');
+    seedPresence(players[0]!.member.id, gameId, 'fountain');
     beforeStart(gameId);
     const started = await call('POST', '/api/game/start', { token: created.token });
     expect(started.status, started.text).toBe(200);
@@ -119,10 +119,10 @@ describe('timeline over the API: start = day 1 Morning, players see no future ev
   it('C5: a player calling the API sees nothing of events that have not happened yet', async () => {
     await start();
     const { gameId, player, gm } = await startedGame();
-    advanceTimeline(server!.orm, gameId, { day: 3, phase: 'HESPERION' });
+    advanceTimeline(server!.orm, gameId, { day: 5, phase: 'EOSORIA' });
 
     const scenario = defaultScenario();
-    const future = scenario.timeline.filter((e) => e.day > 3);
+    const future = scenario.timeline.filter((e) => e.day > 5);
     for (const path of ['/api/game/timeline', '/api/game', '/api/me']) {
       const res = await call('GET', path, { token: player });
       if (res.status === 404) continue;
@@ -130,17 +130,20 @@ describe('timeline over the API: start = day 1 Morning, players see no future ev
       for (const event of future) {
         expect(res.text, `${path} ${event.id}`).not.toContain(event.id);
         expect(res.text, `${path} ${event.id}`).not.toContain(event.title);
-        if (event.description) expect(res.text, `${path} ${event.id}`).not.toContain(event.description);
+        for (const secret of [event.description, event.outcome, event.interventionEffects, event.foreshadowing]) {
+          if (secret) expect(res.text, `${path} ${event.id}`).not.toContain(secret);
+        }
       }
     }
     const view = GameTimelineResponse.parse((await call('GET', '/api/game/timeline', { token: player })).body);
     expect(view.events.map((e) => [e.id, e.status])).toEqual([
       ['d1-bread', 'resolved'],
-      ['d2-first-companion', 'resolved'],
-      ['d3-cult-clue', 'active'],
+      ['d5-disaster', 'active'],
     ]);
-    // Even past events show only their public title: no description, outcome or GM note.
-    expect(JSON.stringify(view)).not.toContain(scenario.timeline[0]!.description);
+    // Even past events show only their public title: no outcome, intervention effects or GM note.
+    for (const secret of [scenario.timeline[0]!.outcome, scenario.timeline[0]!.interventionEffects]) {
+      expect(JSON.stringify(view)).not.toContain(secret);
+    }
 
     // The Human GM sees the whole timeline.
     const gmView = GameTimelineResponse.parse((await call('GET', '/api/game/timeline', { token: gm })).body);
@@ -193,32 +196,32 @@ describe('timeline over the API: start = day 1 Morning, players see no future ev
       await start();
       const { gameId, members } = await startedGame();
       const [a, b, c] = members;
-      moveCharacter(server!.orm, b!.id, 'market', Date.now());
+      moveCharacter(server!.orm, b!.id, 'fountain', Date.now());
       expect(await seenIds(b!.token)).toEqual([]);
 
-      // d5-disaster (gate, day 5 Morning): A is there when it begins, C arrives after.
-      moveCharacter(server!.orm, a!.id, 'gate', Date.now());
-      advanceTimeline(server!.orm, gameId, { day: 5, phase: 'EOSORIA' });
-      moveCharacter(server!.orm, c!.id, 'gate', Date.now());
-      const townWide = ['d2-first-companion', 'd3-cult-clue'];
-      expect(await seenIds(a!.token)).toEqual(['d1-bread', ...townWide, 'd5-disaster']);
+      // d7-kidnapping (temple, day 7 HESPERION): A is there when it begins, C arrives after.
+      moveCharacter(server!.orm, a!.id, 'temple', Date.now());
+      advanceTimeline(server!.orm, gameId, { day: 7, phase: 'HESPERION' });
+      moveCharacter(server!.orm, c!.id, 'temple', Date.now());
+      const townWide = ['d5-disaster'];
+      expect(await seenIds(a!.token)).toEqual(['d1-bread', ...townWide, 'd7-kidnapping']);
       expect(await seenIds(b!.token)).toEqual(townWide);
       expect(await seenIds(c!.token)).toEqual(townWide);
 
-      advanceTimeline(server!.orm, gameId, { day: 5, phase: 'SOLARION' });
+      advanceTimeline(server!.orm, gameId, { day: 7, phase: 'NOCTHERION' });
       expect(await seenIds(c!.token)).toEqual(townWide);
-      expect(await seenIds(a!.token)).toContain('d5-disaster');
+      expect(await seenIds(a!.token)).toContain('d7-kidnapping');
     });
 
     it('an event the game skipped past is seen by whoever was at its place when it happened', async () => {
       await start();
       const { gameId, members } = await startedGame();
       const [a, b] = members;
-      moveCharacter(server!.orm, a!.id, 'gate', Date.now());
-      advanceTimeline(server!.orm, gameId, { day: 6, phase: 'EOSORIA' });
-      moveCharacter(server!.orm, b!.id, 'gate', Date.now());
-      expect(await seenIds(a!.token)).toContain('d5-disaster');
-      expect(await seenIds(b!.token)).not.toContain('d5-disaster');
+      moveCharacter(server!.orm, a!.id, 'temple', Date.now());
+      advanceTimeline(server!.orm, gameId, { day: 8, phase: 'EOSORIA' });
+      moveCharacter(server!.orm, b!.id, 'temple', Date.now());
+      expect(await seenIds(a!.token)).toContain('d7-kidnapping');
+      expect(await seenIds(b!.token)).not.toContain('d7-kidnapping');
     });
 
     it('a day 1 Morning event at the starting place is seen by everyone the start places there', async () => {
@@ -229,7 +232,7 @@ describe('timeline over the API: start = day 1 Morning, players see no future ev
         expect(updateGameScenario(server!.orm, gameId, { ...scenario, timeline }).ok).toBe(true);
       });
       const [a, b, c] = members;
-      // A was placed at the market before the start, so it missed it; B and C start at the inn.
+      // A was placed at the fountain before the start, so it missed it; B and C start at the inn.
       expect(await seenIds(a!.token)).toEqual([]);
       expect(await seenIds(b!.token)).toEqual(['d1-bread']);
       expect(await seenIds(c!.token)).toEqual(['d1-bread']);
@@ -251,7 +254,7 @@ describe('timeline over the API: start = day 1 Morning, players see no future ev
       const { members } = await startedGame();
       const [a, b] = members;
       moveCharacter(server!.orm, a!.id, 'inn', Date.now());
-      moveCharacter(server!.orm, b!.id, 'market', Date.now());
+      moveCharacter(server!.orm, b!.id, 'fountain', Date.now());
 
       await server!.close();
       await start();
@@ -266,7 +269,7 @@ describe('timeline over the API: start = day 1 Morning, players see no future ev
       const [a, b] = members;
       server!.db.prepare('update game_event_state set witnesses = null where game_id = ?').run(gameId);
       moveCharacter(server!.orm, a!.id, 'inn', Date.now());
-      moveCharacter(server!.orm, b!.id, 'market', Date.now());
+      moveCharacter(server!.orm, b!.id, 'fountain', Date.now());
       expect(await seenIds(a!.token)).toEqual([]);
       expect(await seenIds(b!.token)).toEqual(['d1-bread']);
     });

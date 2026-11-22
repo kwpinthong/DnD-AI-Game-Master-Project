@@ -1,4 +1,4 @@
-import { PHASE_LABEL, PHASES as PERIODS, type Phase, type Scenario } from '@isekai/protocol';
+import { eventPeriods, PHASE_LABEL, PHASES as PERIODS, TURNS_PER_PERIOD, type Phase, type Scenario } from '@isekai/protocol';
 import { useEffect, useState, type ReactNode } from 'react';
 import { scenarioCall, type ScenarioAction } from './scenario-api.ts';
 
@@ -7,7 +7,7 @@ type Npc = Scenario['npcs'][number];
 type Legendary = Scenario['legendaries'][number];
 type Tab = 'events' | 'npcs' | 'legendaries';
 
-/** GEN-063: an event belongs to one of the 4 periods and lasts both of its turns. */
+/** GEN-063 / GEN-071: an event runs from one of the 4 periods to an end period of the same day, both turns of each. */
 const PHASES: { value: Phase; label: string }[] = PERIODS.map((value) => ({ value, label: PHASE_LABEL[value] }));
 const phaseLabel = (p: Phase) => PHASE_LABEL[p];
 const RANKS = ['F', 'B', 'A', 'S'] as const;
@@ -131,17 +131,42 @@ export function ScenarioEditor({
   const eventRow = (e: Event, i: number) => {
     const p = `timeline.${i}`;
     const kindNote = e.kind === 'finale' ? ' (ฉากจบ)' : e.kind === 'climax' ? ' (จุดไคลแมกซ์)' : '';
+    const range = e.endPhase && e.endPhase !== e.phase ? ` ถึง ${phaseLabel(e.endPhase) ?? e.endPhase}` : '';
+    const hint = e.foreshadowAt;
+    const setHint = (patch: Partial<NonNullable<Event['foreshadowAt']>>) =>
+      setAt('timeline', i, { foreshadowAt: { day: hint?.day ?? e.day - 1, phase: hint?.phase ?? 'EOSORIA', ...patch } });
     return (
       <fieldset key={e.id}>
         <legend>
           เหตุการณ์ {i + 1}: วัน {shown(e.day)} {phaseLabel(e.phase) ?? e.phase}
+          {range} · {eventPeriods(e).length * TURNS_PER_PERIOD} เทิร์น
           {kindNote}
         </legend>
         {numberInput(`${e.id}-day`, 'วัน', `${p}.day`, e.day, (day) => setAt('timeline', i, { day }))}
         {select(`${e.id}-phase`, 'ช่วง', `${p}.phase`, e.phase, PHASES, (phase) => setAt('timeline', i, { phase }))}
+        {select<Phase | ''>(`${e.id}-end`, 'ถึงช่วง', `${p}.endPhase`, e.endPhase ?? '', [{ value: '', label: 'ช่วงเดียว' }, ...PHASES], (end) =>
+          setAt('timeline', i, { endPhase: end === '' ? null : end }),
+        )}
         {textInput(`${e.id}-title`, 'หัวข้อ', `${p}.title`, e.title, (title) => setAt('timeline', i, { title }))}
         {textInput(`${e.id}-desc`, 'รายละเอียด', `${p}.description`, e.description, (description) => setAt('timeline', i, { description }), true)}
-        {textInput(`${e.id}-outcome`, 'ผลตั้งต้น', `${p}.outcome`, e.outcome, (outcome) => setAt('timeline', i, { outcome }), true)}
+        {textInput(`${e.id}-effects`, 'ผลที่ผู้เล่นแทรกแซงได้', `${p}.interventionEffects`, e.interventionEffects, (interventionEffects) =>
+          setAt('timeline', i, { interventionEffects }), true,
+        )}
+        {textInput(`${e.id}-outcome`, 'ผลถ้าไม่มีใครแทรกแซง', `${p}.outcome`, e.outcome, (outcome) => setAt('timeline', i, { outcome }), true)}
+        {textInput(`${e.id}-hint`, 'ปูเรื่อง (ลางบอกเหตุ)', `${p}.foreshadowing`, e.foreshadowing, (foreshadowing) =>
+          setAt('timeline', i, { foreshadowing }), true,
+        )}
+        {field(`${e.id}-hint-on`, 'มีวันปูเรื่อง', `${p}.foreshadowAt`, (id) => (
+          <input
+            id={id}
+            type="checkbox"
+            checked={hint !== null}
+            disabled={locked}
+            onChange={(x) => (x.target.checked ? setHint({}) : setAt('timeline', i, { foreshadowAt: null }))}
+          />
+        ))}
+        {hint && numberInput(`${e.id}-hint-day`, 'ปูเรื่องวัน', `${p}.foreshadowAt.day`, hint.day, (day) => setHint({ day }))}
+        {hint && select(`${e.id}-hint-phase`, 'ปูเรื่องช่วง', `${p}.foreshadowAt.phase`, hint.phase, PHASES, (phase) => setHint({ phase }))}
         {field(`${e.id}-crisis`, 'วิกฤต (NPC เกรด A ขึ้น S ได้)', `${p}.crisis`, (id) => (
           <input id={id} type="checkbox" checked={e.crisis} disabled={locked} onChange={(x) => setAt('timeline', i, { crisis: x.target.checked })} />
         ))}
@@ -219,7 +244,24 @@ export function ScenarioEditor({
         ...s,
         timeline: [
           ...s.timeline,
-          { id: newId('ev'), day: 1, phase: 'EOSORIA', kind: 'event', title: '', description: '', outcome: '', crisis: false, locationId: null, npcIds: [], gmNote: '' },
+          {
+            id: newId('ev'),
+            day: 1,
+            phase: 'EOSORIA',
+            endPhase: null,
+            kind: 'event',
+            title: '',
+            description: '',
+            outcome: '',
+            interventionEffects: '',
+            foreshadowing: '',
+            foreshadowAt: null,
+            strategyIds: [],
+            crisis: false,
+            locationId: null,
+            npcIds: [],
+            gmNote: '',
+          },
         ],
       }),
       true,
@@ -228,7 +270,10 @@ export function ScenarioEditor({
     edit(
       (s) => ({
         ...s,
-        npcs: [...s.npcs, { id: newId('npc'), name: '', alias: '', rank: 'F', locationId: s.locations[0]!.id, personality: '', obsTrait: 0, gmNote: '' }],
+        npcs: [
+          ...s.npcs,
+          { id: newId('npc'), name: '', alias: '', rank: 'F', locationId: s.locations[0]!.id, personality: '', obsTrait: 0, otherNames: [], gmNote: '' },
+        ],
       }),
       true,
     );

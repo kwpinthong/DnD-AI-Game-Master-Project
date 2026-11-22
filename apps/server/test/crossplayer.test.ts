@@ -295,21 +295,21 @@ describe('cross-player actions on the server (GEN-060)', { timeout: 60_000 }, ()
 
   it('Q-080 / Q-104: a player sees timeline events they were at when they began (or town-wide); the Human GM sees all', async () => {
     const t = await table(true);
-    move(t.a, 'market');
+    move(t.a, 'fountain');
     move(t.b, 'forest');
-    move(t.c, 'gate');
-    advanceTimeline(server!.orm, t.gameId, { day: 5, phase: 'EOSORIA' }, CLOCK);
+    move(t.c, 'temple');
+    advanceTimeline(server!.orm, t.gameId, { day: 7, phase: 'HESPERION' }, CLOCK);
     const timeline = async (who: { token: string }) => GameTimelineResponse.parse((await t.call('GET', '/api/game/timeline', { token: who.token })).body);
 
-    // d1-bread (market) began at the start, before A got there; d5-disaster (gate) began with C there;
-    // d2 / d3 have no place (town-wide).
-    expect((await timeline(t.a)).events.map((e) => e.id)).toEqual(['d2-first-companion', 'd3-cult-clue']);
-    expect((await timeline(t.b)).events.map((e) => e.id)).toEqual(['d2-first-companion', 'd3-cult-clue']);
+    // d1-bread (fountain) began at the start, before A got there; d7-kidnapping (temple) began with C there;
+    // d5-disaster has no place (town-wide).
+    expect((await timeline(t.a)).events.map((e) => e.id)).toEqual(['d5-disaster']);
+    expect((await timeline(t.b)).events.map((e) => e.id)).toEqual(['d5-disaster']);
     move(t.c, 'forest');
-    move(t.a, 'gate');
-    expect((await timeline(t.c)).events.map((e) => e.id)).toEqual(['d2-first-companion', 'd3-cult-clue', 'd5-disaster']);
-    expect((await timeline(t.a)).events.map((e) => e.id)).toEqual(['d2-first-companion', 'd3-cult-clue']);
-    expect((await timeline(t.gm!)).events.map((e) => e.id)).toContain('d5-disaster');
+    move(t.a, 'temple');
+    expect((await timeline(t.c)).events.map((e) => e.id)).toEqual(['d5-disaster', 'd7-kidnapping']);
+    expect((await timeline(t.a)).events.map((e) => e.id)).toEqual(['d5-disaster']);
+    expect((await timeline(t.gm!)).events.map((e) => e.id)).toContain('d7-kidnapping');
     expect((await timeline(t.gm!)).events.map((e) => e.id)).toContain('d1-bread');
   });
 });

@@ -134,8 +134,8 @@ describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () =
     expect(ids.indexOf('gm-day4-morning')).toBe(ids.indexOf('gm-day4-afternoon') - 1);
     const day4 = saved.timeline.find((e) => e.id === 'gm-day4-afternoon');
     expect(day4).toMatchObject({ day: 4, phase: 'SOLARION', outcome: 'ถ้าไม่มีใครช่วย คาราวานถูกปล้นตอนค่ำ' });
-    // Day 3 events come right before day 4, day 5 right after.
-    expect(saved.timeline[ids.indexOf('gm-day4-morning') - 1]!.day).toBe(3);
+    // The day 1 event comes right before day 4 (GEN-071 has nothing on days 2-3), day 5 right after.
+    expect(saved.timeline[ids.indexOf('gm-day4-morning') - 1]!.day).toBe(1);
     expect(saved.timeline[ids.indexOf('gm-day4-afternoon') + 1]!.day).toBe(5);
 
     // Stored, not only echoed.
@@ -148,14 +148,14 @@ describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () =
     const { scenario } = await getScenario(gm.token);
     const edited: Scenario = {
       ...scenario,
-      timeline: scenario.timeline.map((e) => (e.day === 3 ? { ...e, title: 'เบาะแสใหม่ของ GM', outcome: 'ลัทธิย้ายฐาน' } : e)),
+      timeline: scenario.timeline.map((e) => (e.day === 7 ? { ...e, title: 'เบาะแสใหม่ของ GM', outcome: 'ลัทธิย้ายฐาน' } : e)),
       legendaries: [{ ...scenario.legendaries[0]!, condition: 'ช่วยเด็กกำพร้าครบ 3 วันติด', target: 3 }],
       npcs: scenario.npcs.map((n) => (n.id === 'merchant' ? { ...n, alias: 'พ่อค้าเครายาว', gmNote: 'เป็นสายลับ' } : n)),
     };
     const res = await putScenario(gm.token, edited);
     expect(res.status, res.text).toBe(200);
     const saved = (await getScenario(gm.token)).scenario;
-    expect(saved.timeline.find((e) => e.day === 3)).toMatchObject({ title: 'เบาะแสใหม่ของ GM', outcome: 'ลัทธิย้ายฐาน' });
+    expect(saved.timeline.find((e) => e.day === 7)).toMatchObject({ title: 'เบาะแสใหม่ของ GM', outcome: 'ลัทธิย้ายฐาน' });
     expect(saved.legendaries).toEqual([expect.objectContaining({ condition: 'ช่วยเด็กกำพร้าครบ 3 วันติด', target: 3 })]);
     expect(saved.npcs.find((n) => n.id === 'merchant')).toMatchObject({ alias: 'พ่อค้าเครายาว', gmNote: 'เป็นสายลับ' });
   });

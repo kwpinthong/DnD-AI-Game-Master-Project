@@ -372,7 +372,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
     await submitAndAccept(b, 'ผลักแผงผลไม้');
     await submitAndAccept(c, 'เก็บสมุนไพร');
     const seenByA = await a.waitFor(isEntry);
-    expect(seenByA.entry).toMatchObject({ kind: 'feed', text: result, place: { id: 'market', name: 'ลานตลาด' } });
+    expect(seenByA.entry).toMatchObject({ kind: 'feed', text: result, place: { id: 'market', name: 'ย่านการค้า-ตลาดมืด' } });
     expect((await b.waitFor(isEntry)).entry.text).toBe(result);
     await c.waitFor(phaseIs(1, 'EOSORIA', 2));
 

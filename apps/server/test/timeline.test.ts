@@ -59,7 +59,7 @@ describe('timeline events: pending → active → resolved + outcome (GEN-053)',
 
     expect(result.timeline).toMatchObject({ ok: true, activated: ['d1-bread'] });
     expect(activeIds()).toEqual(['d1-bread']);
-    expect(statusOf('d2-first-companion').status).toBe('pending');
+    expect(statusOf('d5-disaster').status).toBe('pending');
 
     expect(mock.requests).toHaveLength(1);
     const request = mock.requests[0]!;
@@ -74,21 +74,23 @@ describe('timeline events: pending → active → resolved + outcome (GEN-053)',
       expect(prompt).not.toContain(future.id);
       expect(prompt).not.toContain(future.title);
     }
-    for (const npc of scenario.npcs) expect(prompt).not.toContain(npc.name);
-    expect(prompt).toContain('{{n:cult-acolyte}}');
+    // GEN-071: the sheet text names NPCs by short forms too ("มัลคอล์ม"); those become tokens as well.
+    for (const npc of scenario.npcs) for (const name of [npc.name, ...npc.otherNames]) expect(prompt).not.toContain(name);
+    expect(prompt).toContain('{{n:archbishop}}');
+    expect(prompt).toContain('{{n:nun}}');
     expect(result.ai.ok).toBe(true);
   });
 
   it('C1: a real NPC name the GM typed into the event text reaches the AI only as a token', () => {
     const scenario = getGameScenario(opened.db, GAME)!;
-    const npc = scenario.npcs.find((n) => n.id === 'cult-acolyte')!;
+    const npc = scenario.npcs.find((n) => n.id === 'nun')!;
     scenario.timeline[0]!.description = `${npc.name} ยิ้มขณะยื่นขนมปัง`;
     expect(updateGameScenario(opened.db, GAME, scenario).ok).toBe(true);
     advanceTimeline(opened.db, GAME, { day: 1, phase: 'EOSORIA' });
 
     const text = JSON.stringify(buildEventContext(opened.db, GAME, 1, 'EOSORIA'));
     expect(text).not.toContain(npc.name);
-    expect(text).toContain('{{n:cult-acolyte}} ยิ้มขณะยื่นขนมปัง');
+    expect(text).toContain('{{n:nun}} ยิ้มขณะยื่นขนมปัง');
   });
 
   it('C2: day 4 has no event, so nothing is active in any of its phases', () => {
@@ -98,7 +100,7 @@ describe('timeline events: pending → active → resolved + outcome (GEN-053)',
       expect(buildEventContext(opened.db, GAME, 4, phase).active).toEqual([]);
     }
     // Everything before day 4 is over; everything after is still to come.
-    expect(statusOf('d3-cult-clue').status).toBe('resolved');
+    expect(statusOf('d1-bread').status).toBe('resolved');
     expect(statusOf('d5-disaster').status).toBe('pending');
   });
 
@@ -173,24 +175,31 @@ describe('timeline events: pending → active → resolved + outcome (GEN-053)',
     const outcomes = getEventOutcomes(opened.db, GAME);
     expect(outcomes.map((o) => o.eventId)).toEqual(defaultScenario().timeline.map((e) => e.id));
     expect(outcomes.find((o) => o.eventId === 'd7-kidnapping')).toMatchObject({ outcome: 'prevented', intervened: true });
-    expect(outcomes.find((o) => o.eventId === 'd12-meteor')).toMatchObject({ kind: 'finale', outcome: '', intervened: false });
+    expect(outcomes.find((o) => o.eventId === 'd12-meteor')).toMatchObject({
+      kind: 'finale',
+      outcome: defaultScenario().timeline.at(-1)!.outcome,
+      intervened: false,
+    });
   });
 
   it('the timeline never moves backwards and repeating the same point changes nothing', () => {
-    advanceTimeline(opened.db, GAME, { day: 2, phase: 'SOLARION' });
-    expect(advanceTimeline(opened.db, GAME, { day: 2, phase: 'SOLARION' })).toMatchObject({ ok: true, activated: [], resolved: [] });
-    expect(advanceTimeline(opened.db, GAME, { day: 1, phase: 'HESPERION' })).toMatchObject({ ok: false, code: 'backwards' });
-    expect(activeIds()).toEqual(['d2-first-companion']);
+    advanceTimeline(opened.db, GAME, { day: 5, phase: 'EOSORIA' });
+    expect(advanceTimeline(opened.db, GAME, { day: 5, phase: 'EOSORIA' })).toMatchObject({ ok: true, activated: [], resolved: [] });
+    expect(advanceTimeline(opened.db, GAME, { day: 4, phase: 'HESPERION' })).toMatchObject({ ok: false, code: 'backwards' });
+    expect(activeIds()).toEqual(['d5-disaster']);
     expect(advanceTimeline(opened.db, 'no-game', { day: 1, phase: 'EOSORIA' })).toMatchObject({ ok: false, code: 'not_found' });
   });
 
   it('the context holds the active event and past outcomes, never a pending event', () => {
-    advanceTimeline(opened.db, GAME, { day: 3, phase: 'HESPERION' });
-    const context = buildEventContext(opened.db, GAME, 3, 'HESPERION');
-    expect(context.active.map((e) => e.id)).toEqual(['d3-cult-clue']);
-    expect(context.past.map((e) => e.id)).toEqual(['d1-bread', 'd2-first-companion']);
+    advanceTimeline(opened.db, GAME, { day: 7, phase: 'HESPERION' });
+    const context = buildEventContext(opened.db, GAME, 7, 'HESPERION');
+    expect(context.active.map((e) => e.id)).toEqual(['d7-kidnapping']);
+    expect(context.past.map((e) => e.id)).toEqual(['d1-bread', 'd5-disaster']);
     const text = JSON.stringify(context);
-    for (const future of defaultScenario().timeline.filter((e) => e.day > 3)) expect(text).not.toContain(future.title);
+    for (const future of defaultScenario().timeline.filter((e) => e.day > 7)) {
+      expect(text).not.toContain(future.title);
+      expect(text).not.toContain(future.outcome);
+    }
     // GM notes stay out of prompts.
     expect(text).not.toContain('gmNote');
   });
