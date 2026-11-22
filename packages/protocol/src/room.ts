@@ -202,8 +202,25 @@ export type RoomState = z.infer<typeof RoomState>;
  * `whisper`: one ally to another (GEN-067); `place` null, `whisper` says who to whom.
  * `omen`: an Astral Spirit's one-sentence omen to you (GEN-070, Q-193); `place` null, the sender is not named.
  */
-export const RoomEntryKind = z.enum(['feed', 'narration', 'whisper', 'omen', 'hit', 'changes']);
+export const RoomEntryKind = z.enum(['feed', 'narration', 'whisper', 'omen', 'hit', 'changes', 'npc']);
 export type RoomEntryKind = z.infer<typeof RoomEntryKind>;
+
+/**
+ * GEN-110, `npc` entries: one line an NPC says while the AI GM narrates a turn (`text`, at most 120 characters,
+ * already with names filled in for this viewer). `kind`: `dialogue` = the NPC talks about / to what a player did (1-3 per
+ * NPC), `reaction` = a bystander at the place reacts (1 line, up to 3 NPCs). Public lines carry the `place` and
+ * go to everyone who was there (a Secret action never causes one); `private: true` = said to this player alone
+ * (`place` null). `ref` is the same opaque handle as `NpcView.ref` / `CompanionView.ref`. `name` is the alias until
+ * the viewer has learned the real name (Q-219); `grade` only once the viewer knows the name (never for a hidden one).
+ */
+export const NpcLineView = z.strictObject({
+  ref: z.string(),
+  name: z.string(),
+  grade: z.enum(['F', 'B', 'A', 'S', 'SS']).optional(),
+  kind: z.enum(['dialogue', 'reaction']),
+  private: z.literal(true).optional(),
+});
+export type NpcLineView = z.infer<typeof NpcLineView>;
 /** `hit` (Q-229, GEN-060): another player's act landed on you (the pinned card; `RoomEntry.hit` has the details). */
 export const RoomViewEntryKind = RoomEntryKind;
 export type RoomViewEntryKind = RoomEntryKind;
@@ -213,7 +230,7 @@ export type RoomViewEntryKind = RoomEntryKind;
  * (NPC dialogue, GEN-110) is added here and gets the buttons with no other change. A `fallback` entry is the
  * server's template, not the AI's, so it is never votable (`isVotableEntry`).
  */
-export const VOTABLE_ENTRY_KINDS: readonly RoomEntryKind[] = ['feed', 'narration'];
+export const VOTABLE_ENTRY_KINDS: readonly RoomEntryKind[] = ['feed', 'narration', 'npc'];
 export const isVotableEntry = (entry: { kind: RoomEntryKind; fallback?: true | null | string }) => VOTABLE_ENTRY_KINDS.includes(entry.kind) && !entry.fallback;
 
 /** A player's rating of one AI-written entry (GEN-107): 👍 `up` ("ถูกใจ") / 👎 `down` ("ไม่ถูกใจ"). */
@@ -252,6 +269,8 @@ export const RoomEntry = z.strictObject({
   hit: HitView.optional(),
   /** `changes` entries (GEN-114): what changed in your own HP / Stamina / coins / conduct word / items / statuses, and why. `text` = the character's name. */
   changes: z.array(TurnChange).optional(),
+  /** `npc` entries (GEN-110): who says `text` (avatar + name + grade for the chat UI) and what kind of line it is. */
+  npc: NpcLineView.optional(),
   /**
    * GEN-107: this player's own vote on an AI-written entry (`isVotableEntry`): null = not voted. Absent on
    * every other entry and for the Human GM, so "has the key" = "show the buttons". Others' votes are never sent.

@@ -109,6 +109,8 @@ export interface EntryMeta {
   /** GEN-114: a `changes` entry's list (own values that changed in a turn, with reasons). */
   readonly changes?: readonly TurnChange[];
   readonly finale?: true;
+  /** GEN-110: an `npc` entry's speaker (scenario NPC id; the viewer's name / ref come at read time) and kind. */
+  readonly npc?: { readonly id: string; readonly kind: 'dialogue' | 'reaction'; readonly private?: true };
 }
 
 export interface NewEntry {

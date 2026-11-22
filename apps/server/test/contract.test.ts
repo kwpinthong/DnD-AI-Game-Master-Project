@@ -241,7 +241,7 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
 
     expect(problems).toEqual([]);
     // GEN-101 C2: every kind of entry the Play page reads came over the real socket and passed `entry` above.
-    expect([...seenEntryKinds].sort()).toEqual(expect.arrayContaining(['feed', 'narration', 'omen', 'whisper']));
+    expect([...seenEntryKinds].sort()).toEqual(expect.arrayContaining(['feed', 'narration', 'omen', 'whisper', 'npc']));
     expect([...READY_HTTP.map(key)].filter((r) => !ok.has(r)), 'ready endpoints never answered 2xx').toEqual([]);
     expect([...schemaOf.keys()].filter((type) => !seenTypes.has(type)), 'ready server events never seen').toEqual([]);
   });

@@ -111,6 +111,9 @@ const entries: In<typeof p.RoomEntry>[] = [
   { seq: 15, kind: 'narration', ...AT, place: null, text: 'ระบบบรรยายแทน AI GM', fallback: true },
   { seq: 16, kind: 'omen', day: 6, phase: 'NOCTHERION', turn: 1, place: null, text: 'เงาใต้แท่นบูชากำลังรอคืนจันทราโลหิต' },
   { seq: 17, kind: 'changes', ...AT, place: null, text: 'ลิน', changes: turnChanges },
+  { seq: 18, kind: 'npc', ...AT, place: FOUNTAIN_ZONED, text: 'ถ้าเจ้าอยากรู้เรื่องนาฬิกา ก็นั่งลงก่อนสิ', npc: { ref: 'n-ref-lucia', name: 'ลูเซีย', grade: 'F', kind: 'dialogue' } },
+  { seq: 19, kind: 'npc', ...AT, place: FOUNTAIN_ZONED, text: 'เด็กขอทานเงยหน้ามองแล้วรีบถอยไปชิดกำแพง', npc: { ref: 'n-ref-noah', name: 'โนอา', grade: 'F', kind: 'reaction' } },
+  { seq: 20, kind: 'npc', ...AT, place: null, text: 'ข้าเห็นว่าเจ้าไม่ได้มาที่นี่เพื่อน้ำพุเท่านั้น', npc: { ref: 'n-ref-lucia', name: 'ลูเซีย', kind: 'dialogue', private: true } },
 ];
 
 const you: In<typeof p.RoomYou> = {
@@ -423,6 +426,10 @@ export const CONTRACT_FIXTURES: Fixtures = {
   RoomEntry: entries,
   RollView: [roll, { d20: 20, difficulty: 'แทบเป็นไปไม่ได้', outcome: 'critical_success', factors: [] }],
   TurnChange: turnChanges,
+  NpcLineView: [
+    { ref: 'n-ref-lucia', name: 'ลูเซีย', grade: 'F', kind: 'dialogue' },
+    { ref: 'n-ref-noah', name: 'โนอา', kind: 'reaction', private: true },
+  ],
   HitView: [hit, { actor: 'ชายผมแดง ผ้าพันแผล', changes: [{ stat: 'hp', delta: -8 }] }],
   PlaceActionView: [{ id: 'train', label: 'ฝึก TRAIN (วันนี้เหลือ 1)', costCoins: null, usesLeftToday: 1, blocked: null }],
   AstralView: [astral],

@@ -7,7 +7,7 @@ export type PlayTab = (typeof PLAY_TABS)[number];
 /** How many things each tab has had so far: the public feed, and everything that is yours alone (story, omen, whisper you received, hit). */
 export function tabCounts(entries: readonly RoomEntry[]): Record<PlayTab, number> {
   const feed = entries.filter((e) => e.kind === 'feed').length;
-  const mine = entries.filter((e) => e.kind !== 'feed' && !(e.kind === 'whisper' && e.whisper?.mine)).length;
+  const mine = entries.filter((e) => e.kind !== 'feed' && e.kind !== 'npc' && !(e.kind === 'whisper' && e.whisper?.mine)).length;
   return { place: feed, private: mine, self: 0, action: 0 };
 }
 

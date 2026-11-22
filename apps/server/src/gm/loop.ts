@@ -1,6 +1,7 @@
 import {
   ReplayRng,
   isDrowsy,
+  karmaBand,
   orderPhaseActions,
   resolvePhaseActions,
   type ActionOutcome,
@@ -60,6 +61,7 @@ import {
   type TurnAction,
 } from './context.ts';
 import { createStageTimer, type StageTimer } from './timing.ts';
+import { NPC_LINE_LIMITS, capTotal, cleanNpcLines, npcPrompt, npcsPresentAt } from './npc-lines.ts';
 import { GM_OUTPUT, GmDaySummary, GmFinale, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
 import {
   activeConstraints,
@@ -352,18 +354,30 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
             text: `พบร่องรอยลับ (หลักฐาน ${f.id}) ที่${placeName.get(f.locationId) ?? f.locationId} ซึ่งมีคนทิ้งไว้ในวันที่ ${f.day}`,
             result: 'scene',
             target: null,
+            targetNpc: null,
             moved: null,
             items: [],
           }))
         : [];
-    const audiences = narrationAudiences(world, resolved.log, textOf, start, events.active, evidenceFor);
+    // GEN-110: the NPCs the schedule puts at a place now, and each player's standing with them.
+    const karmaOf = (memberId: string) => state.players[memberId]?.karma ?? 0;
+    const npcsFor = (placeId: string, members: string[]) => {
+      const here = npcsPresentAt(world, assets, placeId, { phase: at.phase, weather: input.weather?.weather ?? null, karmas: members.map(karmaOf) });
+      const hereIds = new Set(here.map((n) => n.id));
+      // Tokens may still name the NPCs of the scenario place (as before); only the scheduled ones speak.
+      return npcPrompt(db, assets, world, world.npcs.filter((n) => hereIds.has(n.id) || n.locationId === placeId), hereIds, members);
+    };
+    const secretBy = new Set(order.filter((a) => a.visibility === 'secret').map((a) => a.memberId));
+    const targetNpcs = new Map(proposal.actions.map((a) => [a.actionId, a.targetNpc]));
+    const audiences = narrationAudiences(world, resolved.log, textOf, start, events.active, evidenceFor, npcsFor, (m) => karmaBand(karmaOf(m)), (id) => targetNpcs.get(id) ?? null);
     // GEN-115: the narrations do not depend on each other, so they run together: the wait is the slowest one, not the sum.
-    const narrations = await timer.time('narrate', () => Promise.all(audiences.map(async (audience): Promise<{ key: string; ctx: NarrationContext; out: StoredNarration }> => {
+    const narrations = await timer.time('narrate', () => Promise.all(audiences.map(async (audience): Promise<{ key: string; ctx: NarrationContext; out: StoredNarration; forbidden: string[] }> => {
       const ctx: NarrationContext = {
         kind: 'gm_narration',
         ...audience.ctx,
         turn: at,
         place: { id: audience.placeId, name: placeName.get(audience.placeId) ?? audience.placeId },
+        privateLines: 'player' in audience.ctx.audience && secretBy.has(audience.readers[0]!),
         journal: 'player' in audience.ctx.audience ? narrationJournal(db, audience.readers[0]!, at.day) : null,
       };
       const saved = stored.narrations[audience.key];
@@ -386,7 +400,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           ...(signal ? { signal } : {}),
         }).then(({ value, fallback }) => (fallback === null ? value : { ...value, fallback })));
       if (!saved) timer.time('db', () => saveNarration(db, gameId, at, audience.key, out, now()));
-      return { key: audience.key, ctx, out };
+      return { key: audience.key, ctx, out, forbidden };
     })));
 
     // Q-229: each player's own roll (F5) and the hit card of whoever another player cost something.
@@ -413,14 +427,38 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     });
 
     // 6: what the room publishes and applies.
-    const entries: ResolutionEntry[] = narrations.map(({ ctx, out }) => {
+    // GEN-110: each narration is followed by its NPC lines as `npc` entries (public: the place's witnesses; private: the reader).
+    const realNpcNames = world.npcs.flatMap((n) => n.names.filter((name) => name !== n.alias));
+    let lineBudget = NPC_LINE_LIMITS.total;
+    const entries: ResolutionEntry[] = narrations.flatMap(({ ctx, out, forbidden }) => {
       const reader = 'player' in ctx.audience ? world.byRef.get(ctx.audience.player)!.memberId : null;
       const text = out.segments.map((s) => renderTokens(db, world, s.text, reader)).join('\n');
       const fallback = out.fallback ? { fallback: out.fallback } : {};
       const roll = reader !== null && rollOf.has(reader) ? { roll: rollOf.get(reader)! } : {};
-      return reader === null
-        ? { kind: 'feed', locationId: ctx.place.id, actorMemberId: null, text, ...fallback }
-        : { kind: 'narration', memberId: reader, text, ...roll, ...fallback };
+      const main: ResolutionEntry =
+        reader === null
+          ? { kind: 'feed', locationId: ctx.place.id, actorMemberId: null, text, ...fallback }
+          : { kind: 'narration', memberId: reader, text, ...roll, ...fallback };
+      const lines = capTotal(
+        cleanNpcLines(reader !== null && !ctx.privateLines ? [] : (out.npcLines ?? []), {
+          present: new Set(ctx.npcs.filter((n) => n.here).map((n) => n.id)),
+          audience: reader === null ? 'public' : 'private',
+          forbidden: [...forbidden, ...realNpcNames],
+          cast: new Set(ctx.cast.map((c) => c.ref)),
+        }),
+      ).slice(0, lineBudget);
+      lineBudget -= lines.length;
+      return [
+        main,
+        ...lines.map((l): ResolutionEntry => ({
+          kind: 'npc',
+          npcId: l.npcId,
+          npcKind: l.kind,
+          locationId: reader === null ? ctx.place.id : null,
+          memberId: reader,
+          text: renderTokens(db, world, l.text, reader),
+        })),
+      ];
     });
     const rolls = stored.rolls;
     log(`[gm] game=${gameId} day=${at.day} phase=${at.phase} turn=${at.turn} timing ${timer.line()}`);
@@ -601,6 +639,10 @@ function narrationAudiences(
   start: ReadonlyMap<string, string>,
   activeEvents: readonly { id: string; title: string; places: readonly string[] | null }[],
   evidenceFor: (o: ActionOutcome) => Beat[],
+  /** GEN-110: who is at a place now (the schedule), what they are like, and how each player stands with them. */
+  npcsFor: (placeId: string, members: string[]) => NarrationContext['npcs'],
+  karmaBandOf: (memberId: string) => number,
+  targetNpcOf: (actionId: string) => string | null,
 ): Audience[] {
   const ref = (memberId: string) => world.players.get(memberId)!.ref;
   const placeBeats = new Map<string, Beat[]>();
@@ -618,6 +660,7 @@ function narrationAudiences(
       text,
       result: RESULT_OF(o),
       target: target ? ref(target.playerId) : o.status === 'no_target' ? ref(o.targetId) : null,
+      targetNpc: targetNpcOf(o.actionId),
       moved: resolved?.moved ?? null,
       items: [],
     };
@@ -640,7 +683,7 @@ function narrationAudiences(
   for (const e of activeEvents) {
     for (const place of e.places ?? []) {
       const placeId = world.places.find((p) => p.name === place)?.id;
-      if (placeId) push(placeBeats, placeId, { actionId: `event:${e.id}`, kind: 'event', actor: null, text: e.title, result: 'scene', target: null, moved: null, items: [] });
+      if (placeId) push(placeBeats, placeId, { actionId: `event:${e.id}`, kind: 'event', actor: null, text: e.title, result: 'scene', target: null, targetNpc: null, moved: null, items: [] });
     }
   }
 
@@ -648,27 +691,24 @@ function narrationAudiences(
     const refs = new Set([...extra, ...beats.flatMap((b) => [b.actor, b.target].filter((r): r is string => r !== null))]);
     return [...refs].flatMap((r) => {
       const p = world.byRef.get(r);
-      return p ? [{ ref: r, looks: world.tokenise(p.appearance), title: p.socialTitle, self: r === self }] : [];
+      return p ? [{ ref: r, looks: world.tokenise(p.appearance), title: p.socialTitle, self: r === self, karmaBand: karmaBandOf(p.memberId) }] : [];
     });
   };
-  const npcsAt = (placeId: string) => world.npcs.filter((n) => n.locationId === placeId).map((n) => ({ id: n.id, alias: n.alias }));
+  const npcsAt = (placeId: string, cast: { ref: string }[]) => npcsFor(placeId, cast.flatMap((c) => world.byRef.get(c.ref)?.memberId ?? []));
 
   const out: Audience[] = [];
   for (const [placeId, beats] of placeBeats) {
     const readers = [...start].filter(([, loc]) => loc === placeId).map(([id]) => id);
     if (readers.length === 0) continue;
-    out.push({
-      key: `place:${placeId}`,
-      placeId,
-      readers,
-      ctx: { audience: { place: placeId }, cast: castOf(beats, readers.filter((id) => world.players.has(id)).map(ref), null), npcs: npcsAt(placeId), beats },
-    });
+    const cast = castOf(beats, readers.filter((id) => world.players.has(id)).map(ref), null);
+    out.push({ key: `place:${placeId}`, placeId, readers, ctx: { audience: { place: placeId }, cast, npcs: npcsAt(placeId, cast), beats } });
   }
   for (const [memberId, beats] of playerBeats) {
     const p = world.players.get(memberId);
     if (!p) continue;
     const placeId = start.get(memberId) ?? p.locationId;
-    out.push({ key: `player:${p.ref}`, placeId, readers: [memberId], ctx: { audience: { player: p.ref }, cast: castOf(beats, [p.ref], p.ref), npcs: npcsAt(placeId), beats } });
+    const cast = castOf(beats, [p.ref], p.ref);
+    out.push({ key: `player:${p.ref}`, placeId, readers: [memberId], ctx: { audience: { player: p.ref }, cast, npcs: npcsAt(placeId, cast), beats } });
   }
   return out;
 }
@@ -696,6 +736,7 @@ export function templateNarration(ctx: Pick<NarrationContext, 'beats'>): GmNarra
       const text = [who, b.text, outcome].filter((s) => s.length > 0).join(' ');
       return { actionId: b.actionId, text: (text.length > 0 ? text : 'มีบางอย่างเกิดขึ้น').slice(0, 800) };
     }),
+    npcLines: [],
   };
 }
 

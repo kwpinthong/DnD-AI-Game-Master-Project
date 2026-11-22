@@ -30,6 +30,7 @@ const V2_SCREENS = [
   'play-feed',
   'play-private',
   'play-changes',
+  'play-npc',
   'play-hit',
   'play-self',
   'play-companions',

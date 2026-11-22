@@ -1,7 +1,7 @@
 import type { AiCallRequest } from '../ai/provider.ts';
 import type { DayContext, JournalContext, NarrationContext, TurnContext } from './context.ts';
 import { templateFinale, type FinaleContext } from './finale.ts';
-import { GM_OUTPUT, type GmAction, type GmJournal, type GmNarration, type GmTurnProposal } from './schema.ts';
+import { GM_OUTPUT, type GmAction, type GmJournal, type GmNarration, type GmNpcLine, type GmTurnProposal } from './schema.ts';
 
 /**
  * The Mock GM (AI_PROVIDER=mock without a script, plugged into the Mock provider by `ai/registry.ts`; tests
@@ -147,12 +147,33 @@ const RESULT_WORD: Record<string, string> = {
   scene: '',
 };
 
+/**
+ * GEN-110: the Mock GM's NPC lines. A place narration: 2 dialogue lines of the NPC a beat aims at (else the first NPC),
+ * then a reaction of each other NPC (up to 3, in order). A player narration: one private line when the reader's action is Secret.
+ */
+export function mockNpcLines(all: NarrationContext): GmNpcLine[] {
+  const ctx = { ...all, npcs: all.npcs.filter((n) => n.here) };
+  if ('player' in ctx.audience) {
+    const first = ctx.npcs[0];
+    return first && ctx.privateLines ? [{ npcId: first.id, kind: 'dialogue', text: 'ข้าเห็นนะว่าเจ้าทำอะไรอยู่ ไว้คุยกันทีหลัง' }] : [];
+  }
+  const aimed = ctx.beats.find((b) => b.targetNpc !== null && ctx.npcs.some((n) => n.id === b.targetNpc))?.targetNpc;
+  const main = ctx.npcs.find((n) => n.id === aimed) ?? ctx.npcs[0];
+  if (!main || ctx.beats.every((b) => b.kind !== 'public_action')) return [];
+  return [
+    { npcId: main.id, kind: 'dialogue', text: 'อ้อ เจ้าหมายถึงเรื่องนั้นสินะ เข้ามานั่งก่อน' },
+    { npcId: main.id, kind: 'dialogue', text: 'ข้าจะเล่าเท่าที่ข้ารู้ให้ฟัง' },
+    ...ctx.npcs.filter((n) => n.id !== main.id).slice(0, 3).map((n): GmNpcLine => ({ npcId: n.id, kind: 'reaction', text: 'หันมามองอย่างสงสัยแล้วเงียบไป' })),
+  ];
+}
+
 export function mockNarration(ctx: NarrationContext): GmNarration {
   return {
     segments: ctx.beats.map((b) => ({
       actionId: b.actionId,
       text: [b.actor === null ? 'มีบางอย่างเกิดขึ้น' : `{{p:${b.actor}}}`, b.text, RESULT_WORD[b.result] ?? ''].filter((s) => s.length > 0).join(' ').slice(0, 800),
     })),
+    npcLines: mockNpcLines(ctx),
   };
 }
 

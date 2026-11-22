@@ -3,6 +3,7 @@ import { karmaBand, type CrossPlayerState, type PeriodWeather, type TagContext, 
 import { and, eq, isNull } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
 import type { PromptBlock } from '../ai/provider.ts';
+import { sheetNpcFor } from '../companions/sheet.ts';
 import { itemsInGame, skillsInGame } from '../crossplayer/items.ts';
 import { isLegacyOption, type StoredOption } from '../game/loot.ts';
 import { titleOf } from '../game/character.ts';
@@ -66,7 +67,8 @@ export interface GmWorld {
   gameId: string;
   players: Map<string, GmPlayer>;
   byRef: Map<string, GmPlayer>;
-  npcs: { id: string; name: string; alias: string; rank: string; locationId: string }[];
+  /** `names`: every name the NPC_Schedule tab may call it by (real name, other names, the sheet's aliases). */
+  npcs: { id: string; name: string; alias: string; rank: string; locationId: string; names: string[] }[];
   places: { id: string; name: string; safety: string; tags: string[] }[];
   /** Who knows whose real name (GEN-050 / GEN-067), by viewer. */
   knownNames: (viewerMemberId: string) => ReadonlySet<string>;
@@ -89,7 +91,14 @@ export function loadWorld(db: DbOrTx, gameId: string, assets: GameAssets): GmWor
     if (!p) continue;
     players.set(c.memberId, { memberId: c.memberId, ref: p.ref, name: c.name, appearance: c.appearance, socialTitle: titleOf(c), locationId: p.locationId });
   }
-  const npcs = (scenario?.npcs ?? []).map((n) => ({ id: n.id, name: n.name, alias: n.alias, rank: n.rank, locationId: n.locationId }));
+  const npcs = (scenario?.npcs ?? []).map((n) => ({
+    id: n.id,
+    name: n.name,
+    alias: n.alias,
+    rank: n.rank,
+    locationId: n.locationId,
+    names: [...new Set([n.name, ...(n.otherNames ?? []), ...(sheetNpcFor(assets, n)?.record.aliases ?? [])])],
+  }));
   const places = (scenario?.locations ?? []).map((l) => ({ id: l.id, name: l.name, safety: l.safety, tags: [...(assets.location(l.name)?.tags ?? [])] }));
   const names = [
     ...[...players.values()].map((p) => ({ name: p.name, token: playerToken(p.ref) })),
@@ -295,6 +304,8 @@ export interface Beat {
   /** `crit` | `success` | `fail` | `fumble` | `no_target` | `skipped` | `scene`. */
   result: string;
   target: string | null;
+  /** GEN-110: the scenario NPC the action is aimed at (talking to them directly = a key moment); null = none. */
+  targetNpc: string | null;
   moved: { from: string; to: string } | null;
   items: string[];
 }
@@ -304,9 +315,19 @@ export interface NarrationContext {
   audience: { place: string } | { player: string };
   turn: { day: number; phase: Phase; turn: Turn };
   place: { id: string; name: string };
-  /** The only players the text may name, as {{p:ref}}. `self`: the reader of a private narration. */
-  cast: { ref: string; looks: string; title: string; self: boolean }[];
-  npcs: { id: string; alias: string }[];
+  /**
+   * The only players the text may name, as {{p:ref}}. `self`: the reader of a private narration. `looks` + `title`
+   * = how the NPCs know the player (the alias); `karmaBand` -2..+2 (GEN-110: how NPCs treat them, never the number).
+   */
+  cast: { ref: string; looks: string; title: string; self: boolean; karmaBand: number }[];
+  /**
+   * The NPCs of the place (tokens may name any of them). `here`: at the place now by NPC_Schedule + period + weather (GEN-110):
+   * only these may speak (`npcLines`). `persona`: the sheet's personality (only when `here`), names as tokens;
+   * `bonds`: each cast player's affinity (-/+) and whether they have met.
+   */
+  npcs: { id: string; alias: string; grade: string; here: boolean; persona: string | null; bonds: { player: string; affinity: number; met: boolean }[] }[];
+  /** GEN-110: private NPC lines (`npcLines` of a player narration) are kept only when this is true: the reader's own action is Secret. */
+  privateLines: boolean;
   /** In the server's order; write one or more segments for each, in the same order. */
   beats: Beat[];
   /** The reader's own journal (Q-153), for a private narration only; null for a place feed. */
@@ -367,6 +388,13 @@ const NARRATOR_TEXT = [
   'คุณคือผู้เล่าเรื่องของ Game Master เล่าเฉพาะ beats ที่ให้มา ตามลำดับ ทุก beat ต้องมีอย่างน้อย 1 segment ที่ actionId ตรงกับ beat',
   'ห้ามเล่าเรื่องที่ไม่อยู่ใน beats ห้ามอ้างคนที่ไม่อยู่ใน cast ใช้ {{p:ref}} / {{n:id}} แทนชื่อเสมอ ห้ามเขียนชื่อจริง',
   'audience แบบ place = ทุกคนที่อยู่ที่นั่นอ่านร่วมกัน / แบบ player = อ่านคนเดียว (self = คุณ)',
+  // GEN-110
+  'npcLines = บทพูดของ NPC ที่อยู่ที่นี่ตอนนี้ (npcs ของ context เท่านั้น npcId ต้องตรง) ตอบ [] ได้เสมอ ไม่ต้องพูดทุกเทิร์น',
+  '- audience place (ทุกคนอ่านร่วมกัน): kind dialogue = NPC พูดเรื่องที่ beat นั้นทำ / พูดกับผู้ทำ ได้สูงสุด 3 บรรทัดของ NPC เดียว (NPC ที่ beat เล็งถึงด้วย targetNpc) / kind reaction = NPC คนอื่นที่อยู่ที่นั่นตอบสนองคนละ 1 บรรทัด ไม่เกิน 3 คน',
+  '- audience player (อ่านคนเดียว): ใส่ npcLines ได้เฉพาะเมื่อ privateLines เป็น true (action ของผู้อ่านเป็นการกระทำลับ) เป็นสิ่งที่ NPC พูดกับผู้อ่านคนเดียว ไม่เกิน 2 บรรทัด นอกนั้นตอบ [] เสมอ (บทพูดต่อหน้าทุกคนอยู่ใน audience place แล้ว ห้ามซ้ำ)',
+  '- ช่วงสำคัญ (beat มี targetNpc, ผู้เล่นเจอ NPC ครั้งแรก = bonds met เป็น false, หรือมี beat kind event) ให้พูดมากขึ้น เทิร์นธรรมดาพูดน้อย 0-2 บรรทัด',
+  '- แต่ละบรรทัดสั้น ไม่เกิน 120 ตัวอักษร เป็นภาษาไทย พูดตาม persona ของ NPC นั้น และท่าทีต่อผู้เล่นตาม bonds (affinity สูง = เป็นมิตร ต่ำ = ระแวง), karmaBand (-2 โหดร้าย .. +2 ใจบุญ) และ looks / title ของผู้เล่น (NPC รู้จักผู้เล่นแค่รูปลักษณ์กับฉายา ห้ามเรียกชื่อจริง)',
+  '- ห้ามเฉลยความลับ ชื่อจริง หรือกรรมเป็นตัวเลข ห้ามพูดถึงสิ่งที่ไม่อยู่ใน beats / ห้ามเล่าเรื่องของ action ลับให้คนอื่นรู้ ใช้ {{p:ref}} / {{n:id}} แทนชื่อ ห้ามใส่ HP / กรรม / เกรด',
 ].join('\n');
 
 const SUMMARY_TEXT = 'สรุปวันที่จบไปของ Game Master: recap = เรื่องสำคัญของวันนี้ / saga = เรื่องทั้งหมดจนถึงวันนี้ย่อรวมกับ saga เดิม ใช้ token แทนชื่อเสมอ';

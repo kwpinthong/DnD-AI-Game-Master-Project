@@ -71,6 +71,18 @@ export type ResolutionEntry = (
       /** Q-229 (F5): the roll of this player's own action, shown on this narration only. */
       readonly roll?: RollView;
     }
+  | {
+      /**
+       * GEN-110: one line an NPC says. `memberId` set = said to that player alone (like a `narration`); null = said at
+       * `locationId` to everyone there (like a `feed`). `text` has the names filled in; the viewer's NPC name comes at read time.
+       */
+      readonly kind: 'npc';
+      readonly npcId: string;
+      readonly npcKind: 'dialogue' | 'reaction';
+      readonly locationId: string | null;
+      readonly memberId: string | null;
+      readonly text: string;
+    }
 ) & {
   /** Q-177: set when the text is the server template, with why. */
   readonly fallback?: GmFallbackCause;

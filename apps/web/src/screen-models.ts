@@ -17,6 +17,8 @@ const SECTION: Record<RoomEntry['kind'], EntrySection> = {
   omen: 'private',
   hit: 'pin',
   changes: 'private',
+  // GEN-110: public lines belong to the place, `npc.private` ones to your column; the chat UI (GEN-122) decides per entry.
+  npc: 'place',
 };
 export const entrySection = (entry: Pick<RoomEntry, 'kind'>): EntrySection => SECTION[entry.kind];
 

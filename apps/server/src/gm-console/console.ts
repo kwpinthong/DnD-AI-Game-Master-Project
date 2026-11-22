@@ -171,9 +171,10 @@ function pendingView(db: DbOrTx, gameId: string, turn: HeldTurn): GmPendingTurn 
     ...(edited.checks ? { checks: [...edited.checks] } : {}),
     entries: (edited.entries ?? []).map((e, index) => ({
       index,
-      kind: e.kind,
-      memberId: e.kind === 'narration' ? e.memberId : null,
-      locationId: e.kind === 'feed' ? e.locationId : null,
+      // GEN-110: an NPC line is shown (and edited) as the feed line or private text it is published as.
+      kind: e.kind === 'npc' ? (e.memberId === null ? 'feed' : 'narration') : e.kind,
+      memberId: e.kind === 'feed' ? null : e.memberId,
+      locationId: e.kind === 'narration' ? null : e.locationId,
       text: e.text,
       edited: edits.narrations.has(index),
     })),
@@ -258,7 +259,7 @@ function fallbacksOf(db: DbOrTx, gameId: string): GmFallbackView[] {
     .orderBy(asc(roomEntry.id))
     .all();
   return rows.flatMap(({ e }) => {
-    if (e.fallback === null || e.kind === 'whisper' || e.kind === 'omen' || e.kind === 'hit' || e.kind === 'changes') return [];
+    if (e.fallback === null || e.kind === 'whisper' || e.kind === 'omen' || e.kind === 'hit' || e.kind === 'changes' || e.kind === 'npc') return [];
     const reader =
       e.kind === 'narration'
         ? (db
