@@ -232,6 +232,66 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(contextOf<TurnContext>(provider.requests.filter(isTurn).at(-1)!).actions.map((a) => a.text).sort()).toEqual(['ขโมยขนม', 'ร้องเพลง', 'เต้นรำ'].sort());
   });
 
+  it('Q-180: a succeeded action\'s skillFlags and grants are applied with the turn; a wrong flag / grant is repaired first', async () => {
+    let refA = '';
+    await boot({}, (req, n) => {
+      if (!isTurn(req)) return noRoll(req, n);
+      const proposal = mockTurnProposal(contextOf<TurnContext>(req));
+      for (const a of proposal.actions) a.check = { type: 'none' };
+      const mine = proposal.actions.find((a) => a.actor === refA)!;
+      if (req.purpose === 'gm_adjudicate') {
+        mine.skillFlags = ['protected_others', 'made_up_flag'];
+        // Censer is the noble's grade A reward (open); Sanctuary Aegis only after he evolves (not open).
+        mine.grants = [
+          { kind: 'item', name: 'Censer of Purging Flame', npcId: 'noble' },
+          { kind: 'skill', name: 'Sanctuary Aegis', npcId: 'noble' },
+        ];
+      } else {
+        mine.skillFlags = ['protected_others'];
+        mine.grants = [{ kind: 'item', name: 'Censer of Purging Flame', npcId: 'noble' }];
+      }
+      return mockReply.ok(proposal);
+    });
+    const t = await startedTable(server!, false);
+    refA = refOf(t.a);
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    await playTurn(clients, ['ยืนบังเด็กจากรถม้า', 'นั่งฟังข่าว', 'ล้างแก้ว'], { day: 1, phase: 'EOSORIA', turn: 2 });
+
+    const turnRequests = provider.requests.filter(isTurn);
+    expect(turnRequests.map((r) => r.purpose)).toEqual(['gm_adjudicate', 'gm_repair']);
+    const repairAsk = lastUserText(turnRequests[1]!);
+    expect(repairAsk).toContain('unknown_flag');
+    expect(repairAsk).toContain('not_unlocked');
+    expect(server!.db.prepare('select member_id as m, flag, count from skill_flag').all()).toEqual([{ m: t.a.memberId, flag: 'protected_others', count: 1 }]);
+    expect(server!.db.prepare('select member_id as m, npc_id as npc, reward from npc_reward').all()).toEqual([{ m: t.a.memberId, npc: 'noble', reward: 'Censer of Purging Flame' }]);
+    expect(server!.db.prepare("select count(*) as n from owned_skill where name = 'Sanctuary Aegis'").get()).toEqual({ n: 0 });
+  });
+
+  it('Q-180 / Q-049: a grant still not allowed after the repair: the turn is stuck and no flag or reward is stored', async () => {
+    let refA = '';
+    await boot({}, (req, n) => {
+      if (!isTurn(req)) return noRoll(req, n);
+      const proposal = mockTurnProposal(contextOf<TurnContext>(req));
+      const mine = proposal.actions.find((a) => a.actor === refA)!;
+      mine.skillFlags = ['protected_others'];
+      mine.grants = [
+        { kind: 'item', name: 'Censer of Purging Flame', npcId: 'noble' },
+        { kind: 'item', name: 'Not An Item', npcId: 'noble' },
+      ];
+      return mockReply.ok(proposal);
+    });
+    const t = await startedTable(server!, false);
+    refA = refOf(t.a);
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    for (const [i, c] of clients.entries()) await send(c, ['ช่วยคน', 'นั่ง', 'ยืน'][i]!);
+    const shown = await clients[0]!.waitFor(gmStuck);
+    expect(shown.gmStatus).toMatchObject({ code: 'stuck' });
+    expect(lastUserText(provider.requests.filter(isTurn)[1]!)).toContain('unknown_item');
+    expect(server!.db.prepare('select count(*) as n from skill_flag').get()).toEqual({ n: 0 });
+    expect(server!.db.prepare('select count(*) as n from npc_reward').get()).toEqual({ n: 0 });
+    expect(turnRows()).toEqual([]);
+  });
+
   it('C3: A\'s private narration with B\'s real name (A does not know it) is refused and repaired', async () => {
     let refA = '';
     await boot({}, async (req) => {

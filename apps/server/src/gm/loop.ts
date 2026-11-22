@@ -28,6 +28,7 @@ import { buildEventContext } from '../timeline/context.ts';
 import { setEventOutcome } from '../timeline/store.ts';
 import { discoverHiddenEvidence, locationSnapshot, npcBondsOf } from '../visibility/store.ts';
 import { recordTurnProgress } from '../skills/progress.ts';
+import { applySkillChanges, checkSkillChanges, earnedSkillChanges } from './skill-grants.ts';
 import { checkNarration, checkTurnProposal, type GmError } from './check.ts';
 import {
   CONTEXT_BUDGET,
@@ -256,6 +257,9 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       activeConstraintIds: new Set(constraints.map((c) => c.id)),
     });
 
+    const memberOfRef = (ref: string) => world.byRef.get(ref)?.memberId;
+    const skillTime = () => ({ day: at.day, period: at.phase, now: now() });
+
     const toTurnAction = (memberId: string): TurnAction => {
       const a = acting.find((x) => x.memberId === memberId)!;
       return { actionId: actionIdOf(memberId), memberId, text: a.text, visibility: a.visibility };
@@ -290,8 +294,11 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         budget: CONTEXT_BUDGET.gm_adjudicate,
         check: (p) => {
           const r = checkTurnProposal(checkInput(order), p);
-          if (r.ok) checked = r.actions;
-          return r.ok ? [] : r.errors;
+          if (!r.ok) return r.errors;
+          // Q-180: flags and grants go through the sheet / unlock rules too (dry run, nothing kept).
+          const refused = checkSkillChanges(db, assets, memberOfRef, p, skillTime());
+          if (refused.length === 0) checked = r.actions;
+          return refused;
         },
         ...(signal ? { signal } : {}),
       });
@@ -391,6 +398,11 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         if (!applied.ok) throw new Error('the stored turn no longer applies');
         // GEN-055: the unlock progress of every action (verb tags, karma) and the library's INVESTIGATE reveal.
         recordTurnProgress(tx, assets, gameId, applied.log, { day: at.day, period: at.phase, now: now() }, investigators);
+        // Q-180: the flags and grants of the actions that succeeded.
+        const results = new Map(applied.log.outcomes.map((o) => [o.actionId, RESULT_OF(o)]));
+        const earned = earnedSkillChanges(proposal, (id) => results.get(id));
+        const skipped = applySkillChanges(tx, assets, memberOfRef, earned, proposal, skillTime());
+        if (skipped.length > 0) log(`[gm] game=${gameId} skill changes skipped at apply: ${[...new Set(skipped.map((e) => e.code))].join(', ')}`);
         for (const c of proposal.constraints.add) {
           addConstraint(tx, { gameId, memberId: world.byRef.get(c.player)!.memberId, text: c.text, reason: c.reason, day: at.day }, now());
         }

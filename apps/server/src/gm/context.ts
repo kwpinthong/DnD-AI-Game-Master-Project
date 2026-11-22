@@ -8,6 +8,7 @@ import { isLegacyOption, type StoredOption } from '../game/loot.ts';
 import type { DbOrTx } from '../db/client.ts';
 import { character, member } from '../db/schema.ts';
 import { getGameScenario } from '../scenario/store.ts';
+import { SKILL_FLAGS } from '../skills/unlock-rules.ts';
 import { buildEventContext, type EventContext } from '../timeline/context.ts';
 import { namesVisibleTo, presencesInGame } from '../visibility/store.ts';
 import { activeConstraints, dayLog, journalFor, memoryFor } from './store.ts';
@@ -325,6 +326,10 @@ const RULES_TEXT = [
   '5. ผู้เล่นที่ติด constraints (Constraint Lock) ยังติดอยู่จนกว่าคุณจะปลดใน constraints.release พร้อม reason ที่อธิบายว่าทำไมหลุด',
   '6. คุณไม่รู้ผลเต๋า เสนอ onSuccess และ onFail ให้สมเหตุสมผลทั้งคู่ ห้ามใส่ค่า HP / Stamina ใหม่เอง',
   '7. ห้ามเขียนชื่อจริงของตัวละคร ใช้ {{p:ref}} / {{n:id}} ที่ให้มาเท่านั้น',
+  // Q-180
+  '8. skillFlags / grants ของ action มีผลกับผู้ทำเมื่อ action นั้นสำเร็จเท่านั้น: skillFlags = เงื่อนไขปลดล็อกที่เกิดขึ้นจริงในเทิร์นนี้ ใช้ได้เฉพาะชื่อในรายการนี้: ' +
+    [...SKILL_FLAGS].join(', ') +
+    ' / grants = มอบสกิลที่เงื่อนไขครบแล้ว หรือสกิล / ไอเทมที่อยู่ในรางวัลของ NPC (npcId) ที่เปิดให้ผู้เล่นคนนี้แล้ว ไอเทมต้องมี npcId เสมอ นอกนั้นเว้นว่าง',
 ].join('\n');
 
 const NARRATOR_TEXT = [

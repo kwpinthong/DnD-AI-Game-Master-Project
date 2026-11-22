@@ -54,6 +54,8 @@ export function mockAction(ctx: TurnContext, actionId: string): GmAction {
     moveTo: null,
     awareness: 'normal',
     investigate: marked.investigate ?? false,
+    skillFlags: [],
+    grants: [],
     intentSummary: `{{p:${action.actor}}} ${action.text}`.slice(0, 200),
     reason: 'Mock GM',
   };
