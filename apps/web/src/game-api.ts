@@ -101,6 +101,23 @@ export async function gameCall(baseUrl: string, token: string, action: GameActio
   return { kind: 'error', message: error.data.message };
 }
 
+/** DELETE /api/game (GEN-112): the owner deletes the game for everyone; `confirmName` is the typed game name. */
+export async function deleteGameCall(baseUrl: string, token: string, confirmName: string): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    // 204 has no body, so this does not go through `send` (which reads JSON).
+    const res = await fetchWithTimeout(apiUrl(baseUrl, '/api/game'), {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ confirmName }),
+    });
+    if (res.ok) return { ok: true };
+    const error = ApiError.safeParse(await res.json());
+    return { ok: false, message: error.success ? error.data.message : UNREACHABLE };
+  } catch {
+    return { ok: false, message: UNREACHABLE };
+  }
+}
+
 /** A character call's result (GEN-047): the character (null = none yet), field errors, or a Thai error. */
 export type CharacterResult =
   | { kind: 'ok'; character: CharacterView | null }

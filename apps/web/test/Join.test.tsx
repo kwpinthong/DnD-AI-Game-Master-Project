@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App.tsx';
-import { TOKEN_KEY } from '../src/session.ts';
+import { loadKnownTokens, TOKEN_KEY } from '../src/session.ts';
 
 const member = { id: 'm-1', gameId: 'g-1', name: 'นก' };
 const joined = { token: 'tok-abc', expiresAt: '2026-12-21T12:00:00.000Z', created: true, member };
@@ -206,7 +206,7 @@ describe('Join page', () => {
     await waitFor(() => expect(localStorage.getItem(TOKEN_KEY)).toBeNull());
   });
 
-  it('logging out forgets the token and shows the join form again', async () => {
+  it('GEN-112: leaving the game only leaves the screen: join form again, no logout call, the game stays on the list', async () => {
     localStorage.setItem(TOKEN_KEY, 'tok-abc');
     const fetchMock = stubApi({
       '/api/me': () => Response.json({ member }),
@@ -218,7 +218,7 @@ describe('Join page', () => {
 
     expect(await screen.findByLabelText('PIN')).toBeTruthy();
     expect(localStorage.getItem(TOKEN_KEY)).toBeNull();
-    const [call] = callsTo(fetchMock, '/api/logout');
-    expect(new Headers(call![1]?.headers).get('authorization')).toBe('Bearer tok-abc');
+    expect(callsTo(fetchMock, '/api/logout')).toHaveLength(0);
+    expect(loadKnownTokens()).toEqual(['tok-abc']);
   });
 });

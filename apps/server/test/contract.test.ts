@@ -210,6 +210,7 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'GET /api/admin/ai-usage/:gameId', { token: adminToken, path: `/api/admin/ai-usage/${lobby.game.id}` });
     await hit(call, 'POST /api/admin/logout', { token: adminToken });
     await hit(call, 'POST /api/logout', { token: p1.token });
+    await hit(call, 'DELETE /api/game', { token: gm, body: { confirmName: 'เกมสัญญา 2' } });
 
     // --- Socket frames: each passes the schema the contract names for its `type` ---
     const schemaOf = new Map(READY_SERVER_EVENTS.map((i) => [i.type, i.schema]));

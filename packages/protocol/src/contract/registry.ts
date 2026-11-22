@@ -193,6 +193,7 @@ export const CONTRACT: readonly ContractItem[] = [
   http('PATCH', '/api/game', 'UpdateGameRequest', 'GameView', ready('GEN-025', 'player', ['lobby'], 'เจ้าของเท่านั้น ก่อนเริ่ม')),
   http('POST', '/api/game/invite-code', null, 'GameView', ready('GEN-025', 'player', ['lobby'], 'เจ้าของเท่านั้น')),
   http('DELETE', '/api/game/members/:memberId', null, 'GameView', ready('GEN-025', 'player', ['lobby'], 'เจ้าของเตะ')),
+  http('DELETE', '/api/game', null, null, ready('GEN-112', 'player', ['lobby'], 'เจ้าของเท่านั้น (คนอื่น 403); body {confirmName} ต้องตรงชื่อเกม; ปุ่ม "ออกจากเกม" ไม่ลบเกม')),
   http('POST', '/api/game/start', null, 'GameView', ready('GEN-025 + GEN-065', 'player', ['lobby'], 'สุ่มจุดเกิดตอนเริ่ม')),
   http('GET', '/api/game/scenario', null, 'GameScenarioResponse', ready('GEN-046', 'gm', ['scenario-editor'])),
   http('PUT', '/api/game/scenario', 'Scenario', 'GameScenarioResponse', ready('GEN-046', 'gm', ['scenario-editor'])),

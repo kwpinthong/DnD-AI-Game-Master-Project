@@ -270,6 +270,32 @@ describe('Create game + Lobby (GEN-025)', () => {
     expect(screen.queryByRole('button', { name: 'เตะ นก' })).toBeNull();
   });
 
+  it('GEN-112 C6: deleting the game is a separate button; it needs the game name typed, then goes back to the join form', async () => {
+    const fetchMock = loggedIn(view(), { 'DELETE /api/game': () => new Response(null, { status: 204 }) });
+
+    render(<App apiBaseUrl="" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'ลบเกม' }));
+    const confirm = screen.getByRole('button', { name: 'ยืนยันลบเกม' }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    expect(callsTo(fetchMock, 'DELETE', '/api/game')).toHaveLength(0);
+
+    fireEvent.change(screen.getByLabelText('พิมพ์ชื่อเกมเพื่อยืนยัน'), { target: { value: 'เมืองก่อนอุกกาบาต' } });
+    expect(confirm.disabled).toBe(false);
+    fireEvent.click(confirm);
+
+    expect(await screen.findByLabelText('PIN')).toBeTruthy();
+    const [call] = callsTo(fetchMock, 'DELETE', '/api/game');
+    expect(JSON.parse(String(call![1]?.body))).toEqual({ confirmName: 'เมืองก่อนอุกกาบาต' });
+    expect(localStorage.getItem(TOKEN_KEY)).toBeNull();
+  });
+
+  it('GEN-112 C6: a member who is not the owner has no delete button', async () => {
+    loggedIn(view({ you: { memberId: 'm-bel', role: 'player', isOwner: false } }));
+    render(<App apiBaseUrl="" />);
+    expect(await screen.findByText('K7Q-2MX')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'ลบเกม' })).toBeNull();
+  });
+
   it('C7: a member who is not the owner sees no kick, new code or start controls', async () => {
     loggedIn(view({ you: { memberId: 'm-bel', role: 'player', isOwner: false } }));
 

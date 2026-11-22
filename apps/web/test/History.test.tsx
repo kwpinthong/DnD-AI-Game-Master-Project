@@ -148,7 +148,7 @@ describe('known sessions (GEN-037)', () => {
 });
 
 describe('C3: game list and the summary + log of a finished game', () => {
-  it('a join adds the game to this browser\'s list; leaving the game (logout) takes it off', async () => {
+  it('a join adds the game to this browser\'s list; leaving the game keeps it on the list (GEN-112)', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
@@ -170,7 +170,7 @@ describe('C3: game list and the summary + log of a finished game', () => {
     expect(loadKnownTokens()).toEqual(['tok-new', 'tok-old']);
 
     fireEvent.click(screen.getByRole('button', { name: 'ออกจากเกม' }));
-    expect(loadKnownTokens()).toEqual(['tok-old']);
+    expect(loadKnownTokens()).toEqual(['tok-new', 'tok-old']);
   });
 
   it('lists every game this browser joined with its status, and drops a session the server no longer knows', async () => {
