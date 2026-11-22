@@ -50,7 +50,8 @@ describe('C1 colours and fonts come from tokens.css', () => {
     const themeAt = main.indexOf("import './theme.css';");
     expect(tokensAt).toBeGreaterThanOrEqual(0);
     expect(themeAt).toBeGreaterThan(tokensAt);
-    const imports = filesUnder(src).flatMap((f) => [...readFileSync(f, 'utf8').matchAll(/(?:import\s+|@import\s+(?:url\()?)['"][^'"]*tokens\.css['"]/g)].map(() => relative(src, f)));
+    // text sources only: reading the painted .webp assets as utf8 made this scan exceed the test timeout
+    const imports = filesUnder(src).filter((f) => ['.ts', '.tsx', '.css'].includes(extname(f))).flatMap((f) => [...readFileSync(f, 'utf8').matchAll(/(?:import\s+|@import\s+(?:url\()?)['"][^'"]*tokens\.css['"]/g)].map(() => relative(src, f)));
     expect(imports.filter((f) => f !== 'tokens.css')).toEqual(['main.tsx']);
   });
 

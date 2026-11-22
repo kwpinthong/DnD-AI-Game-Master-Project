@@ -14,7 +14,7 @@ const PREFIX = 'info';
 
 export const INFO_TABS = ['place', 'self', 'bag', 'people'] as const;
 export type InfoTab = (typeof INFO_TABS)[number];
-const TAB_DEFS: readonly TabDef<InfoTab>[] = INFO_TABS.map((id) => ({ id, label: t[id] }));
+export const TAB_DEFS:readonly TabDef<InfoTab>[] = INFO_TABS.map((id) => ({ id, label: t[id] }));
 
 /** Everything the four panels read; the same object feeds the desktop side panel and the phone's tabs (GEN-123). */
 export interface InfoData {
@@ -155,18 +155,38 @@ export function PeoplePanel({ room, data, entries, onSave, onRelease, companionP
   );
 }
 
+/** The four tabs and the scrolling panel of the open one; the desktop side panel and the phone's sheet both use it. */
+export function InfoTabs({ tab, onPick, children }: { tab: InfoTab; onPick: (tab: InfoTab) => void; children: ReactNode }) {
+  return (
+    <>
+      <RovingTabs label={t.label} prefix={PREFIX} tabs={TAB_DEFS} active={tab} onPick={onPick} />
+      <div role="tabpanel" id={panelId(PREFIX, tab)} aria-labelledby={tabId(PREFIX, tab)} className="info-scroll" tabIndex={0}>
+        {children}
+      </div>
+    </>
+  );
+}
+
+/** The panel of one tab. */
+export function InfoTabBody({ tab, ...props }: InfoData & { tab: InfoTab }) {
+  return (
+    <>
+      {tab === 'place' && <PlacePanel {...props} />}
+      {tab === 'self' && <SelfPanel {...props} />}
+      {tab === 'bag' && <BagPanel {...props} />}
+      {tab === 'people' && <PeoplePanel {...props} />}
+    </>
+  );
+}
+
 /** The right panel of the desktop page (340): four tabs and the one that is open. */
 export function InfoPanel(props: InfoData & { initial?: InfoTab }) {
   const [tab, setTab] = useState<InfoTab>(props.initial ?? 'place');
   return (
     <aside className="info-panel" aria-label={t.label}>
-      <RovingTabs label={t.label} prefix={PREFIX} tabs={TAB_DEFS} active={tab} onPick={setTab} />
-      <div role="tabpanel" id={panelId(PREFIX, tab)} aria-labelledby={tabId(PREFIX, tab)} className="info-scroll" tabIndex={0}>
-        {tab === 'place' && <PlacePanel {...props} />}
-        {tab === 'self' && <SelfPanel {...props} />}
-        {tab === 'bag' && <BagPanel {...props} />}
-        {tab === 'people' && <PeoplePanel {...props} />}
-      </div>
+      <InfoTabs tab={tab} onPick={setTab}>
+        <InfoTabBody tab={tab} {...props} />
+      </InfoTabs>
     </aside>
   );
 }

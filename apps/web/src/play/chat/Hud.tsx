@@ -102,6 +102,35 @@ export function HudBar({ room, character, menuOpen, onMenu, onHistory }: { room:
   );
 }
 
+/**
+ * The phone's top bar (GEN-123), two lines: the place + a small dial with the period / [เมนู], then HP, Stamina, coins +
+ * "ส่งแล้ว x/y". Same dial, same labels as the desktop bar; History lives in the menu here.
+ */
+export function CompactHudBar({ room, character, menuOpen, onMenu }: { room: RoomState; character: CharacterView | null | undefined; menuOpen: boolean; onMenu: () => void }) {
+  const bar = topBar(room);
+  const place = room.you.astral ? playText.lock.astral_spirit : (room.you.place?.name ?? playText.place.nowhere);
+  return (
+    <div className="hud hud--compact">
+      <div className="hud-line">
+        <h3 className="display hud-place">{place}</h3>
+        <div className="hud-time" role="group" aria-label={playText.top.label}>
+          <PeriodDial room={room} />
+          <span className="hud-time__now">
+            {bar.day} · {PERIOD_WORD[room.phase]} · {playText.top.turn(room.turn)}
+          </span>
+        </div>
+        <Button aria-expanded={menuOpen} onClick={onMenu}>
+          {playText.top.menu}
+        </Button>
+      </div>
+      <div className="hud-line">
+        {character !== null && <StatusHud character={character} />}
+        {bar.submitted && <span className="hud-sent">{bar.submitted}</span>}
+      </div>
+    </div>
+  );
+}
+
 /** The dial, the day, the turn, the weather and "ส่งแล้ว x/y" (the count only, Q-195). */
 export function TimeHud({ room, children }: { room: RoomState; children?: ReactNode }) {
   const bar = topBar(room);

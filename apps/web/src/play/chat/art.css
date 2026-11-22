@@ -154,11 +154,12 @@
 }
 
 /* ---------- stars between the HUD and the action bar ---------- */
-.v3-main {
+.v3-main,
+.v3m-feed {
   background: var(--bg) url('../../assets/textures/texture-stars.webp') 0 0 / 512px 512px repeat;
 }
 
-.v3-feed {
+.v3-main .v3-feed {
   background: transparent;
 }
 
