@@ -2,6 +2,9 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AdminDashboard } from './AdminDashboard.tsx';
 import { App } from './App.tsx';
+// Theme v2 (GEN-087): tokens.css is the only place colours and fonts are defined; theme.css uses them.
+import './tokens.css';
+import './theme.css';
 
 // VITE_API_URL: the server's public URL when the web app is hosted elsewhere (Netlify, Q-031).
 // Empty in dev: requests stay same-origin and the Vite proxy forwards them to the server.
