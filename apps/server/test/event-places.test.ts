@@ -76,6 +76,19 @@ describe('GEN-097 witnesses and the player timeline', { timeout: 60_000 }, () =>
     expect(await seen(t, t.c)).not.toContain('d10-summoning');
   });
 
+  it('Q-247: the sheet day 7 event (ย่านชุมชน & โบสถ์) is seen at community and temple, not the market; community is a normal place', async () => {
+    const t = await startedTable(server!, false);
+    const gameId = gameOf(t);
+    expect(getGameScenario(server!.orm, gameId)!.timeline.find((e) => e.id === 'd7-kidnapping')!.locationIds).toEqual(['community', 'temple']);
+    move(t.a, 'community');
+    move(t.b, 'temple');
+    move(t.c, 'market');
+    advanceTimeline(server!.orm, gameId, { day: 7, phase: 'HESPERION' }, CLOCK);
+    expect(await seen(t, t.a)).toContain('d7-kidnapping');
+    expect(await seen(t, t.b)).toContain('d7-kidnapping');
+    expect(await seen(t, t.c)).not.toContain('d7-kidnapping');
+  });
+
   it('C3: a town-wide event is seen by everyone, wherever they are', async () => {
     const t = await startedTable(server!, false);
     const gameId = gameOf(t);
@@ -114,11 +127,11 @@ describe('GEN-097 C2: a stored scenario with one locationId', () => {
     opened.sqlite.prepare('update game_scenario set data = ? where game_id = ?').run(JSON.stringify(old), GAME);
 
     const scenario = getGameScenario(opened.db, GAME)!;
-    expect(scenario.timeline.find((e) => e.id === 'd7-kidnapping')!.locationIds).toEqual(['temple']);
+    expect(scenario.timeline.find((e) => e.id === 'd7-kidnapping')!.locationIds).toEqual(['community']);
     expect(scenario.timeline.find((e) => e.id === 'd5-disaster')!.locationIds).toBeNull();
 
     advanceTimeline(opened.db, GAME, { day: 7, phase: 'HESPERION' });
-    expect(buildEventContext(opened.db, GAME, 7, 'HESPERION').active[0]).toMatchObject({ id: 'd7-kidnapping', places: [placeName('temple')] });
+    expect(buildEventContext(opened.db, GAME, 7, 'HESPERION').active[0]).toMatchObject({ id: 'd7-kidnapping', places: [placeName('community')] });
   });
 });
 

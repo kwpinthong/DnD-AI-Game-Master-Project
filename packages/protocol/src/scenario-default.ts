@@ -36,7 +36,7 @@ const template: ScenarioInput = {
       name: 'น้ำพุกลางเมือง',
       restQuality: 'normal',
       safety: 'normal',
-      connects: ['inn', 'temple'],
+      connects: ['inn', 'temple', 'community'],
       description: 'โซนใจกลางเมือง ลานกลางแจ้งที่ชาวเมืองมารวมตัวกัน',
     },
     {
@@ -44,7 +44,7 @@ const template: ScenarioInput = {
       name: 'โบสถ์',
       restQuality: 'normal',
       safety: 'normal',
-      connects: ['fountain', 'inn', 'church-crypt'],
+      connects: ['fountain', 'inn', 'church-crypt', 'community'],
       description: 'โซนใจกลางเมือง โบสถ์ของเมือง',
     },
     {
@@ -54,6 +54,14 @@ const template: ScenarioInput = {
       safety: 'restricted',
       connects: ['temple'],
       description: 'โซนใจกลางเมือง ชั้นใต้ดินของโบสถ์ เขตหวงห้าม',
+    },
+    {
+      id: 'community',
+      name: 'ย่านชุมชน',
+      restQuality: 'normal',
+      safety: 'normal',
+      connects: ['fountain', 'temple'],
+      description: 'โซนใจกลางเมือง ย่านบ้านเรือนของชาวเมืองรอบโบสถ์ (Q-247)',
     },
     {
       id: 'forest',
@@ -218,8 +226,7 @@ const template: ScenarioInput = {
       foreshadowing: 'เช้าวันที่ 6: ประกาศเตือนคนหายปริศนาในตรอกเมือง',
       foreshadowAt: { day: 6, phase: 'EOSORIA' },
       crisis: true,
-      // ย่านชุมชน & โบสถ์: ย่านชุมชน is not a Location row of the sheet yet (open question for Nok).
-      locationIds: ['temple'],
+      locationIds: ['community', 'temple'], // ย่านชุมชน & โบสถ์
       npcIds: ['noble', 'guard', 'archbishop', 'dark-spirit'],
     },
     {
