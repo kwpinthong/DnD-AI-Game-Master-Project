@@ -13,7 +13,7 @@ export const CompanionView = z.strictObject({
   name: z.string(),
   nameRevealed: z.boolean(),
   role: z.enum(['main', 'secondary']),
-  /** F4: the bond as a word + a 6-step bar, never the affinity number (pending, see docs/contract.md). */
+  /** F4: the bond as a word + a 6-step bar, never the affinity number (Q-229). */
   bond: BondView.optional(),
 });
 export type CompanionView = z.infer<typeof CompanionView>;

@@ -1,4 +1,4 @@
-import type { CompanionView, NpcView, Scenario, ScenarioNpc } from '@isekai/protocol';
+import { bondFor, type CompanionView, type NpcView, type Scenario, type ScenarioNpc } from '@isekai/protocol';
 import {
   applyAffinityDelta,
   checkNpcSpawn,
@@ -453,6 +453,7 @@ export function companionsOf(db: DbOrTx, assets: GameAssets, me: MemberRow): Com
     ref: refs.get(s.npcId)!,
     ...displayName(s.ctx, s.bond),
     role,
+    bond: bondFor(s.affinity),
   });
   return { kind: 'ok', companions: [...(main ? [view(main, 'main')] : []), ...secondary.map((s) => view(s, 'secondary'))] };
 }
