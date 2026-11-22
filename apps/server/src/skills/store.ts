@@ -4,8 +4,9 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
 import { grantNpcReward, observeKarma } from '../companions/store.ts';
 import { heldItemsOf, skillsInGame } from '../crossplayer/items.ts';
+import { usesOnDay } from '../crossplayer/tags.ts';
 import type { DbOrTx } from '../db/client.ts';
-import { character, karmaDay, member, ownedSkill, skillActivity, skillFlag, skillReveal } from '../db/schema.ts';
+import { character, gamePhase, karmaDay, member, ownedSkill, skillActivity, skillFlag, skillReveal } from '../db/schema.ts';
 import type { MemberRow } from '../game/service.ts';
 import { isLegacyOption, type StoredOption } from '../game/loot.ts';
 import { SKILL_FLAGS, UNLOCK_RULES } from './unlock-rules.ts';
@@ -183,10 +184,12 @@ export function revealAtLibrary(db: DbOrTx, assets: GameAssets, memberId: string
 
 export type InventoryOutcome = { kind: 'ok'; inventory: InventoryView } | { kind: 'gm_has_no_character' };
 
-function entryOf(o: StoredOption, assets: GameAssets): InventoryEntry {
+function entryOf(o: StoredOption, assets: GameAssets, usesToday: Readonly<Record<string, number>>): InventoryEntry {
   const row = isLegacyOption(o) ? undefined : o.kind === 'skill' ? assets.ability(o.name) : assets.item(o.name);
-  if (!row) return { id: o.id, name: o.name, rank: null, alignment: null, category: '', triggerType: null, dailyLimit: 0, description: o.description };
+  if (!row) return { id: o.id, name: o.name, rank: null, alignment: null, category: '', triggerType: null, dailyLimit: 0, usesLeftToday: null, description: o.description };
   return {
+    // Q-229: "วันนี้เหลือ n"; the uses are counted per game day, so a new day starts full again.
+    usesLeftToday: row.dailyLimit > 0 ? Math.max(0, row.dailyLimit - (usesToday[o.id] ?? 0)) : null,
     id: o.id,
     name: o.name,
     rank: isSkillRank(row.rank) ? row.rank : null,
@@ -207,11 +210,14 @@ export function inventoryOf(db: DbOrTx, assets: GameAssets, me: MemberRow): Inve
     .where(and(eq(skillReveal.memberId, me.id)))
     .orderBy(asc(skillReveal.createdAt), sql`skill_reveal.rowid`)
     .all();
+  // Read, never created: the engine state does not exist before the start (day 1 then).
+  const phase = db.select({ state: gamePhase.state }).from(gamePhase).where(eq(gamePhase.gameId, me.gameId)).get();
+  const usesToday = usesOnDay(db, me.id, phase ? (JSON.parse(phase.state) as { day: number }).day : 1);
   return {
     kind: 'ok',
     inventory: {
-      skills: ownedOf(db, me.gameId, me.id).map((o) => entryOf(o, assets)),
-      items: heldItemsOf(db, me.gameId, me.id).map((o) => entryOf(o, assets)),
+      skills: ownedOf(db, me.gameId, me.id).map((o) => entryOf(o, assets, usesToday)),
+      items: heldItemsOf(db, me.gameId, me.id).map((o) => entryOf(o, assets, usesToday)),
       discoveries: reveals.flatMap((r) => {
         const text = r.kind === 'skill' ? assets.ability(r.name)?.condition : assets.item(r.name)?.synergy;
         return text === undefined ? [] : [{ kind: r.kind, name: r.name, text }];

@@ -22,7 +22,7 @@ export const InventoryEntry = z.strictObject({
   triggerType: z.string().nullable(),
   /** Uses per game day; 0 = no limit. */
   dailyLimit: z.number().int().min(0),
-  /** "วันนี้เหลือ n": uses left today; null = no limit (pending, see docs/contract.md). */
+  /** "วันนี้เหลือ n": uses left today; null = no limit (Q-229). */
   usesLeftToday: z.number().int().min(0).nullable().optional(),
   /** Ability Description / Item Effect. */
   description: z.string(),

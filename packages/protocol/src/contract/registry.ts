@@ -286,7 +286,6 @@ export const PENDING_FIELDS: readonly PendingField[] = [
   { schema: 'RoomState', path: 'you.placeActions', owner: 'GEN-069', screens: ['play-action'], note: 'ชิป action ของสถานที่' },
   { schema: 'RoomAction', path: 'placeAction', owner: 'GEN-069', screens: ['play-action'], note: 'ใช้ชิปของสถานที่เป็น action ของเทิร์น' },
   { schema: 'PlaceView', path: 'zone', owner: 'new', screens: ['play-place'], note: 'โซนของสถานที่ (ช่องว่างของ GEN-066)' },
-  { schema: 'InventoryEntry', path: 'usesLeftToday', owner: 'new', screens: ['play-inventory'], note: '"วันนี้เหลือ n" (ช่องว่างของ GEN-055 / GEN-064)' },
   { schema: 'GameView', path: 'memory', owner: 'GEN-083', screens: ['lobby'], note: 'Lobby บอกสถานะความทรงจำ' },
   { schema: 'GameMemorySetting', path: 'enabled', owner: 'GEN-083', screens: ['create-game'], note: 'จะเป็น `CreateGameRequest.memory`' },
   { schema: 'JoinStyleFields', path: 'playerCode', owner: 'GEN-082', screens: ['join'], note: 'จะเป็น `JoinRequest.playerCode` + `noStyle`' },
