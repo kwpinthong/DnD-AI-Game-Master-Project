@@ -812,7 +812,28 @@
   .play-top {
     flex: none;
     max-height: 30%;
-    overflow-y: auto;
+    overflow: hidden auto;
+  }
+
+  /* the four periods get a row of their own (names only; the lit one keeps its turn) */
+  .play-periods {
+    order: 9;
+    flex: 1 1 100%;
+  }
+
+  .play-period {
+    flex: 1;
+    justify-content: center;
+    padding: 0 var(--space-1);
+  }
+
+  .play-period__dots,
+  .play-period__now {
+    display: none;
+  }
+
+  .play-period__name {
+    letter-spacing: 0;
   }
 
   .play-body {
