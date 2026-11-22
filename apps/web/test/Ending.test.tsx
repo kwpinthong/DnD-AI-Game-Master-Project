@@ -5,6 +5,7 @@ import { CONTRACT_FIXTURES } from '@isekai/protocol/contract';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GameLog } from '../src/GameHistory.tsx';
+import { scenarioById } from '../src/mock/scenarios.ts';
 
 const ENDED = GameLogResponse.parse(CONTRACT_FIXTURES.GameLogResponse[1]);
 const RATED: GameRatingView = CONTRACT_FIXTURES.GameRatingResponse[0]!.rating;
@@ -189,6 +190,21 @@ describe('GEN-091 end page', () => {
     state.down = false;
     fireEvent.click(r.getByRole('button', { name: 'ลองอีกครั้ง' }));
     expect(await r.findAllByRole('radio')).toHaveLength(10);
+  });
+
+  it('Q-270: secrets over several days and players show a day filter; one day narrows the list, ทุกวัน restores it', () => {
+    const reply = scenarioById('ended-days').http['GET /api/game/log'] as { body: unknown };
+    ratingServer(NOT_RATED);
+    render(<GameLog log={GameLogResponse.parse(reply.body)} apiBaseUrl="http://api" token="tok" onBack={() => {}} />);
+    const list = () => within(screen.getByRole('list', { name: 'สิ่งที่ทำไว้ลับ ๆ' })).getAllByRole('listitem');
+    expect(list()).toHaveLength(4);
+    const filter = screen.getByRole('combobox', { name: 'ดูวัน' });
+    expect([...(filter as HTMLSelectElement).options].map((o) => o.textContent)).toEqual(['ทุกวัน', 'วันที่ 1', 'วันที่ 2', 'วันที่ 3', 'วันที่ 4']);
+    fireEvent.change(filter, { target: { value: '3' } });
+    expect(list()).toHaveLength(1);
+    expect(list()[0]!.textContent).toMatch(/ลอบตามนักบวช/);
+    fireEvent.change(filter, { target: { value: '' } });
+    expect(list()).toHaveLength(4);
   });
 
   it('a game still playing has no rating section and asks the server for none', async () => {

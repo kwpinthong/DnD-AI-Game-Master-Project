@@ -133,7 +133,34 @@ const DOWN = surroundingsWith({ hp: { current: 0, max: 30 } });
 const FINALE_TURN = F.GmPendingTurn.find((t) => t.finale)!;
 const LOW_RATING = { rating: { ...F.GameRatingResponse[0]!.rating, mine: { score: 6, comment: 'ช่วงกลางเกมช้าไปหน่อย' }, average: 7.4, eligible: false, blocker: 'score_too_low' } };
 
-const ALL_SCREENS = CONTRACT_SCREENS.map((s) => s.id);
+/** An ended game whose secrets span days 1, 2, 3 and 4 and two players, so the end page's day filter shows (Q-270). */
+const ENDED_LOG = F.GameLogResponse[1]!;
+const LIN = ENDED_LOG.reveal!.players[0]!;
+const ENDED_DAYS_LOG = {
+  ...ENDED_LOG,
+  reveal: {
+    ...ENDED_LOG.reveal!,
+    players: [
+      {
+        ...LIN,
+        secretActions: [
+          { day: 1, phase: 'EOSORIA', turn: 1, text: 'แอบฟังข่าวลือที่ตลาด', sourceRef: '1-EOSORIA-1-3' },
+          ...LIN.secretActions,
+          { day: 4, phase: 'SOLARION', turn: 2, text: 'ซ่อนกุญแจไว้ใต้บันไดโบสถ์', sourceRef: '4-SOLARION-2-9' },
+        ],
+      },
+      {
+        ...LIN,
+        memberId: 'm-bel',
+        lobbyName: 'เบล',
+        characterName: 'ไรเดน',
+        secretActions: [{ day: 3, phase: 'EOSORIA', turn: 1, text: 'ลอบตามนักบวชไปที่ห้องใต้ดิน', sourceRef: '3-EOSORIA-1-5' }],
+      },
+    ],
+  },
+};
+
+const ALL_SCREENS =CONTRACT_SCREENS.map((s) => s.id);
 const room = (state: RoomState, script: readonly MockStep[] = [], entries: readonly RoomEntry[] = START_ENTRIES) => ({ state, entries, script });
 
 export const SCENARIOS: readonly MockScenario[] = [
@@ -341,6 +368,15 @@ export const SCENARIOS: readonly MockScenario[] = [
     session: 'player',
     screens: ['ending', 'ending-rating', 'home', 'play-lock'],
     http: { 'GET /api/game/log': ok(F.GameLogResponse[1]), 'GET /api/game/rating': ok(F.GameRatingResponse[1]) },
+    room: room(endedRoom),
+  },
+  {
+    id: 'ended-days',
+    title: 'จบเกม ความลับหลายวัน',
+    note: 'ความลับกระจายหลายวัน หลายคน: มีตัวกรองตามวัน',
+    session: 'player',
+    screens: ['ending'],
+    http: { 'GET /api/game/log': ok(ENDED_DAYS_LOG), 'GET /api/game/rating': ok(F.GameRatingResponse[1]) },
     room: room(endedRoom),
   },
   {
