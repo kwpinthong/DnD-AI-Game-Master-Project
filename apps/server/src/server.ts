@@ -19,6 +19,7 @@ import websocket from '@fastify/websocket';
 import { createAiGmResolver } from './gm/loop.ts';
 import type { PhaseResolver } from './room/resolver.ts';
 import { registerRoomRoutes } from './room/routes.ts';
+import { createWeatherService, type WeatherService } from './weather/service.ts';
 import { DEFAULT_ASSETS_DIR, loadGameAssets, type GameAssets } from './assets/load.ts';
 import { registerCompanionRoutes } from './companions/routes.ts';
 
@@ -31,6 +32,8 @@ export interface RunningServer {
   orm: Db;
   /** The AI GM boundary (GEN-038): check `ai.ready()` before creating / starting a game. */
   ai: AiService;
+  /** Each period's weather (GEN-068); the room picks it when a period opens. */
+  weather: WeatherService;
   /** `METHOD /url` of every HTTP route (HEAD left out). */
   routes: readonly string[];
   /** Game data from the JSON in apps/server/assets (GEN-062), checked at start; never fetched while running. */
@@ -101,8 +104,9 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerGameRoutes(app, db, now, { ai, karmaTiers: assets.karmaTiers, assets, ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}) });
   registerTimelineRoutes(app, db, now);
   registerVisibilityRoutes(app, db, now, assets);
+  const weather = createWeatherService(db, ai, now, options.aiLog ?? ((line) => console.log(line)));
   const resolver = options.phaseResolver ?? createAiGmResolver({ db, ai, assets, now, log: options.aiLog ?? ((line) => console.log(line)) });
-  registerRoomRoutes(app, db, now, { resolver, assets, webOrigins: config.webOrigins ?? [] });
+  registerRoomRoutes(app, db, now, { resolver, assets, webOrigins: config.webOrigins ?? [], weather });
   registerCompanionRoutes(app, db, now, assets);
 
   try {
@@ -122,10 +126,12 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     db: sqlite,
     orm: db,
     ai,
+    weather,
     routes,
     assets,
     async close() {
       await app.close();
+      await weather.idle();
       if (sqlite.open) sqlite.close();
     },
   };

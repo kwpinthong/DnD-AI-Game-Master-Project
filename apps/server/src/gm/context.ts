@@ -1,5 +1,5 @@
 import type { ActionVisibility, Phase } from '@isekai/protocol';
-import { karmaBand, socialTitle, type CrossPlayerState, type TagContext, type Turn } from '@isekai/rules';
+import { karmaBand, socialTitle, type CrossPlayerState, type PeriodWeather, type TagContext, type Turn } from '@isekai/rules';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
 import type { PromptBlock } from '../ai/provider.ts';
@@ -128,7 +128,7 @@ export interface PlayerContext {
 export interface TurnContext {
   kind: 'gm_turn';
   turn: { day: number; phase: Phase; turn: Turn };
-  /** GEN-068 chooses the weather later (Q-089); null until then. */
+  /** The period's weather chosen by the AI GM within the server's limits (GEN-068, Q-089); null = none. */
   weather: string | null;
   /** Action ids in the server's order (GEN-060 §10.5). Answer every one, in this order. */
   order: string[];
@@ -154,6 +154,8 @@ export interface TurnContextInput {
   /** In the server's order. */
   actions: readonly TurnAction[];
   resting: readonly string[];
+  /** The period's weather (GEN-068); null = none chosen. */
+  weather?: PeriodWeather | null;
 }
 
 export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnContext {
@@ -198,7 +200,7 @@ export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnConte
   return {
     kind: 'gm_turn',
     turn: at,
-    weather: null,
+    weather: input.weather ? weatherLabel(input.weather) : null,
     order: input.actions.map((a) => a.actionId),
     actions: input.actions.map((a) => ({
       actionId: a.actionId,
@@ -302,4 +304,9 @@ export function requestTokens(system: readonly PromptBlock[], messages: readonly
 /** The tier the AI GM sees: an old GEN-048 option keeps "Common", a sheet option (GEN-073) its Rank (e.g. "B"). */
 function optionTier(o: StoredOption): string {
   return isLegacyOption(o) ? o.tier : `Rank ${o.rank ?? '?'}`;
+}
+
+/** The weather as the AI GM reads it (GEN-068): the period's weather plus the day-5 Disaster state. */
+function weatherLabel(w: PeriodWeather): string {
+  return w.disaster ? `${w.weather} + Disaster` : w.weather;
 }

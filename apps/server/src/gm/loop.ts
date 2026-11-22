@@ -17,7 +17,7 @@ import type { GameAssets } from '../assets/load.ts';
 import { tagVocabulary } from '../assets/tags.ts';
 import type { Clock } from '../auth/join.ts';
 import { applyPhaseActions, crossPlayerState } from '../crossplayer/phase.ts';
-import { tagContexts, type TaggingOptions } from '../crossplayer/tags.ts';
+import { tagContexts, weatherTagging, type TaggingOptions } from '../crossplayer/tags.ts';
 import { eq } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { gamePhase } from '../db/schema.ts';
@@ -174,7 +174,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     const world = loadWorld(db, gameId, assets);
     const drowsy = new Set(input.state.order.filter((id) => input.state.players[id] && isDrowsy(input.state.players[id]!, input.state.day)));
     const state = crossPlayerState(db, gameId, drowsy);
-    const tagging: TaggingOptions = { assets, day: at.day, weather: null };
+    const tagging: TaggingOptions = weatherTagging(assets, at.day, at.phase, input.weather ?? null);
     const tags = tagContexts(db, gameId, state, tagging);
 
     const seat = new Map(input.state.order.map((id, i) => [id, i]));
@@ -216,6 +216,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         at,
         actions: order,
         resting: input.actions.filter((a) => a.rest).map((a) => a.memberId),
+        weather: input.weather ?? null,
       });
       let checked: PhaseAction[] = [];
       const proposal = await ask({

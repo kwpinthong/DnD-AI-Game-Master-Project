@@ -13,6 +13,7 @@ import type {
   Severity,
 } from '../resolution/types.ts';
 import type { TagContext } from '../resolution/tags.ts';
+import type { PeriodWeather } from '../weather.ts';
 
 /** A player character in the phase: the resolution actor state plus what cross-player rules need. */
 export interface PlayerState extends ActorState {
@@ -83,6 +84,8 @@ export interface PhaseActionsInput {
   readonly actions: readonly PhaseAction[];
   /** Each player's tag sources and today's uses (GEN-064), by player id. */
   readonly tags?: Readonly<Record<string, TagContext>>;
+  /** The period's weather (GEN-068); an actor is outdoor when their place is one of `outdoorLocationIds` as they act. */
+  readonly weather?: { readonly current: PeriodWeather; readonly outdoorLocationIds: readonly string[] };
 }
 
 // --- Order (spec §10.5) ---

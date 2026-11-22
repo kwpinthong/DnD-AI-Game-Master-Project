@@ -6,6 +6,7 @@ import type { Db } from '../db/client.ts';
 import { character, game } from '../db/schema.ts';
 import type { MemberRow } from '../game/service.ts';
 import type { GameAssets } from '../assets/load.ts';
+import type { WeatherService } from '../weather/service.ts';
 import type { PhaseResolver } from './resolver.ts';
 import { createRoomService, type RoomService } from './service.ts';
 
@@ -16,6 +17,8 @@ export interface RoomOptions {
   /** WEB_ORIGIN: a browser socket from any other origin is refused before the upgrade. */
   webOrigins: readonly string[];
   log?: (line: string) => void;
+  /** Picks each period's weather when it opens (GEN-068); without it the room shows no weather. */
+  weather?: WeatherService;
 }
 
 /** Close codes (4000-4999 are the application's own). */
@@ -43,7 +46,7 @@ function entryRefusal(db: Db, me: MemberRow): RoomErrorCode | null {
  * `action`s. The token, action text and names are never logged.
  */
 export function registerRoomRoutes(app: FastifyInstance, db: Db, now: Clock, options: RoomOptions): RoomService {
-  const room = createRoomService(db, now, options.resolver, options.assets, options.log ?? ((line) => console.log(line)));
+  const room = createRoomService(db, now, options.resolver, options.assets, options.log ?? ((line) => console.log(line)), options.weather);
   // Before the WebSocket plugin closes the sockets, so their close events find no room to update.
   app.addHook('preClose', async () => room.stop());
 

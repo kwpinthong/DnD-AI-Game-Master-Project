@@ -19,6 +19,7 @@ import {
   phaseStep,
   revealsPlayerName,
   secretQuotaUsed,
+  type PeriodWeather,
   type PhaseErrorCode,
   type PhaseState,
   type PlayerResult,
@@ -43,6 +44,7 @@ import { witnessesOf } from '../visibility/views.ts';
 import { advanceTimeline } from '../timeline/store.ts';
 import type { GameAssets } from '../assets/load.ts';
 import { completeTravel, travel, travellingTo, withHazard } from '../travel/service.ts';
+import { weatherAt, type WeatherService } from '../weather/service.ts';
 import type { ClosedAction, PhaseResolution, PhaseResolver, ResolverStuck } from './resolver.ts';
 import {
   ensurePhaseState,
@@ -112,13 +114,22 @@ export interface RoomService {
  * recipients. All database work is synchronous (better-sqlite3), so a replay and the socket registration
  * happen in one tick and no live entry can slip between them.
  */
-export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, assets: GameAssets, log: (line: string) => void): RoomService {
+export function createRoomService(
+  db: Db,
+  now: Clock,
+  resolver: PhaseResolver,
+  assets: GameAssets,
+  log: (line: string) => void,
+  weather?: WeatherService,
+): RoomService {
   /** gameId → socket → member. */
   const rooms = new Map<string, Map<RoomSocket, MemberRow>>();
   const resolving = new Map<string, Promise<void>>();
   /** Games whose closed turn the resolver could not finish (GEN-057); cleared by `retry` or a restart. */
   const stuck = new Map<string, ResolverStuck>();
   const shutdown = new AbortController();
+  /** Weather picks still running (GEN-068), awaited on shutdown. */
+  const picking = new Set<Promise<unknown>>();
   const rng = new CryptoRng();
   let stopped = false;
 
@@ -179,6 +190,40 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, a
     });
   }
 
+  /** The stored weather of the period `state` is in (GEN-068); null before it is picked. */
+  function weatherView(gameId: string, state: PhaseState): PeriodWeather | null {
+    const stored = weatherAt(db, gameId, state);
+    return stored ? { weather: stored.weather, disaster: stored.disaster } : null;
+  }
+
+  const playing = (state: PhaseState) => state.status === 'collecting' || state.status === 'resolving';
+
+  /** The period's weather, picked on first use; null without a weather service or when the pick failed. */
+  async function weatherFor(gameId: string, state: PhaseState): Promise<PeriodWeather | null> {
+    if (!weather || !playing(state)) return null;
+    const run = weather.ensure(gameId, state);
+    picking.add(run);
+    try {
+      const { weather: w, disaster } = await run;
+      return { weather: w, disaster };
+    } catch (error) {
+      log(`[room] weather pick failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
+      return null;
+    } finally {
+      picking.delete(run);
+    }
+  }
+
+  /** A period just opened (or the room did): pick its weather if it has none yet, then show it to everyone. */
+  function openPeriodWeather(gameId: string): void {
+    if (!weather || stopped) return;
+    const state = ensurePhaseState(db, gameId, now());
+    if (!playing(state) || weatherAt(db, gameId, state) !== null) return;
+    void weatherFor(gameId, state).then((w) => {
+      if (w !== null && !stopped) broadcastRoom(gameId);
+    });
+  }
+
   function lockOf(me: MemberRow, state: PhaseState): RoomLockCode | null {
     if (me.role === 'gm' || !state.players[me.id]) return 'not_a_player';
     if (state.status === 'finale' || state.status === 'game_over') return 'game_ended';
@@ -213,6 +258,7 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, a
       phase: state.phase,
       turn: state.turn,
       status: state.status,
+      weather: weatherView(me.gameId, state),
       members: members.map((m) => ({
         memberId: m.id,
         name: m.name,
@@ -303,10 +349,13 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, a
             : [];
         });
 
+        // The resolver always gets the period's weather: picked now if the period opened without one.
+        const periodWeather = await weatherFor(gameId, state);
+
         let resolution: PhaseResolution;
         try {
           const at = { day: state.day, phase: state.phase, turn: state.turn };
-          resolution = await resolver.resolve({ gameId, at, actions, state, signal: shutdown.signal });
+          resolution = await resolver.resolve({ gameId, at, actions, state, signal: shutdown.signal, weather: periodWeather });
         } catch (error) {
           // Stays `resolving`; after a restart the next player to enter starts it again, otherwise `retry` does.
           log(`[room] resolver failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
@@ -381,6 +430,7 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, a
             log(`[room] after-turn work failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
           }
         }
+        openPeriodWeather(gameId);
         // Loop: the next phase may close at once (nobody able to act).
       }
     })().finally(() => resolving.delete(gameId));
@@ -419,7 +469,9 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, a
       const lastSeq = entriesFor(db, me.gameId, me.id, 0).at(-1)?.id ?? 0;
       send(socket, { type: 'ready', lastSeq: Math.max(lastSeq, afterSeq) });
       // After a restart a phase can be left `resolving` with nobody working on it. A stuck turn waits for `retry`.
-      if (state.status === 'resolving' && !stuck.has(me.gameId)) startResolving(me.gameId);
+      if (state.status === 'resolving') {
+        if (!stuck.has(me.gameId)) startResolving(me.gameId);
+      } else openPeriodWeather(me.gameId);
     },
 
     retry(socket) {
@@ -522,7 +574,7 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, a
       stopped = true;
       rooms.clear();
       shutdown.abort();
-      while (resolving.size > 0) await Promise.allSettled([...resolving.values()]);
+      while (resolving.size > 0 || picking.size > 0) await Promise.allSettled([...resolving.values(), ...picking]);
     },
   };
 }

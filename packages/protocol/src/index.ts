@@ -19,5 +19,6 @@ export * from './loot.ts';
 
 export * from './visibility.ts';
 
+export * from './weather.ts';
 export * from './room.ts';
 export * from './companion.ts';

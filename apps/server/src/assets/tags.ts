@@ -102,14 +102,20 @@ export function parseWeatherVerbBoost(text: string): { conditions: string[]; ver
 const weatherFits = (condition: string, weather: string) =>
   condition === weather || (condition === 'Night' && weather.endsWith(' Night')) || (condition === 'Clear' && weather.startsWith('Clear '));
 
-/** The place's Weather_Verb_Boost under `weather` as one `location` source; none without a weather. */
-export function locationSources(location: LocationRecord, weather: string | null): TagSource[] {
+/**
+ * The place's Weather_Verb_Boost under `weather` as one `location` source; none without a weather. `weather`
+ * may list every condition the period meets (GEN-068 `boostConditions`: e.g. "Clear Morning" and "Disaster").
+ */
+export function locationSources(location: LocationRecord, weather: string | readonly string[] | null): TagSource[] {
   if (weather === null) return [];
-  const verbs = [...new Set(parseWeatherVerbBoost(location.weatherVerbBoost).filter((b) => b.conditions.some((c) => weatherFits(c, weather))).flatMap((b) => b.verbs))];
+  const met = typeof weather === 'string' ? [weather] : weather;
+  const verbs = [
+    ...new Set(parseWeatherVerbBoost(location.weatherVerbBoost).filter((b) => b.conditions.some((c) => met.some((w) => weatherFits(c, w)))).flatMap((b) => b.verbs)),
+  ];
   if (verbs.length === 0) return [];
   return [
     {
-      id: `location:${location.name}:${weather}`,
+      id: `location:${location.name}:${met.join('+')}`,
       kind: 'location',
       rank: null,
       trigger: 'passive',

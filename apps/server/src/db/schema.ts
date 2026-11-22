@@ -145,3 +145,6 @@ export * from './schema-gm.ts';
 
 // GEN-066: a trip that ends when the turn closes, own file for the same reason.
 export * from './schema-travel.ts';
+
+// GEN-068: the weather of each period, own file for the same reason.
+export * from './schema-weather.ts';

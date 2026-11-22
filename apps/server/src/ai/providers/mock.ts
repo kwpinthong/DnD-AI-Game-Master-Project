@@ -34,7 +34,11 @@ export function createMockProvider(_config: AiConfig, script?: MockScript, answe
       if (!steps) {
         const input = estimateTokens([...req.system.map((b) => b.text), ...req.messages.map((m) => m.text)].join('\n'));
         const json =
-          req.purpose === 'character_analyze' ? cannedLoot(req, requests.length) : ((await answer?.(req)) ?? sampleFor(req.output.jsonSchema));
+          req.purpose === 'character_analyze'
+            ? cannedLoot(req, requests.length)
+            : req.purpose === 'gm_weather'
+              ? cannedWeather(requests.filter((r) => r.purpose === 'gm_weather').length)
+              : ((await answer?.(req)) ?? sampleFor(req.output.jsonSchema));
         return {
           ok: true,
           json,
@@ -67,6 +71,10 @@ export const mockReply = {
  * (`skill: <Name> | ...`, `item: <Name> | ...`, see game/loot.ts `lootCatalogue`); call n starts
  * one row further, so a reroll shows a different set.
  */
+/** Weather for offline dev (GEN-068): call n rotates through weathers every period allows, so periods differ. */
+const CANNED_WEATHER = ['Rain', 'Fog', 'Clear', 'Storm'] as const;
+const cannedWeather = (n: number) => ({ weather: CANNED_WEATHER[(n - 1) % CANNED_WEATHER.length] });
+
 function cannedLoot(req: AiCallRequest, n: number) {
   const lines = req.system.flatMap((b) => b.text.split('\n'));
   const names = (kind: string) => lines.filter((l) => l.startsWith(`${kind}: `)).map((l) => l.slice(kind.length + 2).split(' | ')[0]!);

@@ -25,6 +25,7 @@ import type {
   ResolveResult,
   StatusEffect,
 } from './types.ts';
+import { weatherEffects } from '../weather.ts';
 import { applyTagging, chargeOnCrit, isQualitativeSource } from './tags.ts';
 import { validateProposal } from './validate.ts';
 
@@ -84,6 +85,11 @@ export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
   let tagging = proposal.tagging !== undefined && tags !== undefined ? applyTagging(tags, proposal.tagging) : undefined;
   // Q-130: a qualitative tag source the AI judged is logged as judged.
   const judgedSources = new Set((tags?.sources ?? []).filter(isQualitativeSource).map((s) => s.id));
+  // Weather rules (GEN-068): the server's numbers, whatever the proposal says.
+  const weather =
+    input.weather === undefined
+      ? undefined
+      : weatherEffects(input.weather, { visibility: proposal.visibility, verbTags: proposal.tagging?.verbTags ?? [], actionTags: proposal.tags });
 
   // Roll.
   let check: CheckLog | null = null;
@@ -95,6 +101,7 @@ export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
         return logged.ref !== undefined && (m.source === 'item' || m.source === 'skill') && judgedSources.has(logged.ref) ? { ...logged, judged: true as const } : logged;
       }),
       ...(tagging?.bonuses ?? []).map((b) => ({ source: b.kind, ref: b.ref, value: b.value })),
+      ...(weather?.modifiers ?? []).map((m) => ({ source: 'weather' as const, ref: m.ref, value: m.value })),
     ];
     const modifierSum = modifiers.reduce((sum, m) => sum + m.value, 0);
     const modifierTotal = clamp(modifierSum, -RULES.modCapTotal, RULES.modCapTotal);
@@ -149,7 +156,7 @@ export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
   }
   if (degree === 'fumble') cost += 2;
   const net = cost > 0 ? Math.max(RULES.minNetCost, cost - actor.afterActionStamina) : 0;
-  const staminaAfter = clamp(actor.stamina - net - (tagging?.skillStamina ?? 0), 0, RULES.staminaMax);
+  const staminaAfter = clamp(actor.stamina - net - (tagging?.skillStamina ?? 0) - (weather?.stamina ?? 0), 0, RULES.staminaMax);
 
   // Reputation only for Public, or Secret that was caught. Karma always.
   const repDelta = proposal.visibility === 'public' ? effects.repDelta : caught ? proposal.repDeltaIfCaught : 0;
@@ -225,6 +232,7 @@ export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
     interrupted,
     stamina: { before: actor.stamina, cost, net, after: staminaAfter },
     ...(tagging !== undefined ? { tagging } : {}),
+    ...(weather !== undefined ? { weather } : {}),
     rep,
     karma,
     affinity,

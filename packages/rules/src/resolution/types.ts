@@ -1,4 +1,5 @@
 /** Resolution engine types (Rules Spec GEN-042 §2-7, §12-13). Every value is plain JSON so logs replay. */
+import type { ActionWeather, WeatherLog } from '../weather.ts';
 import type { TagClaim, TagContext, TaggingLog, TagSourceKind } from './tags.ts';
 
 export const DC_LADDER = [5, 8, 11, 14, 17, 20, 23] as const;
@@ -163,6 +164,8 @@ export interface ResolutionInput {
   readonly pvp?: PvpContext;
   /** The actor's tag sources and today's uses (GEN-064). */
   readonly tags?: TagContext;
+  /** The period's weather where the actor is (GEN-068): the server applies its d20 and Stamina rules. */
+  readonly weather?: ActionWeather;
 }
 
 export type ProposalErrorCode =
@@ -252,10 +255,12 @@ export interface ResolutionLog {
   readonly targetObservation: { readonly d20: number; readonly modifier: number; readonly total: number; readonly noticed: boolean } | null;
   /** The target player noticed, so a success / crit became a fail (spec §10.4). */
   readonly interrupted: boolean;
-  /** `after` also takes off `tagging.skillStamina`. */
+  /** `after` also takes off `tagging.skillStamina` and `weather.stamina`. */
   readonly stamina: { readonly before: number; readonly cost: number; readonly net: number; readonly after: number };
   /** Present when the proposal had a tag claim (GEN-064). */
   readonly tagging?: TaggingLog;
+  /** Present when the input had a weather (GEN-068). */
+  readonly weather?: WeatherLog;
   readonly rep: ChangeLog;
   readonly karma: ChangeLog;
   readonly affinity: readonly ({ readonly npcId: string } & ChangeLog)[];

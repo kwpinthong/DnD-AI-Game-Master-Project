@@ -1,5 +1,5 @@
 import type { ActionVisibility, RoomGmStatusCode } from '@isekai/protocol';
-import type { PhaseState, PlayerResult, TurnPoint } from '@isekai/rules';
+import type { PeriodWeather, PhaseState, PlayerResult, TurnPoint } from '@isekai/rules';
 import type { DbOrTx } from '../db/client.ts';
 
 /**
@@ -41,6 +41,11 @@ export interface ClosedPhase {
   readonly state: PhaseState;
   /** Aborted when the server shuts down: stop calling the AI and return (nothing is applied). */
   readonly signal?: AbortSignal;
+  /**
+   * The period's weather (GEN-068), the same for the whole town; null when the room has no weather service.
+   * Apply it with `weatherTagging` (crossplayer/tags.ts): Weather_Verb_Boost and the d20 / Stamina rules.
+   */
+  readonly weather: PeriodWeather | null;
 }
 
 /**

@@ -5,6 +5,8 @@
 export type AiPurpose =
   | 'gm_adjudicate'
   | 'gm_repair'
+  /** The weather of a period that just opened (GEN-068). */
+  | 'gm_weather'
   | 'narrate_place'
   | 'narrate_player'
   | 'summarize_day'
