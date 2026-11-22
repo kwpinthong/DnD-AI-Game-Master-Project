@@ -116,7 +116,9 @@ export function validateProposal(state: ResolutionState, proposal: ResolutionPro
       if (refsUsed.has(mod.ref)) fail('duplicate', `${path}.ref`, `${mod.ref} is claimed twice`);
       refsUsed.add(mod.ref);
       if (gearRefs.has(mod.ref)) fail('gear_claimed_twice', `${path}.ref`, `${mod.ref} already gives a gear effect inside stat`);
-      if (int(`${path}.value`, mod.value, RULES.judgedMin, Number.MAX_SAFE_INTEGER) && (mod.value as number) > TIER_CAP[owned.tier]) {
+      // A tag source (GEN-064) is capped by its Rank in validateTagging (Q-130), not by the loot tier.
+      const tagSource = tags?.sources.some((s) => s.id === mod.ref) === true;
+      if (int(`${path}.value`, mod.value, RULES.judgedMin, Number.MAX_SAFE_INTEGER) && !tagSource && (mod.value as number) > TIER_CAP[owned.tier]) {
         fail('value_over_cap', `${path}.value`, `${owned.tier} ${source} ${mod.ref} gives at most +${TIER_CAP[owned.tier]}, got +${String(mod.value)}`);
       }
     });
@@ -143,7 +145,7 @@ export function validateProposal(state: ResolutionState, proposal: ResolutionPro
   // Tag matching (GEN-064).
   const judgedRefs = (Array.isArray(p.modifiers) ? p.modifiers : []).flatMap((m, i) => {
     const mod = m as unknown as Record<string, unknown>;
-    return (mod.source === 'item' || mod.source === 'skill') && typeof mod.ref === 'string' ? [{ ref: mod.ref, path: `modifiers[${i}].ref` }] : [];
+    return (mod.source === 'item' || mod.source === 'skill') && typeof mod.ref === 'string' ? [{ ref: mod.ref, path: `modifiers[${i}].ref`, value: mod.value }] : [];
   });
   errors.push(...validateTagging(tags, p.tagging, judgedRefs));
   return errors;

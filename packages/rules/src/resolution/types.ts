@@ -192,7 +192,8 @@ export type ProposalErrorCode =
   | 'not_active'
   | 'tags_not_matched'
   | 'daily_limit_reached'
-  | 'tag_source_judged';
+  | 'tag_source_judged'
+  | 'not_activated';
 
 export interface ProposalError {
   readonly code: ProposalErrorCode;
@@ -208,6 +209,8 @@ export interface LoggedModifier {
   readonly mode?: 'favor' | 'fear';
   readonly align?: 'light' | 'dark';
   readonly value: number;
+  /** Q-130: the AI judged this number for a qualitative tag source (no numeric bonus in the data). */
+  readonly judged?: true;
 }
 
 export interface CheckLog {

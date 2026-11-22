@@ -100,6 +100,26 @@ describe('tag sources from the game data (GEN-064)', () => {
     const inn = assets.location('โรงเตี๊ยมและกิลด์นักเดินทาง') ?? expect.fail('no inn');
     expect(locationSources(inn, 'Dark Night').map((s) => s.verbTags)).toEqual([['REST', 'PERSUADE']]); // "Night" = any night weather
   });
+
+  it('Q-132: "Clear" also fits Clear Morning and Clear Night; a longer name does not fit plain Clear', () => {
+    const fountain = assets.location('น้ำพุกลางเมือง') ?? expect.fail('no fountain');
+    for (const weather of ['Clear', 'Clear Morning', 'Clear Night']) {
+      expect(locationSources(fountain, weather).map((s) => s.verbTags), weather).toEqual([['PERSUADE', 'SHARE']]);
+    }
+    expect(locationSources(fountain, 'Dark Night')).toEqual([]);
+    const sea = assets.location('ทะเล') ?? expect.fail('no sea');
+    expect(locationSources(sea, 'Clear Night').map((s) => s.verbTags)).toEqual([['TRAVEL', 'TRADE', 'OBSERVE', 'RITUAL']]);
+    expect(locationSources(sea, 'Clear Morning').map((s) => s.verbTags)).toEqual([['TRAVEL', 'TRADE']]);
+    const dawn = assets.location('โบสถ์แห่งรุ่งอรุณ') ?? expect.fail('no dawn church');
+    expect(locationSources(dawn, 'Clear')).toEqual([]);
+  });
+
+  it('Q-131: Venom of Despair\'s -3 is a bonus on the target, capped by Rank A', () => {
+    const venom = abilitySource('s', ability('Venom of Despair'));
+    expect(venom.diceBonus).toBe(0);
+    expect(venom.targetDiceBonus).toBe(-3);
+    expect(abilitySource('s', ability('Feast of Malice')).targetDiceBonus ?? 0).toBe(0);
+  });
 });
 
 const noEffects = { repDelta: 0, karmaDelta: 0, affinity: [], damage: null, selfDamage: null, heal: null, addStatus: [], removeStatus: [] };

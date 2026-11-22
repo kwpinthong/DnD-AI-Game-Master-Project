@@ -246,3 +246,121 @@ describe('GEN-064 tag matching', () => {
     expect(replayResolution(r.log)).toEqual(r);
   });
 });
+
+/** Nok's answers round 6 (Q-130, Q-131, Q-133). */
+describe('GEN-064 follow-ups', () => {
+  const venom = source({ id: 'skill-venom', rank: 'A', trigger: 'active', dailyLimit: 2, verbTags: ['CURSE', 'INTIMIDATE'], targetTags: ['NPC', 'PLAYER'], targetDiceBonus: -3 });
+  const shine = source({ id: 'item-shine', kind: 'item', rank: 'F', trigger: 'passive', verbTags: ['ATTACK'] });
+  const lens = source({ id: 'item-lens', kind: 'item', rank: 'B', trigger: 'passive', verbTags: ['ATTACK'], diceBonusCap: 3 });
+  const tags = (patch: Partial<TagContext> = {}) =>
+    ctx({ vocabulary: [...VOCABULARY, 'CURSE', 'INTIMIDATE'], sources: [luminous, smite, feast, lockpick, venom, shine, lens], ...patch });
+  const s = state();
+  const withGear: ResolutionState = {
+    ...s,
+    actor: {
+      ...s.actor,
+      skills: [...s.actor.skills, { id: 'skill-venom', tier: 'Common' }],
+      items: [...s.actor.items, { id: 'item-shine', tier: 'Common' }, { id: 'item-lens', tier: 'Common' }],
+    },
+  };
+  const smiteWith = (value: number, activate: TagClaim['activate'] = [{ ref: 'skill-smite', stamina: 5 }]) =>
+    resolveAction(
+      { state: withGear, proposal: act(claim(['ATTACK'], ['NPC'], activate), { modifiers: [{ source: 'skill', ref: 'skill-smite', value }] }), tags: tags() },
+      new ReplayRng([10]),
+    );
+
+  it('Q-130: a qualitative-only skill (Smite, Rank A) may get an AI-judged d20 bonus up to its Rank cap, logged as judged', () => {
+    for (const value of [1, 3]) {
+      const r = smiteWith(value);
+      expect(r.ok, JSON.stringify(!r.ok && r.errors)).toBe(true);
+      if (!r.ok) continue;
+      // Rank A caps at +3 even though loot gives the skill tier Common (+2).
+      expect(r.log.check?.modifiers).toContainEqual({ source: 'skill', ref: 'skill-smite', value, judged: true });
+      expect(r.log.check?.total).toBe(10 + value);
+    }
+  });
+
+  it('Q-130: over the Rank cap is refused with a repairable error; nothing is rolled', () => {
+    const r = smiteWith(4);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.errors.map((e) => [e.code, e.path])).toEqual([['value_over_cap', 'modifiers[0].value']]);
+      expect(r.errors[0]?.message).toMatch(/\+3/);
+    }
+    // Rank F caps at +1; the Q-119 style exception (cap 3 on a Rank B) allows +3.
+    const item = (ref: string, value: number) =>
+      resolveAction(
+        { state: withGear, proposal: act(claim(['ATTACK'], ['NPC']), { modifiers: [{ source: 'item', ref, value }] }), tags: tags() },
+        new ReplayRng([10]),
+      );
+    expect(item('item-shine', 1).ok).toBe(true);
+    const f2 = item('item-shine', 2);
+    expect(!f2.ok && f2.errors.map((e) => e.code)).toEqual(['value_over_cap']);
+    expect(item('item-lens', 3).ok).toBe(true);
+    const b4 = item('item-lens', 4);
+    expect(!b4.ok && b4.errors.map((e) => e.code)).toEqual(['value_over_cap']);
+  });
+
+  it('Q-130: a judged Active skill must be activated (quota + Stamina); a numeric source still may not be judged', () => {
+    const r = smiteWith(2, []);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.map((e) => [e.code, e.path])).toEqual([['not_activated', 'modifiers[0].ref']]);
+    // Feast of Malice has a numeric +2 from the data: judging it too is still refused.
+    const feastJudged = resolveAction(
+      { state: withGear, proposal: act(claim(['STEAL'], ['SECRET_ACTION']), { target: null, modifiers: [{ source: 'skill', ref: 'skill-feast', value: 1 }] }), tags: tags() },
+      new ReplayRng([10]),
+    );
+    expect(!feastJudged.ok && feastJudged.errors.map((e) => e.code)).toEqual(['tag_source_judged']);
+  });
+
+  it('Q-131: a negative dice_bonus (Venom of Despair -3) lowers the PvP target\'s defence (DC_pvp), not the user\'s roll', () => {
+    const curse = (dc: number) =>
+      resolveAction(
+        {
+          state: withGear,
+          proposal: act(claim(['CURSE'], ['PLAYER'], [{ ref: 'skill-venom', stamina: 4 }]), { target: null, check: { type: 'pvp' } }),
+          pvp: { dc, observeModifier: null },
+          tags: tags(),
+        },
+        new ReplayRng([9]),
+      );
+    const r = curse(13);
+    expect(r.ok, JSON.stringify(!r.ok && r.errors)).toBe(true);
+    if (!r.ok) return;
+    expect(r.log.check?.dc).toBe(10);
+    expect(r.log.check?.modifierSum).toBe(0); // the user's own roll is not lowered
+    expect(r.log.check?.total).toBe(9);
+    expect(r.log.degree).toBe('fail');
+    expect(r.log.tagging?.targetBonuses).toEqual([{ kind: 'skill', ref: 'skill-venom', value: -3 }]);
+    expect(curse(12).ok && curse(12).log.degree).toBe('success'); // 9 vs 12 - 3
+    expect(replayResolution(r.log)).toEqual(r);
+
+    // Against an NPC (a ladder DC) the user is not penalised either.
+    const npc = resolveAction(
+      { state: withGear, proposal: act(claim(['CURSE'], ['NPC'], [{ ref: 'skill-venom', stamina: 4 }])), tags: tags() },
+      new ReplayRng([9]),
+    );
+    expect(npc.ok && [npc.log.check?.dc, npc.log.check?.modifierSum]).toEqual([14, 0]);
+  });
+
+  it('Q-133: on a crit an Active skill\'s Stamina is halved, rounded up like the action cost', () => {
+    const attack = (d20: number, activate: TagClaim['activate']) =>
+      resolveAction({ state: withGear, proposal: act(claim(['ATTACK'], ['NPC'], activate)), tags: tags() }, new ReplayRng([d20]));
+    const crit = attack(20, [{ ref: 'skill-luminous', stamina: 5 }]);
+    expect(crit.ok).toBe(true);
+    if (!crit.ok) return;
+    expect(crit.log.degree).toBe('crit');
+    expect(crit.log.stamina.cost).toBe(3); // action 5 -> ceil(5 / 2)
+    expect(crit.log.tagging?.skillStamina).toBe(3); // skill 5 -> ceil(5 / 2)
+    expect(crit.log.tagging?.activated).toEqual([{ ref: 'skill-luminous', stamina: 3, usesToday: 1 }]);
+    expect(crit.state.actor.stamina).toBe(30 - 3 - 3);
+    expect(replayResolution(crit.log)).toEqual(crit);
+
+    // Two skills are halved one by one: 5 + 4 -> 3 + 2.
+    const both = attack(20, [{ ref: 'skill-luminous', stamina: 5 }, { ref: 'skill-smite', stamina: 4 }]);
+    expect(both.ok && both.log.tagging?.skillStamina).toBe(5);
+    // Not a crit: the stated cost.
+    const hit = attack(15, [{ ref: 'skill-luminous', stamina: 5 }]);
+    expect(hit.ok && [hit.log.tagging?.skillStamina, hit.state.actor.stamina]).toEqual([5, 30 - 5 - 5]);
+  });
+});
