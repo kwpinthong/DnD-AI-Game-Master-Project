@@ -134,3 +134,6 @@ export * from './schema-room.ts';
 
 // GEN-060: items that changed hands between players, own file for the same reason.
 export * from './schema-items.ts';
+
+// GEN-064: Active skill / item uses per game day (Daily_Limit), own file for the same reason.
+export * from './schema-tags.ts';
