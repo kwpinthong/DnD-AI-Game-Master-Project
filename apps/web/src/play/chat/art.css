@@ -158,7 +158,7 @@
 /* ---------- stars between the HUD and the action bar ---------- */
 .v3-main,
 .v3m-feed {
-  background: var(--bg) url('../../assets/textures/texture-stars.webp') 0 0 / 512px 512px repeat;
+  background: var(--page) url('../../assets/textures/texture-stars.webp') 0 0 / 512px 512px repeat;
 }
 
 .v3-main .v3-feed {
@@ -167,7 +167,7 @@
 
 /* ---------- right panel frame ---------- */
 .info-panel {
-  background: transparent;
+  background: var(--panel-deep);
   /* the frame is drawn 26px wide (the ornaments), the layout keeps 18px of it so the 340 column stays readable */
   border: 18px solid transparent;
   border-image: url('../../assets/frames/frame-panel.webp') 70 fill / 26px stretch;
@@ -188,6 +188,37 @@
     border: 18px solid transparent;
     border-image: url('../../assets/frames/frame-panel.webp') 70 fill / 26px stretch;
   }
+}
+
+/* ---------- colours of the mockup that chat.css has not matched (docs/design/ui-v3-chat) ---------- */
+.play .chat-tabs__tab {
+  background: transparent;
+}
+
+.play .chat-bar:not(.chat-bar--secret) .chat-input {
+  background: var(--panel);
+  border-color: var(--line-input);
+}
+
+.chat-result {
+  background: var(--bg);
+}
+
+.play .chat-quick__btn:not([aria-pressed='true']):not(:disabled) {
+  background: var(--panel);
+  color: var(--text-soft);
+}
+
+.play .chat-secret {
+  color: var(--text-soft);
+}
+
+/* the mockup's top and bottom bars are the page colour, not the panel colour */
+.v3-hud,
+.v3-bar,
+.v3m-hud,
+.v3m-bar {
+  background: var(--bg);
 }
 
 /* ---------- primary button (send) ---------- */
