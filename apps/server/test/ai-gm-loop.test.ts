@@ -247,6 +247,20 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(contextOf<TurnContext>(provider.requests.filter(isTurn).at(-1)!).actions.map((a) => a.text).sort()).toEqual(['ขโมยขนม', 'ร้องเพลง', 'เต้นรำ'].sort());
   });
 
+  it('GEN-115 C5: an adjudicate call that times out never hangs the turn: everyone is told, nothing changes, retry works', async () => {
+    await boot({}, (req) => (isTurn(req) ? mockReply.fail('timeout') : undefined));
+    const t = await startedTable(server!, false);
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    for (const [i, c] of clients.entries()) await send(c, ['ขโมยขนม', 'ร้องเพลง', 'เต้นรำ'][i]!);
+    const shown = await clients[0]!.waitFor(gmStuck);
+    expect(shown.gmStatus).toMatchObject({ code: 'stuck', canRetry: true });
+    expect(turnRows()).toEqual([]);
+    provider.use(() => undefined);
+    clients[0]!.send({ type: 'retry' });
+    for (const c of clients) await c.waitFor(at(1, 'EOSORIA', 2));
+    expect(turnRows()).toEqual([expect.objectContaining({ status: 'applied' })]);
+  });
+
   it('GEN-068 / Q-156: the AI GM turn applies the period weather (Storm outdoors: Stamina +1; indoors: no extra)', async () => {
     await boot({}, noRoll);
     const t = await startedTable(server!, false);
