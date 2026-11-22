@@ -46,4 +46,14 @@ export { orderPhaseActions, replayPhaseActions, resolvePhaseActions, validatePha
 export * from './phase/types.ts';
 export { createPhaseState, phaseStep } from './phase/engine.ts';
 export { socialTitle, STARTING_STATS } from './character.ts';
-export { injuryText, NPC_NAME_REVEAL_AFFINITY, revealsNpcName, type InjuryText } from './visibility.ts';
+export {
+  injuryText,
+  NPC_NAME_REVEAL_AFFINITY,
+  PLAYER_NAME_REVEAL_RELATIONSHIP,
+  RELATIONSHIP_MAX,
+  RELATIONSHIP_MIN,
+  revealsNpcName,
+  revealsPlayerName,
+  type InjuryText,
+} from './visibility.ts';
+export { KARMA_MAX, KARMA_MIN, karmaTierProblems, karmaTitle, type KarmaTier } from './karma.ts';
