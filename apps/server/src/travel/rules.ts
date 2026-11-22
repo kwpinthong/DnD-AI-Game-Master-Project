@@ -74,6 +74,8 @@ export interface MoveContext {
   readonly weather: Weather | null;
   /** The Location of the player's Start_Scenarios row (GEN-065): the restricted place they may enter. null = none. */
   readonly spawnPlace: string | null;
+  /** The start scenario lets the player into every restricted place (คุณชาย/คุณหนูขี้โรค, GEN-065). Default no. */
+  readonly restrictedAccess?: boolean;
   /** Knows the black market's password (modelled as a flag until the game has one). */
   readonly blackMarketPassword: boolean;
   /** The degree of an INFILTRATE roll from the resolution engine; absent = walking in. */
@@ -119,7 +121,7 @@ export function planMove(map: PlaceMap, from: Place | null, toId: string, ctx: M
     if (ctx.weather !== 'Clear Night' || !isNight(ctx.phase) || !neutral) return refuse('rift_closed');
     return affordable({ ok: true, kind: 'rift', to, staminaCost: TRAVEL.riftStamina, spendsTurn: false }, ctx);
   }
-  if (to.tags.includes(PLACE_TAG.restricted) && ctx.spawnPlace !== to.name) {
+  if (to.tags.includes(PLACE_TAG.restricted) && ctx.spawnPlace !== to.name && ctx.restrictedAccess !== true) {
     if (ctx.infiltration === undefined) return refuse('restricted');
     if (ctx.infiltration !== 'success' && ctx.infiltration !== 'crit') return refuse('infiltrate_failed');
   }

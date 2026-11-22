@@ -44,7 +44,9 @@ export function caller(server: RunningServer): Call {
 export async function startTestServer(dataDir: string, options: ServerOptions = {}): Promise<RunningServer> {
   return startServer(
     { host: '127.0.0.1', port: 0, dbPath: `${dataDir}/isekai.sqlite`, createCodeHash: await hashPin(CREATE_CODE) },
-    { now: () => CLOCK, ai: loadAiConfig({ AI_PROVIDER: 'mock' }), aiLog: () => {}, ...options },
+    // rng null: no start scenarios (GEN-065), so the tests written before it keep everyone at locations[0]
+    // with the GEN-047 starting stats. start-scenarios.test.ts passes its own Rng.
+    { now: () => CLOCK, ai: loadAiConfig({ AI_PROVIDER: 'mock' }), aiLog: () => {}, rng: null, ...options },
   );
 }
 

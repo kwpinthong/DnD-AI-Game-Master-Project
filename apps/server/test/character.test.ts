@@ -94,6 +94,8 @@ describe('character: name, appearance, personality + starting values (GEN-047)',
       ...lin,
       hp: { current: 100, max: 100 },
       stamina: { current: 30, max: 30 },
+      // GEN-065: no coins until the start scenario gives them at game start.
+      coins: 0,
       socialTitle: 'คนแปลกหน้า',
       // GEN-067: the owner's own Karma word (Karma 0).
       conduct: 'เป็นกลางสุดๆ',

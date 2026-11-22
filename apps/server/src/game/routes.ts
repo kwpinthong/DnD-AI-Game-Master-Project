@@ -6,10 +6,11 @@ import {
   type CharacterResponse,
   LootChooseRequest,
   type LootResponse,
+  type OriginResponse,
   UpdateGameRequest,
   type CreateGameResponse,
 } from '@isekai/protocol';
-import type { KarmaTier } from '@isekai/rules';
+import type { KarmaTier, Rng } from '@isekai/rules';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { memberRowForToken, type Clock } from '../auth/join.ts';
 import { bearerToken, sendError } from '../auth/routes.ts';
@@ -20,6 +21,7 @@ import { readScenario, resetScenario, saveScenario, type ScenarioEditOutcome } f
 import { createCharacter, getCharacter, updateCharacter, type CharacterOutcome } from './character.ts';
 import { createCodeChecker } from './create-code.ts';
 import { chooseLoot, getLoot, LOOT_AI_FAILED, rollLoot, type LootOutcome } from './loot.ts';
+import { getOrigin, narrateOrigins } from './origin.ts';
 import {
   createGame,
   gameView,
@@ -41,8 +43,10 @@ export interface GameRouteOptions {
   ai: AiService;
   /** Karma bands from the assets (GEN-067): the owner's own Karma word in their character. */
   karmaTiers: readonly KarmaTier[];
-  /** Game data (GEN-062): the loot step offers its Rank B Ability / Item rows (GEN-073). */
+  /** Game data (GEN-062): the loot step offers its Rank B Ability / Item rows (GEN-073); Start_Scenarios (GEN-065). */
   assets: GameAssets;
+  /** Real rolls: each player's start scenario at game start (GEN-065); null = none (ServerOptions.rng). */
+  rng: Rng | null;
 }
 
 const minutesUntil = (at: number, t: number) => Math.max(1, Math.ceil((at - t) / 60_000));
@@ -211,7 +215,20 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
     const me = caller(request, reply);
     if (!me) return reply;
     if (refuseWithoutAi(reply)) return reply;
-    return sendOutcome(reply, startGame(db, me, now));
+    const outcome = startGame(db, me, now, options.assets, options.rng);
+    // The start scenarios are already stored; the private narrations follow. A failed one stays null and
+    // is written on the player's next GET /api/game/origin (C8).
+    if (outcome.kind === 'ok') await narrateOrigins(db, options.ai, options.assets, me.gameId, now);
+    return sendOutcome(reply, outcome);
+  });
+
+  // --- Start scenario (GEN-065): the caller's own origin; the Human GM sees every player's. ---
+
+  app.get('/api/game/origin', async (request, reply) => {
+    const me = caller(request, reply);
+    if (!me) return reply;
+    const body: OriginResponse = await getOrigin(db, options.ai, options.assets, me, now);
+    return reply.send(body);
   });
 
   // --- Character (GEN-047): the caller's own character in their game. ---

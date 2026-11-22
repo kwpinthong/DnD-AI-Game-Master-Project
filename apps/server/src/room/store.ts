@@ -1,6 +1,6 @@
 import type { ActionVisibility, RoomEntryKind } from '@isekai/protocol';
 import { createPhaseState, restorePhaseState, type PhaseState, type TurnPoint } from '@isekai/rules';
-import { and, asc, eq, gt, inArray } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
 import { character, gamePhase, phaseAction, roomEntry, roomEntryRecipient } from '../db/schema.ts';
 import { activeMembers } from '../game/service.ts';
@@ -75,7 +75,11 @@ export function recordAction(
 export function syncCharacterStats(db: DbOrTx, state: PhaseState, now: number): void {
   for (const id of state.order) {
     const p = state.players[id]!;
-    db.update(character).set({ hp: p.hp, stamina: p.stamina, updatedAt: now }).where(eq(character.memberId, id)).run();
+    // HP never goes above the character's own Max HP (the start scenario's, GEN-065), whatever the engine's cap.
+    db.update(character)
+      .set({ hp: sql`min(${p.hp}, ${character.hpMax})`, stamina: p.stamina, updatedAt: now })
+      .where(eq(character.memberId, id))
+      .run();
   }
 }
 

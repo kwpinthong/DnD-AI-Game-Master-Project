@@ -253,8 +253,9 @@ const template: ScenarioInput = {
       npcIds: ['horizon-watcher', 'archivist'],
     },
   ],
-  // GDD §6.1 / Rules Spec §11: d100 1-70 standard, 71-99 special, 100 Pocket Dimension. Spawn points are
-  // the sheet Start_Scenarios rows of each tier.
+  // GDD §6.1 / Rules Spec §11: d100 1-70 standard, 71-99 special, 100 the secret route (the Astral Rift; the
+  // Pocket Dimension is cut, Q-093 / Q-101). Spawn points are the sheet Start_Scenarios rows of each tier, by
+  // name (`label` = Start_Scenarios Name): the server takes each row's Rate and starting stats from there.
   origins: [
     {
       id: 'standard',
@@ -287,15 +288,11 @@ const template: ScenarioInput = {
       ],
     },
     {
-      id: 'pocket',
-      kind: 'pocket',
-      label: 'มิติพิศวง (Pocket Dimension)',
+      id: 'secret',
+      kind: 'secret',
+      label: 'รูทลับ',
       weight: 1,
-      description: 'ติดอยู่ในมิติปิดตาย 3 วัน',
-      durationDays: 3,
-      escapeDc: 20,
-      onSuccess: { legendaryRewards: 1, warpToLocationId: 'fountain' }, // PLACEHOLDER: where "เข้าสู่เมือง" lands
-      onFailure: { reputation: -100, warpToLocationId: 'church-crypt' }, // the cult's altar is under the church
+      spawnPoints: [{ id: 'astral-drifter', label: 'ผู้หลงทางเหนือกาลเวลา', locationId: 'astral-rift' }],
     },
   ],
   // GEN-042 Rules Spec §5 (bands fixed, text editable).
