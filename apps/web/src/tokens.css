@@ -26,3 +26,11 @@
   --text-xs: 13px; --text-sm: 14px; --text-md: 16px; --text-lg: 20px; --text-xl: 28px;
   --line-body: 1.65;
 }
+
+/* Play page v3 (GEN-122): colours of the Claude design (docs/design/ui-v3-chat, mockup-play-*.html, Amber Tide
+   before the Q-188 re-tint). Scoped to .play so the other screens keep theme v2 above. */
+.play {
+  --bg: #0F1A2B;  --panel: #16243A;  --line: #2B3F5A;
+  --muted: #9FB0C3;  --highlight: #F0B44C;  --on-accent: #0B1422;
+  --bubble-own: #3A2E14;  --bubble-npc: #1D2C45;  --text-soft: #C8D4E1;
+}
