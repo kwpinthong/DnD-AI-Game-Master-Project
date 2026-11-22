@@ -44,6 +44,8 @@ describe('GEN-055 skills and items from the Asset sheet', { timeout: 60_000 }, (
   async function table(): Promise<Table> {
     server = await startTestServer(dataDir);
     const t = await startedTable(server, false);
+    // The start needs a loot choice (Q-144); these cases count only what they give, so start from none.
+    server.db.prepare('delete from character_loot').run();
     const gameId = gameIdOf(t.a);
     const scenario = getGameScenario(server.orm, gameId)!;
     const sheetNpc = (id: string, name: string, rank: 'A' | 'S'): Scenario['npcs'][number] => ({

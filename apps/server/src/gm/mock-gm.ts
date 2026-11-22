@@ -1,17 +1,19 @@
 import type { AiCallRequest } from '../ai/provider.ts';
-import type { DayContext, NarrationContext, TurnContext } from './context.ts';
-import { GM_OUTPUT, type GmAction, type GmNarration, type GmTurnProposal } from './schema.ts';
+import type { DayContext, JournalContext, NarrationContext, TurnContext } from './context.ts';
+import { GM_OUTPUT, type GmAction, type GmJournal, type GmNarration, type GmTurnProposal } from './schema.ts';
 
 /**
  * The Mock GM (AI_PROVIDER=mock without a script, plugged into the Mock provider by `ai/registry.ts`; tests
  * patch its answers): a valid answer built
  * from the request's own context, so a game runs offline end to end (GEN-057). Dev-only markers in an
  * action's text: `[mock:repair]` makes the first turn answer leave the last action out (forces a repair),
- * `[mock:slow]` makes narration wait 3 s (time to stop the server mid-resolve).
+ * `[mock:slow]` makes narration wait 3 s (time to stop the server mid-resolve), `[mock:badnarration]` makes
+ * every narration with that beat fail its checks (the server template is used, Q-151).
  */
 
 export const MOCK_REPAIR_MARKER = '[mock:repair]';
 export const MOCK_SLOW_MARKER = '[mock:slow]';
+export const MOCK_BAD_NARRATION_MARKER = '[mock:badnarration]';
 
 /** The request's context: the first user message is always the context JSON. */
 export function contextOf<T>(req: AiCallRequest): T {
@@ -86,6 +88,12 @@ export function mockDaySummary(ctx: DayContext): { recap: string; saga: string }
   return { recap, saga };
 }
 
+export function mockJournal(ctx: JournalContext): GmJournal {
+  const journal = `วันที่ ${ctx.day}: ${ctx.seen.join(' / ') || 'ไม่มีเรื่องที่ได้เห็น'}`.slice(0, 750);
+  const saga = [ctx.saga, journal].filter((s): s is string => s !== null).join('\n').slice(-1800);
+  return { journal, saga };
+}
+
 /** The Mock GM's answer for a GM request, or undefined when `req` is not one. */
 export async function cannedGmAnswer(req: AiCallRequest): Promise<unknown> {
   switch (req.output.name) {
@@ -98,10 +106,14 @@ export async function cannedGmAnswer(req: AiCallRequest): Promise<unknown> {
     case GM_OUTPUT.narration: {
       const ctx = contextOf<NarrationContext>(req);
       if (ctx.beats.some((b) => b.text.includes(MOCK_SLOW_MARKER))) await new Promise((r) => setTimeout(r, 3_000));
+      // Never passes the checks (an action id that is not a beat), so the server template is used (Q-151).
+      if (ctx.beats.some((b) => b.text.includes(MOCK_BAD_NARRATION_MARKER))) return { segments: [{ actionId: 'mock-not-a-beat', text: 'เรื่องที่ไม่อยู่ใน beat' }] };
       return mockNarration(ctx);
     }
     case GM_OUTPUT.daySummary:
       return mockDaySummary(contextOf<DayContext>(req));
+    case GM_OUTPUT.journal:
+      return mockJournal(contextOf<JournalContext>(req));
     default:
       return undefined;
   }

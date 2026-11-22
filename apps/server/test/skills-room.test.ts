@@ -89,6 +89,8 @@ describe('GEN-055 skills and items in the play room', { timeout: 60_000 }, () =>
     const nothing: PhaseResolver = { resolve: async () => ({}) };
     server = await startTestServer(dataDir, { phaseResolver: nothing });
     const t = await startedTable(server, false);
+    // The start needs a loot choice (Q-144); these cases count only what they give, so start from none.
+    server.db.prepare('delete from character_loot').run();
     // A and B are at the inn (safe); C holds a Rosary too but stands in the market (not safe).
     moveCharacter(server.orm, t.c.memberId, 'market', CLOCK);
     give(t.a, 'Silver Rosary of Hearth');
@@ -132,6 +134,7 @@ describe('GEN-055 skills and items in the play room', { timeout: 60_000 }, () =>
       ai: loadAiConfig({ AI_PROVIDER: 'mock', AI_MAX_RETRIES: '0', AI_RETRY_DELAY_MS: '0' }),
     });
     const t = await startedTable(server, false);
+    server.db.prepare('delete from character_loot').run(); // Q-144 seeded loot; this case counts only its own.
     const gameId = gameIdOf(t);
     // The market is the sheet's library in this game.
     const scenario = getGameScenario(server.orm, gameId)!;
@@ -163,6 +166,7 @@ describe('GEN-055 skills and items in the play room', { timeout: 60_000 }, () =>
   it('the Mock GM reads dev markers [mock:verb=TAG] / [mock:investigate=TAG] (localhost checks without a script)', async () => {
     server = await startTestServer(dataDir, { ai: loadAiConfig({ AI_PROVIDER: 'mock', AI_MAX_RETRIES: '0', AI_RETRY_DELAY_MS: '0' }) });
     const t = await startedTable(server, false);
+    server.db.prepare('delete from character_loot').run(); // Q-144 seeded loot; this case counts only its own.
     const gameId = gameIdOf(t);
     const scenario = getGameScenario(server.orm, gameId)!;
     const locations = scenario.locations.map((l) => (l.id === 'inn' ? { ...l, name: 'หอสมุดหลวง' } : l));

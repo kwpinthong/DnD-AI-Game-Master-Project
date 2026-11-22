@@ -148,6 +148,13 @@
       "when": 1795320550218,
       "tag": "0020_gm_console",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1795320862414,
+      "tag": "0021_gm_journal",
+      "breakpoints": true
     }
   ]
 }

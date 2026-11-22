@@ -2,6 +2,7 @@ import { CharacterResponse, CreateGameResponse, JoinResponse, type RoomServerMes
 import type Database from 'better-sqlite3';
 import { expect } from 'vitest';
 import type { RunningServer } from '../src/server.ts';
+import { seedChosenLoot } from './helpers.ts';
 import { isReady, openRoom, type RoomClient } from './room-client.ts';
 import { caller, CREATE_CODE, DARIN, LIN, MEKHA, type Call, type Seat } from './visibility-fixture.ts';
 
@@ -34,6 +35,8 @@ export async function fourPlayerTable(server: RunningServer, gameName = 'เม�
     const res = await call('POST', '/api/game/character', { token: member.token, body: identity });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     CharacterResponse.parse(res.body);
+    // The start needs a loot choice (Q-144).
+    seedChosenLoot(server.db, member.memberId);
     return { ...member, ...identity };
   }
 
