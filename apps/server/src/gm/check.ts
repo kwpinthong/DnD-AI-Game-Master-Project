@@ -1,5 +1,6 @@
 import { validatePhaseActions, type CrossPlayerState, type PhaseAction, type TagContext } from '@isekai/rules';
 import { playerToken, TOKEN_PATTERN, type GmWorld, type NarrationContext, type TurnAction } from './context.ts';
+import { hasSidePrefix } from '../timeline/store.ts';
 import type { GmNarration, GmTurnProposal } from './schema.ts';
 
 /**
@@ -123,6 +124,10 @@ export function checkTurnProposal(input: TurnCheckInput, proposal: GmTurnProposa
   });
   proposal.eventOutcomes.forEach((e, i) => {
     if (!input.activeEventIds.has(e.eventId)) fail('unknown_event', `eventOutcomes[${i}].eventId`, `${e.eventId} is not an active event this period`);
+    // Q-243: the side is its own field. A proposal stored before the field existed (no `side`) keeps its old prefix; the store splits it.
+    if (e.side !== undefined && hasSidePrefix(e.outcome)) {
+      fail('outcome_side_prefix', `eventOutcomes[${i}].outcome`, 'outcome must not begin with a side name (Good: / Evil: / Neutral:); put the side in eventOutcomes.side and write only what happened');
+    }
   });
   // Stored proposals from before GEN-059 have no endingPath.
   if ((proposal.endingPath ?? null) !== null && !input.finaleActive) {

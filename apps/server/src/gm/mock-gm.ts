@@ -100,13 +100,18 @@ export function mockAction(ctx: TurnContext, actionId: string): GmAction {
 /** GEN-059 dev marker: `[mock:ending=good|evil|neutral]` in an action while the finale is active sets the ending path. */
 const ENDING_MARKER = /\[mock:ending=(good|evil|neutral)\]/;
 
+/** Q-243 dev marker: `[mock:outcome=good|evil|neutral]` in an action sets the outcome of the first active event, with that side. */
+const OUTCOME_MARKER = /\[mock:outcome=(good|evil|neutral)\]/;
+
 export function mockTurnProposal(ctx: TurnContext): GmTurnProposal {
   const finaleActive = ctx.events.active.some((e) => e.kind === 'finale');
   const marked = ctx.actions.map((a) => ENDING_MARKER.exec(a.text)?.[1]).find((p) => p !== undefined) as GmTurnProposal['endingPath'] | undefined;
+  const side = ctx.actions.map((a) => OUTCOME_MARKER.exec(a.text)?.[1]).find((s) => s !== undefined) as 'good' | 'evil' | 'neutral' | undefined;
+  const event = ctx.events.active[0];
   return {
     actions: ctx.order.map((id) => mockAction(ctx, id)),
     constraints: { add: [], release: [] },
-    eventOutcomes: [],
+    eventOutcomes: side && event ? [{ eventId: event.id, outcome: 'ผู้เล่นเข้าแทรกแซงเหตุการณ์ (Mock GM)', side }] : [],
     endingPath: finaleActive && marked ? marked : null,
     remember: [],
   };

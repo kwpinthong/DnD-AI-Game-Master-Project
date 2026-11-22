@@ -23,8 +23,8 @@ export interface FinaleContext {
   kind: 'gm_finale';
   reason: 'finale' | 'game_over';
   path: EndingPath;
-  /** Every scenario event in play order with its final outcome (d1 / d5 / d7 / d10 / d12). */
-  events: { id: string; day: number; phase: Phase; kind: string; title: string; outcome: string; intervened: boolean }[];
+  /** Every scenario event in play order with its final outcome (d1 / d5 / d7 / d10 / d12); `side` (Q-243): which side the players' outcome was, null = none. */
+  events: { id: string; day: number; phase: Phase; kind: string; title: string; outcome: string; intervened: boolean; side: 'good' | 'evil' | 'neutral' | null }[];
   players: {
     ref: string;
     appearance: string;
@@ -90,6 +90,7 @@ export function buildFinaleContext(db: DbOrTx, assets: GameAssets, gameId: strin
       title: world.tokenise(titles.get(e.eventId) ?? e.eventId),
       outcome: world.tokenise(e.outcome),
       intervened: e.intervened,
+      side: e.side,
     })),
     players,
   };

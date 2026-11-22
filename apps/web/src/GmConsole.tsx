@@ -16,6 +16,8 @@ import { gmConsoleApi } from './gm-console-api.ts';
 const STATS: readonly (keyof GmStats)[] = ['hp', 'stamina', 'karma'];
 const STAT_LABEL: Record<keyof GmStats, string> = { hp: 'HP', stamina: 'Stamina', karma: 'Karma' };
 const EVENT_STATUS = { pending: 'ยังไม่เกิด', active: 'กำลังเกิด', resolved: 'จบแล้ว' } as const;
+/** Q-243: the side of an event outcome, GM only (the sheet's own words). */
+const OUTCOME_SIDE = { good: 'Good', evil: 'Evil', neutral: 'Neutral' } as const;
 
 /** The held turn: narration texts and HP / Stamina / Karma per player, edited with one reason, then approved. */
 function HeldTurn({
@@ -311,7 +313,7 @@ export function GmConsole({ apiBaseUrl, token, refreshKey }: { apiBaseUrl: strin
         <h3>เหตุการณ์ตามเส้นเวลา</h3>
         <ul>
           {view.events.map((e) => (
-            <li key={e.id}>{`วันที่ ${e.day} · ${PHASE_LABEL[e.phase]} · ${e.title} · ${EVENT_STATUS[e.status]}${e.outcome ? ` · ผล: ${e.outcome}` : ''}`}</li>
+            <li key={e.id}>{`วันที่ ${e.day} · ${PHASE_LABEL[e.phase]} · ${e.title} · ${EVENT_STATUS[e.status]}${e.outcome ? ` · ผล: ${e.outcome}` : ''}${e.outcomeSide ? ` · ฝ่าย: ${OUTCOME_SIDE[e.outcomeSide]}` : ''}`}</li>
           ))}
         </ul>
       </section>

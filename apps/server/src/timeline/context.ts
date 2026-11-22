@@ -1,4 +1,4 @@
-import type { Phase, Scenario } from '@isekai/protocol';
+import type { EventOutcomeSide, Phase, Scenario } from '@isekai/protocol';
 import type { PromptBlock } from '../ai/provider.ts';
 import type { GameAssets } from '../assets/load.ts';
 import type { DbOrTx } from '../db/client.ts';
@@ -54,6 +54,8 @@ export interface PastEventContext {
   title: string;
   outcome: string;
   intervened: boolean;
+  /** Q-243: the side of the outcome the players brought about; null = none. */
+  side: EventOutcomeSide | null;
 }
 
 /** A hint of a coming event for the narration (Foreshadowing at its Foreshadowing_Trigger). */
@@ -156,6 +158,7 @@ export function buildEventContext(
         title: clean(event.title),
         outcome: clean(s.outcome ?? ''),
         intervened: s.outcomeSource === 'ai',
+        side: s.outcomeSide,
       });
     }
   }

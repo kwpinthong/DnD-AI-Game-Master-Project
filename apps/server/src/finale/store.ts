@@ -90,7 +90,7 @@ const PLAN_REWARDS: Readonly<Record<string, { buff?: string; side?: 'evil'; refu
  */
 export function day5WentGood(db: DbOrTx, gameId: string): boolean {
   const day5 = getEventOutcomes(db, gameId).find((e) => e.day === 5);
-  return day5 !== undefined && day5.intervened && /^\s*(good|neutral)\b/i.test(day5.outcome);
+  return day5 !== undefined && day5.intervened && (day5.side === 'good' || day5.side === 'neutral');
 }
 
 /**

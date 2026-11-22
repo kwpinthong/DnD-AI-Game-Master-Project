@@ -1,4 +1,4 @@
-import { EventOutcomeText, type PhasePoint } from '@isekai/protocol';
+import { EventOutcomeSide, EventOutcomeText, type PhasePoint } from '@isekai/protocol';
 import { z } from 'zod';
 import type { AiService, AiServiceResult } from '../ai/core/service.ts';
 import type { GameAssets } from '../assets/load.ts';
@@ -11,7 +11,16 @@ import { advanceTimeline, type AdvanceResult } from './store.ts';
  * PhaseProposal and applies it with `applyEventOutcomes` together with the rest (all-or-nothing, Q-049).
  */
 export const EventOutcomeProposal = z.object({
-  eventOutcomes: z.array(z.object({ eventId: z.string().min(1).max(64), outcome: EventOutcomeText })).max(3),
+  eventOutcomes: z
+    .array(
+      z.object({
+        eventId: z.string().min(1).max(64),
+        outcome: EventOutcomeText,
+        /** Q-243: the side of the event's interventionEffects the players took; null = none of them. Never a prefix of `outcome`. */
+        side: EventOutcomeSide.nullable(),
+      }),
+    )
+    .max(3),
 });
 export type EventOutcomeProposal = z.infer<typeof EventOutcomeProposal>;
 

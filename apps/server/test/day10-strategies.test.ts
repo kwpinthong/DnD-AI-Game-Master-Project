@@ -222,11 +222,11 @@ describe('GEN-093 Day 10 strategies', { timeout: 60_000 }, () => {
     expect(byRef.get(refOf(t.b))).toMatchObject({ protectedBy: [], inSafeZone: true });
   });
 
-  /** Day 5 with `outcome` set by the AI GM (null = nobody stepped in), then A leads `plan` on night 10 with `success`, then day 11. */
-  function playOut(t: Table, outcome: string | null, plan: string, success: boolean) {
+  /** Day 5 with an outcome of `side` set by the AI GM (undefined = nobody stepped in), then A leads `plan` on night 10 with `success`, then day 11. */
+  function playOut(t: Table, side: 'good' | 'evil' | 'neutral' | null | undefined, plan: string, success: boolean) {
     const gameId = gameIdOf(t);
     jumpTo(t, { day: 5, phase: 'EOSORIA', turn: 1 });
-    if (outcome !== null) expect(setEventOutcome(server!.orm, gameId, 'd5-disaster', outcome, CLOCK)).toEqual({ ok: true });
+    if (side !== undefined) expect(setEventOutcome(server!.orm, gameId, 'd5-disaster', 'ผู้เล่นเข้าแทรกแซงภัยพิบัติ', side, CLOCK)).toEqual({ ok: true });
     jumpTo(t, { day: 10, phase: 'NOCTHERION', turn: 2 });
     recordStrategyParticipation(server!.orm, gameId, { memberId: t.a.memberId, strategyId: plan, role: 'leader', success, day: 10 }, CLOCK);
     jumpTo(t, { day: 11, phase: 'EOSORIA', turn: 1 });
@@ -236,25 +236,25 @@ describe('GEN-093 Day 10 strategies', { timeout: 60_000 }, () => {
   it('C5: D10-S2 succeeded and day 5 went Good: the clinic is a refuge', async () => {
     await boot();
     const t = await startedTable(server!, false);
-    expect(playOut(t, 'Good: อพยพชาวนาและขนสมุนไพรเข้าสถานพยาบาลได้ทัน', 'D10-S2', true).places).toEqual(new Set(['clinic']));
+    expect(playOut(t, 'good', 'D10-S2', true).places).toEqual(new Set(['clinic']));
   });
 
   it('C5: D10-S2 succeeded but day 5 was not Good (drift): no clinic refuge', async () => {
     await boot();
     const t = await startedTable(server!, false);
-    expect(playOut(t, null, 'D10-S2', true)).toEqual({ buffs: new Map(), places: new Set() });
+    expect(playOut(t, undefined, 'D10-S2', true)).toEqual({ buffs: new Map(), places: new Set() });
   });
 
   it('C5: D10-S2 succeeded but day 5 went Evil: no clinic refuge', async () => {
     await boot();
     const t = await startedTable(server!, false);
-    expect(playOut(t, 'Evil: กักตุนเสบียงปั่นราคาตลาดมืด', 'D10-S2', true).places).toEqual(new Set());
+    expect(playOut(t, 'evil', 'D10-S2', true).places).toEqual(new Set());
   });
 
   it('C6: a plan that failed gives no buff and no refuge (and the night counts as drift)', async () => {
     await boot();
     const t = await startedTable(server!, false);
-    expect(playOut(t, null, 'D10-S1', false)).toEqual({ buffs: new Map(), places: new Set() });
+    expect(playOut(t, undefined, 'D10-S1', false)).toEqual({ buffs: new Map(), places: new Set() });
     expect(strategyOutcomes(server!.orm, gameIdOf(t))).toEqual([
       { strategyId: 'D10-DRIFT', outcome: 'drift' },
       { strategyId: 'D10-S1', outcome: 'failed' },

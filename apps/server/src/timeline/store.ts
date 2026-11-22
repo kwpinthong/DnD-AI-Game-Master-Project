@@ -3,6 +3,7 @@ import {
   EventOutcomeText,
   SCENARIO_DAYS,
   TURNS_PER_PERIOD,
+  type EventOutcomeSide,
   type EventOutcomeSource,
   type EventStatus,
   type Phase,
@@ -80,6 +81,8 @@ export interface TimelineEventState {
   /** AI choice while active, final outcome once resolved; null = nothing chosen yet. */
   outcome: string | null;
   outcomeSource: EventOutcomeSource | null;
+  /** Q-243: the side of the AI's outcome; null = none (always null for the scenario default). */
+  outcomeSide: EventOutcomeSide | null;
 }
 
 export interface GameTimelineState {
@@ -112,6 +115,7 @@ function eventsOf(scenario: Scenario, rows: Map<string, StateRow>): TimelineEven
       status: row?.status ?? 'pending',
       outcome: row?.outcome ?? null,
       outcomeSource: row?.outcomeSource ?? null,
+      outcomeSide: row?.outcomeSide ?? null,
     };
   });
 }
@@ -176,6 +180,7 @@ export function advanceTimeline(db: DbOrTx, gameId: string, to: TimelinePoint | 
         status: 'resolved' as const,
         outcome: chosen ? row.outcome : event.outcome,
         outcomeSource: chosen ? ('ai' as const) : ('default' as const),
+        outcomeSide: chosen ? (row.outcomeSide ?? null) : null,
         activatedAt: row?.activatedAt ?? null,
         resolvedAt: now,
         // Skipped straight past (never active): it happens now, so the snapshot is taken now.
@@ -266,15 +271,41 @@ function checkOutcome(db: DbOrTx, gameId: string, eventId: string, outcome: unkn
   return { ok: true, text: parsed.data };
 }
 
+/** The side name an outcome text began with before Q-243 ("Good: ...", "Good/Neutral: ...", "Evil: ...", "Neutral: ..."). */
+const SIDE_PREFIX = /^\s*(good|evil|neutral)(?:\s*\/\s*(?:good|evil|neutral))*\s*:\s*/i;
+
+/** Whether an outcome text begins with a side name the old way (the side belongs in `side`, Q-243). */
+export const hasSidePrefix = (outcome: string) => SIDE_PREFIX.test(outcome);
+
+/**
+ * An outcome written before Q-243, when the side was the first word of the text: the text without it and the
+ * side it named (the first one of "Good/Neutral"); text without such a prefix has no side.
+ */
+export function splitSidePrefix(outcome: string): { outcome: string; side: EventOutcomeSide | null } {
+  const prefix = SIDE_PREFIX.exec(outcome);
+  const rest = prefix ? outcome.slice(prefix[0].length) : '';
+  return prefix && rest.trim().length > 0 ? { outcome: rest, side: prefix[1]!.toLowerCase() as EventOutcomeSide } : { outcome, side: null };
+}
+
 /**
  * The AI GM's request to change an event's outcome because players stepped in (C3). Accepted only
- * while the event is active; a later call while still active replaces the earlier choice.
+ * while the event is active; a later call while still active replaces the earlier choice (text and side).
+ * `side` (Q-243): the side of the outcome, null = none; undefined = an answer stored before the field
+ * existed, whose side is read from the old "Good: ..." prefix of the text.
  */
-export function setEventOutcome(db: DbOrTx, gameId: string, eventId: string, outcome: string, now: number = Date.now()): SetOutcomeResult {
-  const check = checkOutcome(db, gameId, eventId, outcome);
+export function setEventOutcome(
+  db: DbOrTx,
+  gameId: string,
+  eventId: string,
+  outcome: string,
+  side?: EventOutcomeSide | null,
+  now: number = Date.now(),
+): SetOutcomeResult {
+  const given = side === undefined ? splitSidePrefix(outcome) : { outcome, side };
+  const check = checkOutcome(db, gameId, eventId, given.outcome);
   if (!check.ok) return check;
   db.update(gameEventState)
-    .set({ outcome: check.text!, outcomeSource: 'ai', updatedAt: now })
+    .set({ outcome: check.text!, outcomeSource: 'ai', outcomeSide: given.side, updatedAt: now })
     .where(and(eq(gameEventState.gameId, gameId), eq(gameEventState.eventId, eventId)))
     .run();
   return { ok: true };
@@ -283,6 +314,8 @@ export function setEventOutcome(db: DbOrTx, gameId: string, eventId: string, out
 export interface EventOutcomeChange {
   eventId: string;
   outcome: string;
+  /** As `setEventOutcome`. */
+  side?: EventOutcomeSide | null;
 }
 
 export type ApplyOutcomesResult =
@@ -297,7 +330,7 @@ export function applyEventOutcomes(db: Db, gameId: string, changes: readonly Eve
       return check.ok ? [] : [{ index, eventId: c.eventId, code: check.code, message: check.message }];
     });
     if (errors.length > 0) return { ok: false, errors };
-    for (const c of changes) setEventOutcome(tx, gameId, c.eventId, c.outcome, now);
+    for (const c of changes) setEventOutcome(tx, gameId, c.eventId, c.outcome, c.side, now);
     return { ok: true };
   });
 }
@@ -310,6 +343,8 @@ export interface EventOutcomeRecord {
   outcome: string;
   /** true = the AI GM set it because players stepped in; false = the scenario default. */
   intervened: boolean;
+  /** Q-243: the side of the outcome the AI GM chose; null = none (always null when nobody stepped in). */
+  side: EventOutcomeSide | null;
 }
 
 /** Outcomes of resolved events in timeline order, for later events and the finale (GEN-057 / GEN-059). */
@@ -320,6 +355,6 @@ export function getEventOutcomes(db: DbOrTx, gameId: string): EventOutcomeRecord
   return inPlayOrder(scenario.timeline).flatMap((e) => {
     const row = rows.get(e.id);
     if (row?.status !== 'resolved') return [];
-    return [{ eventId: e.id, day: e.day, phase: e.phase, kind: e.kind, outcome: row.outcome ?? '', intervened: row.outcomeSource === 'ai' }];
+    return [{ eventId: e.id, day: e.day, phase: e.phase, kind: e.kind, outcome: row.outcome ?? '', intervened: row.outcomeSource === 'ai', side: row.outcomeSide ?? null }];
   });
 }
