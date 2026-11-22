@@ -1,4 +1,4 @@
-import { ROOM_PATH, RoomServerMessage, type ActionVisibility, type RoomEntry, type RoomErrorCode, type RoomState } from '@isekai/protocol';
+import { ROOM_PATH, RoomServerMessage, type ActionVisibility, type PlaceActionId, type PlaceView, type RoomEntry, type RoomErrorCode, type RoomState } from '@isekai/protocol';
 
 /** ws(s)://<server>/api/game/room. An empty base URL means this page's own origin (the Vite proxy). */
 export function roomSocketUrl(baseUrl: string, pageUrl: string = window.location.href): string {
@@ -23,11 +23,19 @@ export interface RoomListener {
   whisperReply(reply: { ok: true } | { ok: false; message: string }): void;
   /** The server refused the socket for good (no reconnect). */
   fatal(code: RoomErrorCode, message: string): void;
+  /** The server answered the last move (GEN-066): where you are / are going, or why not. */
+  moveReply?(reply: { ok: true; place: PlaceView; arrives: 'now' | 'next_turn' } | { ok: false; message: string }): void;
+  /** The server answered the last omen of an Astral Spirit (GEN-070). */
+  omenReply?(reply: { ok: true } | { ok: false; message: string }): void;
 }
 
 export interface RoomConnection {
-  /** `train`: TRAIN at the guild (GEN-069), never with `rest`. */
-  sendAction(text: string, visibility: ActionVisibility, rest?: boolean, train?: boolean): boolean;
+  /** `train`: TRAIN at the guild (GEN-069), never with `rest`. `placeAction`: the chip of the place used (GEN-069). */
+  sendAction(text: string, visibility: ActionVisibility, rest?: boolean, train?: boolean, placeAction?: PlaceActionId): boolean;
+  /** `to`: a destination id of the travel sheet (GEN-066). */
+  sendMove(to: string): boolean;
+  /** An Astral Spirit's omen to one player (`to`: a ref of `you.astral.omen.targets`, Q-193). */
+  sendOmen(to: string, text: string): boolean;
   /** `to`: the ally's ref from `you.allies`. */
   sendWhisper(to: string, text: string): boolean;
   /** Asks the AI GM to try a stuck turn again (GEN-057). */
@@ -79,6 +87,14 @@ export function connectRoom(baseUrl: string, token: string, listener: RoomListen
           return listener.whisperReply({ ok: true });
         case 'whisper_rejected':
           return listener.whisperReply({ ok: false, message: message.message });
+        case 'move_accepted':
+          return listener.moveReply?.({ ok: true, place: message.place, arrives: message.arrives });
+        case 'move_rejected':
+          return listener.moveReply?.({ ok: false, message: message.message });
+        case 'omen_accepted':
+          return listener.omenReply?.({ ok: true });
+        case 'omen_rejected':
+          return listener.omenReply?.({ ok: false, message: message.message });
         case 'error':
           stopped = true;
           listener.status('closed');
@@ -93,23 +109,20 @@ export function connectRoom(baseUrl: string, token: string, listener: RoomListen
     };
   }
 
+  function send(message: Record<string, unknown>): boolean {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+    socket.send(JSON.stringify(message));
+    return true;
+  }
+
   open();
   return {
-    sendAction(text, visibility, rest = false, train = false) {
-      if (!socket || socket.readyState !== WebSocket.OPEN) return false;
-      socket.send(JSON.stringify({ type: 'action', text, visibility, rest, ...(train ? { train } : {}) }));
-      return true;
-    },
-    sendWhisper(to, text) {
-      if (!socket || socket.readyState !== WebSocket.OPEN) return false;
-      socket.send(JSON.stringify({ type: 'whisper', to, text }));
-      return true;
-    },
-    sendRetry() {
-      if (!socket || socket.readyState !== WebSocket.OPEN) return false;
-      socket.send(JSON.stringify({ type: 'retry' }));
-      return true;
-    },
+    sendAction: (text, visibility, rest = false, train = false, placeAction) =>
+      send({ type: 'action', text, visibility, rest, ...(train ? { train } : {}), ...(placeAction ? { placeAction } : {}) }),
+    sendMove: (to) => send({ type: 'move', to }),
+    sendOmen: (to, text) => send({ type: 'omen', to, text }),
+    sendWhisper: (to, text) => send({ type: 'whisper', to, text }),
+    sendRetry: () => send({ type: 'retry' }),
     close() {
       stopped = true;
       clearTimeout(timer);

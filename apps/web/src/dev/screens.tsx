@@ -5,12 +5,11 @@ import { App } from '../App.tsx';
 import { CharacterScreen } from '../CharacterScreen.tsx';
 import { CreateGameForm } from '../CreateGameForm.tsx';
 import { GmConsole } from '../GmConsole.tsx';
-import { InventoryPanel } from '../Inventory.tsx';
 import { JoinForm } from '../JoinForm.tsx';
 import { Lobby } from '../Lobby.tsx';
 import { PlayRoom } from '../PlayRoom.tsx';
 import { ScenarioEditor } from '../ScenarioEditor.tsx';
-import { EndingPreview, HitPreview, LibraryPreview } from './previews.tsx';
+import { EndingPreview, LibraryPreview } from './previews.tsx';
 
 /**
  * What the gallery renders for each contract screen (GEN-100): the page that exists today (pre-v2) or a
@@ -56,10 +55,10 @@ export const SCREEN_VIEWS: Record<ScreenId, ScreenView> = {
   'play-place': PLAY,
   'play-feed': PLAY,
   'play-private': PLAY,
-  'play-hit': { page: 'HitPreview (ตัวแทน)', socket: true, render: ({ baseUrl, token }) => <HitPreview apiBaseUrl={baseUrl} token={token} /> },
+  'play-hit': PLAY,
   'play-self': PLAY,
-  'play-companions': NONE,
-  'play-inventory': { page: 'InventoryPanel', socket: false, render: ({ baseUrl, token }) => <InventoryPanel apiBaseUrl={baseUrl} token={token} onSessionLost={noop} /> },
+  'play-companions': PLAY,
+  'play-inventory': PLAY,
   'play-action': PLAY,
   'play-lock': PLAY,
   'play-astral': PLAY,

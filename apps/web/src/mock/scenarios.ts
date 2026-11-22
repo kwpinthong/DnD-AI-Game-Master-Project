@@ -1,4 +1,4 @@
-import { GameView, RoomEntry, RoomState } from '@isekai/protocol';
+import { GameView, RoomEntry, RoomState, SurroundingsResponse, type CharacterView } from '@isekai/protocol';
 import { CONTRACT_FIXTURES as F, CONTRACT_SCREENS, type ScreenId } from '@isekai/protocol/contract';
 
 /**
@@ -91,6 +91,15 @@ const noCharacterGame: GameView = {
   startBlockers: ['ยังไม่สร้างตัวละคร: นก, ต้น'],
 };
 
+/** GET /api/game/surroundings with your own gauges changed, so the status column agrees with the lock (GEN-088). */
+function surroundingsWith(you: Partial<CharacterView>): Readonly<Record<string, MockReply>> {
+  const base = SurroundingsResponse.parse(F.SurroundingsResponse[0]);
+  if (base.view !== 'player' || !base.you) throw new Error('the first SurroundingsResponse fixture is the player view');
+  return { 'GET /api/game/surroundings': ok({ ...base, you: { ...base.you, ...you } }) };
+}
+const SPENT = surroundingsWith({ stamina: { current: 0, max: 30 } });
+const DOWN = surroundingsWith({ hp: { current: 0, max: 30 } });
+
 const ALL_SCREENS = CONTRACT_SCREENS.map((s) => s.id);
 const room = (state: RoomState, script: readonly MockStep[] = [], entries: readonly RoomEntry[] = START_ENTRIES) => ({ state, entries, script });
 
@@ -148,8 +157,8 @@ export const SCENARIOS: readonly MockScenario[] = [
       { afterMs: 6000, op: 'nextTurn' },
     ]),
   },
-  { id: 'exhausted', title: 'หมดแรง', note: 'Stamina หมด ต้องพักเทิร์นนี้', session: 'player', screens: ['play-lock', 'play-action', 'play-self'], http: {}, room: room(lockState('exhausted')) },
-  { id: 'unconscious', title: 'สลบ', note: 'HP 0 สลบ 1 เทิร์น', session: 'player', screens: ['play-lock', 'play-action', 'play-self'], http: {}, room: room(lockState('unconscious')) },
+  { id: 'exhausted', title: 'หมดแรง', note: 'Stamina หมด ต้องพักเทิร์นนี้', session: 'player', screens: ['play-lock', 'play-action', 'play-self'], http: SPENT, room: room(lockState('exhausted')) },
+  { id: 'unconscious', title: 'สลบ', note: 'HP 0 สลบ 1 เทิร์น', session: 'player', screens: ['play-lock', 'play-action', 'play-self'], http: DOWN, room: room(lockState('unconscious')) },
   { id: 'resolving', title: 'กำลังสรุปผล', note: 'เทิร์นปิดแล้ว AI GM กำลังสรุป', session: 'player', screens: ['play-lock', 'play-action'], http: {}, room: room(lockState('resolving')) },
   { id: 'traveling', title: 'กำลังเดินทางข้ามโซน', note: 'เทิร์นนี้คือการเดินทาง (lock ที่ server ยังไม่ส่ง)', session: 'player', screens: ['play-lock', 'play-place'], http: {}, room: room(lockState('traveling')) },
   { id: 'recovering', title: 'พักฟื้น', note: 'พักที่สถานพยาบาล (GEN-070)', session: 'player', screens: ['play-lock'], http: {}, room: room(lockState('recovering')) },
