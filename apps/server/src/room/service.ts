@@ -360,7 +360,8 @@ export function createRoomService(
           const rows = (resolution.entries ?? []).map((entry) => {
             const recipients = recipientsOf(tx, gameId, entry);
             const locationId = entry.kind === 'feed' ? entry.locationId : null;
-            return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text }, [...recipients], t), recipients };
+            const fallback = entry.fallback ? { fallback: entry.fallback } : {};
+            return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text, ...fallback }, [...recipients], t), recipients };
           });
           // GEN-067: every Secret action that stood leaves a Hidden Evidence Tag at its place for this game day.
           for (const a of actions) {

@@ -30,5 +30,7 @@ export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string 
     ...(row.kind === 'whisper'
       ? { whisper: { from: characterNameOf(db, row.fromMemberId), to: characterNameOf(db, row.toMemberId), mine: row.fromMemberId === viewer.id } }
       : {}),
+    // Q-177: players learn only that it is the template, never why.
+    ...(row.fallback !== null ? { fallback: true as const } : {}),
   };
 }

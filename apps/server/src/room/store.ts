@@ -1,4 +1,4 @@
-import type { ActionVisibility, RoomEntryKind } from '@isekai/protocol';
+import type { ActionVisibility, GmFallbackCause, RoomEntryKind } from '@isekai/protocol';
 import { createPhaseState, restorePhaseState, type PhaseState, type TurnPoint } from '@isekai/rules';
 import { and, asc, eq, gt, inArray } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
@@ -89,6 +89,8 @@ export interface NewEntry {
   /** Whisper only (GEN-067). */
   readonly fromMemberId?: string;
   readonly toMemberId?: string;
+  /** Q-177: the cause when the text is the server template. */
+  readonly fallback?: GmFallbackCause;
 }
 
 /** Stores an entry with who may receive it; the recipients never change afterwards. */
@@ -105,6 +107,7 @@ export function insertEntry(db: DbOrTx, gameId: string, entry: NewEntry, recipie
       text: entry.text,
       fromMemberId: entry.fromMemberId ?? null,
       toMemberId: entry.toMemberId ?? null,
+      fallback: entry.fallback ?? null,
       createdAt: now,
     })
     .returning()

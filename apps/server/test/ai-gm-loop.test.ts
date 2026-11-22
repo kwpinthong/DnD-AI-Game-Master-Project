@@ -1,4 +1,5 @@
-import type { RoomEntry, RoomServerMessage, RoomState } from '@isekai/protocol';
+import { GmConsoleResponse, type RoomEntry, type RoomServerMessage, type RoomState } from '@isekai/protocol';
+import { approveHeldTurn } from './gm-console-client.ts';
 import type { Period, Turn } from '@isekai/rules';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
@@ -284,6 +285,8 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(mine[0]!.text).toContain(texts[0]);
     expect(mine[0]!.text).toContain('คุณ');
     expect(mine[0]!.text).toMatch(/สำเร็จ|พลาด/);
+    // Q-177: every template narration carries the fallback marker.
+    expect(mine[0]).toMatchObject({ fallback: true });
     // The inn feed tells each Public action of the inn, from the validated outcome.
     const feed = turnEntries(clients[1]!, 1, 'EOSORIA', 1).filter((e) => e.kind === 'feed');
     expect(feed.some((e) => texts.every((x) => e.text.includes(x)))).toBe(true);
@@ -296,9 +299,77 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     // Only the GM narration lines: the GEN-068 weather pick logs its own `source=fallback` here.
     const fallbackLines = logs.filter((l) => l.startsWith('[gm]') && l.includes('fallback'));
     expect(fallbackLines).toHaveLength(2);
+    for (const line of fallbackLines) expect(line).toContain('cause=invalid');
     for (const line of logs) {
       for (const secret of [...texts, BAD, LIN.name, DARIN.name, MEKHA.name]) expect(line).not.toContain(secret);
     }
+  });
+
+  it('Q-177: a narration call that times out is retried once, then the template goes out with the fallback marker and the cause is logged', async () => {
+    let refA = '';
+    // AI_MAX_RETRIES 2 for every other call: narration gets exactly one retry.
+    await boot({ AI_MAX_RETRIES: '2' }, (req, n) => {
+      if (!isNarration(req)) return noRoll(req, n);
+      const audience = narrationFor(req);
+      return 'player' in audience && audience.player === refA ? mockReply.fail('timeout') : undefined;
+    });
+    const t = await startedTable(server!, true);
+    refA = refOf(t.a);
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    const texts = ['เช็ดโต๊ะในโรงเตี๊ยม', 'สั่งน้ำชาร้อน', 'ซ่อมเก้าอี้'];
+    for (const [i, c] of clients.entries()) await send(c, texts[i]!);
+    await approveHeldTurn(t.call, t.gm!.token);
+    for (const c of clients) await c.waitFor(at(1, 'EOSORIA', 2));
+
+    const toA = provider.requests.filter((r) => {
+      if (!isNarration(r)) return false;
+      const audience = narrationFor(r);
+      return 'player' in audience && audience.player === refA;
+    });
+    expect(toA).toHaveLength(2);
+    const mine = turnEntries(clients[0]!, 1, 'EOSORIA', 1).filter((e) => e.kind === 'narration');
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({ fallback: true });
+    expect(mine[0]!.text).toContain(texts[0]);
+    // The others got the AI's own narration: no marker.
+    for (const c of clients.slice(1)) for (const e of turnEntries(c, 1, 'EOSORIA', 1)) expect(e.fallback).toBeUndefined();
+    expect(turnRows()).toEqual([expect.objectContaining({ status: 'applied' })]);
+
+    const lines = logs.filter((l) => l.startsWith('[gm]') && l.includes('fallback'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('cause=timeout');
+    // The GM console shows the cause; players' payloads never carry it.
+    const view = GmConsoleResponse.parse((await t.call('GET', '/api/game/gm/console', { token: t.gm!.token })).body);
+    expect(view.fallbacks).toEqual([{ at: { day: 1, phase: 'EOSORIA', turn: 1 }, kind: 'narration', memberId: t.a.memberId, locationId: null, cause: 'timeout' }]);
+    for (const c of clients) for (const frame of c.raw) expect(frame).not.toContain('timeout');
+  });
+
+  it('Q-177: the budget runs out after the adjudication: every narration is the template at once, and the owner is told', async () => {
+    const free = { inputTokens: 0, cachedInputTokens: 0, cacheWriteTokens: 0, outputTokens: 0 };
+    // Only the adjudication costs (4000 micro-USD) and the ceiling is 1000: it passes, the narrations do not.
+    await boot({ AI_GAME_MONTHLY_USD: '0.001' }, async (req, n) => {
+      if (isTurn(req)) return noRoll(req, n);
+      return mockReply.ok(await cannedGmAnswer(req), free);
+    });
+    const t = await startedTable(server!, false);
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    await playTurn(clients, ['ซื้อดาบ', 'ขายผ้า', 'ซ่อมรองเท้า'], { day: 1, phase: 'EOSORIA', turn: 2 });
+
+    expect(provider.requests.filter(isNarration)).toEqual([]);
+    for (const c of clients) {
+      const entries = turnEntries(c, 1, 'EOSORIA', 1).filter((e) => !e.text.startsWith('ระบบ:'));
+      expect(entries.length).toBeGreaterThan(0);
+      for (const e of entries) expect(e.fallback).toBe(true);
+    }
+    // The owner (A) gets one notice with the reason; the other players do not.
+    const notices = (c: RoomClient) => c.entries().filter((e) => e.text.startsWith('ระบบ:'));
+    expect(notices(clients[0]!)).toHaveLength(1);
+    expect(notices(clients[0]!)[0]!.text).toContain('เพดาน');
+    expect(notices(clients[1]!)).toEqual([]);
+    expect(notices(clients[2]!)).toEqual([]);
+    const lines = logs.filter((l) => l.startsWith('[gm]') && l.includes('fallback'));
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) expect(line).toContain('cause=budget');
   });
 
   it('C4: a constraint the AI sets stays in activeConstraints every turn until the AI releases it with a reason', async () => {

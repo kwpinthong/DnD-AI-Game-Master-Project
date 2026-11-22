@@ -1,4 +1,4 @@
-import { ACTION_MAX_LENGTH, PHASE_LABEL, actionTextProblem, weatherText, type ActionVisibility, type RoomEntry, type RoomState } from '@isekai/protocol';
+import { ACTION_MAX_LENGTH, FALLBACK_NARRATION_LABEL, PHASE_LABEL, actionTextProblem, weatherText, type ActionVisibility, type RoomEntry, type RoomState } from '@isekai/protocol';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { GmConsole } from './GmConsole.tsx';
 import { connectRoom, type RoomConnection, type RoomConnectionStatus } from './room-api.ts';
@@ -34,6 +34,7 @@ function EntryList({ label, entries, empty }: { label: string; entries: RoomEntr
           {entries.map((e) => (
             <li key={e.seq}>
               <small>{entryHeading(e)}</small>
+              {e.fallback && <small className="fallback-label">{FALLBACK_NARRATION_LABEL}</small>}
               <p>{e.text}</p>
             </li>
           ))}

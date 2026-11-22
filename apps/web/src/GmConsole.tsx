@@ -3,6 +3,7 @@ import {
   PHASE_LABEL,
   type GmAdjustRequest,
   type GmConsoleResponse,
+  type GmFallbackCause,
   type GmInsertEventRequest,
   type GmOverrideView,
   type GmPendingTurn,
@@ -90,6 +91,14 @@ function HeldTurn({
     </section>
   );
 }
+
+/** Q-177: why a narration is the server template. */
+const FALLBACK_CAUSE: Record<GmFallbackCause, string> = {
+  timeout: 'AI ไม่ตอบ (timeout) ลองซ้ำ 1 ครั้งแล้ว',
+  budget: 'ใช้ครบงบ AI ของเดือนแล้ว',
+  invalid: 'ข้อความของ AI ยังผิดหลังให้แก้ 1 ครั้ง',
+  error: 'เรียก AI ไม่สำเร็จ',
+};
 
 /** Q-174: a hand edit changes the number only; the companion rules run on the next normal change. */
 const AFFINITY_HAND_EDIT_NOTE =
@@ -305,6 +314,21 @@ export function GmConsole({ apiBaseUrl, token, refreshKey }: { apiBaseUrl: strin
             <li key={e.id}>{`วันที่ ${e.day} · ${PHASE_LABEL[e.phase]} · ${e.title} · ${EVENT_STATUS[e.status]}${e.outcome ? ` · ผล: ${e.outcome}` : ''}`}</li>
           ))}
         </ul>
+      </section>
+
+      <section aria-label="บรรยายสำรองจากระบบ">
+        <h3>บรรยายสำรองจากระบบ (AI GM ไม่ได้เขียน)</h3>
+        {view.fallbacks.length === 0 ? (
+          <p>ยังไม่มี</p>
+        ) : (
+          <ol>
+            {view.fallbacks.map((f, i) => (
+              <li key={i}>
+                {`วันที่ ${f.at.day} · ${PHASE_LABEL[f.at.phase]} · เทิร์น ${f.at.turn} · ${f.kind === 'narration' ? `ถึง ${nameOf(f.memberId)}` : `ฟีดของ ${f.locationId ?? 'ทั้งเมือง'}`} · ${FALLBACK_CAUSE[f.cause]}`}
+              </li>
+            ))}
+          </ol>
+        )}
       </section>
 
       <AdjustForm view={view} onAdjust={(body) => run(() => api.adjust(body))} />

@@ -1,4 +1,4 @@
-import type { ActionVisibility, RoomGmStatusCode } from '@isekai/protocol';
+import type { ActionVisibility, GmFallbackCause, RoomGmStatusCode } from '@isekai/protocol';
 import type { PeriodWeather, PhaseState, PlayerResult, TurnPoint } from '@isekai/rules';
 import type { DbOrTx } from '../db/client.ts';
 
@@ -54,9 +54,13 @@ export interface ClosedPhase {
  *   publish time (`witnessesOf`). A Secret action's outcome belongs in the actor's narration instead.
  * - `narration`: private text for one player only.
  */
-export type ResolutionEntry =
+export type ResolutionEntry = (
   | { readonly kind: 'feed'; readonly locationId: string | null; readonly actorMemberId: string | null; readonly text: string }
-  | { readonly kind: 'narration'; readonly memberId: string; readonly text: string };
+  | { readonly kind: 'narration'; readonly memberId: string; readonly text: string }
+) & {
+  /** Q-177: set when the text is the server template, with why. */
+  readonly fallback?: GmFallbackCause;
+};
 
 /** Why the resolver could not finish the turn (GEN-057). The turn stays closed with every action kept. */
 export interface ResolverStuck {

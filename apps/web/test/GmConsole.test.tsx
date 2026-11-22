@@ -65,6 +65,7 @@ function consoleView(pending: boolean): GmConsoleResponse {
           results: [{ memberId: 'm-a', before: { hp: 100, stamina: 30, karma: -30 }, after: { hp: 90, stamina: 30, karma: -30 }, edited: false }],
         }
       : null,
+    fallbacks: [],
   };
 }
 
@@ -145,6 +146,21 @@ describe('GEN-058 GM console (web)', () => {
     expect(note.textContent).toMatch(/ครั้งถัดไป/);
     fireEvent.change(within(form).getByLabelText('ค่า'), { target: { value: 'karma' } });
     expect(within(form).queryByRole('note')).toBeNull();
+  });
+
+  it('Q-177: lists the template narrations with their cause in Thai', async () => {
+    const view: GmConsoleResponse = {
+      ...consoleView(false),
+      fallbacks: [
+        { at: { day: 1, phase: 'EOSORIA', turn: 1 }, kind: 'narration', memberId: 'm-a', locationId: null, cause: 'timeout' },
+        { at: { day: 1, phase: 'EOSORIA', turn: 2 }, kind: 'feed', memberId: null, locationId: 'market', cause: 'budget' },
+      ],
+    };
+    stubApi({ 'GET /api/game/gm/console': () => Response.json(view), 'GET /api/game/gm/log': () => Response.json(emptyLog) });
+    render(<GmConsole apiBaseUrl="http://api" token="tok" refreshKey="1" />);
+    const list = await screen.findByRole('region', { name: 'บรรยายสำรองจากระบบ' });
+    expect(within(list).getByText(/เทิร์น 1.*ถึง ลิน.*AI ไม่ตอบ \(timeout\)/)).toBeTruthy();
+    expect(within(list).getByText(/เทิร์น 2.*ฟีดของ market.*ใช้ครบงบ AI ของเดือน/)).toBeTruthy();
   });
 
   it('Q-176: an approve row reads as approved, with or without edits', async () => {

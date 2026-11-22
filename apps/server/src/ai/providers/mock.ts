@@ -20,7 +20,7 @@ export interface MockProvider extends AiProvider {
 
 const estimateTokens = (text: string) => Math.ceil(text.length / 3);
 
-export function createMockProvider(_config: AiConfig, script?: MockScript, answer?: MockAnswerer): MockProvider {
+export function createMockProvider(config: AiConfig, script?: MockScript, answer?: MockAnswerer): MockProvider {
   const requests: AiCallRequest[] = [];
   const steps = script ? [...script.steps] : undefined;
 
@@ -32,6 +32,9 @@ export function createMockProvider(_config: AiConfig, script?: MockScript, answe
     async call(req) {
       requests.push(req);
       if (!steps) {
+        // AI_MOCK_FAIL (Q-177): a dev run sees what a failing provider does to the game.
+        const fail = config.mockFail?.[req.purpose];
+        if (fail) return mockReply.fail(fail);
         const input = estimateTokens([...req.system.map((b) => b.text), ...req.messages.map((m) => m.text)].join('\n'));
         const json =
           req.purpose === 'character_analyze'

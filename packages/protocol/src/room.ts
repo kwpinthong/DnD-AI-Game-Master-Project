@@ -193,8 +193,16 @@ export const RoomEntry = z.strictObject({
    * whether this viewer sent it.
    */
   whisper: z.strictObject({ from: z.string(), to: z.string(), mine: z.boolean() }).optional(),
+  /**
+   * Q-177: the server's template text, not the AI GM's (the AI did not answer, ran out of budget, or its
+   * text was still wrong after a repair). Present only when true; show `FALLBACK_NARRATION_LABEL` with it.
+   */
+  fallback: z.literal(true).optional(),
 });
 export type RoomEntry = z.infer<typeof RoomEntry>;
+
+/** The small marker players see on a `fallback` entry (Q-177). */
+export const FALLBACK_NARRATION_LABEL = 'บรรยายสำรองจากระบบ';
 
 export const RoomEntryMessage = z.strictObject({ type: z.literal('entry'), entry: RoomEntry });
 

@@ -1,4 +1,4 @@
-import type { GameView, RoomEntry, RoomServerMessage, RoomState } from '@isekai/protocol';
+import { FALLBACK_NARRATION_LABEL, type GameView, type RoomEntry, type RoomServerMessage, type RoomState } from '@isekai/protocol';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App.tsx';
@@ -205,6 +205,17 @@ describe('GEN-056 play room (web)', () => {
     expect(within(mine).getByText('คุณเห็นรอยเท้าใต้โต๊ะ')).toBeTruthy();
   });
 
+  it('Q-177: a template narration carries the fallback label; the AI GM\'s own text does not', async () => {
+    const socket = await enterRoom();
+    socket.receive({ type: 'entry', entry: { ...entry(1, 'narration', 'คุณ: เช็ดโต๊ะ สำเร็จ'), fallback: true } });
+    socket.receive({ type: 'entry', entry: entry(2, 'narration', 'แสงเทียนสั่นไหว') });
+    socket.receive(roomState());
+    const mine = screen.getByRole('region', { name: 'สิ่งที่คุณรู้คนเดียว' });
+    const items = within(mine).getAllByRole('listitem');
+    expect(within(items[0]!).getByText(FALLBACK_NARRATION_LABEL)).toBeTruthy();
+    expect(within(items[1]!).queryByText(FALLBACK_NARRATION_LABEL)).toBeNull();
+  });
+
   it('C5: an empty or too long action is stopped with a reason; a server refusal and a lock are shown', async () => {
     const socket = await enterRoom();
     socket.receive(roomState());
@@ -369,6 +380,7 @@ describe('GEN-058 Human GM console in the play room (web)', () => {
       events: [],
       legendaries: [],
       pending: pending ? { at: { day: 1, phase: 'EOSORIA', turn: 1 }, entries: [{ index: 0, kind: 'narration', memberId: 'm-bee', locationId: null, text: 'ฉบับเดิม', edited: false }], results: [] } : null,
+      fallbacks: [],
     });
     loggedIn(gmGame, {
       'GET /api/game/gm/console': () => Response.json(view(++consoleCalls > 1)),
