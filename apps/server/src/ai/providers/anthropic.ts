@@ -58,7 +58,7 @@ export function createAnthropicProvider(config: AiConfig): AiProvider {
 
       const text = response.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('');
       try {
-        return { ok: true, json: JSON.parse(text), usage, model: response.model, latencyMs: latency() };
+        return { ok: true, json: fromStructuredOutput(req.output.jsonSchema, JSON.parse(text)), usage, model: response.model, latencyMs: latency() };
       } catch {
         return failure('invalid_json', `not JSON (${text.length} chars, stop ${response.stop_reason})`, usage, true, latency());
       }
@@ -76,6 +76,51 @@ const SCHEMA_MAPS = new Set(['properties', '$defs', 'definitions']);
 /** Keywords whose value is data, not a schema. */
 const DATA_KEYWORDS = new Set(['enum', 'const', 'required']);
 
+type Json = Record<string, unknown>;
+const isObject = (v: unknown): v is Json => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+/**
+ * Q-279: the API takes at most 16 union-typed parameters (GmTurnProposal has 25). A nullable enum
+ * (`anyOf: [enum, null]`) is sent as the enum plus this value, and this value comes back as null.
+ */
+const NULL_VALUE = 'none';
+
+/** The values of a nullable string enum that can take NULL_VALUE; undefined for anything else (also an enum that already has that value). */
+function nullableEnum(schema: unknown): string[] | undefined {
+  if (!isObject(schema) || !Array.isArray(schema.anyOf) || schema.anyOf.length !== 2) return undefined;
+  const values = schema.anyOf.find((b): b is Json => isObject(b) && Array.isArray(b.enum))?.enum as unknown[] | undefined;
+  if (!values || !schema.anyOf.some((b) => isObject(b) && b.type === 'null')) return undefined;
+  return values.every((v): v is string => typeof v === 'string' && v !== NULL_VALUE) ? values : undefined;
+}
+
+/** Whether `value` is of the object branch `branch` of a union: its literal and enum properties agree. */
+function fits(branch: unknown, value: unknown): boolean {
+  if (!isObject(branch) || !isObject(branch.properties) || !isObject(value)) return false;
+  return Object.entries(branch.properties).every(([key, p]) => {
+    if (!isObject(p)) return true;
+    if ('const' in p) return value[key] === p.const;
+    return Array.isArray(p.enum) ? p.enum.includes(value[key]) : true;
+  });
+}
+
+/**
+ * The answer as the caller's schema means it: NULL_VALUE becomes null wherever `schema` (the one given to
+ * `forStructuredOutput`) has a nullable enum, at any depth. Everything else is returned as it came.
+ * shortcut: follows inline schemas only (what z.toJSONSchema writes here), upgrade when a schema uses $ref.
+ */
+export function fromStructuredOutput(schema: unknown, value: unknown): unknown {
+  if (nullableEnum(schema)) return value === NULL_VALUE ? null : value;
+  if (!isObject(schema)) return value;
+  if (Array.isArray(schema.anyOf)) {
+    const branch = schema.anyOf.find((b) => fits(b, value));
+    return branch ? fromStructuredOutput(branch, value) : value;
+  }
+  if (Array.isArray(value)) return value.map((v) => fromStructuredOutput(schema.items, v));
+  const properties = schema.properties;
+  if (!isObject(value) || !isObject(properties)) return value;
+  return Object.fromEntries(Object.entries(value).map(([key, v]) => [key, key in properties ? fromStructuredOutput(properties[key], v) : v]));
+}
+
 /**
  * The JSON schema as the API takes it: the same shape (types, required, enum, anyOf, additionalProperties)
  * without the size / range constraints. Those rules are not lost: the AI service parses every answer with the
@@ -84,6 +129,8 @@ const DATA_KEYWORDS = new Set(['enum', 'const', 'required']);
 export function forStructuredOutput(schema: unknown): unknown {
   if (Array.isArray(schema)) return schema.map(forStructuredOutput);
   if (schema === null || typeof schema !== 'object') return schema;
+  const values = nullableEnum(schema);
+  if (values) return { type: 'string', enum: [...values, NULL_VALUE] };
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(schema)) {
     if (UNSUPPORTED_KEYWORDS.has(key)) continue;
