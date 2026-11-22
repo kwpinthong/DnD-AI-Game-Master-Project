@@ -167,8 +167,8 @@ describe('GEN-059 finale', { timeout: 60_000 }, () => {
     await boot((req, n) => (isFinale(req) ? markedFinale(req) : turnWith('evil')(req, n)));
     const t = await startedTable(server!, false);
     const gameId = gameIdOf(t);
-    // A Good side (+20), B on the edge of neutral (+13), C Evil (-30); everyone at the inn (SAFE_ZONE).
-    const karma = new Map([[t.a.memberId, 20], [t.b.memberId, 13], [t.c.memberId, -30]]);
+    // A just on the Good side (+14), B on the edge of neutral (+13), C Evil (-30); everyone at the inn (SAFE_ZONE).
+    const karma = new Map([[t.a.memberId, 14], [t.b.memberId, 13], [t.c.memberId, -30]]);
     for (const [id, k] of karma) server!.db.prepare('update character set karma = ? where member_id = ?').run(k, id);
     const state = ensurePhaseState(server!.orm, gameId, CLOCK);
     savePhaseState(server!.orm, gameId, { ...state, players: Object.fromEntries(Object.entries(state.players).map(([id, p]) => [id, { ...p, karma: karma.get(id)! }])) }, CLOCK);
