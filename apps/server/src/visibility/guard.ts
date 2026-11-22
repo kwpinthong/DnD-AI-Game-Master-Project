@@ -1,9 +1,9 @@
 /**
- * Keys that must never appear in anything sent to a player (GEN-050): Karma, the Reputation number and
- * affinity numbers are GM-only. The C6 test runs every HTTP route through `forbiddenKeysIn`; the socket
- * layer (GEN-056) should run every event it sends to a player through it in its tests the same way.
+ * Keys that must never appear in anything sent to a player (GEN-050): Karma, the Reputation number,
+ * affinity numbers and (GEN-067) the relationship number between players are GM-only. The C6 test runs
+ * every HTTP route through `forbiddenKeysIn`, the C2 test every play-room socket frame.
  */
-export const PLAYER_FORBIDDEN_KEYS: ReadonlySet<string> = new Set(['karma', 'reputation', 'reputationScore', 'affinity']);
+export const PLAYER_FORBIDDEN_KEYS: ReadonlySet<string> = new Set(['karma', 'reputation', 'reputationScore', 'affinity', 'relationship']);
 
 /** Dotted paths (`people.0.karma`) of every forbidden key anywhere in `payload`; empty = safe for a player. */
 export function forbiddenKeysIn(payload: unknown): string[] {

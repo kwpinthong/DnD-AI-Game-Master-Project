@@ -43,12 +43,18 @@ export const roomEntry = sqliteTable(
     gameId: text('game_id')
       .notNull()
       .references(() => game.id, { onDelete: 'cascade' }),
-    kind: text('kind', { enum: ['feed', 'narration'] }).notNull(),
+    kind: text('kind', { enum: ['feed', 'narration', 'whisper'] }).notNull(),
     day: integer('day').notNull(),
     phase: text('phase', { enum: ['MORNING', 'AFTERNOON', 'NIGHT'] }).notNull(),
     /** Scenario location id; null = the whole town (feed) or no place (narration). */
     locationId: text('location_id'),
     text: text('text').notNull(),
+    /**
+     * Whisper only (GEN-067): sender and target member ids; null for feed / narration. No foreign key:
+     * SQLite cannot add a column with ON DELETE CASCADE, and the row goes with its game anyway.
+     */
+    fromMemberId: text('from_member_id'),
+    toMemberId: text('to_member_id'),
     createdAt: integer('created_at').notNull(),
   },
   (t) => [index('room_entry_game').on(t.gameId, t.id)],

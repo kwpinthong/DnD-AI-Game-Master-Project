@@ -57,6 +57,7 @@ const saved: CharacterView = {
   hp: { current: 100, max: 100 },
   stamina: { current: 30, max: 30 },
   socialTitle: 'คนแปลกหน้า',
+  conduct: 'เป็นกลางสุดๆ',
   editable: true,
 };
 
@@ -108,6 +109,8 @@ describe('Character creation step 1 (GEN-047)', () => {
     expect(within(card).getByText('HP 100/100')).toBeTruthy();
     expect(within(card).getByText('Stamina 30/30')).toBeTruthy();
     expect(within(card).getByText('ฉายา: คนแปลกหน้า')).toBeTruthy();
+    // GEN-067 (Q-091): your own Karma word only, never a number.
+    expect(within(card).getByText('ความประพฤติ: เป็นกลางสุดๆ')).toBeTruthy();
     expect(within(card).getByText('ลิน')).toBeTruthy();
     expect(card.textContent).not.toMatch(/karma|กรรม|ชื่อเสียง|reputation/i);
     const [call] = callsTo(fetchMock, 'POST', '/api/game/character');

@@ -76,7 +76,7 @@ function roomState(patch: Partial<RoomState> = {}, you: Partial<RoomState['you']
       { memberId: me.id, name: 'นก', role: 'player', online: true, submitted: false },
       { memberId: 'm-bee', name: 'บี', role: 'player', online: false, submitted: false },
     ],
-    you: { memberId: me.id, role: 'player', place: { id: 'market', name: 'ลานตลาด' }, lock: null, secretUsedToday: false, action: null, ...you },
+    you: { memberId: me.id, role: 'player', place: { id: 'market', name: 'ลานตลาด' }, lock: null, secretUsedToday: false, action: null, allies: [], ...you },
     ...patch,
   };
 }
@@ -251,6 +251,39 @@ describe('GEN-056 play room (web)', () => {
       expect.stringContaining('ฟีดสอง'),
     ]);
     expect(screen.getByRole('status', { name: 'การเชื่อมต่อห้อง' }).textContent).toBe('เชื่อมต่อแล้ว');
+  });
+
+  it('GEN-067 C4 / C6: Whisper goes to the chosen ally by ref; sent and received Whispers are listed apart', async () => {
+    const socket = await enterRoom();
+    socket.receive(roomState({}, { allies: [{ ref: 'ref-darin', name: 'ดาริน' }] }));
+
+    const form = screen.getByRole('form', { name: 'ส่ง Whisper' });
+    fireEvent.change(within(form).getByLabelText('ถึง'), { target: { value: 'ref-darin' } });
+    fireEvent.change(within(form).getByLabelText('ข้อความ Whisper'), { target: { value: 'คืนนี้เจอกันหลังวิหาร' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'ส่ง Whisper' }));
+    expect(socket.sent.at(-1)).toEqual({ type: 'whisper', to: 'ref-darin', text: 'คืนนี้เจอกันหลังวิหาร' });
+
+    socket.receive({ type: 'entry', entry: { ...entry(4, 'whisper', 'คืนนี้เจอกันหลังวิหาร'), whisper: { from: 'ลิน', to: 'ดาริน', mine: true } } });
+    socket.receive({ type: 'whisper_accepted' });
+    socket.receive({ type: 'entry', entry: { ...entry(5, 'whisper', 'ได้ เจอกัน'), whisper: { from: 'ดาริน', to: 'ลิน', mine: false } } });
+    expect((within(form).getByLabelText('ข้อความ Whisper') as HTMLTextAreaElement).value).toBe('');
+
+    const list = screen.getByRole('region', { name: 'Whisper' });
+    expect(within(list).getByText('ถึง ดาริน: คืนนี้เจอกันหลังวิหาร')).toBeTruthy();
+    expect(within(list).getByText('จาก ดาริน: ได้ เจอกัน')).toBeTruthy();
+    // Not mixed into the feed or the narration.
+    expect(within(screen.getByRole('region', { name: 'เหตุการณ์ที่นี่' })).queryByText(/เจอกัน/)).toBeNull();
+    expect(within(screen.getByRole('region', { name: 'สิ่งที่คุณรู้คนเดียว' })).queryByText(/เจอกัน/)).toBeNull();
+
+    socket.receive({ type: 'whisper_rejected', code: 'not_allowed', message: 'ส่ง Whisper ถึงคนนี้ไม่ได้ ต้องเป็นพันธมิตรที่สนิทกันพอก่อน' });
+    expect(within(form).getByRole('alert').textContent).toMatch(/พันธมิตร/);
+  });
+
+  it('GEN-067 C4: without an ally above +9 there is no Whisper form, only a note', async () => {
+    const socket = await enterRoom();
+    socket.receive(roomState());
+    expect(screen.queryByRole('form', { name: 'ส่ง Whisper' })).toBeNull();
+    expect(screen.getByText('ยังไม่มีพันธมิตรที่สนิทพอจะ Whisper ได้')).toBeTruthy();
   });
 
   it('C7: a Single game uses the same room', async () => {

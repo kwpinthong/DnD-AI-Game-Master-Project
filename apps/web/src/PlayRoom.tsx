@@ -67,6 +67,9 @@ export function PlayRoom({
   const [visibility, setVisibility] = useState<ActionVisibility>('public');
   const [problem, setProblem] = useState<string>();
   const [waitingReply, setWaitingReply] = useState(false);
+  const [whisperTo, setWhisperTo] = useState('');
+  const [whisperText, setWhisperText] = useState('');
+  const [whisperProblem, setWhisperProblem] = useState<string>();
   const conn = useRef<RoomConnection | undefined>(undefined);
 
   useEffect(() => {
@@ -80,6 +83,12 @@ export function PlayRoom({
           setProblem(undefined);
           setText('');
         } else setProblem(reply.message);
+      },
+      whisperReply: (reply) => {
+        if (reply.ok) {
+          setWhisperProblem(undefined);
+          setWhisperText('');
+        } else setWhisperProblem(reply.message);
       },
       fatal: (code, message) => {
         if (code === 'no_character') onNeedCharacter();
@@ -100,9 +109,20 @@ export function PlayRoom({
     setWaitingReply(true);
   }
 
+  function sendWhisper(event: FormEvent, fallbackTo: string) {
+    event.preventDefault();
+    const local = actionTextProblem(whisperText);
+    if (local) return setWhisperProblem(local.code === 'empty' ? 'พิมพ์ข้อความก่อนส่ง Whisper' : local.message);
+    if (!conn.current?.sendWhisper(whisperTo || fallbackTo, whisperText)) {
+      return setWhisperProblem('ยังเชื่อมต่อไม่ได้ ลองอีกครั้งเมื่อขึ้นว่าเชื่อมต่อแล้ว');
+    }
+  }
+
   const feed = entries.filter((e) => e.kind === 'feed');
   const narration = entries.filter((e) => e.kind === 'narration');
+  const whispers = entries.filter((e) => e.kind === 'whisper');
   const you = room?.you;
+  const allies = you?.allies ?? [];
   const locked = !you || you.lock !== null;
   const left = ACTION_MAX_LENGTH - [...text].length;
 
@@ -176,6 +196,45 @@ export function PlayRoom({
 
           <EntryList label="เหตุการณ์ที่นี่" entries={feed} empty="ยังไม่มีอะไรเกิดขึ้นที่นี่" />
           <EntryList label="สิ่งที่คุณรู้คนเดียว" entries={narration} empty="ยังไม่มี" />
+
+          <section aria-label="Whisper">
+            <h3>Whisper</h3>
+            {you.role === 'player' &&
+              (allies.length === 0 ? (
+                <p>ยังไม่มีพันธมิตรที่สนิทพอจะ Whisper ได้</p>
+              ) : (
+                <form aria-label="ส่ง Whisper" onSubmit={(e) => sendWhisper(e, allies[0]!.ref)}>
+                  <label>
+                    ถึง
+                    <select value={whisperTo || allies[0]!.ref} onChange={(e) => setWhisperTo(e.target.value)}>
+                      {allies.map((a) => (
+                        <option key={a.ref} value={a.ref}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    ข้อความ Whisper
+                    <textarea value={whisperText} onChange={(e) => setWhisperText(e.target.value)} rows={2} />
+                  </label>
+                  <button type="submit">ส่ง Whisper</button>
+                  {whisperProblem && <p role="alert">{whisperProblem}</p>}
+                </form>
+              ))}
+            {whispers.length === 0 ? (
+              <p>ยังไม่มี Whisper</p>
+            ) : (
+              <ol>
+                {whispers.map((e) => (
+                  <li key={e.seq}>
+                    <small>{entryHeading(e)}</small>
+                    <p>{e.whisper?.mine ? `ถึง ${e.whisper.to}: ${e.text}` : `จาก ${e.whisper?.from ?? ''}: ${e.text}`}</p>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
         </>
       )}
     </section>

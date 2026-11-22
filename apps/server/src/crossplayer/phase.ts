@@ -20,7 +20,7 @@ import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { character, characterPresence, member } from '../db/schema.ts';
 import { getGameScenario } from '../scenario/store.ts';
-import { moveCharacter, namesKnownBy, npcBondsOf, presencesInGame } from '../visibility/store.ts';
+import { moveCharacter, namesVisibleTo, npcBondsOf, presencesInGame } from '../visibility/store.ts';
 import { otherCharacterView, witnessesOf } from '../visibility/views.ts';
 import { chosenLootInGame, itemsInGame, transferItem } from './items.ts';
 
@@ -231,7 +231,7 @@ export function noticesFor(db: DbOrTx, gameId: string, viewerMemberId: string, e
       .map((r) => [r.character.memberId, r.character]),
   );
   const presences = new Map(presencesInGame(db, gameId).map((p) => [p.memberId, p]));
-  const known = namesKnownBy(db, viewerMemberId);
+  const known = namesVisibleTo(db, viewerMemberId);
   const items = itemsInGame(db, gameId);
   const person = (memberId: string): OtherCharacterView | null => {
     const c = characters.get(memberId);

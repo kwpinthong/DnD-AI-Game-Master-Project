@@ -5,7 +5,7 @@ import { applyPhaseActions, crossPlayerState, noticesFor, type PhaseEventRecord 
 import { heldItemsOf } from '../src/crossplayer/items.ts';
 import type { RunningServer } from '../src/server.ts';
 import { advanceTimeline } from '../src/timeline/store.ts';
-import { learnName, moveCharacter, presenceOf } from '../src/visibility/store.ts';
+import { moveCharacter, presenceOf, setPlayerBond } from '../src/visibility/store.ts';
 import { makeTempDir } from './helpers.ts';
 import { CLOCK, startedTable, startTestServer, type Seat, type Table } from './visibility-fixture.ts';
 
@@ -198,7 +198,8 @@ describe('cross-player actions on the server (GEN-060)', { timeout: 60_000 }, ()
     move(t.a, 'market');
     move(t.b, 'market');
     giveLoot(t.b, { id: 'item-purse', name: 'ถุงเงินหนังวัว' });
-    learnName(server!.orm, t.b.memberId, t.a.memberId, 'introduced', CLOCK);
+    // GEN-067: B sees A's real name because they are allies at relationship > +9.
+    setPlayerBond(server!.orm, t.b.memberId, t.a.memberId, { alliance: true, relationship: 10 }, CLOCK);
 
     const result = apply(t, [steal(t.a, t.b, 'secret'), idle(t.b)], [15, 5, 14, 16]);
 

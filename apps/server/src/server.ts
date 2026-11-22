@@ -96,9 +96,9 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
 
   const now = options.now ?? Date.now;
   registerAuthRoutes(app, db, now);
-  registerGameRoutes(app, db, now, { ai, ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}) });
+  registerGameRoutes(app, db, now, { ai, karmaTiers: assets.karmaTiers, ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}) });
   registerTimelineRoutes(app, db, now);
-  registerVisibilityRoutes(app, db, now);
+  registerVisibilityRoutes(app, db, now, assets.karmaTiers);
   registerRoomRoutes(app, db, now, { resolver: options.phaseResolver ?? placeholderResolver, webOrigins: config.webOrigins ?? [] });
 
   try {

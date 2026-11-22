@@ -1,8 +1,8 @@
-import { revealsNpcName, type NpcGrade } from '@isekai/rules';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { RELATIONSHIP_MAX, RELATIONSHIP_MIN, revealsNpcName, revealsPlayerName, type Degree, type NpcGrade } from '@isekai/rules';
+import { and, asc, eq, inArray, isNull, ne, or } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import type { DbOrTx } from '../db/client.ts';
-import { character, characterPresence, knownName, member, npcBond } from '../db/schema.ts';
+import { character, characterPresence, hiddenEvidence, knownName, member, npcBond, playerBond } from '../db/schema.ts';
 
 /**
  * The state the visibility layer reads (GEN-050): where each character is, whose real name each
@@ -57,7 +57,11 @@ export function locationSnapshot(db: DbOrTx, gameId: string): Map<string, string
   return new Map(presencesInGame(db, gameId).map((p) => [p.memberId, p.locationId]));
 }
 
-/** `viewer` learns `subject`'s real name (แนะนำตัว = introduced, สืบรู้ = discovered). Only `viewer` learns it. */
+/**
+ * Records that `viewer` learned `subject`'s real name (แนะนำตัว = introduced, สืบรู้ = discovered; GEN-050).
+ * Since GEN-067 this no longer shows the name to the player: only the Title Mask rule does
+ * (`namesVisibleTo`). The row stays as a record of the introduction.
+ */
 export function learnName(
   db: DbOrTx,
   viewerMemberId: string,
@@ -69,13 +73,120 @@ export function learnName(
   db.insert(knownName).values({ viewerMemberId, subjectMemberId, how, learnedAt: now }).onConflictDoNothing().run();
 }
 
-/** Member ids whose real name `viewer` knows, among `subjects`. */
-export function namesKnownBy(db: DbOrTx, viewerMemberId: string, subjects?: readonly string[]): Set<string> {
-  if (subjects && subjects.length === 0) return new Set();
-  const where = subjects
-    ? and(eq(knownName.viewerMemberId, viewerMemberId), inArray(knownName.subjectMemberId, [...subjects]))
-    : eq(knownName.viewerMemberId, viewerMemberId);
-  return new Set(db.select({ id: knownName.subjectMemberId }).from(knownName).where(where).all().map((r) => r.id));
+// --- Between players (GEN-067) ---
+
+export interface PlayerBond {
+  readonly alliance: boolean;
+  /** -100..+100 */
+  readonly relationship: number;
+}
+
+/**
+ * Sets the alliance flag and / or the relationship between two players of the same game (the AI GM loop,
+ * GEN-057, calls this; no player route does). The pair is unordered: A-B is B-A. Relationship is clamped
+ * to -100..+100. Throws when the two are the same member or not in the same game.
+ */
+export function setPlayerBond(
+  db: DbOrTx,
+  a: string,
+  b: string,
+  change: { readonly alliance?: boolean; readonly relationship?: number },
+  now: number,
+): PlayerBond {
+  if (a === b) throw new Error('a player has no bond with themself');
+  const games = db.select({ id: member.id, gameId: member.gameId }).from(member).where(inArray(member.id, [a, b])).all();
+  const gameId = games[0]?.gameId;
+  if (games.length !== 2 || games[1]!.gameId !== gameId || gameId === undefined) throw new Error('both players must be in the same game');
+
+  const [memberLow, memberHigh] = pairKey(a, b);
+  const existing = playerBondBetween(db, a, b);
+  const bond: PlayerBond = {
+    alliance: change.alliance ?? existing?.alliance ?? false,
+    relationship: clampRelationship(change.relationship ?? existing?.relationship ?? 0),
+  };
+  db.insert(playerBond)
+    .values({ gameId, memberLow, memberHigh, ...bond, updatedAt: now })
+    .onConflictDoUpdate({ target: [playerBond.memberLow, playerBond.memberHigh], set: { ...bond, updatedAt: now } })
+    .run();
+  return bond;
+}
+
+const pairKey = (a: string, b: string): [string, string] => (a < b ? [a, b] : [b, a]);
+const clampRelationship = (value: number) => Math.max(RELATIONSHIP_MIN, Math.min(RELATIONSHIP_MAX, Math.trunc(value)));
+
+export function playerBondBetween(db: DbOrTx, a: string, b: string): PlayerBond | undefined {
+  const [low, high] = pairKey(a, b);
+  return db
+    .select({ alliance: playerBond.alliance, relationship: playerBond.relationship })
+    .from(playerBond)
+    .where(and(eq(playerBond.memberLow, low), eq(playerBond.memberHigh, high)))
+    .get();
+}
+
+/** Every bond `memberId` has, keyed by the other member. */
+export function playerBondsOf(db: DbOrTx, memberId: string): Map<string, PlayerBond> {
+  const rows = db
+    .select()
+    .from(playerBond)
+    .where(or(eq(playerBond.memberLow, memberId), eq(playerBond.memberHigh, memberId)))
+    .all();
+  return new Map(
+    rows.map((r) => [r.memberLow === memberId ? r.memberHigh : r.memberLow, { alliance: r.alliance, relationship: r.relationship }]),
+  );
+}
+
+/** Members whose real name `viewer` sees: allies with relationship > +9 (`revealsPlayerName`). */
+export function namesVisibleTo(db: DbOrTx, viewerMemberId: string): Set<string> {
+  return new Set([...playerBondsOf(db, viewerMemberId)].filter(([, bond]) => revealsPlayerName(bond)).map(([id]) => id));
+}
+
+// --- Hidden Evidence (GEN-067) ---
+
+export type HiddenEvidenceRow = typeof hiddenEvidence.$inferSelect;
+
+/** A Secret action at `locationId` on game day `day` leaves one tag there. */
+export function leaveHiddenEvidence(
+  db: DbOrTx,
+  evidence: { readonly gameId: string; readonly locationId: string; readonly day: number; readonly actorMemberId: string },
+  now: number,
+): void {
+  db.insert(hiddenEvidence).values({ ...evidence, createdAt: now }).run();
+}
+
+/** What an investigator learns of a tag: that it is there, not who left it (the GM narrates the rest). */
+export interface FoundEvidence {
+  readonly id: number;
+  readonly locationId: string;
+  readonly day: number;
+}
+
+/**
+ * INVESTIGATE at the investigator's place on game day `day`: with a success / crit of the resolution engine
+ * (GEN-051, `resolveAction`'s `degree`) they find every tag left there that day by someone else; otherwise
+ * nothing. A tag from another day is gone.
+ */
+export function discoverHiddenEvidence(db: DbOrTx, gameId: string, investigatorMemberId: string, day: number, degree: Degree): FoundEvidence[] {
+  if (degree !== 'success' && degree !== 'crit') return [];
+  const here = presenceOf(db, investigatorMemberId);
+  if (!here || here.gameId !== gameId) return [];
+  return db
+    .select({ id: hiddenEvidence.id, locationId: hiddenEvidence.locationId, day: hiddenEvidence.day })
+    .from(hiddenEvidence)
+    .where(
+      and(
+        eq(hiddenEvidence.gameId, gameId),
+        eq(hiddenEvidence.locationId, here.locationId),
+        eq(hiddenEvidence.day, day),
+        ne(hiddenEvidence.actorMemberId, investigatorMemberId),
+      ),
+    )
+    .orderBy(asc(hiddenEvidence.id))
+    .all();
+}
+
+/** Every tag of the game, oldest first (the Human GM's view). */
+export function hiddenEvidenceInGame(db: DbOrTx, gameId: string): HiddenEvidenceRow[] {
+  return db.select().from(hiddenEvidence).where(eq(hiddenEvidence.gameId, gameId)).orderBy(asc(hiddenEvidence.id)).all();
 }
 
 export type NpcBondRow = typeof npcBond.$inferSelect;

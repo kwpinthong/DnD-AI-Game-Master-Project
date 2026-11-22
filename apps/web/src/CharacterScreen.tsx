@@ -138,6 +138,7 @@ export function CharacterScreen({
             Stamina {character.stamina.current}/{character.stamina.max}
           </li>
           <li>ฉายา: {character.socialTitle}</li>
+          <li>ความประพฤติ: {character.conduct}</li>
         </ul>
         {character.editable ? (
           <button type="button" onClick={() => startEditing(character)}>
