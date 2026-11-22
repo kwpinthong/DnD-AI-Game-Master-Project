@@ -10,6 +10,10 @@ export const GAME_NAME_MAX_LENGTH = 60;
 export const GameMode = z.enum(['online', 'single']);
 export type GameMode = z.infer<typeof GameMode>;
 
+/** GEN-116: how many NPC lines a turn may carry. `normal` is the GEN-110 limits, `high` doubles them; a game with none is `normal`. */
+export const NpcDialogueLevel = z.enum(['low', 'normal', 'high']);
+export type NpcDialogueLevel = z.infer<typeof NpcDialogueLevel>;
+
 /** `gm` = the Human GM (the creator when the game has one); everyone else is a `player`. */
 export const MemberRole = z.enum(['player', 'gm']);
 export type MemberRole = z.infer<typeof MemberRole>;
@@ -40,6 +44,8 @@ export const CreateGameRequest = z
     gameName,
     mode: z.enum(GameMode.options, { error: 'เลือกโหมด Online หรือเล่นคนเดียว' }),
     humanGm: z.boolean({ error: 'เลือกว่ามี GM คนหรือไม่' }),
+    /** GEN-116: absent = normal. */
+    npcDialogue: NpcDialogueLevel.optional(),
     name: JoinRequest.shape.name,
     pin: JoinRequest.shape.pin,
   })
@@ -66,6 +72,7 @@ export function createGameFieldErrors(input: unknown): Partial<Record<CreateGame
 export const UpdateGameRequest = z.object({
   gameName: gameName.optional(),
   mode: GameMode.optional(),
+  npcDialogue: NpcDialogueLevel.optional(),
 });
 export type UpdateGameRequest = z.infer<typeof UpdateGameRequest>;
 
@@ -85,6 +92,8 @@ export const GameView = z.object({
   name: z.string(),
   mode: GameMode,
   humanGm: z.boolean(),
+  /** GEN-116: the NPC dialogue level of the game (owner edits it in the lobby). The server always sends it; optional so older web fixtures still type. */
+  npcDialogue: NpcDialogueLevel.optional(),
   /** Normalised (no dash); show it with formatInviteCode. */
   inviteCode: z.string(),
   status: z.enum(['lobby', 'started']),

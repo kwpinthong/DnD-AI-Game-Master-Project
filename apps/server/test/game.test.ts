@@ -450,6 +450,27 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     expect(error(tooMany.body).code).toBe('not_allowed');
   });
 
+  it('GEN-116 C5/C6: the NPC dialogue level is normal by default, set at creation, edited by the owner in the lobby; a non-owner gets 403; a bad value 400', async () => {
+    await start();
+    const created = await createGame();
+    expect(created.game.npcDialogue).toBe('normal');
+    const low = await createGame({ gameName: 'เกมบทพูดน้อย', npcDialogue: 'low' });
+    expect(low.game.npcDialogue).toBe('low');
+
+    const bel = await joinOk(created.game.inviteCode, 'เบล');
+    const denied = await call('PATCH', '/api/game', { token: bel.token, body: { npcDialogue: 'high' } });
+    expect(denied.status).toBe(403);
+    expect(error(denied.body).code).toBe('forbidden');
+    expect((await getGame(created.token)).npcDialogue).toBe('normal');
+
+    const set = await call('PATCH', '/api/game', { token: created.token, body: { npcDialogue: 'high' } });
+    expect(set.status).toBe(200);
+    expect(GameView.parse(set.body).npcDialogue).toBe('high');
+    expect((await getGame(bel.token)).npcDialogue).toBe('high');
+    expect((await call('PATCH', '/api/game', { token: created.token, body: { npcDialogue: 'loud' } })).status).toBe(400);
+    expect((await call('POST', '/api/games', { body: { ...validCreate, npcDialogue: 'loud' } })).status).toBe(400);
+  });
+
   it('the owner cannot kick themselves', async () => {
     await start();
     const created = await createGame();

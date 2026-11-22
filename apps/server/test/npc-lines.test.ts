@@ -83,6 +83,26 @@ describe('GEN-110 NPC lines: the server trims what the AI sends', () => {
     expect(capTotal(many).map((l) => l.text)).toEqual(Array.from({ length: NPC_LINE_LIMITS.total }, (_, i) => String(i)));
   });
 
+  it('GEN-116 C5: the level changes the most lines accepted: low < normal (and a game with none) < high', () => {
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    const raw: RawLine[] = [
+      ...Array.from({ length: 8 }, (_, i) => line('a', 'dialogue', `พูดครั้งที่ ${i + 1}`)),
+      ...ids.slice(1).map((id) => line(id, 'reaction', `${id} มองดู`)),
+    ];
+    const count = (level?: 'low' | 'normal' | 'high') => {
+      const out = cleanNpcLines(raw, { present: present(...ids), audience: 'public', ...NONE, ...(level ? { level } : {}) });
+      return { dialogue: out.filter((l) => l.kind === 'dialogue').length, reactions: out.filter((l) => l.kind === 'reaction').length };
+    };
+    expect(count('low')).toEqual({ dialogue: 2, reactions: 2 });
+    expect(count('normal')).toEqual({ dialogue: 3, reactions: 3 });
+    expect(count()).toEqual(count('normal'));
+    expect(count('high')).toEqual({ dialogue: 6, reactions: 6 });
+    const many = Array.from({ length: 40 }, (_, i) => i);
+    expect([capTotal(many, 'low'), capTotal(many), capTotal(many, 'high')].map((l) => l.length)).toEqual([6, 12, 24]);
+    const priv = (level?: 'low' | 'high') => cleanNpcLines([1, 2, 3, 4, 5].map((i) => line('a', 'dialogue', String(i))), { present: present('a'), audience: 'private', ...NONE, ...(level ? { level } : {}) }).length;
+    expect([priv('low'), priv(), priv('high')]).toEqual([1, 2, 4]);
+  });
+
   it('C8: a narration without npcLines (the AI sent none, or an old stored one) parses with none', () => {
     const parsed = GmNarration.parse({ segments: [{ actionId: 'act-1', text: 'เล่า' }] });
     expect(parsed.npcLines).toEqual([]);
