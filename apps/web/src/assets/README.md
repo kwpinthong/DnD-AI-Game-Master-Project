@@ -66,7 +66,7 @@ import rainIcon from './assets/icons/weather-rain.svg';
 <img src={rainIcon} alt="" aria-hidden="true" /> {/* มีข้อความ "ฝนตก" ข้าง ๆ อยู่แล้ว */}
 ```
 
-ไอคอนที่ต้องเปลี่ยนสีตาม theme ให้ใส่เป็น component (inline SVG) หรือใช้ CSS `mask-image` กับ `background-color: var(--accent)` เพราะ `<img>` เปลี่ยนสี `currentColor` ไม่ได้ ส่วนนี้ GEN-087 (theme + component พื้นฐาน) จะทำตัวช่วยไว้ให้
+ไอคอนที่ต้องเปลี่ยนสีตาม theme ให้ใส่เป็น component (inline SVG) หรือใช้ CSS `mask-image` กับ `background-color: var(--accent)` เพราะ `<img>` เปลี่ยนสี `currentColor` ไม่ได้ ใช้ตัวช่วย `MaskIcon` จาก `src/ui` (GEN-087): `<MaskIcon src={rainIcon} />` ระบายด้วยสีตัวหนังสือปัจจุบัน (`currentColor`) และเป็น `aria-hidden` เสมอ ต้องมีคำกำกับข้าง ๆ
 
 ## ไฟล์ชื่อคงที่ (`apps/web/public/`)
 
