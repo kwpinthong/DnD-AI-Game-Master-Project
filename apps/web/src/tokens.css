@@ -20,6 +20,7 @@
   --private-bg: #211C36;  --hit-bg: #3D1F22;
   --card-bg: #EDE6D6;  --card-text: #142A37;
   --bubble-own: #3A2E14;  --bubble-npc: #1D2C45;  --text-soft: #C8D4E1;  --star: #E8EEF5; /* GEN-122 หน้า Play แบบแชต: กล่องของเรา / กล่อง NPC / ตัวเอียงบรรยาย / จุดดาวบนพื้น (ใช้กับ color-mix ให้จาง) */
+  --page: #0B1422;  --panel-deep: #13203A;  --line-input: #3A4E68; /* GEN-132 ของ mockup ที่ไม่เคยมี token: พื้นหลังหลังดาว / แผงข้อมูลขวา / ขอบช่องพิมพ์ */
   --font-display: "Trirong", serif;
   --font-body: "Anuphan", sans-serif;
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px; --space-7: 48px;
