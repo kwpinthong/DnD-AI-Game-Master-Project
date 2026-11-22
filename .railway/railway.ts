@@ -59,6 +59,8 @@ export default defineRailway(() => {
       WEB_ORIGIN: preserve(),
       // scrypt hash of the create code (Q-021) from `create-code:hash`; set in the dashboard, never in the repo.
       CREATE_CODE_HASH: preserve(),
+      // scrypt hash of the server owner's admin code (GEN-061) from `admin-code:hash`; opens the AI usage dashboard.
+      ADMIN_CODE_HASH: preserve(),
       // Secret for the AI GM (GEN-038); without it games cannot be created or started (Q-075).
       ANTHROPIC_API_KEY: preserve(),
     },

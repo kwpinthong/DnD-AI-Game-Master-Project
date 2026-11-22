@@ -49,6 +49,11 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/game/companions': { method: 'GET', path: '/api/game/companions' },
     'POST /api/game/companions': { method: 'POST', path: '/api/game/companions', body: { ref: merchantRef ?? 'none' } },
     'DELETE /api/game/companions/:ref': { method: 'DELETE', path: '/api/game/companions/not-a-companion' },
+    // GEN-061: the server owner's AI usage dashboard; a player's session is 403 (checked below).
+    'POST /api/admin/session': { method: 'POST', path: '/api/admin/session', body: { code: 'เดาเอา' } },
+    'GET /api/admin/ai-usage': { method: 'GET', path: '/api/admin/ai-usage' },
+    'GET /api/admin/ai-usage/:gameId': { method: 'GET', path: '/api/admin/ai-usage/any-game' },
+    'POST /api/admin/logout': { method: 'POST', path: '/api/admin/logout' },
     'POST /api/join': { method: 'POST', path: '/api/join', body: { inviteCode: t.inviteCode, name: playerNameOf(t, me), pin: '1111' } },
     'POST /api/games': {
       method: 'POST',
@@ -59,6 +64,9 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'POST /api/logout': { method: 'POST', path: '/api/logout' },
   };
 }
+
+/** GEN-061 (Q-058): only the server owner's admin token opens these; every player gets 403. */
+const ADMIN_DATA_ROUTES = ['GET /api/admin/ai-usage', 'GET /api/admin/ai-usage/:gameId'];
 
 /** The join name the fixture gave each seat (A is "นก" in both table kinds). */
 function playerNameOf(t: Table, me: Seat): string {
@@ -139,6 +147,7 @@ describe('C6: no player-facing payload carries karma (GEN-050)', { timeout: 120_
       for (const [route, request] of Object.entries(requests)) {
         const res = await t.call(request.method, request.path, { token: seat.token, ...(request.body !== undefined ? { body: request.body } : {}) });
         for (const path of forbiddenKeysIn(res.body)) leaks.push(`${route} (${res.status}) as ${seat.name}: ${path}`);
+        if (ADMIN_DATA_ROUTES.includes(route) && res.status !== 403) leaks.push(`${route} answered ${res.status} (not 403) to ${seat.name}`);
         if (JSON.stringify(res.body ?? null).includes('"karma"')) leaks.push(`${route} raw "karma" as ${seat.name}`);
       }
     }

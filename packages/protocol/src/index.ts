@@ -21,3 +21,4 @@ export * from './visibility.ts';
 
 export * from './room.ts';
 export * from './companion.ts';
+export * from './admin.ts';
