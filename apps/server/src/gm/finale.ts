@@ -59,7 +59,7 @@ export function buildFinaleContext(db: DbOrTx, assets: GameAssets, gameId: strin
   const scenario = getGameScenario(db, gameId);
   const titles = new Map((scenario?.timeline ?? []).map((e) => [e.id, e.title]));
   const placeName = new Map(world.places.map((p) => [p.id, p.name]));
-  const refuges = strategyRefuges(db, gameId);
+  const refuges = strategyRefuges(db, assets, gameId);
   const players = Object.entries(ending.outcomes).flatMap(([memberId, outcome]) => {
     const p = world.players.get(memberId);
     if (!p) return [];

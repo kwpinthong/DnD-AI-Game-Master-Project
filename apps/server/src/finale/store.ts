@@ -7,8 +7,10 @@ import type { DbOrTx } from '../db/client.ts';
 import { character, gameEnding, gameEventState } from '../db/schema.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { isSafeZone } from '../skills/progress.ts';
+import { strategyOutcomes, strategyParticipants } from '../strategy/store.ts';
+import { getEventOutcomes } from '../timeline/store.ts';
 import { locationSnapshot } from '../visibility/store.ts';
-import { decideEnding, goodSideMin, type EndingPlayerFacts } from './ending.ts';
+import { decideEnding, evilSideMax, goodSideMin, type EndingPlayerFacts } from './ending.ts';
 
 /**
  * The game's ending (GEN-059): the path the AI GM declares during the finale event, the facts the ending
@@ -72,21 +74,57 @@ export interface StrategyRefuges {
 }
 
 /**
- * SEAM (Q-203): nothing records yet which Day-10 strategy succeeded or who took part, so no plan gives a
- * buff or a refuge. The follow-up task (AI GM records strategyId + participants) fills this in; the ending
- * rule already counts what it returns (`protectedBy` / `inSafeZone`).
+ * What a plan that succeeded gives (Day10_Strategies Success_Effect / Ending_Link, Q-203): an S-level buff to its
+ * participants (`side`: only those on that side of the karma tiers at the end), and a refuge place (by its
+ * scenario place name; `needsDay5Good`: only when day 5 went Good).
  */
-export function strategyRefuges(db: DbOrTx, gameId: string): StrategyRefuges {
-  void db;
-  void gameId;
-  return { buffs: new Map(), places: new Set() };
+const PLAN_REWARDS: Readonly<Record<string, { buff?: string; side?: 'evil'; refuge?: string; needsDay5Good?: boolean }>> = {
+  'D10-S1': { buff: 'แสงรุ่งอรุณคืนเมือง', refuge: 'โบสถ์' },
+  'D10-S2': { refuge: 'สถานพยาบาลกลาง', needsDay5Good: true },
+  'D10-S3': { buff: 'พันธสัญญาจันทราโลหิต', side: 'evil' },
+};
+
+/**
+ * Whether day 5 went Good: the AI GM set the day 5 event's outcome (players stepped in) and the outcome names
+ * the Good (or Good/Neutral) side of its interventionEffects first. The default (drift) and Evil are not Good.
+ */
+export function day5WentGood(db: DbOrTx, gameId: string): boolean {
+  const day5 = getEventOutcomes(db, gameId).find((e) => e.day === 5);
+  return day5 !== undefined && day5.intervened && /^\s*(good|neutral)\b/i.test(day5.outcome);
+}
+
+/**
+ * The buffs and refuges of the Day-10 plans that succeeded (GEN-093): read from the plan outcomes written when
+ * the night of day 10 ended and from who took part. A failed plan (or the drift) gives nothing.
+ */
+export function strategyRefuges(db: DbOrTx, assets: GameAssets, gameId: string): StrategyRefuges {
+  const succeeded = new Set(strategyOutcomes(db, gameId).filter((o) => o.outcome === 'success').map((o) => o.strategyId));
+  const buffs = new Map<string, string[]>();
+  const places = new Set<string>();
+  if (succeeded.size === 0) return { buffs, places };
+  const evilFrom = evilSideMax(assets.karmaTiers);
+  const karmaOf = (memberId: string) => db.select({ karma: character.karma }).from(character).where(eq(character.memberId, memberId)).get()?.karma ?? 0;
+  for (const p of strategyParticipants(db, gameId)) {
+    const buff = succeeded.has(p.strategyId) ? PLAN_REWARDS[p.strategyId]?.buff : undefined;
+    if (buff === undefined) continue;
+    if (PLAN_REWARDS[p.strategyId]!.side === 'evil' && karmaOf(p.memberId) > evilFrom) continue;
+    const own = buffs.get(p.memberId) ?? [];
+    if (!own.includes(buff)) buffs.set(p.memberId, [...own, buff]);
+  }
+  const locations = getGameScenario(db, gameId)?.locations ?? [];
+  for (const id of succeeded) {
+    const reward = PLAN_REWARDS[id];
+    if (reward?.refuge === undefined || (reward.needsDay5Good && !day5WentGood(db, gameId))) continue;
+    for (const l of locations) if (l.name === reward.refuge) places.add(l.id);
+  }
+  return { buffs, places };
 }
 
 /** What the ending rule reads for each player of the engine state. */
 export function endingFacts(db: DbOrTx, assets: GameAssets, gameId: string, state: PhaseState): EndingPlayerFacts[] {
   const places = locationSnapshot(db, gameId);
   const skills = skillsInGame(db, gameId);
-  const refuges = strategyRefuges(db, gameId);
+  const refuges = strategyRefuges(db, assets, gameId);
   const goodFrom = goodSideMin(assets.karmaTiers);
   return state.order.map((memberId) => {
     const place = places.get(memberId);

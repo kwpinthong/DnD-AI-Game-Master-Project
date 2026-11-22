@@ -22,6 +22,16 @@ export function goodSideMin(tiers: readonly KarmaTier[]): number {
   return tiers.find((t) => t.min > 1 && t.title !== neutral)?.min ?? KARMA_MAX + 1;
 }
 
+/**
+ * The highest karma of the Evil side (GEN-093, mirror of `goodSideMin`): the last band below -1 whose word is
+ * not the word at -1. With the sheet's bands that is -14. No such band = nobody is Evil.
+ */
+export function evilSideMax(tiers: readonly KarmaTier[]): number {
+  const neutral = tiers.find((t) => t.min <= -1 && t.max >= -1)?.title;
+  const below = tiers.filter((t) => t.max < -1 && t.title !== neutral).map((t) => t.max);
+  return below.length > 0 ? Math.max(...below) : -KARMA_MAX - 1;
+}
+
 export interface EndingInput {
   reason: 'finale' | 'game_over';
   /** The path the AI GM said the players completed on day 12; null = none. */

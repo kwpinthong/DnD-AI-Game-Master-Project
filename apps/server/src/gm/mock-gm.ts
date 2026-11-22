@@ -26,6 +26,8 @@ const NO_EFFECTS = { repDelta: 0, karmaDelta: 0, affinity: [], damage: null, sel
 /** GEN-055 dev markers: `[mock:verb=PRAY]` sets the verb tag; `[mock:investigate=MIRACLE]` an INVESTIGATE on that topic (no roll). */
 const VERB_MARKER = /\[mock:verb=([A-Z0-9_]+)\]/;
 const INVESTIGATE_MARKER = /\[mock:investigate=([A-Z0-9_]+)\]/;
+/** GEN-093 dev marker: `[mock:strategy=D10-S1:leader]` names the action's Day-10 plan and role (the server checks it). */
+const STRATEGY_MARKER = /\[mock:strategy=([A-Z0-9-]+):(leader|support)\]/;
 
 /** A plain general action at DC 11 for one action of the context. */
 export function mockAction(ctx: TurnContext, actionId: string): GmAction {
@@ -33,6 +35,7 @@ export function mockAction(ctx: TurnContext, actionId: string): GmAction {
   const known = (tag: string | undefined) => (tag !== undefined && ctx.tagVocabulary.includes(tag) ? tag : undefined);
   const topic = known(INVESTIGATE_MARKER.exec(action.text)?.[1]);
   const verb = topic !== undefined ? known('INVESTIGATE') : (known(VERB_MARKER.exec(action.text)?.[1]) ?? ctx.tagVocabulary[0]);
+  const strategy = STRATEGY_MARKER.exec(action.text) ?? undefined;
   const marked = {
     ...(topic !== undefined ? { investigate: true, check: { type: 'none' as const }, targetTags: [topic] } : {}),
   };
@@ -57,6 +60,7 @@ export function mockAction(ctx: TurnContext, actionId: string): GmAction {
     investigate: marked.investigate ?? false,
     skillFlags: [],
     grants: [],
+    strategy: strategy === undefined ? null : { id: strategy[1]!, role: strategy[2] as 'leader' | 'support' },
     intentSummary: `{{p:${action.actor}}} ${action.text}`.slice(0, 200),
     reason: 'Mock GM',
   };

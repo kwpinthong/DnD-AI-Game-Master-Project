@@ -22,6 +22,11 @@ export interface TurnCheckInput {
   activeConstraintIds: ReadonlySet<number>;
   /** GEN-059: the day 12 finale event is active (only then may the proposal name an `endingPath`). */
   finaleActive: boolean;
+  /**
+   * GEN-093: the Day10_Strategies plan ids of the game data (`known`, D10-DRIFT left out) and the ones an active
+   * event names now (`active`, the night of day 10); an action's `strategy` must be in both.
+   */
+  strategies: { known: ReadonlySet<string>; active: ReadonlySet<string> };
 }
 
 export type TurnCheck = { ok: true; actions: PhaseAction[] } | { ok: false; errors: GmError[] };
@@ -53,6 +58,13 @@ export function checkTurnProposal(input: TurnCheckInput, proposal: GmTurnProposa
     if (!turnAction) return;
     const path = `actions[${i}]`;
     if (memberOfRef(a.actor) !== turnAction.memberId) fail('actor_mismatch', `${path}.actor`, `the actor of ${a.actionId} is ${world.players.get(turnAction.memberId)?.ref}`);
+    // A proposal stored before GEN-093 has no strategy.
+    const plan = a.strategy ?? null;
+    if (plan !== null && !input.strategies.known.has(plan.id)) {
+      fail('unknown_strategy', `${path}.strategy.id`, `${plan.id} is not a plan of Day10_Strategies; use an id of the active event's strategies or null`);
+    } else if (plan !== null && !input.strategies.active.has(plan.id)) {
+      fail('strategy_not_active', `${path}.strategy`, `${plan.id} is only for the night of day 10 while its event is active; answer null`);
+    }
     if (a.moveTo !== null && !places.has(a.moveTo)) fail('unknown_location', `${path}.moveTo`, `the scenario has no place ${a.moveTo}`);
     let targetMember: string | undefined;
     if (a.targetPlayer !== null) {

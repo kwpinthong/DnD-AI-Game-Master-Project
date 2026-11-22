@@ -211,7 +211,8 @@ export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnConte
     ];
   });
 
-  const events = buildEventContext(db, world.gameId, at.day, at.phase);
+  // GEN-093: with the assets, an active strategy event lists its Day10_Strategies plans.
+  const events = buildEventContext(db, world.gameId, at.day, at.phase, input.assets);
   return {
     kind: 'gm_turn',
     turn: at,
@@ -340,6 +341,9 @@ const RULES_TEXT = [
     [...SKILL_FLAGS].join(', ') +
     ' / grants = มอบสกิลที่เงื่อนไขครบแล้ว หรือสกิล / ไอเทมที่อยู่ในรางวัลของ NPC (npcId) ที่เปิดให้ผู้เล่นคนนี้แล้ว ไอเทมต้องมี npcId เสมอ นอกนั้นเว้นว่าง',
   '9. endingPath: เฉพาะตอนที่เหตุการณ์ kind finale (วันพิพากษา วันที่ 12) active เท่านั้น ถ้าผู้เล่นทำเส้นทางสำเร็จในเทิร์นนี้ ให้ตอบ good (ม่านปาฏิหาริย์เบี่ยงอุกกาบาต) / evil (ดูดซับพลังอุกกาบาต) / neutral (ร่วมกับ NPC ของเหตุการณ์ลบล้างผลเป็นศูนย์) ตาม interventionEffects ของเหตุการณ์นั้น โดยดูจากผลของวันที่ 1, 5, 7, 10 ใน past ด้วย นอกนั้นตอบ null',
+  // GEN-093 (Q-203)
+  '10. strategy ของ action: เฉพาะตอนที่เหตุการณ์ที่มี strategies (คืนวันที่ 10) active เท่านั้น ถ้า action เป็นส่วนหนึ่งของแผน ให้ตอบ id ของแผนจาก strategies ของเหตุการณ์ (ห้ามใช้ D10-DRIFT) และ role = leader (ผู้นำที่ทอยตัดสินแผน) หรือ support (ผู้ร่วมสนับสนุน) ผลสำเร็จมาจากเต๋าของ action นั้น นอกนั้นตอบ null',
+  '11. eventOutcomes.outcome: ขึ้นต้นด้วยฝ่ายตาม interventionEffects ของเหตุการณ์ที่ผู้เล่นทำ เช่น "Good: ..." / "Evil: ..." / "Neutral: ..."',
 ].join('\n');
 
 const FINALE_TEXT = [

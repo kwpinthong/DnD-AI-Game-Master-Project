@@ -21,7 +21,7 @@ export interface EarnedSkillChange {
   readonly grants: readonly Grant[];
 }
 
-const SUCCEEDED = new Set(['success', 'crit']);
+export const SUCCEEDED: ReadonlySet<string> = new Set(['success', 'crit']);
 
 /** What each action earns: its flags and grants when it succeeded (success / crit), nothing otherwise. */
 export function earnedSkillChanges(proposal: GmTurnProposal, resultOf: (actionId: string) => string | undefined): EarnedSkillChange[] {

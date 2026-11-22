@@ -12,6 +12,7 @@ import { and, eq } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { gameEventState, gameTimeline } from '../db/schema.ts';
 import { getGameScenario } from '../scenario/store.ts';
+import { settleStrategies } from '../strategy/store.ts';
 import { locationSnapshot } from '../visibility/store.ts';
 import { witnessesOf } from '../visibility/views.ts';
 
@@ -174,6 +175,8 @@ export function advanceTimeline(db: DbOrTx, gameId: string, to: PhasePoint | 'en
         .values({ gameId, eventId: event.id, ...values })
         .onConflictDoUpdate({ target: [gameEventState.gameId, gameEventState.eventId], set: values })
         .run();
+      // GEN-093: the night of day 10 is over, so its plans end (or the drift stands).
+      if (event.strategyIds.length > 0) settleStrategies(db, gameId, now);
       resolved.push(event.id);
     } else if (first <= target && target <= last && status === 'pending') {
       const values = { status: 'active' as const, activatedAt: now, witnesses: witnessesAtStart(event, locations), updatedAt: now };

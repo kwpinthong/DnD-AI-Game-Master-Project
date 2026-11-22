@@ -28,8 +28,9 @@ import { buildEventContext } from '../timeline/context.ts';
 import { setEventOutcome } from '../timeline/store.ts';
 import { discoverHiddenEvidence, locationSnapshot, npcBondsOf } from '../visibility/store.ts';
 import { recordTurnProgress } from '../skills/progress.ts';
-import { applySkillChanges, checkSkillChanges, earnedSkillChanges } from './skill-grants.ts';
+import { applySkillChanges, checkSkillChanges, earnedSkillChanges, SUCCEEDED } from './skill-grants.ts';
 import { setEndingPath } from '../finale/store.ts';
+import { DRIFT_STRATEGY_ID, recordStrategyParticipation } from '../strategy/store.ts';
 import { SCENARIO_DAYS } from '@isekai/protocol';
 import { buildFinaleContext, checkFinale, finaleCheckInput, finaleEntries, templateFinale } from './finale.ts';
 import { checkNarration, checkTurnProposal, type GmError } from './check.ts';
@@ -240,8 +241,13 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     let actions: PhaseAction[];
     let resolved: { state: CrossPlayerState; log: PhaseActionsLog };
     const constraints = activeConstraints(db, gameId);
-    const events = buildEventContext(db, gameId, at.day, at.phase);
+    const events = buildEventContext(db, gameId, at.day, at.phase, assets);
+    const strategies = {
+      known: new Set((assets.day10Strategies ?? []).map((s) => s.id).filter((id) => id !== DRIFT_STRATEGY_ID)),
+      active: new Set(events.active.flatMap((e) => e.strategies.map((s) => s.id)).filter((id) => id !== DRIFT_STRATEGY_ID)),
+    };
     const checkInput = (o: TurnAction[]) => ({
+      strategies,
       world,
       state,
       tags,
@@ -397,6 +403,13 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         for (const e of proposal.eventOutcomes) setEventOutcome(tx, gameId, e.eventId, e.outcome, now());
         // GEN-059: the ending path the players completed during the finale (a proposal stored before it has none).
         if (proposal.endingPath) setEndingPath(tx, gameId, proposal.endingPath, now());
+        // GEN-093: each action's Day-10 plan and role, with whether it succeeded (a proposal stored before it has none).
+        for (const a of proposal.actions) {
+          const memberId = a.strategy ? memberOfRef(a.actor) : undefined;
+          if (!a.strategy || memberId === undefined) continue;
+          const success = SUCCEEDED.has(results.get(a.actionId) ?? '');
+          recordStrategyParticipation(tx, gameId, { memberId, strategyId: a.strategy.id, role: a.strategy.role, success, day: at.day }, now());
+        }
         markApplied(tx, gameId, at, now());
       },
       after: () => summarizeFinishedDays(gameId, at),
