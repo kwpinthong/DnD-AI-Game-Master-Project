@@ -2,7 +2,9 @@
    Q-188 ปรับแล้ว: --bg/--panel/--line เขียวขึ้นนิด (navy อม teal), --highlight อำพัน → ทองอ่อน,
    เพิ่ม --ornament = เส้นทองบาง 1px ตกแต่งมุมแผง (ไม่ใช้ภาพพื้นหลัง)
    contrast-check (vault: wiki/brainstorm/Isekai Chronicles - UI Tone v2/) ผ่าน 33/33 คู่ ต่ำสุด 6.06:1 (--danger บน --hit-bg)
-   เดิม: --bg #0F1A2B, --panel #16243A, --line #2B3F5C, --highlight #F0B44C */
+   Nok 2026-11-23: ทุกหน้าใช้พาเลตต์ของ Claude design (docs/design/ui-v3-chat) = ค่า Amber Tide เดิมก่อน Q-188:
+   --bg #0F1A2B, --panel #16243A, --line #2B3F5A, --muted #9FB0C3, --highlight #F0B44C, --bubble-npc #1D2C45
+   (ค่า v2 ที่ปรับตาม Q-188: --bg #0D1C27, --panel #142A37, --line #28465A, --muted #A3B1C4, --highlight #E8C878) */
 @font-face { font-family: "Anuphan"; src: url("./assets/fonts/woff2/Anuphan-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "Anuphan"; src: url("./assets/fonts/woff2/Anuphan-500.woff2") format("woff2"); font-weight: 500; font-display: swap; }
 @font-face { font-family: "Anuphan"; src: url("./assets/fonts/woff2/Anuphan-600.woff2") format("woff2"); font-weight: 600; font-display: swap; }
@@ -10,14 +12,14 @@
 @font-face { font-family: "Trirong"; src: url("./assets/fonts/woff2/Trirong-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
 
 :root {
-  --bg: #0D1C27;  --panel: #142A37;  --line: #28465A;
-  --text: #E8EEF5;  --muted: #A3B1C4;
-  --accent: #3CCFC0;  --on-accent: #0D1C27;  --highlight: #E8C878;
+  --bg: #0F1A2B;  --panel: #16243A;  --line: #2B3F5A;
+  --text: #E8EEF5;  --muted: #9FB0C3;
+  --accent: #3CCFC0;  --on-accent: #0B1422;  --highlight: #F0B44C;
   --ornament: #C9A45C; /* เส้นทอง 1px มุมแผง/หัวคอลัมน์/เส้นรูน (ตกแต่ง ไม่ใช้กับตัวหนังสือ) */
   --danger: #F4877A;  --success: #8FD18B;  --secret: #C3B1F5;
   --private-bg: #211C36;  --hit-bg: #3D1F22;
   --card-bg: #EDE6D6;  --card-text: #142A37;
-  --bubble-own: #3A2E14;  --bubble-npc: #1B3347;  --text-soft: #C8D4E1;  --star: #E8EEF5; /* GEN-122 หน้า Play แบบแชต: กล่องของเรา / กล่อง NPC / ตัวเอียงบรรยาย / จุดดาวบนพื้น (ใช้กับ color-mix ให้จาง) */
+  --bubble-own: #3A2E14;  --bubble-npc: #1D2C45;  --text-soft: #C8D4E1;  --star: #E8EEF5; /* GEN-122 หน้า Play แบบแชต: กล่องของเรา / กล่อง NPC / ตัวเอียงบรรยาย / จุดดาวบนพื้น (ใช้กับ color-mix ให้จาง) */
   --font-display: "Trirong", serif;
   --font-body: "Anuphan", sans-serif;
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px; --space-7: 48px;
@@ -25,12 +27,4 @@
   --line-w: 1px; --hit-border-w: 3px;
   --text-xs: 13px; --text-sm: 14px; --text-md: 16px; --text-lg: 20px; --text-xl: 28px;
   --line-body: 1.65;
-}
-
-/* Play page v3 (GEN-122): colours of the Claude design (docs/design/ui-v3-chat, mockup-play-*.html, Amber Tide
-   before the Q-188 re-tint). Scoped to .play so the other screens keep theme v2 above. */
-.play {
-  --bg: #0F1A2B;  --panel: #16243A;  --line: #2B3F5A;
-  --muted: #9FB0C3;  --highlight: #F0B44C;  --on-accent: #0B1422;
-  --bubble-own: #3A2E14;  --bubble-npc: #1D2C45;  --text-soft: #C8D4E1;
 }
