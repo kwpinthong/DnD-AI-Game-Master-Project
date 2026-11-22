@@ -678,4 +678,32 @@ describe('character loot from the Asset sheet: Rank B skills / items (GEN-048, G
     expect(after.chosen).toEqual(chosen);
     expect(after.canReroll).toBe(false);
   });
+
+  // --- GEN-109: the AI writes {{p:id}} into trait text; the view shows the character name, never the token ---
+
+  it('GEN-109 C1/C5/C6: own token shows the character name (offer and old saved choice), follows a rename; others / unknown ids are a neutral word', async () => {
+    let own = '';
+    await start([
+      () =>
+        mockReply.ok(
+          analysis(0, {
+            strength: { label: 'ช่างสังเกต', scope: 'observe', description: `ช่างสังเกตเงียบ ๆ — ${own} เป็นคนเงียบ` },
+            weakness: { label: 'กลัวความมืด', scope: 'stealth', description: `${own} กลัวที่มืด คุยกับ {{p:someone-else}} ไม่เก่ง` },
+          }),
+        ),
+    ]);
+    const me = await playerWithCharacter();
+    own = `{{p:${me.member.id}}}`;
+
+    const offer = lootOf(await rollLoot(me.token)).offer!;
+    expect(offer.strength.description).toBe(`ช่างสังเกตเงียบ ๆ — ${lin.name} เป็นคนเงียบ`);
+    expect(offer.weakness.description).toBe(`${lin.name} กลัวที่มืด คุยกับ ใครบางคน ไม่เก่ง`);
+
+    const chosen = lootOf(await pickFirst(me.token, offer)).chosen!;
+    expect(JSON.stringify([chosen.strength, chosen.weakness])).not.toMatch(/\{\{|[0-9a-f]{8}-[0-9a-f]{4}-/);
+    expect(chosen.strength.description).toBe(offer.strength.description);
+
+    expect((await putCharacter(me.token, { ...lin, name: 'ลินดา' })).status).toBe(200);
+    expect(lootOf(await getLoot(me.token)).chosen!.strength.description).toBe('ช่างสังเกตเงียบ ๆ — ลินดา เป็นคนเงียบ');
+  });
 });

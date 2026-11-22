@@ -15,6 +15,7 @@ import { placeCharacter } from '../visibility/store.ts';
 import type { StoredChosen } from './loot.ts';
 import type { MemberRow } from './service.ts';
 import { CHRONIC_ILLNESS_LABEL, START_RULES } from './start-rules.ts';
+import { resolveOwnTokens } from './tokens.ts';
 
 /**
  * Start scenarios (GEN-065 on GEN-049's origin code, GDD §6.1, sheet Start_Scenarios).
@@ -321,7 +322,7 @@ function toView(scenario: Scenario | null, assets: GameAssets, row: OriginRow, c
   const tier = scenario?.origins.find((o) => o.id === row.tierId);
   const record = recordOf(assets, row);
   const narration =
-    row.narration === null ? null : row.narration.split(`{{p:${row.memberId}}}`).join(characterName).replace(/\{\{p:[^}]*\}\}/g, 'ใครบางคน');
+    row.narration === null ? null : resolveOwnTokens(row.narration, row.memberId, characterName);
   return {
     kind: row.kind,
     tierLabel: tier?.label ?? row.tierId,
