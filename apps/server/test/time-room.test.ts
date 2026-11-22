@@ -149,6 +149,27 @@ describe('GEN-063 time system in the play room', { timeout: 60_000 }, () => {
     for (const client of [a, b, c]) for (const m of client.messages) expect(forbiddenKeysIn(m)).toEqual([]);
   });
 
+  it('C5: the character karma decides the Evil make-up sleep (Q-087): karma -20 rests in EOSORIA, karma 0 stays Drowsy', async () => {
+    const t = await startedTable(server!, false);
+    jumpTo(t, { day: 1, phase: 'NOCTHERION', turn: 1 });
+    // Karma written by the cross-player rules after the engine state was made.
+    server!.db.prepare('update character set karma = -20 where member_id = ?').run(t.a.memberId);
+    const [a, b, c] = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    for (const turn of [1, 2]) {
+      expect(await send(a, 'เฝ้ายาม')).toEqual({ type: 'action_accepted' });
+      expect(await send(b, 'เฝ้ายาม')).toEqual({ type: 'action_accepted' });
+      expect(await send(c, 'นอน', 'public', true)).toEqual({ type: 'action_accepted' });
+      await a.waitFor(turn === 1 ? at(1, 'NOCTHERION', 2) : at(2, 'EOSORIA', 1));
+    }
+    await b.waitFor(at(2, 'EOSORIA', 1));
+    expect([a.lastRoom()!.you.drowsy, b.lastRoom()!.you.drowsy]).toEqual([true, true]);
+    for (const client of [a, b]) expect(await send(client, 'งีบชดเชย', 'public', true)).toEqual({ type: 'action_accepted' });
+    expect(await send(c, 'เดินตลาด')).toEqual({ type: 'action_accepted' });
+    await a.waitFor(at(2, 'EOSORIA', 2));
+    await b.waitFor(at(2, 'EOSORIA', 2));
+    expect([a.lastRoom()!.you.drowsy, b.lastRoom()!.you.drowsy]).toEqual([false, true]);
+  });
+
   it('C7: a restart at day 5 SOLARION turn 2 with 2 of 3 sent: same place, nobody sends again', async () => {
     const t = await startedTable(server!, false);
     jumpTo(t, { day: 5, phase: 'SOLARION', turn: 2 });
