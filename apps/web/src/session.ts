@@ -138,12 +138,3 @@ export async function fetchMe(baseUrl: string, token: string): Promise<Member | 
     return 'unreachable';
   }
 }
-
-/** Ends the session on the server too; the token is forgotten locally either way. */
-export async function postLogout(baseUrl: string, token: string): Promise<void> {
-  try {
-    await fetch(apiUrl(baseUrl, '/api/logout'), { method: 'POST', headers: { authorization: `Bearer ${token}` } });
-  } catch {
-    // offline: the server copy expires on its own
-  }
-}

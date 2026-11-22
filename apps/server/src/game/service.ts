@@ -218,6 +218,17 @@ export function kickMember(db: Db, actor: MemberRow, targetId: string, now: Cloc
   });
 }
 
+/** GEN-112: the only way a game is removed. Owner only, and the caller must type the game's name; every table cascades. */
+export function deleteGame(db: Db, actor: MemberRow, confirmName: unknown): 'ok' | 'forbidden' | 'confirm_required' {
+  return db.transaction((tx) => {
+    const row = tx.select().from(game).where(eq(game.id, actor.gameId)).get();
+    if (!row || row.ownerMemberId !== actor.id) return 'forbidden';
+    if (confirmName !== row.name) return 'confirm_required';
+    tx.delete(game).where(eq(game.id, row.id)).run();
+    return 'ok';
+  });
+}
+
 export function updateGame(db: Db, actor: MemberRow, change: UpdateGameRequest): OwnerActionOutcome {
   return asOwner(db, actor, (tx, row) => {
     if (row.startedAt !== null) return { kind: 'game_started' };

@@ -4,7 +4,7 @@ import { CreateGameForm } from './CreateGameForm.tsx';
 import { JoinForm } from './JoinForm.tsx';
 import { Lobby } from './Lobby.tsx';
 import { GameHistory } from './GameHistory.tsx';
-import { apiUrl, fetchMe, fetchWithTimeout, forgetToken, loadToken, postLogout, rememberToken, saveToken } from './session.ts';
+import { apiUrl, fetchMe, fetchWithTimeout, forgetToken, loadToken, rememberToken, saveToken } from './session.ts';
 
 type Status = 'checking' | 'connected' | 'unreachable';
 
@@ -76,12 +76,8 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
     setAuth({ state: 'guest' });
   }
 
-  function logout() {
-    if (auth.state === 'member') {
-      void postLogout(apiBaseUrl, auth.token);
-      // The server ends the session, so this game can no longer be opened from the list.
-      forgetToken(auth.token);
-    }
+  /** Leaves the screen only (GEN-112): the session and the game stay, so the game stays on the list and name + PIN still enter it. */
+  function leave() {
     saveToken(null);
     setAuth({ state: 'guest' });
   }
@@ -118,7 +114,7 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
           <p>
             เข้าเกมแล้ว: <strong>{auth.member.name}</strong>
           </p>
-          <button type="button" onClick={logout}>
+          <button type="button" onClick={leave}>
             ออกจากเกม
           </button>
           <Lobby

@@ -40,6 +40,8 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'POST /api/game/scenario/reset': { method: 'POST', path: '/api/game/scenario/reset' },
     'PATCH /api/game': { method: 'PATCH', path: '/api/game', body: { gameName: 'ชื่อใหม่' } },
     'POST /api/game/invite-code': { method: 'POST', path: '/api/game/invite-code' },
+    // No confirmName: the owner gets 400 and nobody's game is deleted by the scan.
+    'DELETE /api/game': { method: 'DELETE', path: '/api/game' },
     'DELETE /api/game/members/:memberId': { method: 'DELETE', path: `/api/game/members/${t.c.memberId}` },
     'POST /api/game/start': { method: 'POST', path: '/api/game/start' },
     'POST /api/game/character': { method: 'POST', path: '/api/game/character', body: LIN },

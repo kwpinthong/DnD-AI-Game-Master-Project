@@ -1,7 +1,7 @@
 import { formatInviteCode, type GameMember, type GameView } from '@isekai/protocol';
 import { useEffect, useRef, useState } from 'react';
 import { CharacterScreen } from './CharacterScreen.tsx';
-import { gameCall, type GameAction } from './game-api.ts';
+import { deleteGameCall, gameCall, type GameAction } from './game-api.ts';
 import { OriginCard } from './OriginCard.tsx';
 import { PlayRoom } from './PlayRoom.tsx';
 import { ScenarioEditor } from './ScenarioEditor.tsx';
@@ -30,6 +30,44 @@ function rememberOriginSeen(game: GameView): void {
   } catch {
     // no storage: the card shows again next time, nothing else breaks
   }
+}
+
+/** GEN-112: the owner deletes the game for everyone, apart from "leave"; the game name must be typed first. */
+function DeleteGame({ apiBaseUrl, token, gameName, onDeleted }: { apiBaseUrl: string; token: string; gameName: string; onDeleted: () => void }) {
+  const [asking, setAsking] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string>();
+  if (!asking) {
+    return (
+      <Button variant="danger" onClick={() => setAsking(true)}>
+        ลบเกม
+      </Button>
+    );
+  }
+  async function confirm() {
+    setBusy(true);
+    const result = await deleteGameCall(apiBaseUrl, token, typed);
+    setBusy(false);
+    if (result.ok) onDeleted();
+    else setProblem(result.message);
+  }
+  return (
+    <div role="group" aria-label="ยืนยันลบเกม">
+      <p>ลบเกมนี้ถาวร ทุกคนในเกมจะเข้าไม่ได้ และกู้คืนไม่ได้ (ถ้าแค่พักเล่น ให้กด "ออกจากเกม")</p>
+      <label>
+        พิมพ์ชื่อเกมเพื่อยืนยัน
+        <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={gameName} />
+      </label>
+      <Button variant="danger" disabled={busy || typed !== gameName} onClick={() => void confirm()}>
+        ยืนยันลบเกม
+      </Button>
+      <Button disabled={busy} onClick={() => setAsking(false)}>
+        ยกเลิก
+      </Button>
+      {problem && <p role="alert">{problem}</p>}
+    </div>
+  );
 }
 
 /**
@@ -318,6 +356,7 @@ export function Lobby({
             รีเฟรช
           </Button>
         </div>
+        {owner && <DeleteGame apiBaseUrl={apiBaseUrl} token={token} gameName={game.name} onDeleted={onSessionLost} />}
         {error && (
           <div role="alert">
             <p>{error.message}</p>
