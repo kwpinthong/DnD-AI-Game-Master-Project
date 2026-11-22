@@ -23,6 +23,7 @@ import { getGameScenario } from '../scenario/store.ts';
 import { moveCharacter, namesKnownBy, npcBondsOf, presencesInGame } from '../visibility/store.ts';
 import { otherCharacterView, witnessesOf } from '../visibility/views.ts';
 import { chosenLootInGame, itemsInGame, transferItem } from './items.ts';
+import { recordTagUses, tagContexts, type TaggingOptions } from './tags.ts';
 
 /**
  * Cross-player phase actions on the server (GEN-060, Rules Spec §10). The AI GM phase loop (GEN-057)
@@ -32,6 +33,8 @@ import { chosenLootInGame, itemsInGame, transferItem } from './items.ts';
  *    Reputation, Karma, places and item holders in one transaction. Any invalid action → nothing is
  *    rolled or written (Q-049: all-or-nothing; the caller asks the AI to repair once). Keep `log`
  *    with the phase: it holds every die and replays with `replayPhaseActions`.
+ *    Pass `tagging` (GEN-064, `./tags.ts`) to match verb / target tags against the players' skills,
+ *    items, place, weather and start passives; Active uses are counted per game day in the same transaction.
  * 2. `noticesFor(db, gameId, viewer, events)`: what one player may know of those events, for their
  *    narration and the socket (GEN-056). Other players appear as `OtherCharacterView` (appearance;
  *    the real name only once the viewer knows it), never by member id, so AI prompts stay free of names (Q-045).
@@ -181,9 +184,17 @@ function witnessesOfOutcome(outcome: ActionOutcome): string[] {
 }
 
 /** Resolves and writes one phase's actions (see the module comment). */
-export function applyPhaseActions(db: Db, gameId: string, actions: readonly PhaseAction[], rng: Rng, now: number): ApplyPhaseResult {
+export function applyPhaseActions(
+  db: Db,
+  gameId: string,
+  actions: readonly PhaseAction[],
+  rng: Rng,
+  now: number,
+  tagging?: TaggingOptions,
+): ApplyPhaseResult {
   return db.transaction((tx) => {
     const state = crossPlayerState(tx, gameId);
+    const tags = tagging === undefined ? undefined : tagContexts(tx, gameId, state, tagging);
     const places = new Set((getGameScenario(tx, gameId)?.locations ?? []).map((l) => l.id));
     const errors: PhaseApplyError[] = [
       ...actions.flatMap((a, i) =>
@@ -191,12 +202,13 @@ export function applyPhaseActions(db: Db, gameId: string, actions: readonly Phas
           ? [{ code: 'unknown_location' as const, path: 'moveTo', action: i, message: `the scenario has no place ${a.moveTo}` }]
           : [],
       ),
-      ...validatePhaseActions({ state, actions }),
+      ...validatePhaseActions({ state, actions, ...(tags ? { tags } : {}) }),
     ];
     if (errors.length > 0) return { ok: false, errors };
 
-    const result = resolvePhaseActions({ state, actions }, rng);
+    const result = resolvePhaseActions({ state, actions, ...(tags ? { tags } : {}) }, rng);
     if (!result.ok) return { ok: false, errors: [...result.errors] };
+    if (tagging !== undefined) recordTagUses(tx, gameId, result.log, tagging.day, now);
 
     for (const after of Object.values(result.state.players)) {
       const before = state.players[after.id]!;

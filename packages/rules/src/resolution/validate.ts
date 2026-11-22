@@ -1,4 +1,5 @@
 import { RULES, TIER_CAP, staminaCostRange } from './tables.ts';
+import { validateTagging, type TagContext } from './tags.ts';
 import {
   ACTION_KINDS,
   ACTION_TAGS,
@@ -20,7 +21,7 @@ const JUDGED = ['item', 'skill'] as const;
  * Checks a proposal against the state before any die is rolled (spec §1.6, §13).
  * Returns every error found; an empty list means the whole proposal may be applied (all-or-nothing, Q-049).
  */
-export function validateProposal(state: ResolutionState, proposal: ResolutionProposal): ProposalError[] {
+export function validateProposal(state: ResolutionState, proposal: ResolutionProposal, tags?: TagContext): ProposalError[] {
   const errors: ProposalError[] = [];
   const fail = (code: ProposalErrorCode, path: string, message: string) => errors.push({ code, path, message });
   const int = (path: string, value: unknown, min: number, max: number): boolean => {
@@ -138,6 +139,13 @@ export function validateProposal(state: ResolutionState, proposal: ResolutionPro
 
   validateEffects('onSuccess', p.onSuccess);
   validateEffects('onFail', p.onFail);
+
+  // Tag matching (GEN-064).
+  const judgedRefs = (Array.isArray(p.modifiers) ? p.modifiers : []).flatMap((m, i) => {
+    const mod = m as unknown as Record<string, unknown>;
+    return (mod.source === 'item' || mod.source === 'skill') && typeof mod.ref === 'string' ? [{ ref: mod.ref, path: `modifiers[${i}].ref` }] : [];
+  });
+  errors.push(...validateTagging(tags, p.tagging, judgedRefs));
   return errors;
 
   function validateEffects(path: string, effects: Effects | undefined) {

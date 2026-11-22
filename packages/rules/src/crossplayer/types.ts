@@ -12,6 +12,7 @@ import type {
   ResolutionProposal,
   Severity,
 } from '../resolution/types.ts';
+import type { TagContext } from '../resolution/tags.ts';
 
 /** A player character in the phase: the resolution actor state plus what cross-player rules need. */
 export interface PlayerState extends ActorState {
@@ -80,6 +81,8 @@ export interface PhaseAction {
 export interface PhaseActionsInput {
   readonly state: CrossPlayerState;
   readonly actions: readonly PhaseAction[];
+  /** Each player's tag sources and today's uses (GEN-064), by player id. */
+  readonly tags?: Readonly<Record<string, TagContext>>;
 }
 
 // --- Order (spec §10.5) ---

@@ -1,4 +1,5 @@
 /** Resolution engine types (Rules Spec GEN-042 §2-7, §12-13). Every value is plain JSON so logs replay. */
+import type { TagClaim, TagContext, TaggingLog, TagSourceKind } from './tags.ts';
 
 export const DC_LADDER = [5, 8, 11, 14, 17, 20, 23] as const;
 export type Dc = (typeof DC_LADDER)[number];
@@ -151,6 +152,8 @@ export interface ResolutionProposal {
   readonly onSuccess: Effects;
   readonly onFail: Effects;
   readonly reason: string;
+  /** Verb / target tags and Active sources used (GEN-064); needs `ResolutionInput.tags`. */
+  readonly tagging?: TagClaim;
 }
 
 export interface ResolutionInput {
@@ -158,6 +161,8 @@ export interface ResolutionInput {
   readonly proposal: ResolutionProposal;
   /** Only for an action that targets a player (GEN-060). */
   readonly pvp?: PvpContext;
+  /** The actor's tag sources and today's uses (GEN-064). */
+  readonly tags?: TagContext;
 }
 
 export type ProposalErrorCode =
@@ -183,7 +188,11 @@ export type ProposalErrorCode =
   | 'unknown_npc'
   | 'npc_not_present'
   | 'unknown_status'
-  | 'invalid_field';
+  | 'invalid_field'
+  | 'not_active'
+  | 'tags_not_matched'
+  | 'daily_limit_reached'
+  | 'tag_source_judged';
 
 export interface ProposalError {
   readonly code: ProposalErrorCode;
@@ -193,7 +202,8 @@ export interface ProposalError {
 }
 
 export interface LoggedModifier {
-  readonly source: Modifier['source'];
+  /** A proposal modifier's source, or where a tag-matched bonus came from (GEN-064). */
+  readonly source: Modifier['source'] | TagSourceKind;
   readonly ref?: string;
   readonly mode?: 'favor' | 'fear';
   readonly align?: 'light' | 'dark';
@@ -239,7 +249,10 @@ export interface ResolutionLog {
   readonly targetObservation: { readonly d20: number; readonly modifier: number; readonly total: number; readonly noticed: boolean } | null;
   /** The target player noticed, so a success / crit became a fail (spec §10.4). */
   readonly interrupted: boolean;
+  /** `after` also takes off `tagging.skillStamina`. */
   readonly stamina: { readonly before: number; readonly cost: number; readonly net: number; readonly after: number };
+  /** Present when the proposal had a tag claim (GEN-064). */
+  readonly tagging?: TaggingLog;
   readonly rep: ChangeLog;
   readonly karma: ChangeLog;
   readonly affinity: readonly ({ readonly npcId: string } & ChangeLog)[];
