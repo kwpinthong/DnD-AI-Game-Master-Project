@@ -121,6 +121,33 @@ function refsOnly(world: GmWorld, message: string): string {
   return out;
 }
 
+const SEGMENTER = typeof Intl.Segmenter === 'function' ? new Intl.Segmenter('th', { granularity: 'word' }) : null;
+const MARK = /\p{M}/u;
+
+/**
+ * Q-152: whether `text` names `name` as a whole word, both NFC-normalised and the name trimmed. Thai has no
+ * spaces, so the Thai word segmenter (ICU dictionary) decides: an occurrence does not count when one
+ * segment holds all of it and more (ลิน inside the dictionary word คลินิก, ดา inside ดารา, Lin inside
+ * Linda). A name the dictionary does not know comes out in odd pieces (ดาริน → ดา|ริน, ลินที่ → ลิ|นที่);
+ * none of them holds the whole name, so it still counts. An occurrence followed by a combining mark is
+ * part of another syllable and does not count. Without Intl.Segmenter every other occurrence counts.
+ */
+export function containsName(text: string, name: string): boolean {
+  const n = name.normalize('NFC').trim();
+  if (n.length === 0) return false;
+  const t = text.normalize('NFC');
+  let words: (readonly [number, number])[] | null = null;
+  for (let i = t.indexOf(n); i !== -1; i = t.indexOf(n, i + 1)) {
+    const end = i + n.length;
+    if (end < t.length && MARK.test(t[end]!)) continue;
+    if (!SEGMENTER) return true;
+    words ??= [...SEGMENTER.segment(t)].map((s) => [s.index, s.index + s.segment.length] as const);
+    const insideLongerWord = words.some(([from, to]) => from <= i && end <= to && to - from > n.length);
+    if (!insideLongerWord) return true;
+  }
+  return false;
+}
+
 /**
  * A narration for one audience. `forbiddenNames`: real names a reader of this text does not know (C3); the
  * message never repeats the name, so it does not end up in the repair prompt (Q-045).
@@ -142,7 +169,7 @@ export function checkNarration(ctx: NarrationContext, out: GmNarration, forbidde
       if (kind === 'p' && !cast.has(id!)) fail('unknown_ref', `${path}.text`, `${playerToken(id!)} is not in the cast of this audience`);
       if (kind === 'n' && !npcs.has(id!)) fail('unknown_ref', `${path}.text`, `{{n:${id}}} is not an NPC of this place`);
     }
-    if (forbiddenNames.some((name) => s.text.includes(name))) fail('name_leak', `${path}.text`, 'the text has a real name the reader does not know; use the {{p:ref}} / {{n:id}} tokens only');
+    if (forbiddenNames.some((name) => containsName(s.text, name))) fail('name_leak', `${path}.text`, 'the text has a real name the reader does not know; use the {{p:ref}} / {{n:id}} tokens only');
   });
   for (const b of ctx.beats) if (!out.segments.some((s) => s.actionId === b.actionId)) fail('missing_beat', 'segments', `no segment for beat ${b.actionId}`);
   return errors;
