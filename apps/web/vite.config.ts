@@ -16,7 +16,8 @@ export default defineConfig(({ command }) => {
       strictPort: true,
       proxy: {
         '/health': apiTarget,
-        '/api': apiTarget,
+        // ws: the play room's WebSocket (GEN-056) is under /api too.
+        '/api': { target: apiTarget, ws: true },
       },
     },
   };

@@ -25,6 +25,8 @@ function playerRequests(t: Table, me: Seat): Record<string, Request> {
     'GET /api/game/character': { method: 'GET', path: '/api/game/character' },
     'GET /api/game/timeline': { method: 'GET', path: '/api/game/timeline' },
     'GET /api/game/surroundings': { method: 'GET', path: '/api/game/surroundings' },
+    // GEN-056: the play room's WebSocket (a plain GET is 404, no body). Its events are scanned in room.test.ts.
+    'GET /api/game/room': { method: 'GET', path: '/api/game/room' },
     'GET /api/game/scenario': { method: 'GET', path: '/api/game/scenario' },
     'PUT /api/game/scenario': { method: 'PUT', path: '/api/game/scenario', body: defaultScenario() },
     'POST /api/game/scenario/reset': { method: 'POST', path: '/api/game/scenario/reset' },

@@ -2,6 +2,7 @@ import { formatInviteCode, type GameMember, type GameView } from '@isekai/protoc
 import { useEffect, useState } from 'react';
 import { CharacterScreen } from './CharacterScreen.tsx';
 import { gameCall, type GameAction } from './game-api.ts';
+import { PlayRoom } from './PlayRoom.tsx';
 import { ScenarioEditor } from './ScenarioEditor.tsx';
 
 const modeLabel = { online: 'Online', single: 'เล่นคนเดียว' } as const;
@@ -32,6 +33,8 @@ export function Lobby({
   const [scenarioOpen, setScenarioOpen] = useState(false);
   /** Character creation (GEN-047) opens over the lobby; going back reloads the lobby. */
   const [characterOpen, setCharacterOpen] = useState(false);
+  /** The play room (GEN-056), after the start. */
+  const [roomOpen, setRoomOpen] = useState(false);
 
   async function run(action: GameAction) {
     setBusy(true);
@@ -67,6 +70,21 @@ export function Lobby({
         onBack={() => {
           setCharacterOpen(false);
           void run({ method: 'GET', path: '/api/game' });
+        }}
+      />
+    );
+  }
+
+  if (roomOpen) {
+    return (
+      <PlayRoom
+        apiBaseUrl={apiBaseUrl}
+        token={token}
+        onSessionLost={onSessionLost}
+        onBack={() => setRoomOpen(false)}
+        onNeedCharacter={() => {
+          setRoomOpen(false);
+          setCharacterOpen(true);
         }}
       />
     );
@@ -110,6 +128,17 @@ export function Lobby({
         )}
       </p>
       {!lobby && <p role="status">เกมเริ่มแล้ว โหมดและสมาชิกล็อกแล้ว</p>}
+      {!lobby && you && (
+        <p>
+          <button
+            type="button"
+            // A player needs a character to play (C2); the Human GM watches without one.
+            onClick={() => (you.role === 'player' && !you.hasCharacter ? setCharacterOpen(true) : setRoomOpen(true))}
+          >
+            เข้าห้องเล่น
+          </button>
+        </p>
+      )}
       {(game.canEditScenario || gmOfGame) && (
         <p>
           Scenario{' '}
