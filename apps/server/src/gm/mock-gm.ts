@@ -20,10 +20,19 @@ export function contextOf<T>(req: AiCallRequest): T {
 
 const NO_EFFECTS = { repDelta: 0, karmaDelta: 0, affinity: [], damage: null, selfDamage: null, heal: null, addStatus: [], removeStatus: [] };
 
+/** GEN-055 dev markers: `[mock:verb=PRAY]` sets the verb tag; `[mock:investigate=MIRACLE]` an INVESTIGATE on that topic (no roll). */
+const VERB_MARKER = /\[mock:verb=([A-Z0-9_]+)\]/;
+const INVESTIGATE_MARKER = /\[mock:investigate=([A-Z0-9_]+)\]/;
+
 /** A plain general action at DC 11 for one action of the context. */
 export function mockAction(ctx: TurnContext, actionId: string): GmAction {
   const action = ctx.actions.find((a) => a.actionId === actionId)!;
-  const verb = ctx.tagVocabulary[0];
+  const known = (tag: string | undefined) => (tag !== undefined && ctx.tagVocabulary.includes(tag) ? tag : undefined);
+  const topic = known(INVESTIGATE_MARKER.exec(action.text)?.[1]);
+  const verb = topic !== undefined ? known('INVESTIGATE') : (known(VERB_MARKER.exec(action.text)?.[1]) ?? ctx.tagVocabulary[0]);
+  const marked = {
+    ...(topic !== undefined ? { investigate: true, check: { type: 'none' as const }, targetTags: [topic] } : {}),
+  };
   return {
     actionId,
     actor: action.actor,
@@ -31,7 +40,7 @@ export function mockAction(ctx: TurnContext, actionId: string): GmAction {
     tags: [],
     opposed: false,
     staminaCost: 3,
-    check: { type: 'dc', dc: 11 },
+    check: marked.check ?? { type: 'dc', dc: 11 },
     modifiers: [{ source: 'stat' }],
     targetNpc: null,
     targetPlayer: null,
@@ -39,10 +48,10 @@ export function mockAction(ctx: TurnContext, actionId: string): GmAction {
     repDeltaIfCaught: 0,
     onSuccess: NO_EFFECTS,
     onFail: NO_EFFECTS,
-    tagging: { verbTags: verb === undefined ? [] : [verb], targetTags: [], activate: [] },
+    tagging: { verbTags: verb === undefined ? [] : [verb], targetTags: marked.targetTags ?? [], activate: [] },
     moveTo: null,
     awareness: 'normal',
-    investigate: false,
+    investigate: marked.investigate ?? false,
     intentSummary: `{{p:${action.actor}}} ${action.text}`.slice(0, 200),
     reason: 'Mock GM',
   };

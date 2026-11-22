@@ -23,3 +23,4 @@ export * from './weather.ts';
 export * from './room.ts';
 export * from './companion.ts';
 export * from './admin.ts';
+export * from './inventory.ts';

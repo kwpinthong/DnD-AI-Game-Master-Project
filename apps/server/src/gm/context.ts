@@ -3,7 +3,7 @@ import { karmaBand, socialTitle, type CrossPlayerState, type PeriodWeather, type
 import { and, eq, isNull } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
 import type { PromptBlock } from '../ai/provider.ts';
-import { chosenLootInGame, itemsInGame } from '../crossplayer/items.ts';
+import { itemsInGame, skillsInGame } from '../crossplayer/items.ts';
 import { isLegacyOption, type StoredOption } from '../game/loot.ts';
 import type { DbOrTx } from '../db/client.ts';
 import { character, member } from '../db/schema.ts';
@@ -119,8 +119,9 @@ export interface PlayerContext {
   stamina: number;
   karmaBand: number;
   drowsy: boolean;
-  items: { id: string; name: string; tier: string }[];
-  skills: { id: string; name: string; tier: string }[];
+  /** `effect`: the qualitative text the AI judges (GEN-055); the numbers come through `tagSources`. */
+  items: { id: string; name: string; tier: string; effect: string }[];
+  skills: { id: string; name: string; tier: string; effect: string }[];
   tagSources: { id: string; kind: string; verbTags: string[]; targetTags: string[]; trigger: string; dailyLimit: number; usesToday: number }[];
   constraints: { id: number; text: string; reason: string; sinceDay: number }[];
 }
@@ -156,12 +157,15 @@ export interface TurnContextInput {
   resting: readonly string[];
   /** The period's weather (GEN-068); null = none chosen. */
   weather?: PeriodWeather | null;
+  /** Game data: each skill / item's Rank and qualitative text (GEN-055). */
+  assets?: GameAssets;
 }
 
 export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnContext {
   const { world, state, at } = input;
-  const loot = new Map(chosenLootInGame(db, world.gameId).map((l) => [l.memberId, l.chosen]));
+  const skills = skillsInGame(db, world.gameId);
   const items = [...itemsInGame(db, world.gameId).values()];
+  const gear = (o: StoredOption) => ({ id: o.id, name: world.tokenise(o.name), tier: optionTier(o, input.assets), effect: qualitativeText(o, input.assets) });
   const constraints = activeConstraints(db, world.gameId);
   const ref = (memberId: string) => world.players.get(memberId)?.ref ?? memberId;
 
@@ -169,7 +173,6 @@ export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnConte
     const p = world.players.get(s.id);
     if (!p) return [];
     const ctx = input.tags[s.id];
-    const skill = loot.get(s.id)?.skill;
     return [
       {
         ref: p.ref,
@@ -180,8 +183,8 @@ export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnConte
         stamina: s.stamina,
         karmaBand: karmaBand(s.karma),
         drowsy: input.drowsy.has(s.id),
-        items: items.filter((i) => i.holderMemberId === s.id).map((i) => ({ id: i.id, name: world.tokenise(i.name), tier: optionTier(i) })),
-        skills: skill ? [{ id: skill.id, name: world.tokenise(skill.name), tier: optionTier(skill) }] : [],
+        items: items.filter((i) => i.holderMemberId === s.id).map(gear),
+        skills: (skills.get(s.id) ?? []).map(gear),
         tagSources: (ctx?.sources ?? []).map((src) => ({
           id: src.id,
           kind: src.kind,
@@ -301,9 +304,25 @@ export function requestTokens(system: readonly PromptBlock[], messages: readonly
   return estimateTokens([...system.map((b) => b.text), ...messages.map((m) => m.text)].join('\n'));
 }
 
-/** The tier the AI GM sees: an old GEN-048 option keeps "Common", a sheet option (GEN-073) its Rank (e.g. "B"). */
-function optionTier(o: StoredOption): string {
-  return isLegacyOption(o) ? o.tier : `Rank ${o.rank ?? '?'}`;
+const sheetRow = (o: StoredOption, assets: GameAssets | undefined) => (o.kind === 'skill' ? assets?.ability(o.name) : assets?.item(o.name));
+
+/** The tier the AI GM sees: an old GEN-048 option keeps "Common", a sheet row its Rank (GEN-055: B / A / S / SS). */
+function optionTier(o: StoredOption, assets: GameAssets | undefined): string {
+  if (isLegacyOption(o)) return o.tier;
+  return `Rank ${sheetRow(o, assets)?.rank ?? o.rank ?? '?'}`;
+}
+
+/**
+ * GEN-055: what the server does not compute (the qualitative half), as text the AI judges within the Rank cap:
+ * the Ability Description / Item Effect, the item's skill-boost half of Skill Synergy, and the Note.
+ * Never the unlock condition.
+ */
+function qualitativeText(o: StoredOption, assets: GameAssets | undefined): string {
+  const row = sheetRow(o, assets);
+  if (!row) return o.description;
+  const boost = 'synergy' in row ? (/เสริมสกิล:\s*([^/]*)/.exec(row.synergy)?.[1]?.trim() ?? '') : '';
+  const text = 'effect' in row ? row.effect : row.description;
+  return [text, boost && `เสริมสกิล: ${boost}`, row.note].filter((s) => s.length > 0).join(' / ');
 }
 
 /** The weather as the AI GM reads it (GEN-068): the period's weather plus the day-5 Disaster state. */

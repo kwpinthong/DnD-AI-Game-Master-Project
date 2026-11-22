@@ -3,7 +3,9 @@ import {
   CharacterResponse,
   CreateGameResponse,
   GameView,
+  InventoryResponse,
   LootResponse,
+  type InventoryView,
   type LootChooseRequest,
   type LootView,
   type CharacterField,
@@ -123,6 +125,21 @@ export async function lootCall(baseUrl: string, token: string, action: LootActio
     return { kind: 'error', message: Object.values(error.data.fields).join(' / ') || error.data.message };
   }
   return { kind: 'error', message: error.data.message };
+}
+
+/** GET /api/game/inventory (GEN-055): your own skills, the items you hold now and your library discoveries. */
+export type InventoryResult = { kind: 'ok'; inventory: InventoryView } | { kind: 'session_lost' } | { kind: 'error'; message: string };
+
+export async function inventoryCall(baseUrl: string, token: string): Promise<InventoryResult> {
+  const answer = await send(apiUrl(baseUrl, '/api/game/inventory'), { method: 'GET', headers: { authorization: `Bearer ${token}` } });
+  if (!answer) return { kind: 'error', message: UNREACHABLE };
+  if (answer.res.ok) {
+    const parsed = InventoryResponse.safeParse(answer.json);
+    return parsed.success ? { kind: 'ok', inventory: parsed.data.inventory } : { kind: 'error', message: UNREACHABLE };
+  }
+  if (answer.res.status === 401) return { kind: 'session_lost' };
+  const error = ApiError.safeParse(answer.json);
+  return { kind: 'error', message: error.success ? error.data.message : UNREACHABLE };
 }
 
 export async function characterCall(

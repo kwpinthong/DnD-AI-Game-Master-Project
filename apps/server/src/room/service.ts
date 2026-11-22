@@ -45,6 +45,7 @@ import { advanceTimeline } from '../timeline/store.ts';
 import type { GameAssets } from '../assets/load.ts';
 import { completeTravel, travel, travellingTo, withHazard } from '../travel/service.ts';
 import { weatherAt, type WeatherService } from '../weather/service.ts';
+import { settleTurnProgress, withPeriodEndEffects } from '../skills/progress.ts';
 import type { ClosedAction, PhaseResolution, PhaseResolver, ResolverStuck } from './resolver.ts';
 import {
   ensurePhaseState,
@@ -392,7 +393,9 @@ export function createRoomService(
           }
           resolution.apply?.(tx);
           // GEN-066: a turn spent in the forest / at the sea from day 5 costs Stamina, on top of what the resolver said.
-          const settled = (results: Readonly<Record<string, PlayerResult>>) => withHazard(tx, assets, gameId, current, withKarma(tx, current, results));
+          // GEN-055: on the period's last turn, end_of_period restores of skills / items (capped at max).
+          const settled = (results: Readonly<Record<string, PlayerResult>>) =>
+            withPeriodEndEffects(tx, assets, gameId, current, withHazard(tx, assets, gameId, current, withKarma(tx, current, results)));
           let step = phaseStep(current, { type: 'resolved', results: settled(resolution.results ?? {}) }, rng);
           if (!step.ok) {
             log(`[room] resolver results refused (game ${gameId}): ${step.error.code}; the turn advances without them`);
@@ -401,6 +404,8 @@ export function createRoomService(
           if (!step.ok) throw new Error(`phase engine refused an empty result: ${step.error.code}`);
           savePhaseState(tx, gameId, step.state, t);
           syncCharacterStats(tx, step.state, t);
+          // GEN-055: karma per day / period for the unlock rules, then the skills that unlock now.
+          settleTurnProgress(tx, assets, gameId, current, t);
           // GEN-066: trips to another zone arrive, rift visitors go back (after the feed's witnesses were taken).
           completeTravel(tx, gameId, t);
           // The timeline follows the period (GEN-053): events of the new period become active for the next turn.

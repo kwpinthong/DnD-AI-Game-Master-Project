@@ -26,6 +26,7 @@ import { CryptoRng } from '../rng.ts';
 import { buildEventContext } from '../timeline/context.ts';
 import { setEventOutcome } from '../timeline/store.ts';
 import { discoverHiddenEvidence, locationSnapshot, npcBondsOf } from '../visibility/store.ts';
+import { recordTurnProgress } from '../skills/progress.ts';
 import { checkNarration, checkTurnProposal, type GmError } from './check.ts';
 import {
   CONTEXT_BUDGET,
@@ -173,7 +174,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     const { gameId, at, signal } = input;
     const world = loadWorld(db, gameId, assets);
     const drowsy = new Set(input.state.order.filter((id) => input.state.players[id] && isDrowsy(input.state.players[id]!, input.state.day)));
-    const state = crossPlayerState(db, gameId, drowsy);
+    const state = crossPlayerState(db, gameId, drowsy, assets);
     const tagging: TaggingOptions = weatherTagging(assets, at.day, at.phase, input.weather ?? null);
     const tags = tagContexts(db, gameId, state, tagging);
 
@@ -217,6 +218,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         actions: order,
         resting: input.actions.filter((a) => a.rest).map((a) => a.memberId),
         weather: input.weather ?? null,
+        assets,
       });
       let checked: PhaseAction[] = [];
       const proposal = await ask({
@@ -313,6 +315,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       apply: (tx) => {
         const applied = applyPhaseActions(tx, gameId, actions, new ReplayRng(rolls), now(), tagging, drowsy);
         if (!applied.ok) throw new Error('the stored turn no longer applies');
+        // GEN-055: the unlock progress of every action (verb tags, karma) and the library's INVESTIGATE reveal.
+        recordTurnProgress(tx, assets, gameId, applied.log, { day: at.day, period: at.phase, now: now() }, investigators);
         for (const c of proposal.constraints.add) {
           addConstraint(tx, { gameId, memberId: world.byRef.get(c.player)!.memberId, text: c.text, reason: c.reason, day: at.day }, now());
         }

@@ -317,6 +317,37 @@ describe('GEN-057 AI GM status (web)', () => {
   });
 });
 
+describe('GEN-055 skills and items (web)', () => {
+  const skill = { id: 's-1', name: 'Ward of Light', rank: 'B', alignment: 'Good', category: 'Defensive', triggerType: 'Passive', dailyLimit: 0, description: 'สร้างม่านแสงบาง ๆ' };
+  const rosary = { id: 'i-1', name: 'Silver Rosary of Hearth', rank: 'B', alignment: 'Good', category: 'Accessory', triggerType: 'Passive', dailyLimit: 0, description: 'ฟื้นฟู HP +4' };
+
+  it('Q-106 / C7: the button loads your own skills, the items you hold now and what you found at the library', async () => {
+    const inventories = [
+      { inventory: { skills: [skill], items: [rosary], discoveries: [{ kind: 'skill', name: 'The First Light', text: 'สวดภาวนาอธิษฐาน 3 วัน' }] } },
+      // After a steal the list is what the server says you hold now.
+      { inventory: { skills: [skill], items: [], discoveries: [] } },
+    ];
+    let call = 0;
+    loggedIn(gameView(), { 'GET /api/game/inventory': () => Response.json(inventories[Math.min(call++, 1)]) });
+    render(<App apiBaseUrl="" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'เข้าห้องเล่น' }));
+    const socket = await waitFor(() => FakeSocket.all.at(-1)!);
+    socket.open();
+    socket.receive(roomState());
+
+    fireEvent.click(screen.getByRole('button', { name: 'สกิลและไอเท็มของฉัน' }));
+    const panel = await screen.findByRole('region', { name: 'สกิลและไอเท็มของฉัน' });
+    expect(await within(panel).findByText(/Ward of Light · Rank B · Good · Passive/)).toBeTruthy();
+    expect(within(panel).getByText(/Silver Rosary of Hearth · Rank B/)).toBeTruthy();
+    expect(within(panel).getByText(/The First Light: สวดภาวนาอธิษฐาน 3 วัน/)).toBeTruthy();
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'โหลดใหม่' }));
+    expect(await within(panel).findByText('ไม่มีไอเท็มติดตัว')).toBeTruthy();
+    expect(within(panel).queryByText(/Silver Rosary/)).toBeNull();
+    expect(within(panel).getByText('ยังไม่พบเงื่อนไขใด (ค้นได้ด้วย INVESTIGATE ที่หอสมุดหลวง)')).toBeTruthy();
+  });
+});
+
 describe('GEN-063 time system (web)', () => {
   it('C1: the heading shows the period and the turn', async () => {
     const socket = await enterRoom();

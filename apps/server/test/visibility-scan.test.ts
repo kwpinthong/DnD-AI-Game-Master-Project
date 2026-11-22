@@ -54,6 +54,8 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/admin/ai-usage': { method: 'GET', path: '/api/admin/ai-usage' },
     'GET /api/admin/ai-usage/:gameId': { method: 'GET', path: '/api/admin/ai-usage/any-game' },
     'POST /api/admin/logout': { method: 'POST', path: '/api/admin/logout' },
+    // GEN-055: the player's own skills, held items and library discoveries (no condition or progress).
+    'GET /api/game/inventory': { method: 'GET', path: '/api/game/inventory' },
     'POST /api/join': { method: 'POST', path: '/api/join', body: { inviteCode: t.inviteCode, name: playerNameOf(t, me), pin: '1111' } },
     'POST /api/games': {
       method: 'POST',
