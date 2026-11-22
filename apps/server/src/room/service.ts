@@ -267,13 +267,15 @@ export function createRoomService(
       turn: state.turn,
       status: state.status,
       weather: weatherView(me.gameId, state),
+      // Q-195: who sent is the GM's to see; a player gets the count and their own flag only.
       members: members.map((m) => ({
         memberId: m.id,
         name: m.name,
         role: m.role,
         online: online.has(m.id),
-        submitted: m.id in state.submissions,
+        ...(me.role === 'gm' || m.id === me.id ? { submitted: m.id in state.submissions } : {}),
       })),
+      submittedCount: Object.keys(state.submissions).length,
       you: {
         memberId: me.id,
         role: me.role,

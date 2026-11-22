@@ -187,8 +187,10 @@ describe('GEN-063 time system in the play room', { timeout: 60_000 }, () => {
     const c = await enter(t.c);
     const room = c.lastRoom()!;
     expect(room).toMatchObject({ day: 5, phase: 'SOLARION', turn: 2, status: 'collecting' });
-    const sent = Object.fromEntries(room.members.map((m) => [m.memberId, m.submitted]));
-    expect(sent).toEqual({ [t.a.memberId]: true, [t.b.memberId]: true, [t.c.memberId]: false });
+    // Q-195: C sees that 2 sent, and that C did not.
+    expect(room.submittedCount).toBe(2);
+    expect(room.members.find((m) => m.memberId === t.c.memberId)!.submitted).toBe(false);
+    expect(a.lastRoom()!.members.find((m) => m.memberId === t.a.memberId)!.submitted).toBe(true);
     expect(a.lastRoom()!.you.action).toEqual({ text: 'ซ่อนตัวหลังร้านขนมปัง', visibility: 'public', rest: false });
     expect(a.lastRoom()!.you.lock).toBeNull();
 

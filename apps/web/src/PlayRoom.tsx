@@ -167,12 +167,14 @@ export function PlayRoom({
             <p>ช่วง NOCTHERION: ส่ง Secret ได้ฟรี 1 เทิร์น และควรนอน (REST / SLEEP) อย่างน้อย 1 เทิร์น ไม่อย่างนั้นวันถัดไปจะง่วงซึม</p>
           )}
 
+          {/* Q-195: players get only the count; `submitted` is there for their own entry (and every entry for the GM). */}
+          <p>{`ส่ง action แล้ว ${room.submittedCount}/${room.members.filter((m) => m.role === 'player').length} คน`}</p>
           <ul aria-label="ผู้เล่นในห้อง">
             {room.members.map((m) => (
               <li key={m.memberId}>
                 {m.name}
                 {m.memberId === you.memberId && ' (คุณ)'} — {m.online ? 'ออนไลน์' : 'ออฟไลน์'}
-                {m.role === 'gm' ? ' · GM' : m.submitted ? ' · ส่งแล้ว' : ' · ยังไม่ส่ง'}
+                {m.role === 'gm' ? ' · GM' : m.submitted === undefined ? '' : m.submitted ? ' · ส่งแล้ว' : ' · ยังไม่ส่ง'}
               </li>
             ))}
           </ul>

@@ -76,8 +76,9 @@ function roomState(patch: Partial<RoomState> = {}, you: Partial<RoomState['you']
     weather: null,
     members: [
       { memberId: me.id, name: 'นก', role: 'player', online: true, submitted: false },
-      { memberId: 'm-bee', name: 'บี', role: 'player', online: false, submitted: false },
+      { memberId: 'm-bee', name: 'บี', role: 'player', online: false },
     ],
+    submittedCount: 0,
     you: { memberId: me.id, role: 'player', place: { id: 'market', name: 'ลานตลาด' }, lock: null, secretUsed: false, drowsy: false, action: null, allies: [], ...you },
     gmStatus: null,
     ...patch,
@@ -177,10 +178,14 @@ describe('GEN-056 play room (web)', () => {
     expect(await screen.findByLabelText('ชื่อจริง')).toBeTruthy();
   });
 
-  it('C3: other players show only ส่งแล้ว; your own action is shown back to you', async () => {
+  it('C3 / Q-195: players see how many sent, never who; your own action is shown back to you', async () => {
     const socket = await enterRoom();
-    socket.receive(roomState({ members: [roomState().members[0]!, { memberId: 'm-bee', name: 'บี', role: 'player', online: true, submitted: true }] }));
-    expect(screen.getByText(/บี — ออนไลน์ · ส่งแล้ว/)).toBeTruthy();
+    socket.receive(roomState({ members: [roomState().members[0]!, { memberId: 'm-bee', name: 'บี', role: 'player', online: true }], submittedCount: 1 }));
+    expect(screen.getByText('ส่ง action แล้ว 1/2 คน')).toBeTruthy();
+    const list = screen.getByRole('list', { name: 'ผู้เล่นในห้อง' });
+    expect(within(list).getByText(/บี — ออนไลน์$/)).toBeTruthy();
+    expect(within(list).getByText(/นก \(คุณ\) — ออนไลน์ · ยังไม่ส่ง/)).toBeTruthy();
+    expect(within(list).queryByText(/บี.*ส่ง/)).toBeNull();
 
     fireEvent.change(screen.getByLabelText('action ของคุณ'), { target: { value: 'แอบตามชายเสื้อคลุมดำ' } });
     fireEvent.click(screen.getByLabelText(/^Secret/));

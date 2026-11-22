@@ -131,7 +131,9 @@ describe('GEN-063 C8 migration of games stored with 3 phases', { timeout: 60_000
     expect(a.entries()).toEqual([expect.objectContaining({ day: 3, phase: 'SOLARION', turn: 1, text: 'คุณเดินถึงตลาด' })]);
     const room = a.lastRoom()!;
     expect(room).toMatchObject({ day: 3, phase: 'HESPERION', turn: 1, status: 'collecting' });
-    expect(Object.fromEntries(room.members.map((m) => [m.memberId, m.submitted]))).toEqual({ 'm-a': false, 'm-b': true });
+    // Q-195: A sees B's action as the count only.
+    expect(room.submittedCount).toBe(1);
+    expect(room.members.find((m) => m.memberId === 'm-a')!.submitted).toBe(false);
     // The day Secret A used on day 3 still counts.
     expect(room.you.secretUsed).toBe(true);
 
