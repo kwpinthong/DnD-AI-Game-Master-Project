@@ -28,10 +28,10 @@ import {
 import { eq } from 'drizzle-orm';
 import type { Clock } from '../auth/join.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
-import { character, game } from '../db/schema.ts';
+import { game } from '../db/schema.ts';
 import { activeMembers, type MemberRow } from '../game/service.ts';
 import { CryptoRng } from '../rng.ts';
-import { getGameScenario } from '../scenario/store.ts';
+import { characterNameOf, entryViewOf, placeViewOf } from './entry-view.ts';
 import { forbiddenKeysIn } from '../visibility/guard.ts';
 import {
   closeAlliesOf,
@@ -176,31 +176,9 @@ export function createRoomService(
     socket.send(JSON.stringify(message));
   }
 
-  function placeView(db: DbOrTx, gameId: string, locationId: string | null): PlaceView | null {
-    if (locationId === null) return null;
-    const location = getGameScenario(db, gameId)?.locations.find((l) => l.id === locationId);
-    return { id: locationId, name: location?.name ?? locationId };
-  }
-
-  function characterName(memberId: string | null): string {
-    if (memberId === null) return '';
-    return db.select({ name: character.name }).from(character).where(eq(character.memberId, memberId)).get()?.name ?? '';
-  }
-
-  function entryView(row: RoomEntryRow, viewer: MemberRow): RoomEntry {
-    return {
-      seq: row.id,
-      kind: row.kind,
-      day: row.day,
-      phase: row.phase,
-      turn: row.turn === 2 ? 2 : 1,
-      place: placeView(db, row.gameId, row.locationId),
-      text: row.text,
-      ...(row.kind === 'whisper'
-        ? { whisper: { from: characterName(row.fromMemberId), to: characterName(row.toMemberId), mine: row.fromMemberId === viewer.id } }
-        : {}),
-    };
-  }
+  const placeView = placeViewOf;
+  const characterName = (memberId: string | null) => characterNameOf(db, memberId);
+  const entryView = (row: RoomEntryRow, viewer: MemberRow): RoomEntry => entryViewOf(db, row, viewer);
 
   /** Allies `me` may Whisper to and whose real name they see (GEN-067), by their presence ref. A discovered name alone (Q-134) opens no Whisper. */
   function alliesOf(me: MemberRow): { ref: string; name: string }[] {

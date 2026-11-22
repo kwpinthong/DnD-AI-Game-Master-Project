@@ -25,6 +25,8 @@ import { registerCompanionRoutes } from './companions/routes.ts';
 import { registerAdminRoutes } from './admin/routes.ts';
 import { registerInventoryRoutes } from './skills/routes.ts';
 import { registerGmConsoleRoutes } from './gm-console/routes.ts';
+import { startBackupSchedule, type BackupSchedule } from './backup/schedule.ts';
+import { registerHistoryRoutes } from './history/routes.ts';
 
 export interface RunningServer {
   url: string;
@@ -41,6 +43,8 @@ export interface RunningServer {
   routes: readonly string[];
   /** Game data from the JSON in apps/server/assets (GEN-062), checked at start; never fetched while running. */
   assets: GameAssets;
+  /** The backup job (GEN-037) when `config.backup` is set. */
+  backups?: BackupSchedule;
   close(): Promise<void>;
 }
 
@@ -63,6 +67,8 @@ export interface ServerOptions {
   phaseResolver?: PhaseResolver;
   /** Folder of the asset JSON files; default apps/server/assets (tests point it at a broken copy). */
   assetsDir?: string;
+  /** Backup job log lines (default console.log): file, size, time only. */
+  backupLog?: (line: string) => void;
 }
 
 export async function startServer(config: ServerConfig, options: ServerOptions = {}): Promise<RunningServer> {
@@ -114,6 +120,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerAdminRoutes(app, db, now, { ai: aiConfig, ...(config.adminCodeHash ? { adminCodeHash: config.adminCodeHash } : {}) });
   registerInventoryRoutes(app, db, now, assets);
   registerGmConsoleRoutes(app, db, now, room, assets);
+  registerHistoryRoutes(app, db, now);
 
   try {
     await app.listen({ host: config.host, port: config.port });
@@ -124,6 +131,9 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
 
   const { port } = app.server.address() as AddressInfo;
   const urlHost = config.host === '0.0.0.0' ? '127.0.0.1' : config.host;
+  const backups = config.backup
+    ? startBackupSchedule({ ...config.backup, sqlite, now, log: options.backupLog ?? ((line) => console.log(line)) })
+    : undefined;
 
   return {
     url: `http://${urlHost}:${port}`,
@@ -135,9 +145,12 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     weather,
     routes,
     assets,
+    ...(backups ? { backups } : {}),
     async close() {
       await app.close();
       await weather.idle();
+      // After the room and the weather picks stopped writing: the shutdown backup has everything.
+      await backups?.stop();
       if (sqlite.open) sqlite.close();
     },
   };

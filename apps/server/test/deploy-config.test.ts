@@ -64,6 +64,14 @@ describe('Railway service config (.railway/railway.ts)', () => {
     expect(read('apps/server/server.env.example')).toMatch(/^CREATE_CODE_HASH=$/m);
   });
 
+  // GEN-037: backups go to the volume (next to the DB), never to the container's own disk that a deploy wipes.
+  it('BACKUP_DIR is inside the mounted volume, next to the DB', () => {
+    expect(source).toContain('BACKUP_DIR: `${VOLUME_MOUNT}/backups`');
+    for (const name of ['BACKUP_DIR', 'BACKUP_INTERVAL_HOURS', 'BACKUP_KEEP']) {
+      expect(read('apps/server/server.env.example')).toMatch(new RegExp(`^${name}=$`, 'm'));
+    }
+  });
+
   it('pins Node 26 for Railpack, matching engines.node', () => {
     expect(literal(source, 'RAILPACK_NODE_VERSION')).toBe('26');
     expect((JSON.parse(read('package.json')) as { engines: { node: string } }).engines.node).toBe('>=26');
@@ -89,6 +97,17 @@ describe('deploy guide (docs/deploy.md) matches the config files', () => {
     expect(guide).toContain('`CREATE_CODE_HASH`');
     expect(guide).toContain('create-code:hash');
     expect(guide).toMatch(/ลบ.*`BOOTSTRAP_INVITE_CODE`/);
+  });
+
+  it('GEN-037: says where backups go, how often, how many are kept, and how to back up / restore by hand', () => {
+    expect(guide).toContain('`BACKUP_DIR=/data/backups`');
+    expect(guide).toContain('`BACKUP_INTERVAL_HOURS`');
+    expect(guide).toContain('`BACKUP_KEEP`');
+    expect(guide).toContain('node apps/server/src/backup/backup-cli.ts');
+    expect(guide).toContain('node apps/server/src/backup/restore-cli.ts');
+    expect(guide).toContain('integrity_check');
+    expect(existsSync(join(repoRoot, 'apps/server/src/backup/backup-cli.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'apps/server/src/backup/restore-cli.ts'))).toBe(true);
   });
 
   it('has a post-deploy check for every Case C1-C7', () => {
