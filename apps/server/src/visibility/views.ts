@@ -1,6 +1,5 @@
 import type {
   GmCharacterView,
-  NpcView,
   OtherCharacterView,
   PlaceView,
   Scenario,
@@ -8,6 +7,8 @@ import type {
 } from '@isekai/protocol';
 import { injuryText, karmaTitle, socialTitle, type KarmaTier } from '@isekai/rules';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import type { GameAssets } from '../assets/load.ts';
+import { npcViewsAt } from '../companions/store.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { character, member } from '../db/schema.ts';
 import { getCharacter } from '../game/character.ts';
@@ -20,7 +21,6 @@ import {
   playerBondsOf,
   presenceOf,
   presencesInGame,
-  type NpcBondRow,
   type PresenceRow,
 } from './store.ts';
 
@@ -47,11 +47,6 @@ export function otherCharacterView(subject: CharacterRow, presence: PresenceRow,
     socialTitle: socialTitle(subject.reputation),
     name: knowsName ? subject.name : null,
   };
-}
-
-export function npcView(npc: { readonly name: string; readonly alias: string }, bond: Pick<NpcBondRow, 'nameRevealed'> | undefined): NpcView {
-  const nameRevealed = bond?.nameRevealed ?? false;
-  return { name: nameRevealed ? npc.name : npc.alias, nameRevealed };
 }
 
 // --- Events at a place (actions, arrivals, scene events) ---
@@ -107,8 +102,8 @@ function charactersInGame(db: DbOrTx, gameId: string) {
     .all();
 }
 
-function playerSurroundings(db: Db, me: MemberRow, karmaTiers: readonly KarmaTier[]): SurroundingsResponse {
-  const you = getCharacter(db, me, karmaTiers);
+function playerSurroundings(db: Db, me: MemberRow, assets: GameAssets): SurroundingsResponse {
+  const you = getCharacter(db, me, assets.karmaTiers);
   const here = presenceOf(db, me.id);
   if (!you || !here) return { view: 'player', you, place: null, people: [], npcs: [] };
 
@@ -118,14 +113,13 @@ function playerSurroundings(db: Db, me: MemberRow, karmaTiers: readonly KarmaTie
     ({ character: c }) => c.memberId !== me.id && presences.get(c.memberId)?.locationId === here.locationId,
   );
   const known = namesVisibleTo(db, me.id);
-  const bonds = new Map(npcBondsOf(db, me.id).map((b) => [b.npcId, b]));
 
   return {
     view: 'player',
     you,
     place: placeOf(scenario, here.locationId),
     people: others.map(({ character: c }) => otherCharacterView(c, presences.get(c.memberId)!, known.has(c.memberId))),
-    npcs: (scenario?.npcs ?? []).filter((n) => n.locationId === here.locationId).map((n) => npcView(n, bonds.get(n.id))),
+    npcs: npcViewsAt(db, assets, me.id, me.gameId, here.locationId),
   };
 }
 
@@ -155,6 +149,6 @@ function gmSurroundings(db: DbOrTx, gameId: string, karmaTiers: readonly KarmaTi
 }
 
 /** GET /api/game/surroundings for `me`: the GM view for the Human GM, the player view for everyone else. */
-export function surroundingsFor(db: Db, me: MemberRow, karmaTiers: readonly KarmaTier[]): SurroundingsResponse {
-  return me.role === 'gm' ? gmSurroundings(db, me.gameId, karmaTiers) : playerSurroundings(db, me, karmaTiers);
+export function surroundingsFor(db: Db, me: MemberRow, assets: GameAssets): SurroundingsResponse {
+  return me.role === 'gm' ? gmSurroundings(db, me.gameId, assets.karmaTiers) : playerSurroundings(db, me, assets);
 }

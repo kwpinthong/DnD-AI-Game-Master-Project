@@ -137,3 +137,5 @@ export * from './schema-items.ts';
 
 // GEN-064: Active skill / item uses per game day (Daily_Limit), own file for the same reason.
 export * from './schema-tags.ts';
+// GEN-054: NPC handles for companions, own file for the same reason.
+export * from './schema-companion.ts';

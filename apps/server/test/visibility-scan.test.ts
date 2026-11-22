@@ -18,7 +18,7 @@ interface Request {
  * The C6 test fails when the server has a route that is missing here, so a new route gets scanned too.
  * Socket events (GEN-056) go through the same `forbiddenKeysIn` before they are emitted.
  */
-function playerRequests(t: Table, me: Seat): Record<string, Request> {
+function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string, Request> {
   return {
     'GET /health': { method: 'GET', path: '/health' },
     'GET /api/me': { method: 'GET', path: '/api/me' },
@@ -45,6 +45,10 @@ function playerRequests(t: Table, me: Seat): Record<string, Request> {
       path: '/api/game/character/loot/choose',
       body: { skillIds: ['not-offered'], itemIds: ['not-offered'] },
     },
+    // GEN-054: companions (save one NPC at the market, list, release a ref that is not one: the 404 is scanned too).
+    'GET /api/game/companions': { method: 'GET', path: '/api/game/companions' },
+    'POST /api/game/companions': { method: 'POST', path: '/api/game/companions', body: { ref: merchantRef ?? 'none' } },
+    'DELETE /api/game/companions/:ref': { method: 'DELETE', path: '/api/game/companions/not-a-companion' },
     'POST /api/join': { method: 'POST', path: '/api/join', body: { inviteCode: t.inviteCode, name: playerNameOf(t, me), pin: '1111' } },
     'POST /api/games': {
       method: 'POST',
@@ -125,7 +129,10 @@ describe('C6: no player-facing payload carries karma (GEN-050)', { timeout: 120_
   async function scanAsPlayers(t: Table) {
     const leaks: string[] = [];
     for (const seat of [t.a, t.b, t.c]) {
-      const requests = playerRequests(t, seat);
+      const seen = await t.call('GET', '/api/game/surroundings', { token: seat.token });
+      const merchantRef = (seen.body as { npcs?: { ref: string }[] }).npcs?.[0]?.ref;
+      expect(merchantRef, 'an NPC to save').toBeTypeOf('string');
+      const requests = playerRequests(t, seat, merchantRef);
       // CORS preflight (`OPTIONS *`) answers with headers only, no payload.
       const routes = server!.routes.filter((r) => !r.startsWith('OPTIONS '));
       expect(Object.keys(requests).sort(), 'every route must be in the scan list').toEqual([...routes].sort());

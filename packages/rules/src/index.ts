@@ -91,3 +91,4 @@ export {
   type InjuryText,
 } from './visibility.ts';
 export { KARMA_MAX, KARMA_MIN, karmaTierProblems, karmaTitle, type KarmaTier } from './karma.ts';
+export * from './companion.ts';

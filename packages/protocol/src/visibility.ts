@@ -24,8 +24,13 @@ export const OtherCharacterView = z.strictObject({
 });
 export type OtherCharacterView = z.infer<typeof OtherCharacterView>;
 
-/** An NPC at the viewer's place: its alias until `nameRevealed` for this viewer, then its real name. */
+/**
+ * An NPC at the viewer's place: its alias until `nameRevealed` for this viewer, then its real name.
+ * `ref` is an opaque handle per game (not the scenario id, which can give the role away); the player
+ * uses it to save the NPC as a companion (GEN-054).
+ */
 export const NpcView = z.strictObject({
+  ref: z.string(),
   name: z.string(),
   nameRevealed: z.boolean(),
 });

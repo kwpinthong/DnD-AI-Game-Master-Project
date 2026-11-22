@@ -101,6 +101,13 @@ export const npcBond = sqliteTable(
     affinity: integer('affinity').notNull().default(0),
     nameRevealed: integer('name_revealed', { mode: 'boolean' }).notNull().default(false),
     updatedAt: integer('updated_at').notNull(),
+    // --- GEN-054 (companions + evolution; see companions/store.ts) ---
+    /** Save order when this NPC is one of the player's (at most 3) companions; null = not saved. */
+    companionSeq: integer('companion_seq'),
+    /** The NPC's grade for this player once it evolved (F → SS, A → S, S awakened = S); null = not evolved. */
+    evolvedGrade: text('evolved_grade', { enum: ['S', 'SS'] }),
+    /** Which path it took ("สาย Good" / "Evil" / "Neutral" of the sheet); null = the NPC's only path. */
+    evolvedAlignment: text('evolved_alignment', { enum: ['Good', 'Evil', 'Neutral'] }),
   },
   (t) => [primaryKey({ columns: [t.memberId, t.npcId] })],
 );
