@@ -81,7 +81,18 @@ export type RoomWhisper = z.infer<typeof RoomWhisper>;
 export const RoomRetry = z.object({ type: z.literal('retry') });
 export type RoomRetry = z.infer<typeof RoomRetry>;
 
-export const RoomClientMessage = z.discriminatedUnion('type', [RoomHello, RoomAction, RoomWhisper, RoomRetry]);
+/**
+ * Walk to another place (GEN-066). `to` is a place id of the game data's Location tab (its name, e.g.
+ * "โบสถ์"). Same zone: you are there now (Stamina -1) and still send this turn's action. Another zone: the
+ * trip is this turn's action (Stamina -3) and you arrive when the turn closes.
+ */
+export const RoomMove = z.object({
+  type: z.literal('move'),
+  to: z.string(),
+});
+export type RoomMove = z.infer<typeof RoomMove>;
+
+export const RoomClientMessage = z.discriminatedUnion('type', [RoomHello, RoomAction, RoomWhisper, RoomRetry, RoomMove]);
 export type RoomClientMessage = z.infer<typeof RoomClientMessage>;
 
 // --- Server → client ---
@@ -196,8 +207,34 @@ export const RoomActionCode = z.enum([
   'resolving',
   'secret_quota_used',
   'game_ended',
+  /** GEN-066: this turn is the trip to another zone. */
+  'traveling',
 ]);
 export type RoomActionCode = z.infer<typeof RoomActionCode>;
+
+/** Why a move was refused (GEN-066). */
+export const RoomMoveCode = z.enum([
+  'unknown_location',
+  'already_here',
+  'not_enough_stamina',
+  'restricted',
+  'infiltrate_failed',
+  'black_market_closed',
+  'rift_closed',
+  'rift_gateway',
+  'traveling',
+  'not_placed',
+  'cannot_act',
+]);
+export type RoomMoveCode = z.infer<typeof RoomMoveCode>;
+/** `arrives`: `now` (same zone, or into the Astral Rift for one turn) or `next_turn` (another zone). */
+export const RoomMoveAccepted = z.strictObject({
+  type: z.literal('move_accepted'),
+  kind: z.enum(['same_zone', 'cross_zone', 'rift']),
+  place: PlaceView,
+  arrives: z.enum(['now', 'next_turn']),
+});
+export const RoomMoveRejected = z.strictObject({ type: z.literal('move_rejected'), code: RoomMoveCode, message: z.string() });
 
 export const RoomActionAccepted = z.strictObject({ type: z.literal('action_accepted') });
 export const RoomActionRejected = z.strictObject({ type: z.literal('action_rejected'), code: RoomActionCode, message: z.string() });
@@ -227,6 +264,8 @@ export const RoomServerMessage = z.discriminatedUnion('type', [
   RoomActionRejected,
   RoomWhisperAccepted,
   RoomWhisperRejected,
+  RoomMoveAccepted,
+  RoomMoveRejected,
   RoomError,
 ]);
 export type RoomServerMessage = z.infer<typeof RoomServerMessage>;

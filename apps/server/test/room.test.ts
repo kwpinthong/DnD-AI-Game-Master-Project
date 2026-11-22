@@ -353,7 +353,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
     await submitAndAccept(solo, 'สำรวจโรงเตี๊ยม');
     await solo.waitFor(phaseIs(1, 'EOSORIA', 2));
     expect(script.calls).toHaveLength(1);
-    expect(script.calls[0]!.actions).toEqual([{ memberId: created.member.id, text: 'สำรวจโรงเตี๊ยม', visibility: 'public', rest: false, locationId: 'inn' }]);
+    expect(script.calls[0]!.actions).toEqual([{ memberId: created.member.id, text: 'สำรวจโรงเตี๊ยม', visibility: 'public', rest: false, locationId: 'inn', travelingTo: null }]);
   });
 
   it('C8: B\'s Public result at the market reaches A at the market, not C in the forest', async () => {

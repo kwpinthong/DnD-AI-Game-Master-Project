@@ -102,7 +102,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerTimelineRoutes(app, db, now);
   registerVisibilityRoutes(app, db, now, assets);
   const resolver = options.phaseResolver ?? createAiGmResolver({ db, ai, assets, now, log: options.aiLog ?? ((line) => console.log(line)) });
-  registerRoomRoutes(app, db, now, { resolver, webOrigins: config.webOrigins ?? [] });
+  registerRoomRoutes(app, db, now, { resolver, assets, webOrigins: config.webOrigins ?? [] });
   registerCompanionRoutes(app, db, now, assets);
 
   try {

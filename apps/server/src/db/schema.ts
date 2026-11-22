@@ -142,3 +142,6 @@ export * from './schema-companion.ts';
 
 // GEN-057: the AI GM turn loop (stored turn work, Constraint Lock, day memory), own file for the same reason.
 export * from './schema-gm.ts';
+
+// GEN-066: a trip that ends when the turn closes, own file for the same reason.
+export * from './schema-travel.ts';
