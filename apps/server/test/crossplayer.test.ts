@@ -100,6 +100,8 @@ describe('cross-player actions on the server (GEN-060)', { timeout: 60_000 }, ()
     server = await startTestServer(dataDir);
     const t = await startedTable(server, humanGm);
     const gameId = (server.db.prepare('select game_id from member where id = ?').get(t.a.memberId) as { game_id: string }).game_id;
+    // The start needs a loot choice (Q-144); these cases give loot themselves (`giveLoot`), so start from none.
+    server.db.prepare('delete from character_loot').run();
     return { ...t, gameId };
   }
 

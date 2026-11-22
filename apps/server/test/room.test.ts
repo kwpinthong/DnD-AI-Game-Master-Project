@@ -4,7 +4,7 @@ import type { ClosedPhase, PhaseResolution, PhaseResolver } from '../src/room/re
 import type { RunningServer } from '../src/server.ts';
 import { forbiddenKeysIn } from '../src/visibility/guard.ts';
 import { moveCharacter } from '../src/visibility/store.ts';
-import { makeTempDir } from './helpers.ts';
+import { makeTempDir, seedChosenLoot } from './helpers.ts';
 import { isEntry, isError, isReady, isRejected, isRoom, openRoom, type RoomClient } from './room-client.ts';
 import { caller, CLOCK, CREATE_CODE, LIN, startedTable, startTestServer, type Seat, type Table } from './visibility-fixture.ts';
 
@@ -346,6 +346,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
       ).body,
     );
     expect((await call('POST', '/api/game/character', { token: created.token, body: LIN })).status).toBe(201);
+    seedChosenLoot(server!.db, created.member.id);
     expect((await call('POST', '/api/game/start', { token: created.token })).status).toBe(200);
 
     const solo = await enter({ token: created.token });

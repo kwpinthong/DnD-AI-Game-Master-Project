@@ -12,7 +12,7 @@ import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
 import { getGameScenario } from '../src/scenario/store.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
-import { makeTempDir } from './helpers.ts';
+import { makeTempDir, seedChosenLoot } from './helpers.ts';
 
 const CREATE_CODE = 'ลับเฉพาะ-2026';
 const MOCK_AI = loadAiConfig({ AI_PROVIDER: 'mock' });
@@ -96,6 +96,7 @@ describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () =
   /** Characters are created by GEN-047; here a character row is seeded straight into the table. */
   function seedCharacter(memberId: string) {
     server!.db.prepare('insert into character (member_id, created_at) values (?, ?)').run(memberId, clock);
+    seedChosenLoot(server!.db, memberId);
   }
 
   const newEvent = (patch: Record<string, unknown> = {}) => ({
