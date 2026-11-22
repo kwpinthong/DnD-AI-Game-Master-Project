@@ -15,6 +15,7 @@ import type { AiProvider } from './ai/provider.ts';
 import { providerFor } from './ai/registry.ts';
 import { registerTimelineRoutes } from './timeline/routes.ts';
 import { registerVisibilityRoutes } from './visibility/routes.ts';
+import { registerCompanionRoutes } from './companions/routes.ts';
 
 export interface RunningServer {
   url: string;
@@ -85,6 +86,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerGameRoutes(app, db, now, { ai, ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}) });
   registerTimelineRoutes(app, db, now);
   registerVisibilityRoutes(app, db, now);
+  registerCompanionRoutes(app, db, now);
 
   try {
     await app.listen({ host: config.host, port: config.port });

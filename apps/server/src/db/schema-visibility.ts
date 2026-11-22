@@ -55,6 +55,15 @@ export const npcBond = sqliteTable(
     affinity: integer('affinity').notNull().default(0),
     nameRevealed: integer('name_revealed', { mode: 'boolean' }).notNull().default(false),
     updatedAt: integer('updated_at').notNull(),
+    // --- GEN-054 (companions + evolution; see companions/store.ts) ---
+    /** Save order when this NPC is one of the player's (at most 3) companions; null = not saved. */
+    companionSeq: integer('companion_seq'),
+    /** The NPC's grade for this player once it evolved (F → SS, A → S); null = the scenario rank. */
+    grade: text('grade', { enum: ['S', 'SS'] }),
+    /** The SS identity: ทูตสวรรค์ (angel) or เทพมารจันทราโลหิต (blood-moon). */
+    form: text('form', { enum: ['angel', 'blood-moon'] }),
+    /** The player helped this NPC through a crisis (Rules Spec §8.3); evolves A → S at the end of the phase. */
+    crisisAided: integer('crisis_aided', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [primaryKey({ columns: [t.memberId, t.npcId] })],
 );

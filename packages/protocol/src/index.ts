@@ -18,3 +18,4 @@ export * from './character.ts';
 export * from './loot.ts';
 
 export * from './visibility.ts';
+export * from './companion.ts';

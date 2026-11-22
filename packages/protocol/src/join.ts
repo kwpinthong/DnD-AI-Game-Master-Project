@@ -118,5 +118,9 @@ export const ApiError = z.discriminatedUnion('code', [
   z.object({ code: z.literal('loot_closed'), message: z.string() }),
   /** 409: choose was called before any offer exists. */
   z.object({ code: z.literal('loot_no_offer'), message: z.string() }),
+  /** 409: the player already keeps 3 NPCs; release one first (GEN-054). */
+  z.object({ code: z.literal('companion_limit'), message: z.string() }),
+  /** 404: no NPC with that ref at the caller's place, or (release) not one of the caller's companions. */
+  z.object({ code: z.literal('npc_not_found'), message: z.string() }),
 ]);
 export type ApiError = z.infer<typeof ApiError>;

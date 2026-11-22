@@ -7,8 +7,10 @@ import {
   isCrisisAid,
   rankCompanions,
   revealsNpcName,
+  validateProposal,
   type EvolutionInput,
 } from '../src/index.ts';
+import { baseState, noEffects, proposal } from './resolution-fixtures.ts';
 
 const base: EvolutionInput = { grade: 'F', affinity: 0, karma: 0, crisisAided: false, nightEnd: true };
 
@@ -38,6 +40,12 @@ describe('NPC companions, grades and evolution (GEN-054)', () => {
     if (!r.ok) expect(r.error.code).toBe('out_of_range');
     expect(applyAffinityDelta(0, -11).ok).toBe(false);
     expect(applyAffinityDelta(0, 2.5).ok).toBe(false);
+  });
+
+  it('C3: a Mock AI proposal with affinity +15 in one action is rejected as a whole (Q-049)', () => {
+    const proposed = proposal({ onSuccess: noEffects({ affinity: [{ npcId: 'npc-guard', delta: 15 }] }) });
+    const errors = validateProposal(baseState(), proposed);
+    expect(errors.map((e) => [e.code, e.path])).toEqual([['out_of_range', 'onSuccess.affinity[0].delta']]);
   });
 
   it('C3: +10 / -10 pass, and the result stays inside -100..100', () => {
