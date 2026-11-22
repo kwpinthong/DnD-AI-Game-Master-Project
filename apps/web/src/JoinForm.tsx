@@ -1,5 +1,6 @@
 import { joinFieldErrors, type JoinField, type Member } from '@isekai/protocol';
 import { useState, type FormEvent } from 'react';
+import { PinInput } from './PinInput.tsx';
 import { postJoin } from './session.ts';
 
 type Values = Record<JoinField, string>;
@@ -16,7 +17,7 @@ const fields: { field: JoinField; label: string; hint?: string; input: Record<st
     field: 'pin',
     label: 'PIN',
     hint: 'ตัวเลข 4-6 หลัก ครั้งแรกที่เข้าเกมนี้ PIN ที่ใส่จะเป็น PIN ของชื่อนี้',
-    input: { type: 'password', inputMode: 'numeric', autoComplete: 'current-password' },
+    input: {}, // rendered by PinInput below
   },
 ];
 
@@ -55,15 +56,27 @@ export function JoinForm({ apiBaseUrl, onJoined }: { apiBaseUrl: string; onJoine
         return (
           <div className="join-field" key={field}>
             <label htmlFor={id}>{label}</label>
-            <input
-              id={id}
-              name={field}
-              value={values[field]}
-              onChange={(e) => setValues((v) => ({ ...v, [field]: e.target.value }))}
-              aria-invalid={error ? 'true' : 'false'}
-              aria-describedby={describedBy || undefined}
-              {...input}
-            />
+            {field === 'pin' ? (
+              <PinInput
+                id={id}
+                name={field}
+                value={values[field]}
+                onChange={(e) => setValues((v) => ({ ...v, [field]: e.target.value }))}
+                aria-invalid={error ? 'true' : 'false'}
+                aria-describedby={describedBy || undefined}
+                autoComplete="current-password"
+              />
+            ) : (
+              <input
+                id={id}
+                name={field}
+                value={values[field]}
+                onChange={(e) => setValues((v) => ({ ...v, [field]: e.target.value }))}
+                aria-invalid={error ? 'true' : 'false'}
+                aria-describedby={describedBy || undefined}
+                {...input}
+              />
+            )}
             {hint && (
               <small id={`${id}-hint`} className="join-hint">
                 {hint}

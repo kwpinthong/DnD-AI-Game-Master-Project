@@ -121,6 +121,40 @@ describe('Create game + Lobby (GEN-025)', () => {
     expect(screen.getByText('ผู้เล่น 0/6')).toBeTruthy();
   });
 
+  it('GEN-092 C1/C3: a Thai-digit PIN is sent; Thai letters are stopped with the keyboard hint', async () => {
+    const game = view();
+    const fetchMock = stubApi({
+      'POST /api/games': () => Response.json(created(game)),
+      'GET /api/game': () => Response.json(game),
+    });
+
+    render(<App apiBaseUrl="" />);
+    openCreateForm();
+    fillCreate({ pin: 'ๅ/-ภ' });
+    submitCreate();
+    expect(await screen.findByText(/แป้นพิมพ์อาจเป็นภาษาไทย/)).toBeTruthy();
+    expect(callsTo(fetchMock, 'POST', '/api/games')).toHaveLength(0);
+
+    fillCreate({ pin: '๑๒๓๔' });
+    submitCreate();
+    expect(await screen.findByText('K7Q-2MX')).toBeTruthy();
+    expect(callsTo(fetchMock, 'POST', '/api/games')).toHaveLength(1);
+  });
+
+  it('GEN-092 C4/C7: the creator PIN asks for a new password and can be shown and hidden', () => {
+    stubApi({});
+    render(<App apiBaseUrl="" />);
+    openCreateForm();
+    const pin = screen.getByLabelText('PIN ของคุณ');
+
+    expect(pin.getAttribute('autocomplete')).toBe('new-password');
+    expect(pin.getAttribute('type')).toBe('password');
+    fireEvent.click(screen.getByRole('button', { name: 'แสดง PIN' }));
+    expect(pin.getAttribute('type')).toBe('text');
+    fireEvent.click(screen.getByRole('button', { name: 'ซ่อน PIN' }));
+    expect(pin.getAttribute('type')).toBe('password');
+  });
+
   it('C2: Single hides the Human GM choice and sends humanGm false', async () => {
     const game = view({ mode: 'single', players: { count: 1, min: 1, max: 1 }, members: [view().members[0]!] });
     const fetchMock = stubApi({

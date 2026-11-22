@@ -1,6 +1,7 @@
 import { createGameFieldErrors, type CreateGameField, type GameView, type Member } from '@isekai/protocol';
 import { useState, type FormEvent } from 'react';
 import { postCreateGame, type CreateGameInput } from './game-api.ts';
+import { PinInput } from './PinInput.tsx';
 
 type TextField = 'createCode' | 'gameName' | 'name' | 'pin';
 
@@ -17,7 +18,7 @@ const textFields: { field: TextField; label: string; hint?: string; input: Recor
     field: 'pin',
     label: 'PIN ของคุณ',
     hint: 'ตัวเลข 4-6 หลัก',
-    input: { type: 'password', inputMode: 'numeric', autoComplete: 'new-password' },
+    input: {}, // rendered by PinInput below
   },
 ];
 
@@ -77,15 +78,27 @@ export function CreateGameForm({
         return (
           <div className="setup-field" key={field}>
             <label htmlFor={id}>{label}</label>
-            <input
-              id={id}
-              name={field}
-              value={values[field]}
-              onChange={(e) => setValues((v) => ({ ...v, [field]: e.target.value }))}
-              aria-invalid={error ? 'true' : 'false'}
-              aria-describedby={describedBy || undefined}
-              {...input}
-            />
+            {field === 'pin' ? (
+              <PinInput
+                id={id}
+                name={field}
+                value={values[field]}
+                onChange={(e) => setValues((v) => ({ ...v, [field]: e.target.value }))}
+                aria-invalid={error ? 'true' : 'false'}
+                aria-describedby={describedBy || undefined}
+                autoComplete="new-password"
+              />
+            ) : (
+              <input
+                id={id}
+                name={field}
+                value={values[field]}
+                onChange={(e) => setValues((v) => ({ ...v, [field]: e.target.value }))}
+                aria-invalid={error ? 'true' : 'false'}
+                aria-describedby={describedBy || undefined}
+                {...input}
+              />
+            )}
             {hint && <small id={`${id}-hint`}>{hint}</small>}
             {error && (
               <p id={`${id}-error`} className="setup-error" role="alert">
