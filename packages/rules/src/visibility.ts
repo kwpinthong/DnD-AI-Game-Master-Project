@@ -1,3 +1,4 @@
+import { NAME_REVEAL_AFFINITY } from './companion.ts';
 import type { NpcGrade } from './resolution/types.ts';
 
 /** What other people see of someone's HP (Rules Spec §2.2 bands; HP 0 = unconscious, Q-057). */
@@ -12,12 +13,13 @@ export function injuryText(hp: number): InjuryText {
 }
 
 /** Affinity that reveals a grade B NPC's real name to that player (Rules Spec §8.1). */
-export const NPC_NAME_REVEAL_AFFINITY = 9;
+export const NPC_NAME_REVEAL_AFFINITY = NAME_REVEAL_AFFINITY.B;
 
 /**
- * Whether this affinity reveals the NPC's real name. Only grade B has an affinity rule (Rules Spec §8.1);
- * the reveal is permanent, so callers keep `nameRevealed` once it is true.
+ * Whether this affinity reveals the NPC's real name to that player: B +9 (Rules Spec §8.1), the other
+ * grades per `NAME_REVEAL_AFFINITY` (GEN-054, Q-084). The reveal is permanent, so callers keep
+ * `nameRevealed` once it is true.
  */
 export function revealsNpcName(rank: NpcGrade, affinity: number): boolean {
-  return rank === 'B' && affinity >= NPC_NAME_REVEAL_AFFINITY;
+  return affinity >= NAME_REVEAL_AFFINITY[rank];
 }
