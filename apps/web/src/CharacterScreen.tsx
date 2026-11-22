@@ -186,6 +186,7 @@ export function CharacterScreen({
           </div>
         );
       })}
+      {editing && <p>แก้บุคลิกแล้วของติดตัวที่เลือกไว้จะถูกล้าง ต้องให้ AI วิเคราะห์บุคลิกใหม่</p>}
       {formError && (
         <p className="setup-error" role="alert">
           {formError}

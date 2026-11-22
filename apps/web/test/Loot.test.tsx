@@ -244,4 +244,64 @@ describe('Character loot step (GEN-048)', () => {
     expect(await within(section).findByText(/สุ่มใหม่ครบ 3 ครั้งแล้ว/)).toBeTruthy();
     expect((within(section).getByRole('button', { name: 'สุ่มใหม่' }) as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it('Q-081: before the start a kept set can be changed: reroll, then a new choice replaces it', async () => {
+    const newChoice: LootView['chosen'] = { ...chosenOf(0)!, skill: option('ใหม่-s1', 'skill', 'ใหม่-อ่านสีหน้า'), item: option('ใหม่-i2', 'item', 'ใหม่-สมุดจด') };
+    const fetchMock = loggedIn({
+      'GET /api/game/character/loot': () => loot({ ...empty, chosen: chosenOf(0) }),
+      'POST /api/game/character/loot': () => loot(offerView('ใหม่-', { rerollsUsed: 1, chosen: chosenOf(0) })),
+      'POST /api/game/character/loot/choose': () => loot({ ...empty, rerollsUsed: 1, chosen: newChoice }),
+    });
+
+    const section = await openLoot();
+    expect((await within(section).findByRole('list', { name: 'ของติดตัวที่เลือก' })).textContent).toContain('อ่านสีหน้า');
+    fireEvent.click(within(section).getByRole('button', { name: 'เปลี่ยนของติดตัว' }));
+
+    // The new offer is shown with the current set still listed until a new choice is made.
+    fireEvent.click(await within(section).findByLabelText(/ใหม่-อ่านสีหน้า/));
+    expect(within(section).getByRole('list', { name: 'ของติดตัวที่เลือก' }).textContent).toContain('เสื้อหนัง');
+    fireEvent.click(within(section).getByLabelText(/ใหม่-สมุดจด/));
+    fireEvent.click(within(section).getByRole('button', { name: 'ยืนยันของติดตัว' }));
+
+    await within(section).findByText(/ไอเท็ม: ใหม่-สมุดจด/);
+    expect(within(section).queryByRole('radio')).toBeNull();
+    const [call] = callsTo(fetchMock, 'POST', '/api/game/character/loot/choose');
+    expect(JSON.parse(String(call![1]?.body))).toEqual({ skillIds: ['ใหม่-s1'], itemIds: ['ใหม่-i2'] });
+  });
+
+  it('Q-081: after the start the kept set is shown without a change button', async () => {
+    loggedIn({
+      'GET /api/game/character': () => Response.json({ character: { ...saved, editable: false } }),
+      'GET /api/game/character/loot': () => loot({ ...empty, canReroll: false, chosen: chosenOf(1) }),
+    });
+
+    const section = await openLoot();
+
+    expect((await within(section).findByRole('list', { name: 'ของติดตัวที่เลือก' })).textContent).toContain('สายตาเหยี่ยว');
+    expect(within(section).queryByRole('button', { name: 'เปลี่ยนของติดตัว' })).toBeNull();
+    expect(within(section).getByRole('status').textContent).toContain('เกมเริ่มแล้ว เปลี่ยนของติดตัวไม่ได้');
+  });
+
+  it('Q-081: editing the personality warns that the loot is cleared, and the loot step starts again', async () => {
+    let lootCleared = false;
+    const fetchMock = loggedIn({
+      'PUT /api/game/character': (_url, init) => {
+        lootCleared = true;
+        return Response.json({ character: { ...saved, ...(JSON.parse(String(init?.body)) as object) } });
+      },
+      'GET /api/game/character/loot': () => loot(lootCleared ? empty : { ...empty, chosen: chosenOf(0) }),
+    });
+
+    const section = await openLoot();
+    await within(section).findByRole('list', { name: 'ของติดตัวที่เลือก' });
+    fireEvent.click(screen.getByRole('button', { name: 'แก้ไข' }));
+    expect(screen.getByText(/แก้บุคลิกแล้วของติดตัวที่เลือกไว้จะถูกล้าง/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('บุคลิก'), { target: { value: 'ใจดี ชอบช่วยคน' } });
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึกตัวละคร' }));
+
+    const again = await screen.findByRole('region', { name: 'ของติดตัว' });
+    expect(await within(again).findByRole('button', { name: 'ให้ AI วิเคราะห์บุคลิก' })).toBeTruthy();
+    expect(within(again).queryByRole('list', { name: 'ของติดตัวที่เลือก' })).toBeNull();
+    expect(callsTo(fetchMock, 'GET', '/api/game/character/loot')).toHaveLength(2);
+  });
 });
