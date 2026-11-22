@@ -292,18 +292,22 @@ describe('cross-player actions on the server (GEN-060)', { timeout: 60_000 }, ()
     expect(dbDump()).toBe(before);
   });
 
-  it('Q-080: a player sees only timeline events at their own place (or town-wide); the Human GM sees all', async () => {
+  it('Q-080 / Q-104: a player sees timeline events they were at when they began (or town-wide); the Human GM sees all', async () => {
     const t = await table(true);
     move(t.a, 'market');
     move(t.b, 'forest');
+    move(t.c, 'gate');
     advanceTimeline(server!.orm, t.gameId, { day: 5, phase: 'MORNING' }, CLOCK);
     const timeline = async (who: { token: string }) => GameTimelineResponse.parse((await t.call('GET', '/api/game/timeline', { token: who.token })).body);
 
-    // d1-bread is at the market, d5-disaster at the gate, d2 / d3 have no place (town-wide).
-    expect((await timeline(t.a)).events.map((e) => e.id)).toEqual(['d1-bread', 'd2-first-companion', 'd3-cult-clue']);
+    // d1-bread (market) began at the start, before A got there; d5-disaster (gate) began with C there;
+    // d2 / d3 have no place (town-wide).
+    expect((await timeline(t.a)).events.map((e) => e.id)).toEqual(['d2-first-companion', 'd3-cult-clue']);
     expect((await timeline(t.b)).events.map((e) => e.id)).toEqual(['d2-first-companion', 'd3-cult-clue']);
-    move(t.c, 'gate');
+    move(t.c, 'forest');
+    move(t.a, 'gate');
     expect((await timeline(t.c)).events.map((e) => e.id)).toEqual(['d2-first-companion', 'd3-cult-clue', 'd5-disaster']);
+    expect((await timeline(t.a)).events.map((e) => e.id)).toEqual(['d2-first-companion', 'd3-cult-clue']);
     expect((await timeline(t.gm!)).events.map((e) => e.id)).toContain('d5-disaster');
     expect((await timeline(t.gm!)).events.map((e) => e.id)).toContain('d1-bread');
   });
