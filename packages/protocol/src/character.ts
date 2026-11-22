@@ -1,13 +1,19 @@
 import { z } from 'zod';
-import { normalizePlayerName } from './join.ts';
 
 /** Longest values, counted in Unicode code points after normalisation (Thai marks count). */
 export const CHARACTER_NAME_MAX_LENGTH = 40;
 export const APPEARANCE_MAX_LENGTH = 500;
 export const PERSONALITY_MAX_LENGTH = 1000;
 
-/** Free text keeps its line breaks; only NFKC and the outer whitespace are changed. */
-const normalizeText = (raw: string) => raw.normalize('NFKC').trim();
+/**
+ * NFC like action text (GEN-094, Q-108). Not NFKC: NFKC splits Thai sara am (ำ U+0E33) into nikhahit +
+ * sara aa, so "คำแก้ว" would be stored and shown as a different string and count one character longer.
+ * Free text keeps its line breaks; only the outer whitespace goes.
+ */
+const normalizeText = (raw: string) => raw.normalize('NFC').trim();
+
+/** The character's real name: NFC, trimmed, runs of whitespace folded to one space. */
+const normalizeCharacterName = (raw: string) => normalizeText(raw).replace(/\s+/gu, ' ');
 
 function text(normalize: (raw: string) => string, max: number, empty: string, tooLong: string) {
   return z
@@ -28,7 +34,7 @@ function text(normalize: (raw: string) => string, max: number, empty: string, to
  */
 export const CharacterRequest = z.object({
   name: text(
-    normalizePlayerName,
+    normalizeCharacterName,
     CHARACTER_NAME_MAX_LENGTH,
     'กรุณาใส่ชื่อจริงของตัวละคร',
     `ชื่อจริงยาวได้ไม่เกิน ${CHARACTER_NAME_MAX_LENGTH} ตัวอักษร`,
