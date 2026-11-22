@@ -269,6 +269,12 @@ describe('GEN-059 finale', { timeout: 60_000 }, () => {
     expect(c!.karma).toBe(37);
     // Q-196: the 11-tier word is the main label.
     expect(c!.karmaTier).toBe(karmaTitle(37, server!.assets.karmaTiers));
+    // Q-229 C6: how each looked, the last Social Title, and the ending the GM told them (everyone's, only after the end).
+    expect(reveal.players.map((p) => p.appearance)).toEqual([LIN.appearance, DARIN.appearance, MEKHA.appearance]);
+    for (const p of reveal.players) {
+      expect(p.finalTitle).toBeTypeOf('string');
+      expect(p.epilogue).toBe('ฉากจบส่วนตัว survived');
+    }
     for (const p of reveal.players) {
       expect(p.spawn).toBe('โรงเตี๊ยมและกิลด์นักเดินทาง');
       expect(p.outcome).toBe('survived'); // everyone started (and stayed) at the inn: a SAFE_ZONE

@@ -530,7 +530,7 @@ export function createRoomService(
       const out = entries.map((entry) => {
         const recipients = recipientsOf(tx, gameId, state, entry);
         const locationId = entry.kind === 'feed' ? entry.locationId : null;
-        return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text }, [...recipients], t), recipients };
+        return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text, meta: { finale: true } }, [...recipients], t), recipients };
       });
       markNarrated(tx, gameId, t);
       return out;

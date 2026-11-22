@@ -225,6 +225,13 @@
       "when": 1795344647153,
       "tag": "0031_event_outcome_side",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1795354533041,
+      "tag": "0032_entry_meta",
+      "breakpoints": true
     }
   ]
 }
