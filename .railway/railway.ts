@@ -53,6 +53,8 @@ export default defineRailway(() => {
     env: {
       NODE_ENV: 'production',
       DB_PATH: `${VOLUME_MOUNT}/isekai.sqlite`,
+      // Backup job (GEN-037): every 6 h + at shutdown, newest 28 kept (defaults), on the volume next to the DB.
+      BACKUP_DIR: `${VOLUME_MOUNT}/backups`,
       // engines.node is ">=26"; pin the major so Railpack does not pick a newer non-LTS Node.
       RAILPACK_NODE_VERSION: '26',
       // https://<site>.netlify.app, set in the dashboard once the Netlify site exists.
