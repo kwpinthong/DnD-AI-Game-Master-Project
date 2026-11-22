@@ -55,6 +55,8 @@ export const textPairs: readonly Pair[] = [
   ['--text-soft', '--panel', 'ป้ายผลทอย / ค่าที่เปลี่ยน บนแผง'],
   ['--text-soft', '--bubble-own', 'ข้อความรองในกล่องของเรา'],
   ['--highlight', '--bg', 'ป้ายเหรียญที่ได้ (บนพื้น feed)'],
+  ['--text', '--line', 'ตัวอักษรใน avatar'],
+  ['--on-accent', '--highlight', 'ปุ่ม [ส่ง] สีอำพัน'],
 ];
 
 // Non-text UI parts (WCAG 1.4.11, >= 3:1).

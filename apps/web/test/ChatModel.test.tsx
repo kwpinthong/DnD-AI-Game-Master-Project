@@ -23,11 +23,11 @@ describe('C3 quick words only prefill', () => {
   it('an empty box gets the word; a typed text keeps its words behind it', () => {
     expect(prefillAction('', 'สังเกต')).toBe('สังเกต');
     expect(prefillAction('', 'พูดคุย')).toBe('พูดคุย ');
-    expect(prefillAction('ประตูบานนั้น', 'สังเกต')).toBe('สังเกตประตูบานนั้น');
+    expect(prefillAction('ประตูบานนั้น', 'สังเกต')).toBe('สังเกต ประตูบานนั้น');
   });
 
   it('another quick word replaces the first one instead of stacking', () => {
-    expect(prefillAction('สังเกต ประตูบานนั้น', 'สืบค้น')).toBe('สืบค้นประตูบานนั้น');
+    expect(prefillAction('สังเกต ประตูบานนั้น', 'สืบค้น')).toBe('สืบค้น ประตูบานนั้น');
     expect(prefillAction('พูดคุย โนอา', 'โจมตี')).toBe('โจมตี โนอา');
   });
 });

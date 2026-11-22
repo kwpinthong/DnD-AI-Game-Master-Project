@@ -165,6 +165,16 @@ const ENDED_DAYS_LOG = {
   },
 };
 
+/** GEN-116: turn 1's NPC line is published after turn 2's first entry (later seq, same day / phase / turn as its own narration). */
+const LATE_NPC_ENTRIES: readonly RoomEntry[] = (() => {
+  const first = START_ENTRIES.find((e) => e.kind === 'feed')!;
+  return [
+    first,
+    { ...first, seq: 30, turn: first.turn === 1 ? 2 : 1, text: 'เทิร์นถัดมา: ฝนเริ่มซา', myVote: null },
+    { ...ENTRIES.find((e) => e.kind === 'npc' && !e.npc?.private)!, seq: 31, day: first.day, phase: first.phase, turn: first.turn, myVote: null },
+  ];
+})();
+
 const ALL_SCREENS =CONTRACT_SCREENS.map((s) => s.id);
 const room = (state: RoomState, script: readonly MockStep[] = [], entries: readonly RoomEntry[] = START_ENTRIES) => ({ state, entries, script });
 
@@ -347,6 +357,24 @@ export const SCENARIOS: readonly MockScenario[] = [
     ]),
   },
   { id: 'stuck', title: 'AI GM ติดขัด', note: 'กดลองใหม่ได้', session: 'player', screens: ['play-lock'], http: {}, room: room(ROOM_STATES.find((s) => s.gmStatus)!) },
+  {
+    id: 'late-npc',
+    title: 'NPC พูดมาทีหลัง',
+    note: 'บทพูด NPC ของเทิร์นก่อนมาถึงหลัง entry แรกของเทิร์นถัดไป ต้องอยู่ใต้เทิร์นของมันเอง (GEN-116)',
+    session: 'player',
+    screens: ['play-feed', 'play-npc'],
+    http: {},
+    room: room(BASE_ROOM, [], LATE_NPC_ENTRIES),
+  },
+  {
+    id: 'budget-reached',
+    title: 'AI GM หยุดเพราะงบ',
+    note: 'งบ AI ของเดือนหมด เทิร์นค้างอยู่ ส่ง action ไม่ได้จนกว่างบกลับมา (GEN-122)',
+    session: 'player',
+    screens: ['play-lock', 'play-action'],
+    http: {},
+    room: room({ ...lockState('resolving'), status: 'resolving', gmStatus: { code: 'budget_reached', message: 'ใช้ครบงบ AI ของเดือนนี้แล้ว AI GM จะกลับมาเมื่อขึ้นเดือนใหม่', canRetry: false } }),
+  },
   { id: 'single', title: 'เล่นคนเดียว', note: 'Single mode ไม่มีตัวนับคนส่ง', session: 'player', screens: ['play-top-bar'], http: {}, room: room(ROOM_STATES.find((s) => s.mode === 'single')!) },
   {
     id: 'gm',

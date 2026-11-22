@@ -56,7 +56,7 @@ export interface WhisperText {
   setText: (text: string) => void;
 }
 
-function Whispers({
+export function Whispers({
   whispers,
   allies,
   canSend,

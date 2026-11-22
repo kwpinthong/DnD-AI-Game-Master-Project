@@ -65,7 +65,7 @@ export function SelfStatus({ character, secret, drowsy }: { character: Character
 }
 
 /** One panel of the column. The section stays the same element while its data loads, fails or reloads. */
-function Part<T>({ label, value, children }: { label: string; value: T | null | undefined; children: (value: T) => ReactNode }) {
+export function Part<T>({ label, value, children }: { label: string; value: T | null | undefined; children: (value: T) => ReactNode }) {
   return (
     <section className="panel panel--ornament play-panel" aria-label={label}>
       {value === undefined ? <Skeleton lines={3} /> : value === null ? <p className="muted">{t.loadFailed}</p> : children(value)}
@@ -76,7 +76,7 @@ function Part<T>({ label, value, children }: { label: string; value: T | null | 
 const MAX_COMPANIONS = 3;
 
 /** 4.3 companions: the alias or the name, "หลัก" for the main one, the bond as a word + 6 steps (F4, no number). */
-function Companions({ companions, onRelease, problem }: { companions: CompanionView[]; onRelease: ((ref: string) => void) | null; problem: string | undefined }) {
+export function Companions({ companions, onRelease, problem }: { companions: CompanionView[]; onRelease: ((ref: string) => void) | null; problem: string | undefined }) {
   return (
     <>
       <h3>{t.companions.count(companions.length)}</h3>
@@ -111,7 +111,7 @@ function Companions({ companions, onRelease, problem }: { companions: CompanionV
 
 const isActive = (e: InventoryEntry) => /active/i.test(e.triggerType ?? '') && e.usesLeftToday !== 0;
 
-function Entry({ entry, onUse }: { entry: InventoryEntry; onUse: ((name: string) => void) | null }) {
+export function Entry({ entry, onUse }: { entry: InventoryEntry; onUse: ((name: string) => void) | null }) {
   return (
     <li className="play-skill" title={entry.description}>
       <span className="play-skill__name">{entry.name}</span>

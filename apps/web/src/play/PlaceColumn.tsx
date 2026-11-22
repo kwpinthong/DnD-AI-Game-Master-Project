@@ -1,26 +1,13 @@
-import { ACTION_MAX_LENGTH, FALLBACK_NARRATION_LABEL, OMEN_MAX_LENGTH, type ActionVisibility, type DestinationTag, type PlaceActionId, type RoomEntry, type RoomState, type TravelResponse } from '@isekai/protocol';
-import { Fragment, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { OMEN_MAX_LENGTH, type DestinationTag, type RoomEntry, type RoomState, type TravelResponse } from '@isekai/protocol';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import publicIcon from '../assets/icons/visibility-public.svg';
-import secretIcon from '../assets/icons/visibility-secret.svg';
-import { lockDetail, lockTitle, omenBlocked, secretQuota, sentHow, turnGroups, turnName } from '../screen-models.ts';
-import { Button, MaskIcon, Skeleton, playText, uiText } from '../ui/index.ts';
+import { omenBlocked, turnGroups } from '../screen-models.ts';
+import { Button, MaskIcon, Skeleton, playText } from '../ui/index.ts';
 import { fetchTravel, type PlayData } from './play-api.ts';
 
 const t = playText;
-const VISIBILITY_LABEL = { public: uiText.visibility.public.label, secret: uiText.visibility.secret.label } as const;
 
-/** What the player is composing for this turn. `editing`: changing an action that is already sent. */
-export interface ActionDraft {
-  text: string;
-  visibility: ActionVisibility;
-  rest: boolean;
-  train: boolean;
-  placeAction: PlaceActionId | null;
-  editing: boolean;
-}
-export const EMPTY_DRAFT: ActionDraft = { text: '', visibility: 'public', rest: false, train: false, placeAction: null, editing: false };
-
-// ---------- 4.2 the place: name, zone, who is here, travel ----------
+// ---------- the place: name, zone, who is here, travel ----------
 
 const MAX_CHIPS = 5;
 const MAX_COMPANIONS = 3;
@@ -41,12 +28,9 @@ function hereChips(data: PlayData, allies: RoomState['you']['allies']): HereChip
   return [...people, ...data.npcs.map((n) => ({ text: n.name, npc: n.ref }))];
 }
 
-export function PlaceHead({ room, data, onTravel, onSave }: { room: RoomState; data: PlayData; onTravel: (() => void) | null; onSave: ((ref: string) => void) | null }) {
+/** The place's name, zone, who sees it and [เดินทาง] (the "สถานที่" tab). */
+export function PlaceTitle({ room, onTravel }: { room: RoomState; onTravel: (() => void) | null }) {
   const { you } = room;
-  const chips = hereChips(data, you.allies);
-  // Q-268b: an NPC here that is not yet yours can be saved while a slot is free (max 3).
-  const mine = new Set((data.companions ?? []).map((c) => c.ref));
-  const canSave = onSave !== null && data.companions != null && data.companions.length < MAX_COMPANIONS;
   const astral = Boolean(you.astral);
   return (
     <header className="play-place__head" aria-label={t.place.label}>
@@ -66,29 +50,36 @@ export function PlaceHead({ room, data, onTravel, onSave }: { room: RoomState; d
           </Button>
         )}
       </div>
-      {!astral &&
-        (chips.length === 0 ? (
-          <p className="muted play-here--none">{data.seenBy === null ? '' : t.place.nobody}</p>
-        ) : (
-          <ul className="play-here" aria-label={t.place.here}>
-            {chips.slice(0, MAX_CHIPS).map((chip, i) => (
-              <li key={i} className="chip">
-                {chip.text}
-                {canSave && chip.npc && !mine.has(chip.npc) && (
-                  <Button aria-label={t.companions.saveName(chip.text)} onClick={() => onSave(chip.npc!)}>
-                    {t.companions.save}
-                  </Button>
-                )}
-              </li>
-            ))}
-            {chips.length > MAX_CHIPS && (
-              <li className="chip" title={chips.slice(MAX_CHIPS).map((c) => c.text).join(', ')}>
-                {t.place.more(chips.length - MAX_CHIPS)}
-              </li>
-            )}
-          </ul>
-        ))}
     </header>
+  );
+}
+
+/** Who is here (people by the name the payload gives or how they look, NPCs); an NPC not yet yours can be saved (Q-268b). */
+export function HereList({ room, data, onSave }: { room: RoomState; data: PlayData; onSave: ((ref: string) => void) | null }) {
+  const { you } = room;
+  const chips = hereChips(data, you.allies);
+  const mine = new Set((data.companions ?? []).map((c) => c.ref));
+  const canSave = onSave !== null && data.companions != null && data.companions.length < MAX_COMPANIONS;
+  if (you.astral) return null;
+  if (chips.length === 0) return <p className="muted play-here--none">{data.seenBy === null ? '' : t.place.nobody}</p>;
+  return (
+    <ul className="play-here" aria-label={t.place.here}>
+      {chips.slice(0, MAX_CHIPS).map((chip, i) => (
+        <li key={i} className="chip">
+          {chip.text}
+          {canSave && chip.npc && !mine.has(chip.npc) && (
+            <Button aria-label={t.companions.saveName(chip.text)} onClick={() => onSave(chip.npc!)}>
+              {t.companions.save}
+            </Button>
+          )}
+        </li>
+      ))}
+      {chips.length > MAX_CHIPS && (
+        <li className="chip" title={chips.slice(MAX_CHIPS).map((c) => c.text).join(', ')}>
+          {t.place.more(chips.length - MAX_CHIPS)}
+        </li>
+      )}
+    </ul>
   );
 }
 
@@ -186,197 +177,6 @@ export function EntryGroups({ entries, empty, children }: { entries: readonly Ro
         ))
       )}
     </div>
-  );
-}
-
-/**
- * The centre feed: what happened where you are (the server sends only what you witnessed). An Astral Spirit
- * gets every place, read-only, and picks which one to look at (Q-192).
- */
-export function Feed({ entries, placeId, placeName, astral }: { entries: readonly RoomEntry[]; placeId: string | null; placeName?: string | undefined; astral: boolean }) {
-  const [only, setOnly] = useState('');
-  const selectId = useId();
-  // Q-268c: the arrival line goes after the last thing seen at another place (where you last moved from).
-  const arrivedAfter = astral || !placeId || !placeName ? undefined : [...entries].reverse().find((e) => e.place && e.place.id !== placeId)?.seq;
-  const places = [...new Map(entries.flatMap((e) => (e.place ? [[e.place.id, e.place.name] as const] : []))).entries()];
-  const shown = astral && only ? entries.filter((e) => e.place === null || e.place.id === only) : entries;
-  return (
-    <section className="play-feed" aria-label={t.feed.label}>
-      {astral && (
-        <div className="play-feed__astral">
-          <span className="chip">{t.feed.readOnly}</span>
-          <label htmlFor={selectId}>{t.feed.pickPlace}</label>
-          <select id={selectId} value={only} onChange={(e) => setOnly(e.target.value)}>
-            <option value="">{t.feed.allPlaces}</option>
-            {places.map(([id, name]) => (
-              <option key={id} value={id}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-      <EntryGroups entries={shown} empty={t.feed.empty}>
-        {(e) => (
-          <Fragment key={e.seq}>
-            <li className={e.place ? 'play-entry' : 'play-entry play-entry--town'}>
-              {!e.place && <span className="play-entry__tag">{t.feed.town}</span>}
-              {e.place && e.place.id !== placeId && <span className="play-entry__tag">{t.feed.at(e.place.name)}</span>}
-              {e.fallback && <small className="fallback-label">{FALLBACK_NARRATION_LABEL}</small>}
-              <p>{e.text}</p>
-            </li>
-            {e.seq === arrivedAfter && placeName && (
-              <li className="play-arrival">
-                <span>{t.feed.arrived(placeName)}</span>
-              </li>
-            )}
-          </Fragment>
-        )}
-      </EntryGroups>
-    </section>
-  );
-}
-
-// ---------- 4.6 the action box + its locked states (4b–4g) ----------
-
-function GmStatus({ room, onRetry }: { room: RoomState; onRetry: () => void }) {
-  if (!room.gmStatus) return null;
-  return (
-    <div className="play-gm-status">
-      <p role="alert">{room.gmStatus.message}</p>
-      {room.gmStatus.canRetry && <Button onClick={onRetry}>{t.retry}</Button>}
-    </div>
-  );
-}
-
-export function ActionBox({
-  room,
-  seenBy,
-  draft,
-  setDraft,
-  problem,
-  sending,
-  onSend,
-  onRetry,
-}: {
-  room: RoomState;
-  /** People + NPCs at your place who would see a public action; null = not known yet. */
-  seenBy: number | null;
-  draft: ActionDraft;
-  setDraft: (next: ActionDraft) => void;
-  problem: string | undefined;
-  sending: boolean;
-  onSend: (draft: ActionDraft) => void;
-  onRetry: () => void;
-}) {
-  const { you } = room;
-  const group = useId();
-  const textId = useId();
-  const quota = secretQuota(room);
-  const lock = you.lock;
-  const sent = you.action;
-  const composing = !lock && (!sent || draft.editing);
-  const left = ACTION_MAX_LENGTH - [...draft.text].length;
-  // The quota can run out while ลับ is picked (the server answers the other tab): fall back to เปิดเผย.
-  const visibility: ActionVisibility = draft.visibility === 'secret' && you.secretUsed ? 'public' : draft.visibility;
-  const chips = you.placeActions;
-  const now = turnName(room);
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    onSend({ ...draft, visibility });
-  }
-
-  function pickChip(id: PlaceActionId, label: string) {
-    const on = draft.placeAction !== id;
-    setDraft({ ...draft, placeAction: on ? id : null, rest: on && id !== 'train', train: on && id === 'train', text: on && draft.text.trim() === '' ? label : draft.text });
-  }
-
-  return (
-    <form className={visibility === 'secret' && composing ? 'play-action play-action--secret' : 'play-action'} onSubmit={submit} aria-label={t.action.form}>
-      <GmStatus room={room} onRetry={onRetry} />
-      {sent && !draft.editing && (
-        <div className="play-action__sent">
-          <p>{t.action.sent(sentHow(sent, VISIBILITY_LABEL), sent.text)}</p>
-          {!lock && room.status === 'collecting' && (
-            <Button onClick={() => setDraft({ text: sent.text, visibility: sent.visibility, rest: sent.rest, train: Boolean(sent.train), placeAction: null, editing: true })}>
-              {t.action.edit}
-            </Button>
-          )}
-        </div>
-      )}
-      {sent && !draft.editing && !lock && (
-        <p className="play-action__wait">{room.mode === 'single' ? t.action.waitResult : t.action.waitOthers(t.submitted(room.submittedCount, room.members.filter((m) => m.role === 'player').length))}</p>
-      )}
-      {lock && (
-        <div className="play-lock" role="note" aria-label={lockTitle(lock.code)}>
-          <strong>{lockTitle(lock.code)}</strong>
-          <p>{lock.message}</p>
-          {lockDetail(room, lock.code) && <p className="muted">{lockDetail(room, lock.code)}</p>}
-        </div>
-      )}
-      {(composing || lock) && (
-        <>
-          <div className="play-action__write">
-            <label htmlFor={textId}>{t.action.label(now)}</label>
-            <small>{t.action.left(left)}</small>
-            <textarea
-              id={textId}
-              value={lock ? '' : draft.text}
-              disabled={Boolean(lock)}
-              placeholder={lock ? t.action.closed : undefined}
-              rows={2}
-              onChange={(e) => setDraft({ ...draft, text: e.target.value })}
-            />
-          </div>
-          <div className="play-action__controls">
-            <fieldset className="play-vis" disabled={Boolean(lock)}>
-              <legend className="sr-only">{t.action.who}</legend>
-              <label className="play-vis__opt play-vis__opt--public" title={uiText.visibility.public.tooltip}>
-                <input type="radio" name={group} checked={visibility === 'public'} onChange={() => setDraft({ ...draft, visibility: 'public' })} />
-                <MaskIcon src={publicIcon} />
-                {VISIBILITY_LABEL.public}
-              </label>
-              <label className="play-vis__opt play-vis__opt--secret" title={uiText.visibility.secret.tooltip}>
-                <input type="radio" name={group} checked={visibility === 'secret'} disabled={you.secretUsed} onChange={() => setDraft({ ...draft, visibility: 'secret' })} />
-                <MaskIcon src={secretIcon} />
-                {VISIBILITY_LABEL.secret}
-              </label>
-            </fieldset>
-            <Button aria-pressed={draft.rest && !draft.placeAction} disabled={Boolean(lock)} onClick={() => setDraft({ ...draft, rest: !(draft.rest && !draft.placeAction), train: false, placeAction: null })}>
-              {t.action.rest}
-            </Button>
-            {/* The server does not send the place's chips yet (GEN-069 pending): TRAIN stays reachable without them. */}
-            {chips === undefined && (
-              <Button aria-pressed={draft.train} disabled={Boolean(lock)} onClick={() => setDraft({ ...draft, train: !draft.train, rest: false, placeAction: null })}>
-                {t.action.train}
-              </Button>
-            )}
-            {chips?.map((chip) => (
-              <Button key={chip.id} aria-pressed={draft.placeAction === chip.id} disabled={Boolean(lock) || chip.blocked !== null} title={chip.blocked ?? undefined} onClick={() => pickChip(chip.id, chip.label)}>
-                {chip.label}
-              </Button>
-            ))}
-            <Button className="play-action__send" variant="primary" type="submit" disabled={Boolean(lock)} loading={sending} loadingText={t.action.sending}>
-              {sent ? t.action.resend : t.action.send}
-            </Button>
-          </div>
-          {!lock && (
-            <p className="play-action__effect">
-              {quota.blocked && <span className="play-action__quota">{quota.blocked}</span>}
-              <span>{visibility === 'secret' ? t.action.secretEffect : t.action.publicEffect(seenBy)}</span>
-            </p>
-          )}
-          {!lock && room.phase === 'NOCTHERION' && <p className="play-action__hint">{t.action.night}</p>}
-        </>
-      )}
-      {you.drowsy && (
-        <p className="play-action__hint" role="note">
-          {t.action.drowsy}
-        </p>
-      )}
-      {problem && <p role="alert">{problem}</p>}
-    </form>
   );
 }
 

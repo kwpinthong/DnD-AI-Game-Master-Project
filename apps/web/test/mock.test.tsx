@@ -111,7 +111,7 @@ describe('C2 every scenario shows its state', () => {
 
   it('secret-used: Secret cannot be picked today', async () => {
     playRoom('secret-used');
-    const secret = (await screen.findByRole('radio', { name: 'ลับ' })) as HTMLInputElement;
+    const secret = (await screen.findByRole('checkbox', { name: 'ลับ' })) as HTMLInputElement;
     expect(secret.disabled).toBe(true);
     expect(screen.getByText(/^ใช้ลับวันนี้แล้ว/)).toBeTruthy();
   });
@@ -148,7 +148,7 @@ describe('C2 every scenario shows its state', () => {
     slowScripts();
     playRoom('period-change');
     expect(await screen.findByRole('heading', { name: /SOLARION.*เทิร์น 1\/2/ })).toBeTruthy();
-    const weather = () => document.querySelector('.play-top__weather')!.textContent;
+    const weather = () => document.querySelector('.hud-time__weather')!.textContent;
     const rain = weather();
     expect(rain).toContain('ฝนตก');
     expect(await screen.findByRole('heading', { name: /HESPERION.*เทิร์น 1\/2/ }, { timeout: 3000 })).toBeTruthy();

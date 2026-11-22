@@ -3,18 +3,23 @@ import { useEffect, useRef, useState } from 'react';
 import { GameSummaryPage } from './GameHistory.tsx';
 import { GmConsole } from './GmConsole.tsx';
 import { GmNarrating } from './play/GmNarrating.tsx';
-import { ActionBox, EMPTY_DRAFT, Feed, OmenBox, PlaceHead, TravelSheet, type ActionDraft } from './play/PlaceColumn.tsx';
+import { ActionBar, EMPTY_DRAFT, type ActionDraft } from './play/chat/ActionBar.tsx';
+import { ChatFeed } from './play/chat/ChatFeed.tsx';
+import { DesktopLayout } from './play/chat/DesktopLayout.tsx';
+import { HitPin } from './play/chat/HitPin.tsx';
+import { HudBar } from './play/chat/Hud.tsx';
+import { InfoPanel } from './play/chat/InfoPanel.tsx';
+import { useEntryVotes } from './play/chat/useEntryVotes.ts';
+import { OmenBox, TravelSheet } from './play/PlaceColumn.tsx';
 import { hitAcknowledged, rememberHitAcknowledged } from './play/hit-ack.ts';
 import { changeCompanion, usePlayData } from './play/play-api.ts';
-import { PlayTabs } from './play/PlayTabs.tsx';
 import { PrivateColumn } from './play/PrivateColumn.tsx';
-import { SelfColumn } from './play/SelfColumn.tsx';
-import { dotTabs, tabCounts, type PlayTab } from './play/tabs.ts';
-import { RoomMenu, TopBar } from './play/TopBar.tsx';
+import { RoomMenu } from './play/TopBar.tsx';
 import { connectRoom, type RoomConnection, type RoomConnectionStatus } from './room-api.ts';
 import { secretQuota } from './screen-models.ts';
 import { Button, Skeleton, playText } from './ui/index.ts';
 import './play/play.css';
+import './play/chat/chat.css';
 
 const t = playText;
 
@@ -22,11 +27,10 @@ const t = playText;
 const timeLabel = (room: Pick<RoomEntry, 'day' | 'phase' | 'turn'>) => `วันที่ ${room.day} · ${PHASE_LABEL[room.phase]} · เทิร์น ${room.turn}/2`;
 
 /**
- * The Play screen v2 (GEN-088, Screens and Flows v2 §4, layout P1 Q-199): a top bar and three columns by who
- * sees what. Left 272 = you (status, companions, skills + items), centre = your place and everything public
- * there (who is here, travel, the feed, the action box), right 340 = yours alone (the pinned hit card, your
- * story, Whisper). At 1366×620 all of it is in view; only the lists scroll. The socket (GEN-056) reconnects by
- * itself and fills in what it missed. The Human GM gets the console instead of the columns.
+ * The Play page v3 (GEN-122, docs/design/ui-v3-chat): a left-right chat. HUD on top, the chat feed in the middle,
+ * the four-tab info panel on the right, the action bar at the bottom (`DesktopLayout` only places them). Real
+ * data since GEN-101: the socket (GEN-056) reconnects by itself and fills in what it missed. The Human GM gets
+ * the console and a read-only feed instead.
  */
 export function PlayRoom({
   apiBaseUrl,
@@ -64,8 +68,7 @@ export function PlayRoom({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [companionTick, setCompanionTick] = useState(0);
   const [companionProblem, setCompanionProblem] = useState<string>();
-  const [tab, setTab] = useState<PlayTab>('place');
-  const [seen, setSeen] = useState<Record<PlayTab, number>>({ place: 0, private: 0, self: 0, action: 0 });
+  const votes = useEntryVotes(apiBaseUrl, token);
   const conn = useRef<RoomConnection | undefined>(undefined);
 
   useEffect(() => {
@@ -153,15 +156,46 @@ export function PlayRoom({
     setMoving(true);
   }
 
-  const counts = tabCounts(entries);
-  // What the tab you leave and the tab you open have shown so far is "seen"; the dot is for what came after.
-  const pickTab = (next: PlayTab) => {
-    setSeen((s) => ({ ...s, [tab]: counts[tab], [next]: counts[next] }));
-    setTab(next);
-  };
 
-  const feed = entries.filter((e) => e.kind === 'feed');
   const online = connection === 'online';
+  const pinned = entries.filter((e) => e.kind === 'hit' && !acked.has(e.seq));
+  // Votes only for a player (the server leaves `myVote` out for the Human GM, so the feed has none to show anyway).
+  const voting = isPlayer ? { local: votes.local, busy: votes.busy, onVote: (entry: RoomEntry, next: Parameters<typeof votes.vote>[1]) => void votes.vote(entry, next) } : undefined;
+
+  const notices = (
+    <>
+      {room && menuOpen && (
+        <RoomMenu
+          room={room}
+          onBack={() => {
+            setMenuOpen(false);
+            onBack();
+          }}
+          onGameList={() => {
+            setMenuOpen(false);
+            onGameList();
+          }}
+        />
+      )}
+      <p role="status" aria-label={t.connectionLabel} data-connection={connection} className={online ? 'sr-only' : 'play-conn'}>
+        {t.connection[connection]}
+      </p>
+      {room?.status === 'resolving' && !room.gmStatus && <GmNarrating key={`${room.day}-${room.phase}-${room.turn}`} />}
+      {fatal && (
+        <p role="alert" className="play-fatal">
+          {fatal}
+        </p>
+      )}
+      {votes.problem && <p role="alert">{votes.problem}</p>}
+    </>
+  );
+
+  // Q-268a: the game log of this game over the page; the socket and the draft keep running underneath.
+  const history = room && you && historyOpen && (
+    <div className="play-history">
+      <GameSummaryPage apiBaseUrl={apiBaseUrl} token={token} onBack={() => setHistoryOpen(false)} />
+    </div>
+  );
 
   return (
     <section className={you?.astral ? 'play play--astral' : 'play'} aria-label={t.room}>
@@ -170,102 +204,85 @@ export function PlayRoom({
         {room && ` · ${timeLabel(room)}`}
         {room?.mode === 'single' && ` · ${t.single}`}
       </h2>
-      <div className="play-frame">
-        {room && you && <TopBar room={room} menuOpen={menuOpen} onMenu={() => setMenuOpen((v) => !v)} onHistory={() => setHistoryOpen(true)} />}
-        {room && menuOpen && (
-          <RoomMenu
-            room={room}
-            onBack={() => {
-              setMenuOpen(false);
-              onBack();
-            }}
-            onGameList={() => {
-              setMenuOpen(false);
-              onGameList();
-            }}
-          />
-        )}
-        <p role="status" aria-label={t.connectionLabel} data-connection={connection} className={online ? 'sr-only' : 'play-conn'}>
-          {t.connection[connection]}
-        </p>
-        {room?.status === 'resolving' && !room.gmStatus && <GmNarrating key={`${room.day}-${room.phase}-${room.turn}`} />}
-        {fatal && (
-          <p role="alert" className="play-fatal">
-            {fatal}
-          </p>
-        )}
-        {!(room && you) && (
+      {!(room && you) && (
+        <div className="play-frame">
+          {notices}
           <div className="play-wait">
             {!fatal && <Skeleton lines={4} />}
             <Button onClick={onBack}>{t.back}</Button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Q-268a: the game log of this game over the columns; the socket and the draft keep running underneath. */}
-        {room && you && historyOpen && (
-          <div className="play-history">
-            <GameSummaryPage apiBaseUrl={apiBaseUrl} token={token} onBack={() => setHistoryOpen(false)} />
-          </div>
-        )}
-
-        {room && you && isPlayer && (
-          <div className="play-body" data-tab={tab} hidden={historyOpen}>
-            <SelfColumn
-              data={data}
-              secret={secretQuota(room).status}
-              drowsy={you.drowsy}
-              onUse={you.lock ? null : (name) => setDraft((d) => ({ ...d, text: `${t.inventory.insert(name)}${d.text}`, editing: d.editing || Boolean(you.action) }))}
-              onRelease={you.astral ? null : (ref) => void companion({ release: ref })}
-              companionProblem={companionProblem}
-            />
-
-            <div className="play-place">
-              <PlaceHead room={room} data={data} onTravel={you.astral ? null : () => setTravelOpen(true)} onSave={you.astral ? null : (ref) => void companion({ save: ref })} />
-              <div className="play-place__main">
-                <Feed entries={feed} placeId={you.place?.id ?? null} placeName={you.place?.name} astral={Boolean(you.astral)} />
-                {travelOpen && (
-                  <TravelSheet
-                    apiBaseUrl={apiBaseUrl}
-                    token={token}
-                    problem={moveProblem}
-                    busy={moving}
-                    onGo={sendMove}
-                    onClose={() => {
-                      setTravelOpen(false);
-                      setMoveProblem(undefined);
+      {room && you && isPlayer && (
+        <>
+          <div className="play-frame" hidden={historyOpen}>
+            <DesktopLayout
+              hud={<HudBar room={room} character={data.character} menuOpen={menuOpen} onMenu={() => setMenuOpen((v) => !v)} onHistory={() => setHistoryOpen(true)} />}
+              notices={notices}
+              feed={
+                <>
+                  <HitPin pinned={pinned} onAcknowledge={acknowledge} />
+                  <ChatFeed entries={entries} day={room.day} placeId={you.place?.id ?? null} placeName={you.place?.name} astral={Boolean(you.astral)} acknowledged={acked} ownAction={you.action} voting={voting} />
+                  {travelOpen && (
+                    <TravelSheet
+                      apiBaseUrl={apiBaseUrl}
+                      token={token}
+                      problem={moveProblem}
+                      busy={moving}
+                      onGo={sendMove}
+                      onClose={() => {
+                        setTravelOpen(false);
+                        setMoveProblem(undefined);
+                      }}
+                    />
+                  )}
+                </>
+              }
+              side={
+                <InfoPanel
+                  room={room}
+                  data={data}
+                  entries={entries}
+                  secret={secretQuota(room).status}
+                  onTravel={you.astral ? null : () => setTravelOpen(true)}
+                  onSave={you.astral ? null : (ref) => void companion({ save: ref })}
+                  onRelease={you.astral ? null : (ref) => void companion({ release: ref })}
+                  onUse={you.lock ? null : (name) => setDraft((d) => ({ ...d, text: `${t.inventory.insert(name)}${d.text}`, editing: d.editing || Boolean(you.action) }))}
+                  companionProblem={companionProblem}
+                  whisper={{ text: whisperText, setText: setWhisperText }}
+                  whisperProblem={whisperProblem}
+                  onWhisper={sendWhisper}
+                />
+              }
+              actions={
+                you.astral ? (
+                  <OmenBox
+                    room={room}
+                    problem={omenProblem}
+                    onSend={(to, text) => {
+                      if (!conn.current?.sendOmen(to, text)) setOmenProblem(t.notConnected);
                     }}
                   />
-                )}
-              </div>
-              {you.astral ? (
-                <OmenBox
-                  room={room}
-                  problem={omenProblem}
-                  onSend={(to, text) => {
-                    if (!conn.current?.sendOmen(to, text)) setOmenProblem(t.notConnected);
-                  }}
-                />
-              ) : (
-                <ActionBox room={room} seenBy={data.seenBy} draft={draft} setDraft={setDraft} problem={problem} sending={waitingReply} onSend={sendAction} onRetry={() => conn.current?.sendRetry()} />
-              )}
-            </div>
-
-            <PrivateColumn
-              entries={entries}
-              you={you}
-              acknowledged={acked}
-              onAcknowledge={acknowledge}
-              whisper={{ text: whisperText, setText: setWhisperText }}
-              whisperProblem={whisperProblem}
-              onWhisper={sendWhisper}
+                ) : (
+                  <ActionBar room={room} seenBy={data.seenBy} draft={draft} setDraft={setDraft} problem={problem} sending={waitingReply} onSend={sendAction} onRetry={() => conn.current?.sendRetry()} />
+                )
+              }
             />
           </div>
-        )}
-        {room && you && isPlayer && !historyOpen && <PlayTabs active={tab} dots={dotTabs(counts, seen, tab)} onPick={pickTab} />}
+          {history}
+        </>
+      )}
 
-        {/* GEN-058: the Human GM has no character: the console (it reloads whenever the turn or the GM status moves), then the room's entries. */}
-        {room && you && !isPlayer && (
-          <div className="play-gm">
+      {/* GEN-058: the Human GM has no character: the console (it reloads whenever the turn or the GM status moves), then the room's entries. */}
+      {room && you && !isPlayer && (
+        <div className="play-frame">
+          <div className="v3-hud">
+            <HudBar room={room} character={null} menuOpen={menuOpen} onMenu={() => setMenuOpen((v) => !v)} onHistory={() => setHistoryOpen(true)} />
+          </div>
+          {notices}
+          {history}
+          <div className="play-gm" hidden={historyOpen}>
             {room.gmStatus && (
               <div className="play-gm-status">
                 <p role="alert">{room.gmStatus.message}</p>
@@ -273,7 +290,7 @@ export function PlayRoom({
               </div>
             )}
             <GmConsole apiBaseUrl={apiBaseUrl} token={token} refreshKey={`${room.day}-${room.phase}-${room.turn}-${room.status}-${room.gmStatus?.code ?? ''}`} gmStatus={room.gmStatus} />
-            <Feed entries={feed} placeId={null} astral={false} />
+            <ChatFeed entries={entries.filter((e) => e.kind === 'feed')} day={room.day} placeId={null} astral={false} />
             <PrivateColumn
               entries={entries}
               you={you}
@@ -284,8 +301,8 @@ export function PlayRoom({
               onWhisper={sendWhisper}
             />
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </section>
   );
 }

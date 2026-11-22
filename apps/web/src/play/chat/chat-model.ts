@@ -22,10 +22,10 @@ const NEEDS_TARGET: readonly QuickWord[] = ['พูดคุย', 'โจมต�
 
 /** A quick button only prefills: it replaces another quick word at the start, or goes in front of what is already typed. */
 export function prefillAction(text: string, word: QuickWord): string {
-  const start = `${word}${NEEDS_TARGET.includes(word) ? ' ' : ''}`;
   const had = QUICK_WORDS.find((w) => text === w || text.startsWith(`${w} `));
-  if (had) return `${start}${text.slice(had.length).trimStart()}`;
-  return text.trim() === '' ? start : `${start}${text}`;
+  const rest = (had ? text.slice(had.length) : text).trim();
+  if (rest === '') return NEEDS_TARGET.includes(word) ? `${word} ` : word;
+  return `${word} ${rest}`;
 }
 
 /** "ทอย 14 · สำเร็จ" */
