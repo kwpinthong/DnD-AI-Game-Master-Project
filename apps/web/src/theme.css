@@ -154,6 +154,12 @@ button[aria-busy='true'] {
 }
 
 /* ---------- Form fields ---------- */
+/* Q-201: label sits on its own line with a gap below, so it no longer touches its input. */
+label {
+  display: block;
+  margin-block: var(--space-3) var(--space-1);
+}
+
 input:not([type='checkbox']):not([type='radio']),
 textarea,
 select {
