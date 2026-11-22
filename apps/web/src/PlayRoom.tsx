@@ -1,6 +1,7 @@
 import { ACTION_MAX_LENGTH, PHASE_LABEL, actionTextProblem, type ActionVisibility, type RoomEntry, type RoomState } from '@isekai/protocol';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { connectRoom, type RoomConnection, type RoomConnectionStatus } from './room-api.ts';
+import { InventoryPanel } from './Inventory.tsx';
 
 /** "วันที่ 1 · EOSORIA (เช้า 06:00-11:59) · เทิร์น 1/2" (GEN-063: 4 periods x 2 turns). */
 const timeLabel = (t: Pick<RoomEntry, 'day' | 'phase' | 'turn'>) => `วันที่ ${t.day} · ${PHASE_LABEL[t.phase]} · เทิร์น ${t.turn}/2`;
@@ -172,6 +173,8 @@ export function PlayRoom({
               </li>
             ))}
           </ul>
+
+          {you.role === 'player' && <InventoryPanel apiBaseUrl={apiBaseUrl} token={token} onSessionLost={onSessionLost} />}
 
           {you.role === 'player' && (
             <form onSubmit={submit} aria-label="ส่ง action">
