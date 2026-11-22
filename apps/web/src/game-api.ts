@@ -6,6 +6,7 @@ import {
   InventoryResponse,
   LootResponse,
   MemorySourcesResponse,
+  type MemorySourcesRequest,
   OriginResponse,
   type GameMemorySetting,
   type InventoryView,
@@ -167,14 +168,19 @@ export async function originCall(baseUrl: string, token: string): Promise<Origin
 }
 
 /**
- * GET /api/memory/sources (pending GEN-083): the ended games that passed the learning gate and the creator
- * was in. Q-225 finds them by the creator's player code; how the code travels is GEN-083's to decide, so
- * `playerCode` is taken here and not sent yet (the contract row has no request).
+ * POST /api/memory/sources (pending GEN-083): the ended games that passed the learning gate and the creator
+ * was in, found by the creator's player code (Q-225). The code goes in the POST body only, never in a URL
+ * or a header (Q-276).
  */
 export type MemorySourcesResult = { kind: 'ok'; games: MemorySourceGame[] } | { kind: 'error'; message: string };
 
-export async function memorySourcesCall(baseUrl: string, _playerCode: string): Promise<MemorySourcesResult> {
-  const answer = await send(apiUrl(baseUrl, '/api/memory/sources'), { method: 'GET' });
+export async function memorySourcesCall(baseUrl: string, playerCode: string): Promise<MemorySourcesResult> {
+  const body: MemorySourcesRequest = { playerCode };
+  const answer = await send(apiUrl(baseUrl, '/api/memory/sources'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
   if (!answer) return { kind: 'error', message: UNREACHABLE };
   if (answer.res.ok) {
     const parsed = MemorySourcesResponse.safeParse(answer.json);

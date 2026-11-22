@@ -302,6 +302,7 @@ export const CONTRACT_FIXTURES: Fixtures = {
   CreateGameRequest: [{ createCode: 'ลับเฉพาะ', gameName: 'เมืองก่อนอุกกาบาต', mode: 'online', humanGm: false, name: 'นก', pin: '1234' }],
   CreateGameResponse: [{ token: 't0k3n', expiresAt: '2026-12-22T00:00:00.000Z', member, game: gameView }],
   GameMemorySetting: [{ enabled: true, sourceGameIds: ['g-old'] }, { enabled: false }],
+  MemorySourcesRequest: [{ playerCode: 'nok-2026' }],
   MemorySourcesResponse: [{ games: [{ id: 'g-old', name: 'คืนจันทราโลหิต', score: 8.6, endedAt: '2026-11-20T00:00:00.000Z' }] }, { games: [] }],
   UpdateGameRequest: [{ gameName: 'ชื่อใหม่' }, { mode: 'single' }],
   GameView: [gameView, { ...gameView, status: 'started', startedAt: '2026-11-22T12:00:00.000Z', startBlockers: [], memory: { enabled: true, sources: [{ id: 'g-old', name: 'คืนจันทราโลหิต' }] } }],
