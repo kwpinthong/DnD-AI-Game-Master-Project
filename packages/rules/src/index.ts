@@ -42,7 +42,7 @@ export {
   type Safety,
 } from './resolution/rescue.ts';
 export * from './crossplayer/types.ts';
-export { orderPhaseActions, replayPhaseActions, resolvePhaseActions } from './crossplayer/phase.ts';
+export { orderPhaseActions, replayPhaseActions, resolvePhaseActions, validatePhaseActions } from './crossplayer/phase.ts';
 export * from './phase/types.ts';
 export { createPhaseState, phaseStep } from './phase/engine.ts';
 export { socialTitle, STARTING_STATS } from './character.ts';

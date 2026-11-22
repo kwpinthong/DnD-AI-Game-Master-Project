@@ -128,3 +128,6 @@ export * from './schema-loot.ts';
 
 // GEN-050: who is where and who knows whose name, own file for the same reason.
 export * from './schema-visibility.ts';
+
+// GEN-060: items that changed hands between players, own file for the same reason.
+export * from './schema-items.ts';
