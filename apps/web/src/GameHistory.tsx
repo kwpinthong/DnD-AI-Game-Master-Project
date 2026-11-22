@@ -117,7 +117,7 @@ export function GameLog({ log, onBack, apiBaseUrl, token }: { log: GameLogRespon
   const ended = log.game.status === 'ended' && log.reveal !== null;
   const rating = useRating(apiBaseUrl, token, ended);
   const id = useId();
-  const ids = { ending: `${id}ending`, fates: `${id}fates`, rating: `${id}rating` };
+  const ids = { ending: `${id}ending`, fates: `${id}fates`, secrets: `${id}secrets`, rating: `${id}rating` };
   return (
     <section aria-label={`สรุปเกม ${log.game.name}`} className="end">
       <header className="end__head">
@@ -132,6 +132,7 @@ export function GameLog({ log, onBack, apiBaseUrl, token }: { log: GameLogRespon
           parts={[
             { id: ids.ending, label: endText.ending },
             { id: ids.fates, label: endText.fates },
+            { id: ids.secrets, label: endText.secrets },
             { id: ids.rating, label: endText.rate },
           ]}
         />
@@ -143,6 +144,7 @@ export function GameLog({ log, onBack, apiBaseUrl, token }: { log: GameLogRespon
           onToggleLike={(ref, on) => void rating.toggleLike(ref, on)}
           endingId={ids.ending}
           fatesId={ids.fates}
+          secretsId={ids.secrets}
         />
       )}
       {ended && <RatingSection rating={rating} id={ids.rating} />}

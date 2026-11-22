@@ -35,7 +35,9 @@ function ratingServer(start: GameRatingView | 'down', afterPut: Partial<GameRati
         rating = { ...rating, mine: { score: body.score, comment: body.comment ?? '' }, raters: rating.raters + (rating.mine ? 0 : 1), ...afterPut };
       } else if (path.startsWith('/api/game/rating/likes/')) {
         const ref = decodeURIComponent(path.split('/').pop()!);
-        rating = { ...rating, liked: method === 'PUT' ? [...rating.liked, ref] : rating.liked.filter((r) => r !== ref) };
+        const n = (rating.thumbs?.[ref] ?? 0) + (method === 'PUT' ? 1 : -1);
+        const { [ref]: _gone, ...others } = rating.thumbs ?? {};
+        rating = { ...rating, liked: method === 'PUT' ? [...rating.liked, ref] : rating.liked.filter((r) => r !== ref), thumbs: n > 0 ? { ...others, [ref]: n } : others };
       } else if (path !== '/api/game/rating') {
         return Response.json({ code: 'not_found', message: 'ไม่พบ' }, { status: 404 });
       }
@@ -61,7 +63,7 @@ describe('GEN-091 end page', () => {
     const reveal = screen.getByRole('region', { name: 'ความลับของทุกคน' });
     const rating = screen.getByRole('region', { name: 'ให้คะแนนเกม' });
     expect(before(reveal, rating)).toBe(true);
-    expect(before(within(reveal).getByRole('heading', { name: 'ฉากจบ' }), within(reveal).getByRole('heading', { name: 'ชะตาและความลับของแต่ละคน' }))).toBe(true);
+    expect(before(within(reveal).getByRole('heading', { name: 'ฉากจบ' }), within(reveal).getByRole('heading', { name: 'ชะตาของแต่ละคน' }))).toBe(true);
 
     const lin = within(within(reveal).getByRole('article', { name: 'นก' }));
     expect(lin.getByText('ผู้มีจิตใจเอื้อเฟื้อ')).toBeTruthy();
@@ -69,23 +71,54 @@ describe('GEN-091 end page', () => {
     expect(lin.getByText(/หญิงผ้าคลุมเทา/)).toBeTruthy();
     expect(lin.getByText('ผู้ใจบุญ')).toBeTruthy();
     expect(lin.getByText('ลินยืนดูแสงรุ่งอรุณคืนสู่เมือง')).toBeTruthy();
-    expect(lin.getByText(/แอบเข้าโบสถ์ชั้นใต้ดิน/)).toBeTruthy();
+    // Q-270: the secrets are one list apart from the cards, not inside them
+    expect(lin.queryByText(/แอบเข้าโบสถ์ชั้นใต้ดิน/)).toBeNull();
+    const secrets = within(within(reveal).getByRole('list', { name: 'สิ่งที่ทำไว้ลับ ๆ' }));
+    expect(secrets.getByText(/แอบเข้าโบสถ์ชั้นใต้ดิน/)).toBeTruthy();
 
     const scores = await ratingRegion().findAllByRole('radio');
     expect(scores.map((r) => (r as HTMLInputElement).value)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']);
     expect(calls[0]).toMatchObject({ method: 'GET', path: '/api/game/rating', auth: 'Bearer tok' });
 
     // 👍 is a toggle on the action row, above the form
-    const like = lin.getByRole('button', { name: /ชอบการตัดสินนี้.*แอบเข้าโบสถ์ชั้นใต้ดิน/ });
+    const like = secrets.getByRole('button', { name: /ชอบการตัดสินนี้.*แอบเข้าโบสถ์ชั้นใต้ดิน/ });
     expect(before(like, rating)).toBe(true);
     expect(like.getAttribute('aria-pressed')).toBe('false');
+    const row = within(like.closest('li')!);
+    expect(row.getByLabelText('👍 0 คน')).toBeTruthy();
     fireEvent.click(like);
     await waitFor(() => expect(like.getAttribute('aria-pressed')).toBe('true'));
+    // Q-261: the total 👍 of the ruling goes up with the press and down with the take-back
+    expect(row.getByLabelText('👍 1 คน')).toBeTruthy();
     expect(calls.at(-1)).toMatchObject({ method: 'PUT', path: `/api/game/rating/likes/${REF}` });
     expect(ratingRegion().getByText(/คุณกดไป 1/)).toBeTruthy();
     fireEvent.click(like);
     await waitFor(() => expect(like.getAttribute('aria-pressed')).toBe('false'));
     expect(calls.at(-1)).toMatchObject({ method: 'DELETE', path: `/api/game/rating/likes/${REF}` });
+    expect(row.getByLabelText('👍 0 คน')).toBeTruthy();
+  });
+
+  it('Q-270: every secret is in one list in time order across players; the day filter narrows it', () => {
+    ratingServer(NOT_RATED);
+    const [lin] = ENDED.reveal!.players;
+    const log = {
+      ...ENDED,
+      reveal: {
+        ...ENDED.reveal!,
+        players: [
+          { ...lin!, secretActions: [{ day: 5, phase: 'SOLARION' as const, turn: 1, text: 'ลินทำทีหลัง' }, { day: 2, phase: 'NOCTHERION' as const, turn: 1, text: 'ลินทำคืนวันสอง' }] },
+          { ...lin!, memberId: 'm-2', lobbyName: 'บี', characterName: 'ดาริน', secretActions: [{ day: 2, phase: 'EOSORIA' as const, turn: 2, text: 'ดารินทำเช้าวันสอง' }] },
+        ],
+      },
+    };
+    render(<GameLog log={log} apiBaseUrl="http://api" token="tok" onBack={() => {}} />);
+    const list = () => within(screen.getByRole('list', { name: 'สิ่งที่ทำไว้ลับ ๆ' }));
+    const texts = () => list().getAllByRole('listitem').map((li) => li.textContent!);
+    expect(texts().map((t) => /ดารินทำเช้า|ลินทำคืน|ลินทำทีหลัง/.exec(t)![0])).toEqual(['ดารินทำเช้า', 'ลินทำคืน', 'ลินทำทีหลัง']);
+    expect(texts()[0]).toContain('ดาริน (บี)');
+    fireEvent.change(screen.getByLabelText('ดูวัน'), { target: { value: '2' } });
+    expect(texts()).toHaveLength(2);
+    expect(screen.queryByText(/ลินทำทีหลัง/)).toBeNull();
   });
 
   it('C3: after sending, the form becomes "ส่งแล้ว · แก้ได้" with the learning status; it can be opened again', async () => {

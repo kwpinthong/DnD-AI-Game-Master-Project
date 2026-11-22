@@ -232,10 +232,12 @@ describe('C3: game list and the summary + log of a finished game', () => {
     expect(lin.getByText(/รอด/)).toBeTruthy();
     expect(lin.getByText(/โรงเตี๊ยมและกิลด์นักเดินทาง/)).toBeTruthy();
     expect(lin.getByText(/มาร์คัส/)).toBeTruthy();
-    expect(lin.getByText(/แอบขโมยแผนที่ดาว/)).toBeTruthy();
+    // Q-270: the Secret action is in the one list, named for its player, not in the card
+    expect(lin.queryByText(/แอบขโมยแผนที่ดาว/)).toBeNull();
+    const secret = within(reveal.getByRole('list', { name: 'สิ่งที่ทำไว้ลับ ๆ' })).getByText(/แอบขโมยแผนที่ดาว/);
+    expect(secret.closest('li')!.textContent).toContain('ลิน (นก)');
     const darin = within(reveal.getByRole('article', { name: 'บี' }));
     expect(darin.getByText(/พ่ายแพ้/)).toBeTruthy();
-    expect(darin.getByText(/ไม่มี Secret action/)).toBeTruthy();
     expect(screen.getByRole('region', { name: 'ให้คะแนนเกม' })).toBeTruthy();
   });
 
@@ -274,13 +276,18 @@ describe('C3: game list and the summary + log of a finished game', () => {
 
   it('GEN-078 C7: 👍 on a revealed action marks it liked; pressing again takes it back', async () => {
     const { server } = await openEnded();
-    const lin = within(screen.getByRole('article', { name: 'นก' }));
+    const lin = within(await screen.findByRole('list', { name: 'สิ่งที่ทำไว้ลับ ๆ' }));
     const like = await lin.findByRole('button', { name: /ชอบการตัดสินนี้: แอบขโมยแผนที่ดาว/ });
+    const count = (n: number) => lin.getByLabelText(`👍 ${n} คน`);
+    expect(count(0)).toBeTruthy();
     expect(like.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(like);
     await lin.findByRole('button', { name: /ชอบการตัดสินนี้: แอบขโมยแผนที่ดาว/, pressed: true });
+    // Q-261: the total 👍 count (from the server) goes up when liked and down when taken back
+    expect(count(3)).toBeTruthy();
     fireEvent.click(lin.getByRole('button', { name: /ชอบการตัดสินนี้: แอบขโมยแผนที่ดาว/ }));
     await lin.findByRole('button', { name: /ชอบการตัดสินนี้: แอบขโมยแผนที่ดาว/, pressed: false });
+    expect(count(2)).toBeTruthy();
     expect(server.ratingCalls).toEqual([
       { method: 'PUT', path: '/api/game/rating/likes/3-NOCTHERION-1-1', body: undefined },
       { method: 'DELETE', path: '/api/game/rating/likes/3-NOCTHERION-1-1', body: undefined },
