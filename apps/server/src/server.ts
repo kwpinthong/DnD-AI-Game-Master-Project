@@ -115,9 +115,21 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerVisibilityRoutes(app, db, now, assets);
   const weather = createWeatherService(db, ai, now, options.aiLog ?? ((line) => console.log(line)));
   const resolver = options.phaseResolver ?? createAiGmResolver({ db, ai, assets, now, log: options.aiLog ?? ((line) => console.log(line)) });
-  const room = registerRoomRoutes(app, db, now, { resolver, assets, webOrigins: config.webOrigins ?? [], weather });
+  // The backup job starts after `listen`; the room reaches it through this late binding (Q-185).
+  let backups: BackupSchedule | undefined;
+  const room = registerRoomRoutes(app, db, now, {
+    resolver,
+    assets,
+    webOrigins: config.webOrigins ?? [],
+    weather,
+    onGameEnded: (gameId, status) => void backups?.gameEnded(gameId, status),
+  });
   registerCompanionRoutes(app, db, now, assets);
-  registerAdminRoutes(app, db, now, { ai: aiConfig, ...(config.adminCodeHash ? { adminCodeHash: config.adminCodeHash } : {}) });
+  registerAdminRoutes(app, db, now, {
+    ai: aiConfig,
+    log: options.aiLog ?? ((line) => console.log(line)),
+    ...(config.adminCodeHash ? { adminCodeHash: config.adminCodeHash } : {}),
+  });
   registerInventoryRoutes(app, db, now, assets);
   registerGmConsoleRoutes(app, db, now, room, assets);
   registerHistoryRoutes(app, db, now);
@@ -131,7 +143,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
 
   const { port } = app.server.address() as AddressInfo;
   const urlHost = config.host === '0.0.0.0' ? '127.0.0.1' : config.host;
-  const backups = config.backup
+  backups = config.backup
     ? startBackupSchedule({ ...config.backup, sqlite, now, log: options.backupLog ?? ((line) => console.log(line)) })
     : undefined;
 

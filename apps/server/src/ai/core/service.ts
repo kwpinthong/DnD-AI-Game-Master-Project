@@ -61,6 +61,8 @@ export interface AiTrigger<T> {
   maxOutputTokens: number;
   /** Default: medium for gm_adjudicate / gm_repair, low otherwise (ADR §8). */
   effort?: AiCallRequest['effort'];
+  /** Extra attempts for this call; default AI_MAX_RETRIES. Narration uses 1 (Q-177: retry once, then the template). */
+  maxRetries?: number;
   signal?: AbortSignal;
 }
 
@@ -138,7 +140,7 @@ export function createAiService(deps: AiServiceDeps): AiService {
         timeoutMs: config.timeoutMs,
         ...(trigger.signal ? { signal: trigger.signal } : {}),
       };
-      const attempts = 1 + config.maxRetries;
+      const attempts = 1 + (trigger.maxRetries ?? config.maxRetries);
       let lastFailure = '';
 
       for (let attempt = 1; attempt <= attempts; attempt++) {

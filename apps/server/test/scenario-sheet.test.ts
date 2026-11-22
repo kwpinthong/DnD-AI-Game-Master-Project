@@ -88,6 +88,32 @@ describe('GEN-071 default scenario from the sheet', () => {
     for (const place of defaultScenario().locations) expect(assets.location(place.name), place.name).toBeDefined();
   });
 
+  it('Q-161: connections, safety and rest quality of every place come from the sheet Location row', () => {
+    const scenario = defaultScenario();
+    const idOf = new Map(scenario.locations.map((l) => [l.name, l.id]));
+    for (const place of scenario.locations) {
+      const row = assets.location(place.name)!;
+      expect(place.connects, place.name).toEqual(row.connectsTo.map((name) => idOf.get(name)));
+      expect(place.safety, place.name).toBe(row.safety!.toLowerCase());
+      expect(place.restQuality, place.name).toBe(row.restQuality);
+    }
+    // The special links (Q-161).
+    const byId = new Map(scenario.locations.map((l) => [l.id, l]));
+    expect(byId.get('temple')!.connects).toContain('church-crypt');
+    expect(byId.get('church-crypt')!.connects).toEqual(['temple']);
+    expect(byId.get('library')!.connects).toContain('astral-rift');
+    expect(byId.get('astral-rift')!.connects).toEqual(['library']);
+  });
+
+  it('Q-161: an NPC with a Public_Alias in the sheet goes by it', () => {
+    const npcs = defaultScenario().npcs;
+    for (const record of assets.npcs) {
+      const npc = npcs.find((n) => assets.npc(n.name) === record)!;
+      if (record.publicAlias !== '') expect(npc.alias, record.name).toBe(record.publicAlias);
+    }
+    expect(npcs.find((n) => n.id === 'noble')!.alias).toBe('ลอร์ดจูเลียน แวนเดอร์บิลต์ (ขุนนางผู้มาเยือน)');
+  });
+
   it('C1: the finale lasts both of its periods (4 turns) and resolves only at the end of the game', () => {
     advanceTimeline(opened.db, GAME, { day: 12, phase: 'HESPERION' });
     expect(statusOf('d12-meteor').status).toBe('active');

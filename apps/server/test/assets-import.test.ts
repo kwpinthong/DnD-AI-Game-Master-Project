@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { convertSheet, formatIssue } from '../src/assets/import.ts';
-import { REQUIRED_TABS, type TabName, type AbilityRecord, type Day10StrategyRecord, type ItemRecord, type StartScenarioRecord } from '../src/assets/model.ts';
+import { REQUIRED_TABS, type TabName, type AbilityRecord, type Day10StrategyRecord, type ItemRecord, type LocationRecord, type NpcRecord, type StartScenarioRecord } from '../src/assets/model.ts';
 import { duplicateRow, fixtureCsv, keepColumnsBefore, setCell } from './assets-fixture.ts';
 
 /** Data rows of a fixture CSV (lines after the header, blank lines left out). */
@@ -257,5 +257,51 @@ describe('convertSheet (GEN-062)', () => {
     expect(result.warnings).toContainEqual(expect.objectContaining({ tab: 'NPC_Schedule', row: 2, column: 'NPC' }));
     expect(result.warnings).toContainEqual(expect.objectContaining({ tab: 'NPC_Schedule', row: 3, column: 'Location' }));
     expect(result.warnings).toContainEqual(expect.objectContaining({ tab: 'Start_Scenarios', row: 2, column: 'Location' }));
+  });
+});
+
+describe('Q-161 Location Connects_To / Safety / Rest_Quality and NPC Public_Alias', () => {
+  it('reads the new columns into arrays and allowed values; the note column is the note', () => {
+    const result = convertSheet(requiredOnly());
+    expect(result.errors.map(formatIssue)).toEqual([]);
+    const [square, market, crypt, rule] = result.files.Location as LocationRecord[];
+    expect(square).toMatchObject({ connectsTo: ['ตลาดทดสอบ'], safety: 'SAFE', restQuality: 'good', note: 'โน้ตลาน' });
+    expect(market).toMatchObject({ connectsTo: ['ลานทดสอบ', 'ห้องลับ (ชั้นใต้ดิน)'], safety: 'RESTRICTED', restQuality: 'poor', note: '' });
+    expect(crypt).toMatchObject({ safety: 'DANGER', restQuality: 'excellent' });
+    // The weather-rules row is not a place: empty cells, no value.
+    expect(rule).toMatchObject({ connectsTo: [], safety: null, restQuality: null, note: 'แถวกฎ' });
+    expect(square!.extra).toBeUndefined();
+    const [nova, merchant] = result.files.NPC as NpcRecord[];
+    expect(nova).toMatchObject({ publicAlias: 'โนวา — เด็กผู้มาเยือน', note: 'ตัดภูมิหลังออก' });
+    expect(merchant).toMatchObject({ publicAlias: '', note: '' });
+    expect(result.warnings.filter((w) => w.tab === 'Location' || w.tab === 'NPC').map(formatIssue)).toEqual([]);
+  });
+
+  it('refuses a Safety / Rest_Quality outside the allowed values, naming the cell', () => {
+    const csv = requiredOnly();
+    const result = convertSheet({ ...csv, Location: setCell(setCell(csv.Location!, 2, 'Safety', 'safe-ish'), 3, 'Rest_Quality', 'great') });
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(expect.objectContaining({ tab: 'Location', row: 2, column: 'Safety', message: expect.stringContaining('SAFE / NORMAL / DANGER / RESTRICTED') }));
+    expect(result.errors).toContainEqual(expect.objectContaining({ tab: 'Location', row: 3, column: 'Rest_Quality', message: expect.stringContaining('poor / normal / good / excellent') }));
+  });
+
+  it('warns (does not fail) when Connects_To names a place that is not in the tab, or is not a [list]', () => {
+    const csv = requiredOnly();
+    const result = convertSheet({ ...csv, Location: setCell(csv.Location!, 2, 'Connects_To', '[ตลาดทดสอบ, ถ้ำที่ไม่มี]') });
+    expect(result.ok).toBe(true);
+    expect(result.warnings).toContainEqual(expect.objectContaining({ tab: 'Location', row: 2, column: 'Connects_To', message: expect.stringContaining('ถ้ำที่ไม่มี') }));
+    expect((result.files.Location as LocationRecord[])[0]!.connectsTo).toEqual(['ตลาดทดสอบ', 'ถ้ำที่ไม่มี']);
+
+    const broken = convertSheet({ ...csv, Location: setCell(csv.Location!, 2, 'Connects_To', 'ตลาดทดสอบ') });
+    expect(broken.ok).toBe(false);
+    expect(broken.errors).toContainEqual(expect.objectContaining({ tab: 'Location', row: 2, column: 'Connects_To' }));
+  });
+
+  it('a sheet without the new columns still imports, with empty values', () => {
+    const csv = requiredOnly();
+    const result = convertSheet({ ...csv, Location: keepColumnsBefore(csv.Location!, 'Connects_To'), NPC: keepColumnsBefore(csv.NPC!, 'Public_Alias') });
+    expect(result.errors.map(formatIssue)).toEqual([]);
+    expect((result.files.Location as LocationRecord[])[0]).toMatchObject({ connectsTo: [], safety: null, restQuality: null, note: '' });
+    expect((result.files.NPC as NpcRecord[])[0]).toMatchObject({ publicAlias: '', note: '' });
   });
 });

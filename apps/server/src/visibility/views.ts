@@ -43,7 +43,7 @@ export function otherCharacterView(subject: CharacterRow, presence: PresenceRow,
   return {
     ref: presence.ref,
     appearance: subject.appearance,
-    injury: injuryText(subject.hp),
+    injury: injuryText(subject.hp, subject.hpMax),
     socialTitle: socialTitle(subject.reputation),
     name: knowsName ? subject.name : null,
   };
@@ -134,7 +134,7 @@ function gmSurroundings(db: DbOrTx, gameId: string, karmaTiers: readonly KarmaTi
     personality: c.personality,
     hp: { current: c.hp, max: c.hpMax },
     stamina: { current: c.stamina, max: c.staminaMax },
-    injury: injuryText(c.hp),
+    injury: injuryText(c.hp, c.hpMax),
     socialTitle: socialTitle(c.reputation),
     reputationScore: c.reputation,
     karma: c.karma,

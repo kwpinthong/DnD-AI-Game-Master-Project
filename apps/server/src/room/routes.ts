@@ -19,6 +19,8 @@ export interface RoomOptions {
   log?: (line: string) => void;
   /** Picks each period's weather when it opens (GEN-068); without it the room shows no weather. */
   weather?: WeatherService;
+  /** Q-185: after the turn that ends a game is published (the end-of-game backup). */
+  onGameEnded?: (gameId: string, status: 'finale' | 'game_over') => void;
 }
 
 /** Close codes (4000-4999 are the application's own). */
@@ -46,7 +48,7 @@ function entryRefusal(db: Db, me: MemberRow): RoomErrorCode | null {
  * `action`s. The token, action text and names are never logged.
  */
 export function registerRoomRoutes(app: FastifyInstance, db: Db, now: Clock, options: RoomOptions): RoomService {
-  const room = createRoomService(db, now, options.resolver, options.assets, options.log ?? ((line) => console.log(line)), options.weather);
+  const room = createRoomService(db, now, options.resolver, options.assets, options.log ?? ((line) => console.log(line)), options.weather, options.onGameEnded);
   // Before the WebSocket plugin closes the sockets, so their close events find no room to update.
   app.addHook('preClose', async () => room.stop());
 

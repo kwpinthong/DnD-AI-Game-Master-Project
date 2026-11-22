@@ -23,7 +23,9 @@
     "matchTargetTags": [
       "POOR_OR_INJURED",
       "BACK_ALLEY"
-    ]
+    ],
+    "publicAlias": "โนอา — เด็กขอทานตาบอดข้างหนึ่ง",
+    "note": "ตัด \"ผู้รอดชีวิตจากหมู่บ้านชายแดน\" ออก ให้ผู้เล่นค้นพบเอง"
   },
   {
     "grade": "F",
@@ -50,7 +52,9 @@
     "matchTargetTags": [
       "NO_KARMA_CHANGE",
       "FOUNTAIN"
-    ]
+    ],
+    "publicAlias": "ลูเซีย — หญิงสาวผู้พกนาฬิกาพกตาย",
+    "note": ""
   },
   {
     "grade": "B",
@@ -76,7 +80,9 @@
       "CLINIC",
       "CHURCH",
       "POISON_BREAD"
-    ]
+    ],
+    "publicAlias": "แม่ชีผู้เหนื่อยล้าแห่งโบสถ์เก่า",
+    "note": "เหมือนคอลัมน์ C (ซ่อนชื่อจนความสัมพันธ์ +9)"
   },
   {
     "grade": "B",
@@ -102,7 +108,9 @@
       "BARRACKS",
       "GUILD",
       "CULT_SPY"
-    ]
+    ],
+    "publicAlias": "ทหารยามหน้าตาบึ้งตึง",
+    "note": "เหมือนคอลัมน์ C"
   },
   {
     "grade": "B",
@@ -128,7 +136,9 @@
     "matchTargetTags": [
       "BLACK_MARKET",
       "UNDERGROUND"
-    ]
+    ],
+    "publicAlias": "ชายชุดคลุมมอมแมมในตรอกมืด",
+    "note": "เหมือนคอลัมน์ C"
   },
   {
     "grade": "B",
@@ -154,7 +164,9 @@
       "MARKET",
       "FOREST",
       "ANCIENT_LORE"
-    ]
+    ],
+    "publicAlias": "พ่อค้าเร่ผู้สวมแว่นหนา",
+    "note": "เหมือนคอลัมน์ C"
   },
   {
     "grade": "A",
@@ -179,7 +191,9 @@
       "THEATER",
       "MANOR",
       "MISSING_PERSONS"
-    ]
+    ],
+    "publicAlias": "ลอร์ดจูเลียน แวนเดอร์บิลต์ (ขุนนางผู้มาเยือน)",
+    "note": "แทน \"ขุนนางผู้ตรวจการลับ\" ที่เฉลยว่าปลอมตัวมาสืบ"
   },
   {
     "grade": "A",
@@ -204,7 +218,9 @@
       "CHURCH",
       "FOUNTAIN",
       "SACRIFICE"
-    ]
+    ],
+    "publicAlias": "อาร์คบิชอป มัลคอล์ม (นักบวชผู้ใจบุญประจำเมือง)",
+    "note": "แทน \"ผู้นำนักบวชลัทธิ\" ที่เฉลยว่าเป็นลัทธิ"
   },
   {
     "grade": "A",
@@ -230,7 +246,9 @@
       "THEATER",
       "DAWN_CHURCH",
       "METEOR_DATA"
-    ]
+    ],
+    "publicAlias": "เลดี้เซเรน่า แห่งหอจดหมายเหตุ",
+    "note": ""
   },
   {
     "grade": "S",
@@ -254,7 +272,9 @@
     "matchTargetTags": [
       "DAWN_CHURCH",
       "HOLY_GROUND"
-    ]
+    ],
+    "publicAlias": "ภูตแห่งแสงในแท่นบูชา",
+    "note": "ชื่อ ออเรเลีย เปิดเมื่อปลุกสำเร็จ"
   },
   {
     "grade": "S",
@@ -278,7 +298,9 @@
     "matchTargetTags": [
       "CHURCH_BASEMENT",
       "DARK_NIGHT"
-    ]
+    ],
+    "publicAlias": "เงาในรอยแยกใต้แท่นพิธี",
+    "note": "ชื่อ น็อกทิส เปิดเมื่อพบ"
   },
   {
     "grade": "S",
@@ -303,6 +325,8 @@
       "SEA_CLIFF",
       "CLEAR_NIGHT",
       "METEOR_DATA"
-    ]
+    ],
+    "publicAlias": "ผู้เฝ้ามองเส้นขอบฟ้า",
+    "note": "ชื่อ แอสทรา เปิดเมื่อพบ"
   }
 ]

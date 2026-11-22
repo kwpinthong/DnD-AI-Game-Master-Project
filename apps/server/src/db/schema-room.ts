@@ -64,6 +64,8 @@ export const roomEntry = sqliteTable(
      */
     fromMemberId: text('from_member_id'),
     toMemberId: text('to_member_id'),
+    /** Q-177: why this text is the server template (null = the AI GM's own text). Players see only that it is one. */
+    fallback: text('fallback', { enum: ['timeout', 'budget', 'invalid', 'error'] }),
     createdAt: integer('created_at').notNull(),
   },
   (t) => [index('room_entry_game').on(t.gameId, t.id)],

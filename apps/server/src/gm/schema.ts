@@ -81,6 +81,19 @@ export const GmAction = z.object({
   awareness: z.enum(['watch', 'asleep', 'normal']),
   /** INVESTIGATE: a success finds Hidden Evidence left at the place today (GEN-067, Q-135). */
   investigate: z.boolean(),
+  /**
+   * Q-180, applied to the actor only when this action succeeds: unlock-condition flags the AI judged happened
+   * (names from the rules' flag list, e.g. protected_others) ...
+   */
+  skillFlags: z.array(z.string()).max(3).default([]),
+  /**
+   * ... and skills / items given: a skill whose unlock conditions hold or that `npcId` gives as an open reward;
+   * an item only as an open reward of `npcId`. Anything else is refused and repaired (Q-049).
+   */
+  grants: z
+    .array(z.object({ kind: z.enum(['skill', 'item']), name: z.string(), npcId: z.string().nullable() }))
+    .max(2)
+    .default([]),
   /** What the actor does, in tokens: the GM's own log and memory (not narration). */
   intentSummary: z.string().min(1).max(200),
   reason: z.string().max(300),

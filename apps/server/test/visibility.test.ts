@@ -148,6 +148,20 @@ describe('visibility layer: who sees what (GEN-050)', { timeout: 60_000 }, () =>
     expect(await seen()).toBe('หมดสติ');
   });
 
+  it('Q-197: the injury word is a share of B\'s own Max HP (45 here), not of 100', async () => {
+    const t = await table(true);
+    const seen = async () => (await playerView(t, t.a)).view.people.find((p) => p.appearance === t.b.appearance)?.injury;
+    server!.db.prepare('update character set hp_max = 45 where member_id = ?').run(t.b.memberId);
+    for (const [value, word] of [[45, 'ปกติ'], [30, 'ปกติ'], [23, 'ปกติ'], [22, 'บาดเจ็บ'], [12, 'บาดเจ็บ'], [11, 'สาหัส'], [0, 'หมดสติ']] as const) {
+      hp(t.b, value);
+      expect(await seen(), `HP ${value}/45`).toBe(word);
+    }
+    // The GM's view uses the same word.
+    hp(t.b, 30);
+    const gm = await t.call('GET', '/api/game/surroundings', { token: t.gm!.token });
+    expect((gm.body as { characters: { memberId: string; injury: string }[] }).characters.find((c) => c.memberId === t.b.memberId)!.injury).toBe('ปกติ');
+  });
+
   it('C8: A at the market does not see C in the forest, C\'s actions or where C is', async () => {
     const t = await table();
     move(t.a, 'market');

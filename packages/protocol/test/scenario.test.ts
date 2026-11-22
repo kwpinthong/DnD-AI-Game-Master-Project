@@ -146,6 +146,24 @@ describe('scenario validation', () => {
 });
 
 describe('older template versions', () => {
+  it('Q-161: rest quality uses the sheet values; a saved rough / basic / inn is upgraded, and RESTRICTED is a safety', () => {
+    const old = draft();
+    old.locations = old.locations.map((l: Record<string, unknown>, i: number) => ({ ...l, restQuality: ['rough', 'basic', 'inn'][i % 3] }));
+    const result = parseScenario(old);
+    if (!result.ok) throw new Error(JSON.stringify(result.errors));
+    expect(result.scenario.locations.map((l) => l.restQuality)).toEqual(old.locations.map((_: unknown, i: number) => ['poor', 'normal', 'good'][i % 3]));
+
+    const sheet = draft();
+    sheet.locations[0].restQuality = 'excellent';
+    sheet.locations[0].safety = 'restricted';
+    const ok = parseScenario(sheet);
+    if (!ok.ok) throw new Error(JSON.stringify(ok.errors));
+    expect(ok.scenario.locations[0]).toMatchObject({ restQuality: 'excellent', safety: 'restricted' });
+
+    sheet.locations[0].restQuality = 'luxury';
+    expect(parseScenario(sheet)).toMatchObject({ ok: false, errors: [{ path: 'locations.0.restQuality' }] });
+  });
+
   // C6
   it('C6: loads a template saved before the newer fields existed and fills their defaults', () => {
     const old = draft();

@@ -16,6 +16,11 @@ export interface BackupSchedule {
   last(): BackupResult | undefined;
   /** Backups this schedule finished. */
   taken(): number;
+  /**
+   * Q-185: one copy right after a game ended (finale / game_over), named `gameend-...` and kept outside the
+   * rotation. Queued behind a running backup; a failure is logged and the game is not affected.
+   */
+  gameEnded(gameId: string, status: 'finale' | 'game_over'): Promise<void>;
 }
 
 export interface BackupScheduleOptions extends BackupConfig {
@@ -71,5 +76,16 @@ export function startBackupSchedule(options: BackupScheduleOptions): BackupSched
     },
     last: () => last,
     taken: () => taken,
+    gameEnded(gameId, status) {
+      running = running.then(async () => {
+        try {
+          const result = await backupDatabase(options.sqlite, options.dir, options.now(), { gameEnd: { gameId, status } });
+          options.log(`[backup] game end (${status}) game=${gameId}: ${result.path} (${result.bytes} bytes, ${result.tookMs} ms)`);
+        } catch (error) {
+          options.log(`[backup] game end (${status}) game=${gameId} failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      });
+      return running;
+    },
   };
 }

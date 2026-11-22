@@ -148,7 +148,8 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
 
     const from = b.messages.length;
     await submitAndAccept(a, secretText, 'secret');
-    const seen = await b.waitFor((m) => m.type === 'room' && m.members.find((x) => x.memberId === t.a.memberId)?.submitted === true, from);
+    // Q-195: B learns how many sent, not who.
+    const seen = await b.waitFor((m) => m.type === 'room' && m.submittedCount === 1, from);
     expect(seen.type).toBe('room');
     // A gets their own action back; the phase still waits for B and C (Online).
     expect(a.lastRoom()!.you.action).toEqual({ text: secretText, visibility: 'secret', rest: false });
@@ -161,9 +162,35 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
       expect(frame).not.toContain('"secret"');
     }
     const aAsSeenByB = b.lastRoom()!.members.find((m) => m.memberId === t.a.memberId)!;
-    expect(Object.keys(aAsSeenByB).sort()).toEqual(['memberId', 'name', 'online', 'role', 'submitted']);
+    expect(Object.keys(aAsSeenByB).sort()).toEqual(['memberId', 'name', 'online', 'role']);
     expect(b.lastRoom()!.you.action).toBeNull();
     expectNoForbiddenKeys(a, b);
+  });
+
+  it('Q-195: a player gets the number who sent and their own flag only; per-member status is the GM\'s', async () => {
+    const t = await startedTable(server!, true);
+    const gm = await enter(t.gm!);
+    const [a, b, c] = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    const from = [a, b, c, gm].map((x) => x.messages.length);
+    await submitAndAccept(a, 'เดินดูตลาด');
+    const roomOf = async (x: RoomClient, i: number) => x.waitFor((m) => m.type === 'room' && m.submittedCount === 1, from[i]);
+    const [ra, rb, rc, rgm] = [await roomOf(a, 0), await roomOf(b, 1), await roomOf(c, 2), await roomOf(gm, 3)];
+    if (ra.type !== 'room' || rb.type !== 'room' || rc.type !== 'room' || rgm.type !== 'room') throw new Error('not a room message');
+    // A sees their own flag only.
+    expect(ra.members.find((m) => m.memberId === t.a.memberId)!.submitted).toBe(true);
+    expect(ra.members.filter((m) => m.memberId !== t.a.memberId).every((m) => !('submitted' in m))).toBe(true);
+    // B and C: their own (false), nobody else's, never A's.
+    for (const [r, me] of [[rb, t.b], [rc, t.c]] as const) {
+      expect(r.members.find((m) => m.memberId === me.memberId)!.submitted).toBe(false);
+      expect(r.members.filter((m) => m.memberId !== me.memberId).every((m) => !('submitted' in m))).toBe(true);
+    }
+    for (const frame of [...b.raw, ...c.raw]) expect(frame).not.toMatch(new RegExp(`"memberId":"${t.a.memberId}"[^}]*"submitted"`));
+    // The GM sees each member's status.
+    expect(Object.fromEntries(rgm.members.filter((m) => m.role === 'player').map((m) => [m.memberId, m.submitted]))).toEqual({
+      [t.a.memberId]: true,
+      [t.b.memberId]: false,
+      [t.c.memberId]: false,
+    });
   });
 
   it('C4: A\'s private narration never reaches B\'s socket, live or on replay', async () => {

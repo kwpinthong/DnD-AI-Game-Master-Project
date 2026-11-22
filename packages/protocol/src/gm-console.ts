@@ -56,6 +56,25 @@ export const GmPendingTurn = z.strictObject({
 });
 export type GmPendingTurn = z.infer<typeof GmPendingTurn>;
 
+/**
+ * Why a narration went out as the server template (Q-177): `timeout` (no answer after one retry), `budget`
+ * (the game's monthly AI ceiling), `invalid` (still wrong after the repair, Q-151), `error` (any other failure).
+ */
+export const GmFallbackCause = z.enum(['timeout', 'budget', 'invalid', 'error']);
+export type GmFallbackCause = z.infer<typeof GmFallbackCause>;
+
+/** One template narration of the game: which turn, who / where it went, why. */
+export const GmFallbackView = z.strictObject({
+  at: GmTurnPoint,
+  kind: z.enum(['feed', 'narration']),
+  /** narration: its reader; feed: null. */
+  memberId: z.string().nullable(),
+  /** feed: its place (null = the whole town); narration: null. */
+  locationId: z.string().nullable(),
+  cause: GmFallbackCause,
+});
+export type GmFallbackView = z.infer<typeof GmFallbackView>;
+
 /** 200 from GET /api/game/gm/console. */
 export const GmConsoleResponse = z.strictObject({
   view: z.literal('gm'),
@@ -70,6 +89,8 @@ export const GmConsoleResponse = z.strictObject({
   legendaries: z.array(ScenarioLegendary),
   /** The turn that waits for approval; null = none (still collecting, or the AI GM is still working). */
   pending: GmPendingTurn.nullable(),
+  /** Q-177: every published template narration, oldest first, with its cause. */
+  fallbacks: z.array(GmFallbackView),
 });
 export type GmConsoleResponse = z.infer<typeof GmConsoleResponse>;
 
@@ -123,7 +144,8 @@ export const GmInsertEventRequest = z.strictObject({
 });
 export type GmInsertEventRequest = z.input<typeof GmInsertEventRequest>;
 
-export const GmOverrideKind = z.enum(['narration', 'result', 'adjust', 'event']);
+/** `approve` (Q-176): one row per approved turn, target `turn`, after `{ edits: n }` (0 = approved as the AI GM wrote it). */
+export const GmOverrideKind = z.enum(['narration', 'result', 'adjust', 'event', 'approve']);
 export type GmOverrideKind = z.infer<typeof GmOverrideKind>;
 
 /** One override: who changed what, from what to what, and why. */

@@ -128,6 +128,7 @@ server สำรองไฟล์ DB เองระหว่างที่ค
 | เก็บกี่ไฟล์ | `BACKUP_KEEP` ไฟล์ล่าสุด (ค่าเริ่ม 28 = 7 วัน) ที่เก่ากว่าถูกลบหลัง backup ใหม่สำเร็จ / backup ที่ทำด้วยมือนับรวมด้วย |
 | log | Deploy Logs: `[isekai-server] backups: every 6 h + at shutdown into /data/backups, keep 28` ตอน start และ `[backup] scheduled: /data/backups/isekai-....sqlite (N bytes, M ms), removed K old` ทุกครั้ง (ไม่มีข้อมูลผู้เล่นใน log) / backup ล้ม = `[backup] ... failed: <เหตุผล>` เกมเล่นต่อได้ รอบถัดไปลองใหม่ |
 | ขนาด | ประมาณเท่าไฟล์ DB ต่อ 1 ไฟล์ × 28 ไฟล์ (DB 10 MB = ~280 MB บน volume 1 GB) |
+| ตอนเกมจบ (Q-185) | ทันทีหลังเทิร์นที่ทำให้เกมจบ (finale หรือ game_over) ได้ไฟล์ `gameend-<finale\|game_over>-<game id>-<เวลา UTC>.sqlite` 1 ไฟล์ต่อเกม ในโฟลเดอร์เดียวกัน **ไม่นับใน `BACKUP_KEEP` และไม่ถูกลบอัตโนมัติ** (ลบเองเมื่อไม่ใช้แล้ว) / log `[backup] game end (finale) game=<id>: ...` / ปิด backup (`BACKUP_INTERVAL_HOURS=0`) = ไม่มีไฟล์นี้ด้วย / restore ใช้ `db:restore` เหมือนไฟล์อื่น |
 
 ### 6.1 backup ด้วยมือ (เช่น ก่อน deploy ที่มี migration)
 1. ติดตั้ง Railway CLI แล้ว `railway login`, `railway link` (เลือก project + service)

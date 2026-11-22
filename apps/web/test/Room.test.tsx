@@ -1,4 +1,4 @@
-import type { GameView, RoomEntry, RoomServerMessage, RoomState } from '@isekai/protocol';
+import { FALLBACK_NARRATION_LABEL, type GameView, type RoomEntry, type RoomServerMessage, type RoomState } from '@isekai/protocol';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App.tsx';
@@ -76,8 +76,9 @@ function roomState(patch: Partial<RoomState> = {}, you: Partial<RoomState['you']
     weather: null,
     members: [
       { memberId: me.id, name: 'นก', role: 'player', online: true, submitted: false },
-      { memberId: 'm-bee', name: 'บี', role: 'player', online: false, submitted: false },
+      { memberId: 'm-bee', name: 'บี', role: 'player', online: false },
     ],
+    submittedCount: 0,
     you: { memberId: me.id, role: 'player', place: { id: 'market', name: 'ลานตลาด' }, lock: null, secretUsed: false, drowsy: false, action: null, allies: [], ...you },
     gmStatus: null,
     ...patch,
@@ -177,10 +178,14 @@ describe('GEN-056 play room (web)', () => {
     expect(await screen.findByLabelText('ชื่อจริง')).toBeTruthy();
   });
 
-  it('C3: other players show only ส่งแล้ว; your own action is shown back to you', async () => {
+  it('C3 / Q-195: players see how many sent, never who; your own action is shown back to you', async () => {
     const socket = await enterRoom();
-    socket.receive(roomState({ members: [roomState().members[0]!, { memberId: 'm-bee', name: 'บี', role: 'player', online: true, submitted: true }] }));
-    expect(screen.getByText(/บี — ออนไลน์ · ส่งแล้ว/)).toBeTruthy();
+    socket.receive(roomState({ members: [roomState().members[0]!, { memberId: 'm-bee', name: 'บี', role: 'player', online: true }], submittedCount: 1 }));
+    expect(screen.getByText('ส่ง action แล้ว 1/2 คน')).toBeTruthy();
+    const list = screen.getByRole('list', { name: 'ผู้เล่นในห้อง' });
+    expect(within(list).getByText(/บี — ออนไลน์$/)).toBeTruthy();
+    expect(within(list).getByText(/นก \(คุณ\) — ออนไลน์ · ยังไม่ส่ง/)).toBeTruthy();
+    expect(within(list).queryByText(/บี.*ส่ง/)).toBeNull();
 
     fireEvent.change(screen.getByLabelText('action ของคุณ'), { target: { value: 'แอบตามชายเสื้อคลุมดำ' } });
     fireEvent.click(screen.getByLabelText(/^Secret/));
@@ -203,6 +208,17 @@ describe('GEN-056 play room (web)', () => {
     expect(within(feed).getByText('วันที่ 1 · EOSORIA (เช้า 06:00-11:59) · เทิร์น 1/2 · ลานตลาด')).toBeTruthy();
     expect(within(feed).queryByText('คุณเห็นรอยเท้าใต้โต๊ะ')).toBeNull();
     expect(within(mine).getByText('คุณเห็นรอยเท้าใต้โต๊ะ')).toBeTruthy();
+  });
+
+  it('Q-177: a template narration carries the fallback label; the AI GM\'s own text does not', async () => {
+    const socket = await enterRoom();
+    socket.receive({ type: 'entry', entry: { ...entry(1, 'narration', 'คุณ: เช็ดโต๊ะ สำเร็จ'), fallback: true } });
+    socket.receive({ type: 'entry', entry: entry(2, 'narration', 'แสงเทียนสั่นไหว') });
+    socket.receive(roomState());
+    const mine = screen.getByRole('region', { name: 'สิ่งที่คุณรู้คนเดียว' });
+    const items = within(mine).getAllByRole('listitem');
+    expect(within(items[0]!).getByText(FALLBACK_NARRATION_LABEL)).toBeTruthy();
+    expect(within(items[1]!).queryByText(FALLBACK_NARRATION_LABEL)).toBeNull();
   });
 
   it('C5: an empty or too long action is stopped with a reason; a server refusal and a lock are shown', async () => {
@@ -369,6 +385,7 @@ describe('GEN-058 Human GM console in the play room (web)', () => {
       events: [],
       legendaries: [],
       pending: pending ? { at: { day: 1, phase: 'EOSORIA', turn: 1 }, entries: [{ index: 0, kind: 'narration', memberId: 'm-bee', locationId: null, text: 'ฉบับเดิม', edited: false }], results: [] } : null,
+      fallbacks: [],
     });
     loggedIn(gmGame, {
       'GET /api/game/gm/console': () => Response.json(view(++consoleCalls > 1)),

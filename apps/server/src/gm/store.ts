@@ -1,3 +1,4 @@
+import type { GmFallbackCause } from '@isekai/protocol';
 import { PERIODS, type Period, type Turn } from '@isekai/rules';
 import { and, asc, desc, eq, inArray, isNull, lte } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
@@ -12,11 +13,14 @@ export interface TurnAt {
   readonly turn: Turn;
 }
 
+/** A narration as stored for its audience; `fallback` = the server template and why (Q-177), kept across a restart. */
+export type StoredNarration = GmNarration & { fallback?: GmFallbackCause };
+
 export interface StoredTurn {
   status: 'adjudicated' | 'applied';
   proposal: GmTurnProposal;
   rolls: number[];
-  narrations: Record<string, GmNarration>;
+  narrations: Record<string, StoredNarration>;
 }
 
 const turnKey = (gameId: string, at: TurnAt) =>
@@ -29,7 +33,7 @@ export function getStoredTurn(db: DbOrTx, gameId: string, at: TurnAt): StoredTur
     status: row.status,
     proposal: JSON.parse(row.proposal) as GmTurnProposal,
     rolls: JSON.parse(row.rolls) as number[],
-    narrations: JSON.parse(row.narrations) as Record<string, GmNarration>,
+    narrations: JSON.parse(row.narrations) as Record<string, StoredNarration>,
   };
 }
 
@@ -42,7 +46,7 @@ export function saveAdjudicated(db: DbOrTx, gameId: string, at: TurnAt, proposal
     .run();
 }
 
-export function saveNarration(db: DbOrTx, gameId: string, at: TurnAt, key: string, narration: GmNarration, now: number): void {
+export function saveNarration(db: DbOrTx, gameId: string, at: TurnAt, key: string, narration: StoredNarration, now: number): void {
   const stored = getStoredTurn(db, gameId, at);
   if (!stored) return;
   db.update(gmTurn)

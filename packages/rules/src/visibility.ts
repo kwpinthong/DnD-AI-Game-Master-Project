@@ -3,12 +3,17 @@ import type { NpcGrade } from './resolution/types.ts';
 /** What other people see of someone's HP (Rules Spec §2.2 bands; HP 0 = unconscious, Q-057). */
 export type InjuryText = 'ปกติ' | 'บาดเจ็บ' | 'สาหัส' | 'หมดสติ';
 
-/** HP 50-100 ปกติ / 25-49 บาดเจ็บ / 1-24 สาหัส / 0 หมดสติ (same bands as the conditions in tables.ts). */
-export function injuryText(hp: number): InjuryText {
+/**
+ * Shares of the character's own Max HP (Q-197: Max HP is 30..45 by start scenario / TRAIN, not 100): at least
+ * half ปกติ / at least a quarter บาดเจ็บ / above 0 สาหัส / 0 หมดสติ. At Max 100 these are the old
+ * 50-100 / 25-49 / 1-24 bands. Integer maths, so no rounding at the edges.
+ */
+export function injuryText(hp: number, maxHp: number): InjuryText {
   if (hp <= 0) return 'หมดสติ';
-  if (hp <= 24) return 'สาหัส';
-  if (hp <= 49) return 'บาดเจ็บ';
-  return 'ปกติ';
+  const max = Math.max(1, maxHp);
+  if (hp * 2 >= max) return 'ปกติ';
+  if (hp * 4 >= max) return 'บาดเจ็บ';
+  return 'สาหัส';
 }
 
 /** Affinity that reveals a grade B NPC's real name to that player (Rules Spec §8.1). */

@@ -60,10 +60,21 @@ const EventPhase = z.preprocess(
   Phase,
 );
 
-/** Rest recovery at night (Rules Spec §4.1): rough +15, basic +20, inn +25 Stamina. */
-export const RestQuality = z.enum(['rough', 'basic', 'inn']);
-/** Rescue weight of a place (Rules Spec §12.2): safe +4, normal 0, danger -4. */
-export const Safety = z.enum(['safe', 'normal', 'danger']);
+/**
+ * Rest quality of a place, as the sheet's Location `Rest_Quality` (Q-161). The rest engine does not read it
+ * yet (night rest is still inn / rough, GEN-052). A scenario saved before Q-161 is upgraded:
+ * rough → poor, basic → normal, inn → good.
+ */
+export const LEGACY_REST_QUALITIES = { rough: 'poor', basic: 'normal', inn: 'good' } as const;
+export const RestQuality = z.preprocess(
+  (value) => (typeof value === 'string' && value in LEGACY_REST_QUALITIES ? LEGACY_REST_QUALITIES[value as keyof typeof LEGACY_REST_QUALITIES] : value),
+  z.enum(['poor', 'normal', 'good', 'excellent'], { error: 'คุณภาพการพักต้องเป็น poor, normal, good หรือ excellent' }),
+);
+/**
+ * Rescue weight of a place (Rules Spec §12.2): safe +4, normal 0, danger -4; restricted (Q-161, the sheet's
+ * RESTRICTED) counts as normal until Nok gives it a number.
+ */
+export const Safety = z.enum(['safe', 'normal', 'danger', 'restricted'], { error: 'ความปลอดภัยต้องเป็น safe, normal, danger หรือ restricted' });
 
 export const ScenarioLocation = z.object({
   id: Id,

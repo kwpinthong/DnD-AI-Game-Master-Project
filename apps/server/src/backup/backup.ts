@@ -21,19 +21,43 @@ export interface BackupOptions {
   pagesPerStep?: number;
   /** Called after every step (tests count the steps). */
   onStep?: () => void;
+  /** Q-185: the copy taken when this game ended. */
+  gameEnd?: { gameId: string; status: 'finale' | 'game_over' };
 }
+
+/**
+ * End-of-game copies (Q-185): `gameend-<finale|game_over>-<game id>-<time>.sqlite`. Their own prefix keeps them
+ * out of `listBackups`, so the rotation (`keep`, 28 by default) never counts or deletes them.
+ */
+const GAME_END_PREFIX = 'gameend-';
+const isGameEndName = (name: string) => name.startsWith(GAME_END_PREFIX) && name.endsWith(SUFFIX);
+
+/** End-of-game backups in `dir`, newest first. */
+export function listGameEndBackups(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter(isGameEndName)
+    .sort((a, b) => stamp(b).localeCompare(stamp(a)))
+    .map((name) => join(dir, name));
+}
+
+/** The time part of a backup name (sorts as text). */
+const stamp = (name: string) => /(\d{8}T\d{9}Z)/.exec(name)?.[1] ?? '';
 
 const PREFIX = 'isekai-';
 const SUFFIX = '.sqlite';
 const TMP = '.tmp';
 
-/** `isekai-20261122T120000123Z.sqlite`: sorts by time as text. */
-function backupName(now: number): string {
+/** `isekai-20261122T120000123Z.sqlite`: sorts by time as text; an end-of-game copy is `gameend-<status>-<game>-<time>.sqlite`. */
+function backupName(now: number, gameEnd?: BackupOptions['gameEnd']): string {
   const iso = new Date(now).toISOString(); // 2026-11-22T12:00:00.123Z
-  return `${PREFIX}${iso.replace(/[-:]/g, '').replace('.', '')}${SUFFIX}`;
+  const time = iso.replace(/[-:]/g, '').replace('.', '');
+  if (!gameEnd) return `${PREFIX}${time}${SUFFIX}`;
+  return `gameend-${gameEnd.status}-${gameEnd.gameId.replace(/[^A-Za-z0-9_-]/g, '_')}-${time}${SUFFIX}`;
 }
 
 const isBackupName = (name: string) => name.startsWith(PREFIX) && name.endsWith(SUFFIX);
+const isAnyBackupName = (name: string) => isBackupName(name) || name.startsWith('gameend-');
 
 export async function backupDatabase(sqlite: Database.Database, dir: string, now: number, options: BackupOptions = {}): Promise<BackupResult> {
   const started = performance.now();
@@ -41,11 +65,12 @@ export async function backupDatabase(sqlite: Database.Database, dir: string, now
   // Copies left by a crash; an hour old so a backup still running in another process (the CLI) is not touched.
   for (const name of readdirSync(dir)) {
     const file = join(dir, name);
-    if (name.endsWith(TMP) && isBackupName(name.slice(0, -TMP.length)) && statSync(file).mtimeMs < Date.now() - 3_600_000) rmSync(file, { force: true });
+    if (name.endsWith(TMP) && isAnyBackupName(name.slice(0, -TMP.length)) && statSync(file).mtimeMs < Date.now() - 3_600_000) rmSync(file, { force: true });
   }
 
-  let path = join(dir, backupName(now));
-  for (let n = 1; existsSync(path); n++) path = join(dir, backupName(now).replace(SUFFIX, `-${n}${SUFFIX}`));
+  const name = backupName(now, options.gameEnd);
+  let path = join(dir, name);
+  for (let n = 1; existsSync(path); n++) path = join(dir, name.replace(SUFFIX, `-${n}${SUFFIX}`));
   const tmp = `${path}${TMP}`;
   const pagesPerStep = options.pagesPerStep ?? 256;
   try {

@@ -141,6 +141,13 @@ describe('C6: no player-facing payload carries karma (GEN-050)', { timeout: 120_
       for (const [i, x] of clients.entries()) {
         for (const [n, m] of x.messages.entries()) for (const path of forbiddenKeysIn(m)) leaks.push(`socket frame ${n} as ${seats[i]!.name}: ${path}`);
         for (const frame of x.raw) if (frame.includes('"karma"') || frame.includes('"relationship"')) leaks.push(`socket raw as ${seats[i]!.name}: ${frame}`);
+        // Q-195: who sent this turn is the GM's; a player's room frames carry only their own `submitted`.
+        for (const [n, m] of x.messages.entries()) {
+          if (m.type !== 'room') continue;
+          for (const member of m.members) {
+            if (member.memberId !== seats[i]!.memberId && 'submitted' in member) leaks.push(`socket frame ${n} as ${seats[i]!.name}: submitted of ${member.memberId}`);
+          }
+        }
       }
     } finally {
       await Promise.all(clients.map((x) => x.close()));

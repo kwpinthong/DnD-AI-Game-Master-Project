@@ -12,7 +12,14 @@
       "OUTDOOR",
       "CENTRAL"
     ],
-    "weatherVerbBoost": "Clear: [PERSUADE, SHARE] / Rain: [OBSERVE]"
+    "weatherVerbBoost": "Clear: [PERSUADE, SHARE] / Rain: [OBSERVE]",
+    "connectsTo": [
+      "โรงเตี๊ยมและกิลด์นักเดินทาง",
+      "โบสถ์"
+    ],
+    "safety": "NORMAL",
+    "restQuality": "normal",
+    "note": "Connects_To = สถานที่ในโซนเดียวกัน (ไม่เสียเทิร์น, Stamina -1) / ข้ามโซนไปที่ไหนก็ได้ตาม System_Rules (1 เทิร์น, Stamina -3) ไม่ต้องใส่"
   },
   {
     "zone": "โซนใจกลางเมือง (Central Zone)",
@@ -28,7 +35,14 @@
       "TAVERN",
       "COMBAT_PREP"
     ],
-    "weatherVerbBoost": "Rain: [INVESTIGATE, NEGOTIATE] / Night: [REST, PERSUADE]"
+    "weatherVerbBoost": "Rain: [INVESTIGATE, NEGOTIATE] / Night: [REST, PERSUADE]",
+    "connectsTo": [
+      "น้ำพุกลางเมือง",
+      "โบสถ์"
+    ],
+    "safety": "SAFE",
+    "restQuality": "good",
+    "note": "SAFE_ZONE + REST จ่าย 5 เหรียญ ฟื้น Stamina +10"
   },
   {
     "zone": "โซนใจกลางเมือง (Central Zone)",
@@ -42,7 +56,15 @@
       "INDOOR",
       "UNDERGROUND_ACCESS"
     ],
-    "weatherVerbBoost": "Clear: [PRAY] / Dark Night: [RITUAL, INFILTRATE]"
+    "weatherVerbBoost": "Clear: [PRAY] / Dark Night: [RITUAL, INFILTRATE]",
+    "connectsTo": [
+      "น้ำพุกลางเมือง",
+      "โรงเตี๊ยมและกิลด์นักเดินทาง",
+      "โบสถ์ (ชั้นใต้ดิน)"
+    ],
+    "safety": "NORMAL",
+    "restQuality": "normal",
+    "note": "ทางเดียวที่ลงชั้นใต้ดินได้"
   },
   {
     "zone": "โซนใจกลางเมือง (Central Zone)",
@@ -56,7 +78,13 @@
       "UNDERGROUND",
       "RESTRICTED_AREA"
     ],
-    "weatherVerbBoost": "Dark Night: [RITUAL, INFILTRATE, STEALTH]"
+    "weatherVerbBoost": "Dark Night: [RITUAL, INFILTRATE, STEALTH]",
+    "connectsTo": [
+      "โบสถ์"
+    ],
+    "safety": "RESTRICTED",
+    "restQuality": "poor",
+    "note": "เข้าได้จากโบสถ์เท่านั้น (ไม่รับการข้ามโซนตรง) / คนนอกลัทธิถูกพบ = ผู้บุกรุก"
   },
   {
     "zone": "โซนป่าทิศตะวันออก (Eastern Forest Zone)",
@@ -70,7 +98,15 @@
       "WILDERNESS",
       "HAZARD_DAY5"
     ],
-    "weatherVerbBoost": "Clear: [GATHER, ATTACK] / Fog: [STEALTH, ESCAPE]"
+    "weatherVerbBoost": "Clear: [GATHER, ATTACK] / Fog: [STEALTH, ESCAPE]",
+    "connectsTo": [
+      "แปลงเกษตรกรรม",
+      "โรงละคร",
+      "เคหาสน์เจ้าเมือง"
+    ],
+    "safety": "DANGER",
+    "restQuality": "poor",
+    "note": "สัตว์อสูร + หมอกพิษตั้งแต่วันที่ 5 (HAZARD_DAY5)"
   },
   {
     "zone": "โซนป่าทิศตะวันออก (Eastern Forest Zone)",
@@ -84,7 +120,15 @@
       "RURAL",
       "SUPPLY"
     ],
-    "weatherVerbBoost": "Clear: [SUPPORT, SHARE] / Dark Night: [SABOTAGE]"
+    "weatherVerbBoost": "Clear: [SUPPORT, SHARE] / Dark Night: [SABOTAGE]",
+    "connectsTo": [
+      "ป่า",
+      "โรงละคร",
+      "เคหาสน์เจ้าเมือง"
+    ],
+    "safety": "NORMAL",
+    "restQuality": "normal",
+    "note": ""
   },
   {
     "zone": "โซนป่าทิศตะวันออก (Eastern Forest Zone)",
@@ -98,7 +142,15 @@
       "NOBLE_SOCIAL",
       "STAGE"
     ],
-    "weatherVerbBoost": "Rain: [OBSERVE] / Clear Night: [MIND_CONTROL, INVESTIGATE]"
+    "weatherVerbBoost": "Rain: [OBSERVE] / Clear Night: [MIND_CONTROL, INVESTIGATE]",
+    "connectsTo": [
+      "ป่า",
+      "แปลงเกษตรกรรม",
+      "เคหาสน์เจ้าเมือง"
+    ],
+    "safety": "NORMAL",
+    "restQuality": "normal",
+    "note": ""
   },
   {
     "zone": "โซนป่าทิศตะวันออก (Eastern Forest Zone)",
@@ -112,7 +164,15 @@
       "RESTRICTED_AREA",
       "NOBLE_SOCIAL"
     ],
-    "weatherVerbBoost": "Rain/Storm: [INFILTRATE, STEAL]"
+    "weatherVerbBoost": "Rain/Storm: [INFILTRATE, STEAL]",
+    "connectsTo": [
+      "ป่า",
+      "แปลงเกษตรกรรม",
+      "โรงละคร"
+    ],
+    "safety": "RESTRICTED",
+    "restQuality": "normal",
+    "note": "RESTRICTED_AREA: ต้องมีสิทธิ์หรือ INFILTRATE"
   },
   {
     "zone": "โซนการค้าทิศตะวันตก (Western Trade Zone)",
@@ -126,7 +186,14 @@
       "BACK_ALLEY",
       "UNDERGROUND"
     ],
-    "weatherVerbBoost": "Clear: [TRADE] / Dark Night: [STEAL, SABOTAGE]"
+    "weatherVerbBoost": "Clear: [TRADE] / Dark Night: [STEAL, SABOTAGE]",
+    "connectsTo": [
+      "ค่ายทหารป้องกันเมือง",
+      "ทะเล"
+    ],
+    "safety": "NORMAL",
+    "restQuality": "normal",
+    "note": "ค่ำ = ตลาดมืด (รหัสผ่านหรือ karma ติดลบ)"
   },
   {
     "zone": "โซนการค้าทิศตะวันตก (Western Trade Zone)",
@@ -140,7 +207,14 @@
       "MILITARY",
       "TRAINING"
     ],
-    "weatherVerbBoost": "Clear: [TRAIN, DEFEND] / Rain: [INFILTRATE]"
+    "weatherVerbBoost": "Clear: [TRAIN, DEFEND] / Rain: [INFILTRATE]",
+    "connectsTo": [
+      "ย่านการค้า-ตลาดมืด",
+      "ทะเล"
+    ],
+    "safety": "RESTRICTED",
+    "restQuality": "normal",
+    "note": "RESTRICTED_AREA"
   },
   {
     "zone": "โซนการค้าทิศตะวันตก (Western Trade Zone)",
@@ -154,7 +228,14 @@
       "COASTAL",
       "HAZARD_DAY5"
     ],
-    "weatherVerbBoost": "Clear: [TRAVEL, TRADE] / Clear Night: [OBSERVE, RITUAL]"
+    "weatherVerbBoost": "Clear: [TRAVEL, TRADE] / Clear Night: [OBSERVE, RITUAL]",
+    "connectsTo": [
+      "ย่านการค้า-ตลาดมืด",
+      "ค่ายทหารป้องกันเมือง"
+    ],
+    "safety": "DANGER",
+    "restQuality": "poor",
+    "note": "ปิดตายตั้งแต่วันที่ 5 (HAZARD_DAY5)"
   },
   {
     "zone": "โซนที่ราบทิศเหนือ (Northern Plains Zone)",
@@ -168,7 +249,14 @@
       "OBSERVATORY",
       "NORTHERN"
     ],
-    "weatherVerbBoost": "Clear Morning: [PRAY, HEAL] / Clear Night: [OBSERVE]"
+    "weatherVerbBoost": "Clear Morning: [PRAY, HEAL] / Clear Night: [OBSERVE]",
+    "connectsTo": [
+      "สถานพยาบาลกลาง",
+      "หอสมุดหลวง"
+    ],
+    "safety": "NORMAL",
+    "restQuality": "normal",
+    "note": ""
   },
   {
     "zone": "โซนที่ราบทิศเหนือ (Northern Plains Zone)",
@@ -182,7 +270,14 @@
       "SAFE_ZONE",
       "CLINIC"
     ],
-    "weatherVerbBoost": "Rain/Disaster: [HEAL, SUPPORT, REST]"
+    "weatherVerbBoost": "Rain/Disaster: [HEAL, SUPPORT, REST]",
+    "connectsTo": [
+      "โบสถ์แห่งรุ่งอรุณ",
+      "หอสมุดหลวง"
+    ],
+    "safety": "SAFE",
+    "restQuality": "excellent",
+    "note": "SAFE_ZONE + พัก HP +15 Stamina +8 / 2 เทิร์นติด HP เต็ม"
   },
   {
     "zone": "โซนที่ราบทิศเหนือ (Northern Plains Zone)",
@@ -197,7 +292,15 @@
       "ARCHIVE",
       "ASTRONOMY"
     ],
-    "weatherVerbBoost": "Rain: [INVESTIGATE] / Clear Night: [OBSERVE, INVESTIGATE]"
+    "weatherVerbBoost": "Rain: [INVESTIGATE] / Clear Night: [OBSERVE, INVESTIGATE]",
+    "connectsTo": [
+      "โบสถ์แห่งรุ่งอรุณ",
+      "สถานพยาบาลกลาง",
+      "มิติพิศวง (The Astral Rift)"
+    ],
+    "safety": "NORMAL",
+    "restQuality": "normal",
+    "note": "ไปมิติพิศวงได้เฉพาะคืนฟ้าโปร่ง + karma -13..+13"
   },
   {
     "zone": "รูทลับ 1% (Secret Astral Zone)",
@@ -212,7 +315,13 @@
       "ANOMALY",
       "SAFE_ZONE"
     ],
-    "weatherVerbBoost": "Clear Night: [OBSERVE, MEDITATE]"
+    "weatherVerbBoost": "Clear Night: [OBSERVE, MEDITATE]",
+    "connectsTo": [
+      "หอสมุดหลวง"
+    ],
+    "safety": "SAFE",
+    "restQuality": "normal",
+    "note": "เข้า/ออกผ่านหอสมุดเท่านั้น อยู่ได้ 1 เทิร์น (ยกเว้นคนเกิดที่นี่)"
   },
   {
     "zone": "กฎสภาพอากาศกลาง (Weather Rules)",
@@ -224,6 +333,10 @@
     "tags": [
       "GLOBAL_WEATHER_RULES"
     ],
-    "weatherVerbBoost": "Clear: +Public / Rain: +Stealth -Fire / Fog: +Observe / Dark Night: +Evil / Disaster: +Neutral"
+    "weatherVerbBoost": "Clear: +Public / Rain: +Stealth -Fire / Fog: +Observe / Dark Night: +Evil / Disaster: +Neutral",
+    "connectsTo": [],
+    "safety": null,
+    "restQuality": null,
+    "note": "แถวกฎ ไม่ใช่สถานที่"
   }
 ]

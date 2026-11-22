@@ -7,6 +7,7 @@ import {
   type ApiError,
   type GmActionView,
   type GmConsoleResponse,
+  type GmFallbackView,
   type GmOverrideKind,
   type GmOverrideView,
   type GmPendingTurn,
@@ -16,11 +17,11 @@ import {
   type Scenario,
 } from '@isekai/protocol';
 import { AFFINITY_MAX, AFFINITY_MIN, KARMA_MAX, KARMA_MIN, phaseStep, type PhaseState, type PlayerResult } from '@isekai/rules';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, ne } from 'drizzle-orm';
 import type { z } from 'zod';
 import type { GameAssets } from '../assets/load.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
-import { character, gmOverride, member, npcBond, phaseAction } from '../db/schema.ts';
+import { character, gmOverride, member, npcBond, phaseAction, roomEntry, roomEntryRecipient } from '../db/schema.ts';
 import type { MemberRow } from '../game/service.ts';
 import type { PhaseResolution } from '../room/resolver.ts';
 import type { HeldTurn, RoomService } from '../room/service.ts';
@@ -240,7 +241,31 @@ export function consoleView(db: Db, room: RoomService, assets: GameAssets, gm: M
     events: timelineEvents(db, gm.gameId),
     legendaries: getGameScenario(db, gm.gameId)?.legendaries ?? [],
     pending: turn ? pendingView(db, gm.gameId, turn) : null,
+    fallbacks: fallbacksOf(db, gm.gameId),
   };
+}
+
+/** Q-177: every published template feed / narration with its cause, oldest first. A narration's reader is its one non-GM recipient. */
+function fallbacksOf(db: DbOrTx, gameId: string): GmFallbackView[] {
+  const rows = db
+    .select({ e: roomEntry })
+    .from(roomEntry)
+    .where(and(eq(roomEntry.gameId, gameId), isNotNull(roomEntry.fallback)))
+    .orderBy(asc(roomEntry.id))
+    .all();
+  return rows.flatMap(({ e }) => {
+    if (e.fallback === null || e.kind === 'whisper') return [];
+    const reader =
+      e.kind === 'narration'
+        ? (db
+            .select({ id: roomEntryRecipient.memberId })
+            .from(roomEntryRecipient)
+            .innerJoin(member, eq(member.id, roomEntryRecipient.memberId))
+            .where(and(eq(roomEntryRecipient.entryId, e.id), ne(member.role, 'gm')))
+            .get()?.id ?? null)
+        : null;
+    return [{ at: { day: e.day, phase: e.phase, turn: e.turn === 2 ? 2 : 1 }, kind: e.kind, memberId: reader, locationId: e.locationId, cause: e.fallback }];
+  });
 }
 
 // --- Held turn: edit and approve (C2) ---
@@ -301,10 +326,22 @@ function withoutUndefined(r: { hp?: number | undefined; stamina?: number | undef
   return Object.fromEntries(Object.entries(r).filter(([k, v]) => k !== 'memberId' && v !== undefined)) as PlayerResult;
 }
 
-export function approveTurn(db: Db, room: RoomService, gm: MemberRow): ConsoleResult<{ approved: GmTurnPoint }> {
+export function approveTurn(db: Db, room: RoomService, gm: MemberRow, now: number): ConsoleResult<{ approved: GmTurnPoint }> {
   const turn = room.heldTurn(gm.gameId);
   if (!turn) return notAllowed(NO_HELD_TURN);
-  const published = room.approve(gm.gameId, (t) => editedResolution(t, turnEdits(db, gm.gameId, t.at)));
+  const published = room.approve(gm.gameId, (t) => {
+    const edits = turnEdits(db, gm.gameId, t.at);
+    const resolution = editedResolution(t, edits);
+    const count = edits.narrations.size + [...edits.results.values()].reduce((n, r) => n + Object.keys(r).length, 0);
+    // Q-176: every approval is logged, in the same transaction that publishes the turn.
+    return {
+      ...resolution,
+      apply: (tx) => {
+        resolution.apply?.(tx);
+        logOverride(tx, gm, { kind: 'approve', at: t.at, target: 'turn', before: null, after: { edits: count }, reason: '' }, now);
+      },
+    };
+  });
   if (!published) return notAllowed('เผยแพร่ผลของเทิร์นนี้ไม่ได้ ลองใหม่อีกครั้ง');
   return ok({ approved: turn.at });
 }

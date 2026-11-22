@@ -86,7 +86,7 @@ describe('resume after a restart (GEN-037)', { timeout: 120_000 }, () => {
     expect(a.lastRoom()).toMatchObject({ day: 5, phase: 'SOLARION', turn: 1, status: 'collecting' });
     expect(await sendAction(a, 'แอบตามพ่อค้าไปหลังตลาด', 'secret')).toEqual({ type: 'action_accepted' });
     expect(await sendAction(b, 'ซ่อมรั้วให้ยาย')).toEqual({ type: 'action_accepted' });
-    await a.waitFor((m) => m.type === 'room' && m.members.filter((x) => x.submitted).length === 2);
+    await a.waitFor((m) => m.type === 'room' && m.submittedCount === 2);
     const roomBefore = a.lastRoom()!;
 
     await closeSockets();
@@ -103,8 +103,9 @@ describe('resume after a restart (GEN-037)', { timeout: 120_000 }, () => {
       rooms.push(client.lastRoom()!);
     }
     for (const room of rooms) expect(room).toMatchObject({ day: 5, phase: 'SOLARION', turn: 1, status: 'collecting', gmStatus: null });
-    const sent = Object.fromEntries(rooms[3]!.members.map((m) => [m.memberId, m.submitted]));
-    expect(sent).toEqual({ [t.seats[0].memberId]: true, [t.seats[1].memberId]: true, [t.seats[2].memberId]: false, [t.seats[3].memberId]: false });
+    // Q-195: each player sees the count and their own flag.
+    for (const room of rooms) expect(room.submittedCount).toBe(2);
+    rooms.forEach((room, i) => expect(room.members.find((m) => m.memberId === t.seats[i]!.memberId)!.submitted).toBe(i < 2));
     expect(rooms[0]!.you.action).toEqual({ text: 'แอบตามพ่อค้าไปหลังตลาด', visibility: 'secret', rest: false });
     expect(rooms[0]!.you.secretUsed).toBe(roomBefore.you.secretUsed);
     expect(rooms[1]!.you.action).toEqual({ text: 'ซ่อมรั้วให้ยาย', visibility: 'public', rest: false });

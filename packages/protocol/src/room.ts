@@ -103,15 +103,16 @@ export const RoomPhaseStatus = z.enum(['collecting', 'resolving', 'finale', 'gam
 export type RoomPhaseStatus = z.infer<typeof RoomPhaseStatus>;
 
 /**
- * A member as everyone in the room sees them: lobby name, online, and whether they sent this phase's action.
- * Never the action's text or its visibility (C3), never their character or place.
+ * A member as everyone in the room sees them: lobby name and online. Never the action's text or its
+ * visibility (C3), never their character or place. `submitted` (sent this turn's action) is there only on
+ * the viewer's own entry, and on every entry for the Human GM (Q-195): players get `RoomState.submittedCount`.
  */
 export const RoomMember = z.strictObject({
   memberId: z.string(),
   name: z.string(),
   role: MemberRole,
   online: z.boolean(),
-  submitted: z.boolean(),
+  submitted: z.boolean().optional(),
 });
 export type RoomMember = z.infer<typeof RoomMember>;
 
@@ -165,6 +166,8 @@ export const RoomState = z.strictObject({
   /** The current period's weather (GEN-068), the same for everyone; null until the AI GM has picked it. */
   weather: PeriodWeather.nullable(),
   members: z.array(RoomMember),
+  /** Q-195: how many have sent this turn's action (not who). */
+  submittedCount: z.number().int().min(0),
   you: RoomYou,
   /** null = the AI GM is fine (or working). */
   gmStatus: RoomGmStatus.nullable(),
@@ -193,8 +196,16 @@ export const RoomEntry = z.strictObject({
    * whether this viewer sent it.
    */
   whisper: z.strictObject({ from: z.string(), to: z.string(), mine: z.boolean() }).optional(),
+  /**
+   * Q-177: the server's template text, not the AI GM's (the AI did not answer, ran out of budget, or its
+   * text was still wrong after a repair). Present only when true; show `FALLBACK_NARRATION_LABEL` with it.
+   */
+  fallback: z.literal(true).optional(),
 });
 export type RoomEntry = z.infer<typeof RoomEntry>;
+
+/** The small marker players see on a `fallback` entry (Q-177). */
+export const FALLBACK_NARRATION_LABEL = 'บรรยายสำรองจากระบบ';
 
 export const RoomEntryMessage = z.strictObject({ type: z.literal('entry'), entry: RoomEntry });
 

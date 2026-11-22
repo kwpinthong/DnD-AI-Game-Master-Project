@@ -65,6 +65,7 @@ function consoleView(pending: boolean): GmConsoleResponse {
           results: [{ memberId: 'm-a', before: { hp: 100, stamina: 30, karma: -30 }, after: { hp: 90, stamina: 30, karma: -30 }, edited: false }],
         }
       : null,
+    fallbacks: [],
   };
 }
 
@@ -130,6 +131,48 @@ describe('GEN-058 GM console (web)', () => {
     fireEvent.change(within(form).getByLabelText('เหตุผล'), { target: { value: 'ทดสอบ' } });
     fireEvent.click(within(form).getByRole('button', { name: 'ปรับค่า' }));
     expect(await within(form).findByRole('alert')).toHaveProperty('textContent', 'HP ต้องเป็นจำนวนเต็ม 1 ถึง 100 ตามกฎ');
+  });
+
+  it('Q-174: choosing affinity shows a short Thai warning that a hand edit does not reveal, reward or evolve', async () => {
+    stubApi({ 'GET /api/game/gm/console': () => Response.json(consoleView(false)), 'GET /api/game/gm/log': () => Response.json(emptyLog) });
+    render(<GmConsole apiBaseUrl="http://api" token="tok" refreshKey="1" />);
+    const form = await screen.findByRole('form', { name: 'ปรับค่าด้วยมือ' });
+    expect(within(form).queryByRole('note')).toBeNull();
+    fireEvent.change(within(form).getByLabelText('ค่า'), { target: { value: 'affinity' } });
+    const note = within(form).getByRole('note');
+    expect(note.textContent).toMatch(/ไม่เปิดเผยชื่อ/);
+    expect(note.textContent).toMatch(/\+9/);
+    expect(note.textContent).toMatch(/วิวัฒนาการ/);
+    expect(note.textContent).toMatch(/ครั้งถัดไป/);
+    fireEvent.change(within(form).getByLabelText('ค่า'), { target: { value: 'karma' } });
+    expect(within(form).queryByRole('note')).toBeNull();
+  });
+
+  it('Q-177: lists the template narrations with their cause in Thai', async () => {
+    const view: GmConsoleResponse = {
+      ...consoleView(false),
+      fallbacks: [
+        { at: { day: 1, phase: 'EOSORIA', turn: 1 }, kind: 'narration', memberId: 'm-a', locationId: null, cause: 'timeout' },
+        { at: { day: 1, phase: 'EOSORIA', turn: 2 }, kind: 'feed', memberId: null, locationId: 'market', cause: 'budget' },
+      ],
+    };
+    stubApi({ 'GET /api/game/gm/console': () => Response.json(view), 'GET /api/game/gm/log': () => Response.json(emptyLog) });
+    render(<GmConsole apiBaseUrl="http://api" token="tok" refreshKey="1" />);
+    const list = await screen.findByRole('region', { name: 'บรรยายสำรองจากระบบ' });
+    expect(within(list).getByText(/เทิร์น 1.*ถึง ลิน.*AI ไม่ตอบ \(timeout\)/)).toBeTruthy();
+    expect(within(list).getByText(/เทิร์น 2.*ฟีดของ market.*ใช้ครบงบ AI ของเดือน/)).toBeTruthy();
+  });
+
+  it('Q-176: an approve row reads as approved, with or without edits', async () => {
+    const row = (id: number, edits: number) => ({
+      id, gmMemberId: 'm-gm', gmName: 'จีเอ็ม', kind: 'approve' as const, at: { day: 1, phase: 'EOSORIA' as const, turn: 1 as const },
+      target: 'turn', before: null, after: { edits }, reason: '', createdAt: 0,
+    });
+    stubApi({ 'GET /api/game/gm/console': () => Response.json(consoleView(false)), 'GET /api/game/gm/log': () => Response.json({ overrides: [row(1, 0), row(2, 3)] }) });
+    render(<GmConsole apiBaseUrl="http://api" token="tok" refreshKey="1" />);
+    const logView = await screen.findByRole('region', { name: 'บันทึกการแก้ของ GM' });
+    expect(await within(logView).findByText(/จีเอ็ม.*อนุมัติผลของเทิร์นตามที่ AI GM เขียน/)).toBeTruthy();
+    expect(within(logView).getByText(/จีเอ็ม.*อนุมัติผลของเทิร์น \(แก้ 3 จุด\)/)).toBeTruthy();
   });
 
   it('C4 + C5: inserts an event with a reason; the log shows who changed what and why', async () => {
