@@ -10,7 +10,7 @@ import { character, member } from '../db/schema.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { buildEventContext, type EventContext } from '../timeline/context.ts';
 import { namesVisibleTo, presencesInGame } from '../visibility/store.ts';
-import { activeConstraints, dayLog, memoryFor } from './store.ts';
+import { activeConstraints, dayLog, journalFor, memoryFor } from './store.ts';
 
 /**
  * What the AI GM sees (GEN-057, ADR "Isekai Chronicles - AI GM" §6). Every request is one JSON object in
@@ -35,7 +35,9 @@ export function estimateTokens(text: string): number {
 }
 
 /** ADR §6.2 hard caps per call. */
-export const CONTEXT_BUDGET = { gm_adjudicate: 20_000, narrate_player: 6_000, narrate_place: 5_000, summarize_day: 14_000 } as const;
+export const CONTEXT_BUDGET = { gm_adjudicate: 20_000, narrate_player: 6_000, narrate_place: 5_000, summarize_day: 14_000, summarize_journal: 6_000 } as const;
+/** ADR §6.2 / §6.3: what of a player's journal their narrator gets (saga ≤ 600 + yesterday ≤ 250 tokens). */
+export const JOURNAL_BUDGET = { saga: 600, yesterday: 250 } as const;
 /** How much of today's turn log the adjudicator gets (newest kept). */
 const TODAY_LOG_TOKENS = 3_000;
 
@@ -217,6 +219,30 @@ export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnConte
   };
 }
 
+/** The longest start of `text` within `max` tokens (`estimateTokens`). */
+export function withinTokens(text: string, max: number): string {
+  if (estimateTokens(text) <= max) return text;
+  let out = '';
+  let ascii = 0;
+  let other = 0;
+  for (const ch of text) {
+    if (ch.charCodeAt(0) < 128) ascii++;
+    else other++;
+    if (other + Math.ceil(ascii / 4) > max) break;
+    out += ch;
+  }
+  return out;
+}
+
+/** A player's journal for their narrations on `day`, cut to the ADR budget (Q-153). */
+export function narrationJournal(db: DbOrTx, memberId: string, day: number): NonNullable<NarrationContext['journal']> {
+  const j = journalFor(db, memberId, day);
+  return {
+    saga: j.saga === null ? null : withinTokens(j.saga, JOURNAL_BUDGET.saga),
+    yesterday: j.yesterday === null ? null : withinTokens(j.yesterday, JOURNAL_BUDGET.yesterday),
+  };
+}
+
 /** Saga + yesterday's recap + today's turn log (newest kept within `TODAY_LOG_TOKENS`). */
 export function memoryContext(db: DbOrTx, gameId: string, at: { day: number; phase: Phase; turn: Turn }): TurnContext['memory'] {
   const memory = memoryFor(db, gameId, at.day);
@@ -260,6 +286,20 @@ export interface NarrationContext {
   npcs: { id: string; alias: string }[];
   /** In the server's order; write one or more segments for each, in the same order. */
   beats: Beat[];
+  /** The reader's own journal (Q-153), for a private narration only; null for a place feed. */
+  journal: { saga: string | null; yesterday: string | null } | null;
+}
+
+/** `summarize_journal` (ADR §6.3, Q-153): one player's day from the entries that player received. */
+export interface JournalContext {
+  kind: 'gm_journal';
+  day: number;
+  /** The player's ref; their own entries say "คุณ" for them. */
+  player: string;
+  /** Their saga through the day before. */
+  saga: string | null;
+  /** What reached this player that day (feed + private narration), oldest first, tokens only. */
+  seen: string[];
 }
 
 export interface DayContext {
@@ -293,6 +333,10 @@ const SUMMARY_TEXT = 'สรุปวันที่จบไปของ Game M
 export const RULES_BLOCK: PromptBlock = { id: 'rules', text: RULES_TEXT, cache: true };
 export const NARRATOR_BLOCK: PromptBlock = { id: 'narrator-rules', text: NARRATOR_TEXT, cache: true };
 export const SUMMARY_BLOCK: PromptBlock = { id: 'summary-rules', text: SUMMARY_TEXT, cache: true };
+
+const JOURNAL_TEXT =
+  'สรุปบันทึกส่วนตัวของผู้เล่นหนึ่งคนจาก seen (สิ่งที่ผู้เล่นคนนี้เห็นและได้รับรู้ในวันนั้นเท่านั้น): journal = เรื่องสำคัญของวันนี้จากมุมของเขา / saga = saga เดิมย่อรวมกับวันนี้ ห้ามเพิ่มเรื่องที่ไม่อยู่ใน seen ใช้ token แทนชื่อเสมอ ห้ามตัวเลข HP / กรรม';
+export const JOURNAL_BLOCK: PromptBlock = { id: 'journal-rules', text: JOURNAL_TEXT, cache: true };
 
 /** Tokens of a whole request (system + messages). */
 export function requestTokens(system: readonly PromptBlock[], messages: readonly { text: string }[]): number {

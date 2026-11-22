@@ -42,6 +42,7 @@ describe('Q-152 real-name check by whole word', () => {
       cast: [{ ref: 'r1', looks: 'หญิงผ้าคลุมเทา', title: '', self: true }],
       npcs: [],
       beats: [{ actionId: 'act-1', kind: 'own_action', actor: 'r1', text: 'เดิน', result: 'success', target: null, moved: null, items: [] }],
+      journal: null,
     };
     const codes = (text: string) => checkNarration(ctx, { segments: [{ actionId: 'act-1', text }] }, ['ลิน']).map((e) => e.code);
     expect(codes('{{p:r1}} เดินไปคลินิกหัวมุม')).toEqual([]);
