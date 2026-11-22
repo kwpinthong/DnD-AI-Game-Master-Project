@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import type { AiCallRequest, AiCallResult, AiProvider } from '../src/ai/provider.ts';
 import { mockReply } from '../src/ai/providers/mock.ts';
-import { strategyRefuges } from '../src/finale/store.ts';
+import { endingFacts, strategyRefuges } from '../src/finale/store.ts';
 import type { TurnContext } from '../src/gm/context.ts';
 import type { FinaleContext } from '../src/gm/finale.ts';
 import { cannedGmAnswer, contextOf, mockTurnProposal } from '../src/gm/mock-gm.ts';
@@ -249,6 +249,82 @@ describe('GEN-093 Day 10 strategies', { timeout: 60_000 }, () => {
     await boot();
     const t = await startedTable(server!, false);
     expect(playOut(t, 'evil', 'D10-S2', true).places).toEqual(new Set());
+  });
+
+  it('Q-244: D10-S2 succeeded but day 5 went Neutral (or the players\' outcome had no side): no clinic refuge, only side good counts', async () => {
+    await boot();
+    const t = await startedTable(server!, false);
+    expect(playOut(t, 'neutral', 'D10-S2', true)).toEqual({ buffs: new Map(), places: new Set() });
+    await server!.close();
+    cleanup();
+    ({ dir: dataDir, cleanup } = makeTempDir());
+    await boot();
+    const t2 = await startedTable(server!, false);
+    expect(playOut(t2, null, 'D10-S2', true)).toEqual({ buffs: new Map(), places: new Set() });
+  });
+
+  /** Night 10 is over with these D10-S1 turns recorded (member, role, whether their own action succeeded); the game is at day 11. */
+  function settleS1(t: Table, turns: [Seat, 'leader' | 'support', boolean][]) {
+    const gameId = gameIdOf(t);
+    jumpTo(t, { day: 10, phase: 'NOCTHERION', turn: 2 });
+    for (const [who, role, success] of turns) {
+      recordStrategyParticipation(server!.orm, gameId, { memberId: who.memberId, strategyId: 'D10-S1', role, success, day: 10 }, CLOCK);
+    }
+    jumpTo(t, { day: 11, phase: 'EOSORIA', turn: 1 });
+    return { outcomes: strategyOutcomes(server!.orm, gameId), refuges: strategyRefuges(server!.orm, server!.assets, gameId) };
+  }
+
+  it('Q-242 (pin): D10-S1 gives its S buff to everyone who joined the plan, leader and support alike; who did not join gets none', async () => {
+    await boot();
+    const t = await startedTable(server!, false);
+    const { outcomes, refuges } = settleS1(t, [[t.a, 'leader', true], [t.b, 'support', true]]);
+    expect(outcomes).toEqual([{ strategyId: 'D10-S1', outcome: 'success' }]);
+    expect(refuges.buffs).toEqual(new Map([[t.a.memberId, ['แสงรุ่งอรุณคืนเมือง']], [t.b.memberId, ['แสงรุ่งอรุณคืนเมือง']]]));
+    expect(refuges.buffs.has(t.c.memberId)).toBe(false);
+  });
+
+  it('Q-245 (pin): a plan succeeds when at least one leader succeeds; joiners whose own action failed still get the buff', async () => {
+    await boot();
+    const t = await startedTable(server!, false);
+    // Two leaders: A failed, B succeeded. C supported and failed.
+    const { outcomes, refuges } = settleS1(t, [[t.a, 'leader', false], [t.b, 'leader', true], [t.c, 'support', false]]);
+    expect(outcomes).toEqual([{ strategyId: 'D10-S1', outcome: 'success' }]);
+    expect(refuges.buffs).toEqual(new Map([t.a, t.b, t.c].map((s) => [s.memberId, ['แสงรุ่งอรุณคืนเมือง']])));
+    expect(refuges.places).toEqual(new Set(['temple']));
+  });
+
+  it('Q-245 (pin): only supporters succeeded (every leader failed): the plan failed, nobody gets a buff or a refuge', async () => {
+    await boot();
+    const t = await startedTable(server!, false);
+    const { outcomes, refuges } = settleS1(t, [[t.a, 'leader', false], [t.b, 'support', true]]);
+    expect(outcomes).toEqual([{ strategyId: 'D10-DRIFT', outcome: 'drift' }, { strategyId: 'D10-S1', outcome: 'failed' }]);
+    expect(refuges).toEqual({ buffs: new Map(), places: new Set() });
+  });
+
+  it('Q-246 (pin): a plan refuge protects everyone standing there on day 12, whether they joined the plan or not', async () => {
+    await boot();
+    const t = await startedTable(server!, false);
+    const gameId = gameIdOf(t);
+    settleS1(t, [[t.a, 'leader', true]]);
+    // B and C never joined: B stands in the church (the D10-S1 refuge), C at the fountain. A (leader) is at the fountain too.
+    move(t.a, 'fountain');
+    move(t.b, 'temple');
+    move(t.c, 'fountain');
+    const facts = new Map(endingFacts(server!.orm, server!.assets, gameId, ensurePhaseState(server!.orm, gameId, CLOCK)).map((f) => [f.memberId, f]));
+    expect(facts.get(t.b.memberId)).toMatchObject({ inSafeZone: true, protectedBy: [] });
+    expect(facts.get(t.c.memberId)).toMatchObject({ inSafeZone: false, protectedBy: [] });
+    expect(facts.get(t.a.memberId)).toMatchObject({ inSafeZone: false, protectedBy: ['แสงรุ่งอรุณคืนเมือง'] });
+    // The same church without the plan is no refuge: it is the plan that makes it one.
+    await server!.close();
+    cleanup();
+    ({ dir: dataDir, cleanup } = makeTempDir());
+    await boot();
+    const t2 = await startedTable(server!, false);
+    const gameId2 = gameIdOf(t2);
+    jumpTo(t2, { day: 11, phase: 'EOSORIA', turn: 1 });
+    move(t2.b, 'temple');
+    const without = endingFacts(server!.orm, server!.assets, gameId2, ensurePhaseState(server!.orm, gameId2, CLOCK));
+    expect(without.find((f) => f.memberId === t2.b.memberId)).toMatchObject({ inSafeZone: false });
   });
 
   it('C6: a plan that failed gives no buff and no refuge (and the night counts as drift)', async () => {
