@@ -28,7 +28,7 @@ import { isLegacyOption, type StoredOption } from '../game/loot.ts';
 import type { GameAssets } from '../assets/load.ts';
 import { chosenLootInGame, itemsInGame, skillsInGame, transferItem } from './items.ts';
 import { outdoorLocationIds, recordTagUses, tagContexts, type TaggingOptions } from './tags.ts';
-import { originStatuses, treatChronicIllness } from '../game/origin.ts';
+import { originEffects, treatChronicIllness } from '../game/origin.ts';
 import { TREATMENT_VERBS } from '../game/start-rules.ts';
 
 /** Who a successful HEAL / CLEANSE action treated: its player target, else the actor (self-treatment). */
@@ -170,8 +170,10 @@ export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet
     held.forEach(apply);
     const owned = (o: StoredOption): OwnedRef => ({ id: o.id, tier: tierOf(o) });
 
-    // The start scenario's lasting debuff (the chronic illness, GEN-065).
-    statuses.push(...originStatuses(db, c.memberId));
+    // The start scenario's lasting debuff (the chronic illness, GEN-065) with the sheet's penalty (Q-208).
+    const origin = originEffects(db, c.memberId, assets);
+    statuses.push(...origin.statuses);
+    afterActionStamina += origin.afterActionStamina;
 
     players[c.memberId] = {
       id: c.memberId,

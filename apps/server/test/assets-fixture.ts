@@ -39,6 +39,14 @@ export function keepColumnsBefore(csv: string, header: string): string {
   return rows.map((r) => r.slice(0, col).map(quote).join(',')).join('\n') + '\n';
 }
 
+/** Inserts an empty column `header` before the column `before` (a column Nok adds to the sheet). */
+export function addColumnBefore(csv: string, before: string, header: string): string {
+  const rows = parseSimple(csv);
+  const col = rows[0]!.indexOf(before);
+  if (col < 0) throw new Error(`no column ${before}`);
+  return rows.map((r, i) => [...r.slice(0, col), i === 0 ? header : '', ...r.slice(col)].map(quote).join(',')).join('\n') + '\n';
+}
+
 function quote(cell: string): string {
   return /[",\n]/.test(cell) ? `"${cell.replaceAll('"', '""')}"` : cell;
 }

@@ -164,14 +164,35 @@ export function treatChronicIllness(db: DbOrTx, memberId: string): TreatmentOutc
   return { kind: 'treated', treatmentsLeft };
 }
 
+export interface OriginEffects {
+  readonly statuses: StatusEffect[];
+  /** Added to the player's `afterActionStamina` (negative = every action that costs Stamina costs more). */
+  readonly afterActionStamina: number;
+}
+
 /**
- * The chronic illness as a status of the player while it lasts. The sheet gives it no number, so it has no
- * modifier: it is a fact for the AI GM (Q-090: numbers come only from the structured columns).
+ * The chronic illness as a status of the player while it lasts. Its number comes only from the sheet's
+ * Illness_Stat / Illness_Value of the player's Start_Scenarios row (Q-090 / Q-208): d20 → a modifier on every
+ * roll, Stamina → every action that costs Stamina costs that much more. No number in the sheet (or no
+ * `assets`) = no modifier: the status is then a fact for the AI GM only.
  */
-export function originStatuses(db: DbOrTx, memberId: string): StatusEffect[] {
+export function originEffects(db: DbOrTx, memberId: string, assets?: GameAssets): OriginEffects {
   const row = originOf(db, memberId);
-  if (!row || row.illnessLeft === null || row.illnessLeft <= 0) return [];
-  return [{ id: 'origin:chronic-illness', label: CHRONIC_ILLNESS_LABEL, polarity: 'debuff', origin: 'event', visible: true, mods: [], phasesLeft: null }];
+  if (!row || row.illnessLeft === null || row.illnessLeft <= 0) return { statuses: [], afterActionStamina: 0 };
+  const record = row.startScenario ? assets?.startScenarios.find((s) => s.name === row.startScenario) : undefined;
+  const { stat, value } = record?.illness ?? { stat: null, value: null };
+  const d20 = stat === 'd20' && value !== null ? value : 0;
+  const stamina = stat === 'Stamina' && value !== null ? value : 0;
+  const status: StatusEffect = {
+    id: 'origin:chronic-illness',
+    label: CHRONIC_ILLNESS_LABEL,
+    polarity: 'debuff',
+    origin: 'event',
+    visible: true,
+    mods: d20 !== 0 ? [{ scope: 'all', value: d20 }] : [],
+    phasesLeft: null,
+  };
+  return { statuses: [status], afterActionStamina: stamina };
 }
 
 /** "วันที่ 1-3" → days 1..3; anything else = every day. */
