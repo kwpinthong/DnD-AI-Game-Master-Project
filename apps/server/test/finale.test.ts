@@ -263,7 +263,8 @@ describe('GEN-059 finale', { timeout: 60_000 }, () => {
     expect(reveal.players.map((p) => p.characterName)).toEqual([LIN.name, DARIN.name, MEKHA.name]);
     expect(reveal.players.map((p) => p.lobbyName)).toEqual(['นก', 'บี', 'ซี']);
     const [a, , c] = reveal.players;
-    expect(a!.secretActions).toEqual([{ day: 12, phase: 'NOCTHERION', turn: 2, text: 'แอบขโมยแผนที่ดาว' }]);
+    // GEN-078: with the ref a 👍 names (A is the first member of the game).
+    expect(a!.secretActions).toEqual([{ day: 12, phase: 'NOCTHERION', turn: 2, text: 'แอบขโมยแผนที่ดาว', sourceRef: '12-NOCTHERION-2-1' }]);
     expect(reveal.players[1]!.secretActions).toEqual([]);
     expect(c!.karma).toBe(37);
     // Q-196: the 11-tier word is the main label.

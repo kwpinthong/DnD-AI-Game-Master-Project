@@ -51,7 +51,7 @@ export const GameRevealPlayer = z.strictObject({
       phase: Phase,
       turn: Turn,
       text: z.string(),
-      /** GEN-078: the action's ref the 👍 names (GEN-077 ADR); pending, see docs/contract.md. */
+      /** GEN-078: the action's ref the 👍 names (`${day}-${phase}-${turn}-${actionSeq}`, GEN-077 ADR). */
       sourceRef: z.string().optional(),
     }),
   ),

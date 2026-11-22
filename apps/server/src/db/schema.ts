@@ -163,3 +163,5 @@ export * from './schema-origin.ts';
 export * from './schema-strategy.ts';
 // GEN-095: timed curses on players and NPCs, own file for the same reason.
 export * from './schema-statuses.ts';
+// GEN-078: the score, comment and 👍 members give after the end, own file for the same reason.
+export * from './schema-rating.ts';

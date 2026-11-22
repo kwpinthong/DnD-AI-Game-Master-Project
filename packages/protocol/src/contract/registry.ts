@@ -242,10 +242,10 @@ export const CONTRACT: readonly ContractItem[] = [
   http('GET', '/api/game/gm/log', null, 'GmLogResponse', ready('GEN-058', 'gm', ['gm-console'])),
 
   // --- after the end ---
-  http('GET', '/api/game/rating', null, 'GameRatingResponse', pending('GEN-078 + GEN-079', 'player', ['ending-rating'])),
-  http('PUT', '/api/game/rating', 'GameRatingRequest', 'GameRatingResponse', pending('GEN-078 + GEN-079', 'player', ['ending-rating'])),
-  http('PUT', '/api/game/rating/likes/:sourceRef', null, 'GameRatingResponse', pending('GEN-078 + GEN-081', 'player', ['ending-rating'], '👍 action → ผล ด้วย `sourceRef` (ADR GEN-077)')),
-  http('DELETE', '/api/game/rating/likes/:sourceRef', null, 'GameRatingResponse', pending('GEN-078 + GEN-081', 'player', ['ending-rating'])),
+  http('GET', '/api/game/rating', null, 'GameRatingResponse', ready('GEN-078', 'player', ['ending-rating'], 'หลังเกมจบเท่านั้น (ก่อนจบ 409); ไม่ใช่สมาชิก 403; `eligible` / `blocker` เป็นของ GEN-079')),
+  http('PUT', '/api/game/rating', 'GameRatingRequest', 'GameRatingResponse', ready('GEN-078', 'player', ['ending-rating'], 'คนละ 1 คะแนน ส่งใหม่ = แทนค่าเดิม')),
+  http('PUT', '/api/game/rating/likes/:sourceRef', null, 'GameRatingResponse', ready('GEN-078', 'player', ['ending-rating'], '👍 action → ผล ด้วย `sourceRef` (ADR GEN-077); ref ที่หน้าสรุปไม่เปิด = 404 `ruling_not_found`')),
+  http('DELETE', '/api/game/rating/likes/:sourceRef', null, 'GameRatingResponse', ready('GEN-078', 'player', ['ending-rating'], 'ยกเลิก 👍')),
 
   // --- server owner ---
   http('POST', '/api/admin/session', 'AdminSessionRequest', 'AdminSessionResponse', ready('GEN-061', 'any', ['ai-usage', 'learning-library'])),
@@ -295,11 +295,4 @@ export const PENDING_FIELDS: readonly PendingField[] = [
   { schema: 'GameMemorySetting', path: 'enabled', owner: 'GEN-083', screens: ['create-game'], note: 'จะเป็น `CreateGameRequest.memory`' },
   { schema: 'JoinStyleFields', path: 'playerCode', owner: 'GEN-082', screens: ['join'], note: 'จะเป็น `JoinRequest.playerCode` + `noStyle`' },
   { schema: 'GameRevealPlayer', path: 'epilogue', owner: 'new', screens: ['ending'], note: 'ลักษณะ, ฉายาสุดท้าย, บทส่งท้าย (ช่องว่างของ GEN-059)' },
-  {
-    schema: 'GameRevealPlayer',
-    path: 'secretActions[].sourceRef',
-    owner: 'GEN-078',
-    screens: ['ending', 'ending-rating'],
-    note: 'ref ของ action ที่ 👍 ชี้ (ADR GEN-077); action เปิดเผยใน log เต็มก็ต้องมี ref แบบเดียวกัน',
-  },
 ];

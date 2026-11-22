@@ -27,6 +27,7 @@ import { registerInventoryRoutes } from './skills/routes.ts';
 import { registerGmConsoleRoutes } from './gm-console/routes.ts';
 import { startBackupSchedule, type BackupSchedule } from './backup/schedule.ts';
 import { registerHistoryRoutes } from './history/routes.ts';
+import { registerRatingRoutes } from './rating/routes.ts';
 import type { Rng } from '@isekai/rules';
 import { CryptoRng } from './rng.ts';
 
@@ -148,6 +149,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerInventoryRoutes(app, db, now, assets);
   registerGmConsoleRoutes(app, db, now, room, assets);
   registerHistoryRoutes(app, db, now, assets);
+  registerRatingRoutes(app, db, now);
 
   try {
     await app.listen({ host: config.host, port: config.port });

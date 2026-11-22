@@ -225,6 +225,8 @@ export type GameRatingRequest = z.input<typeof GameRatingRequest>;
 export const GameRatingView = z.strictObject({
   mine: z.strictObject({ score: z.number().int().min(RATING_MIN).max(RATING_MAX), comment: z.string() }).nullable(),
   liked: z.array(z.string()),
+  /** GEN-078 C7: `sourceRef` → how many members gave it a 👍 (rows with none are left out). */
+  thumbs: z.record(z.string(), z.number().int().min(1)).optional(),
   average: z.number().nullable(),
   raters: z.number().int().min(0),
   members: z.number().int().min(0),

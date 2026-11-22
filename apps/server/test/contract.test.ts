@@ -1,9 +1,10 @@
-import { ApiError, CreateGameResponse, defaultScenario, JoinResponse, LootResponse, ROOM_PATH, SurroundingsResponse, type RoomServerMessage } from '@isekai/protocol';
+import { ApiError, CreateGameResponse, defaultScenario, GameLogResponse, JoinResponse, LootResponse, ROOM_PATH, SurroundingsResponse, type RoomServerMessage } from '@isekai/protocol';
 import { CONTRACT, CONTRACT_SCHEMAS, type HttpItem, type SocketItem } from '@isekai/protocol/contract';
 import { SeededRng } from '@isekai/rules';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
+import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
 import { moveCharacter, setPlayerBond } from '../src/visibility/store.ts';
 import { heldTurn } from './gm-console-client.ts';
@@ -176,6 +177,21 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await bad.waitFor(isReady);
     bad.send({ type: 'nope' });
     await bad.waitFor((m) => m.type === 'error');
+
+    // --- After the end (GEN-078): the same table, ended; B's Secret action of turn 1 stood and is revealed ---
+    const tableGame = (server!.db.prepare('select game_id as id from member where id = ?').get(t.a.memberId) as { id: string }).id;
+    savePhaseState(server!.orm, tableGame, { ...ensurePhaseState(server!.orm, tableGame, CLOCK), status: 'finale' }, CLOCK);
+    const endedLog = GameLogResponse.parse((await hit(call, 'GET /api/game/log', { token: t.a.token })).body);
+    const likedRef = endedLog.reveal?.players.flatMap((p) => p.secretActions)[0]?.sourceRef;
+    expect(likedRef, 'a revealed Secret action with its ref').toBeTypeOf('string');
+    await hit(call, 'GET /api/game/rating', { token: t.a.token });
+    await hit(call, 'PUT /api/game/rating', { token: t.a.token, body: { score: 0 } });
+    await hit(call, 'PUT /api/game/rating', { token: t.a.token, body: { score: 9, comment: 'สนุกมาก' } });
+    await hit(call, 'PUT /api/game/rating', { token: tgm, body: { score: 8 } });
+    await hit(call, 'PUT /api/game/rating/likes/:sourceRef', { token: t.a.token, path: `/api/game/rating/likes/${likedRef}` });
+    await hit(call, 'PUT /api/game/rating/likes/:sourceRef', { token: t.a.token, path: '/api/game/rating/likes/none' });
+    await hit(call, 'DELETE /api/game/rating/likes/:sourceRef', { token: t.a.token, path: `/api/game/rating/likes/${likedRef}` });
+    await hit(call, 'GET /api/game/rating');
 
     // --- Server owner ---
     const admin = await hit(call, 'POST /api/admin/session', { body: { code: ADMIN_CODE } });
