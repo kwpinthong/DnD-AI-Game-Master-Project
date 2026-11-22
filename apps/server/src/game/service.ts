@@ -235,7 +235,7 @@ export function startGame(db: Db, actor: MemberRow, now: Clock): OwnerActionOutc
     const t = now();
     tx.update(game).set({ startedAt: t }).where(eq(game.id, row.id)).run();
     // The game starts at day 1 Morning: its events become active (GEN-053).
-    advanceTimeline(tx, row.id, { day: 1, phase: 'MORNING' }, t);
+    advanceTimeline(tx, row.id, { day: 1, phase: 'EOSORIA' }, t);
     // Everyone starts at the scenario's first place until origins / spawn points place them (GEN-050).
     const start = getGameScenario(tx, row.id)?.locations[0];
     if (start) placeUnplacedCharacters(tx, row.id, start.id, t);

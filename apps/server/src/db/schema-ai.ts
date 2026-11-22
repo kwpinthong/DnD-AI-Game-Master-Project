@@ -13,8 +13,10 @@ export const aiUsage = sqliteTable(
     gameId: text('game_id').notNull(),
     /** 1..12 when the call belongs to a phase. */
     day: integer('day'),
-    /** MORNING | AFTERNOON | NIGHT when known. */
+    /** The period (EOSORIA | SOLARION | HESPERION | NOCTHERION) when known; older rows were mapped by GEN-063. */
     phase: text('phase'),
+    /** 1 | 2 within the period when the call belongs to a turn (GEN-063). */
+    turn: integer('turn'),
     /** AiPurpose: gm_adjudicate, narrate_player, ... */
     purpose: text('purpose').notNull(),
     provider: text('provider').notNull(),

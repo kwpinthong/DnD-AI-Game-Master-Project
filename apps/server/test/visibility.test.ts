@@ -182,7 +182,7 @@ describe('visibility layer: who sees what (GEN-050)', { timeout: 60_000 }, () =>
 
     // C's move resolves; the game goes on to Afternoon.
     move(t.c, 'market');
-    advanceTimeline(server!.orm, gameId, { day: 1, phase: 'AFTERNOON' }, CLOCK);
+    advanceTimeline(server!.orm, gameId, { day: 1, phase: 'SOLARION' }, CLOCK);
 
     const { view } = await playerView(t, t.a);
     expect(view.people.map((p) => p.appearance).sort()).toEqual([t.b.appearance, t.c.appearance].sort());

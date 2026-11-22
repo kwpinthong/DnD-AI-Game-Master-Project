@@ -15,6 +15,7 @@ export type EventOutcomeSource = z.infer<typeof EventOutcomeSource>;
 /** Outcome text the AI GM may set on an active event (e.g. `prevented`). */
 export const EventOutcomeText = z.string().trim().min(1, 'ห้ามว่าง').max(1000, 'ยาวได้ไม่เกิน 1000 ตัวอักษร');
 
+/** A day + period on the timeline (events last both turns of their period, GEN-063). */
 export const PhasePoint = z.object({ day: z.number().int().min(1).max(12), phase: Phase });
 export type PhasePoint = z.infer<typeof PhasePoint>;
 

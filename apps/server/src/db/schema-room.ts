@@ -1,9 +1,12 @@
 import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { game, member } from './schema.ts';
 
+/** `Phase` of `@isekai/protocol` (periods, GEN-063); written out because drizzle-kit loads this file alone. */
+const PHASES = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
+
 /**
- * The play room (GEN-056). `game_phase.state` is the `PhaseState` JSON of `@isekai/rules` (GEN-052): the
- * day / phase engine is a pure function, so its whole state is stored and replaced on every step.
+ * The play room (GEN-056). `game_phase.state` is the `PhaseState` JSON of `@isekai/rules` (GEN-052, period +
+ * turn since GEN-063): the engine is a pure function, so its whole state is stored and replaced on every step.
  */
 export const gamePhase = sqliteTable('game_phase', {
   gameId: text('game_id')
@@ -13,7 +16,7 @@ export const gamePhase = sqliteTable('game_phase', {
   updatedAt: integer('updated_at').notNull(),
 });
 
-/** Every action that stood when its phase closed (and the current phase's drafts); a resubmit replaces. */
+/** Every action that stood when its turn closed (and the current turn's drafts); a resubmit replaces. */
 export const phaseAction = sqliteTable(
   'phase_action',
   {
@@ -21,15 +24,20 @@ export const phaseAction = sqliteTable(
       .notNull()
       .references(() => game.id, { onDelete: 'cascade' }),
     day: integer('day').notNull(),
-    phase: text('phase', { enum: ['MORNING', 'AFTERNOON', 'NIGHT'] }).notNull(),
+    /** The period. */
+    phase: text('phase', { enum: PHASES }).notNull(),
+    /** 1 | 2 within the period. */
+    turn: integer('turn').notNull().default(1),
     memberId: text('member_id')
       .notNull()
       .references(() => member.id, { onDelete: 'cascade' }),
     text: text('text').notNull(),
     visibility: text('visibility', { enum: ['public', 'secret'] }).notNull(),
+    /** REST / SLEEP this turn (GEN-063). */
+    rest: integer('rest', { mode: 'boolean' }).notNull().default(false),
     submittedAt: integer('submitted_at').notNull(),
   },
-  (t) => [primaryKey({ columns: [t.gameId, t.day, t.phase, t.memberId] })],
+  (t) => [primaryKey({ columns: [t.gameId, t.day, t.phase, t.turn, t.memberId] })],
 );
 
 /**
@@ -45,7 +53,8 @@ export const roomEntry = sqliteTable(
       .references(() => game.id, { onDelete: 'cascade' }),
     kind: text('kind', { enum: ['feed', 'narration'] }).notNull(),
     day: integer('day').notNull(),
-    phase: text('phase', { enum: ['MORNING', 'AFTERNOON', 'NIGHT'] }).notNull(),
+    phase: text('phase', { enum: PHASES }).notNull(),
+    turn: integer('turn').notNull().default(1),
     /** Scenario location id; null = the whole town (feed) or no place (narration). */
     locationId: text('location_id'),
     text: text('text').notNull(),

@@ -70,12 +70,12 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
     for (const c of clients) for (const m of c.messages) expect(forbiddenKeysIn(m)).toEqual([]);
   }
 
-  const phaseIs = (day: number, phase: string, status = 'collecting') => (m: RoomServerMessage) =>
-    m.type === 'room' && m.day === day && m.phase === phase && m.status === status;
+  const phaseIs = (day: number, phase: string, turn: number, status = 'collecting') => (m: RoomServerMessage) =>
+    m.type === 'room' && m.day === day && m.phase === phase && m.turn === turn && m.status === status;
 
-  async function submitAndAccept(client: RoomClient, text: string, visibility: 'public' | 'secret' = 'public') {
+  async function submitAndAccept(client: RoomClient, text: string, visibility: 'public' | 'secret' = 'public', rest?: boolean) {
     const from = client.messages.length;
-    client.action(text, visibility);
+    client.action(text, visibility, rest);
     const reply = await client.waitFor((m) => m.type === 'action_accepted' || m.type === 'action_rejected', from);
     expect(reply, JSON.stringify(reply)).toEqual({ type: 'action_accepted' });
   }
@@ -84,7 +84,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
     const t = await startedTable(server!, false);
     const a = await enter(t.a);
     const firstRoom = a.lastRoom()!;
-    expect(firstRoom).toMatchObject({ day: 1, phase: 'MORNING', status: 'collecting', mode: 'online' });
+    expect(firstRoom).toMatchObject({ day: 1, phase: 'EOSORIA', turn: 1, status: 'collecting', mode: 'online' });
     expect(firstRoom.members.find((m) => m.memberId === t.a.memberId)).toMatchObject({ online: true, submitted: false });
     expect(firstRoom.members.find((m) => m.memberId === t.b.memberId)).toMatchObject({ online: false });
 
@@ -150,7 +150,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
     const seen = await b.waitFor((m) => m.type === 'room' && m.members.find((x) => x.memberId === t.a.memberId)?.submitted === true, from);
     expect(seen.type).toBe('room');
     // A gets their own action back; the phase still waits for B and C (Online).
-    expect(a.lastRoom()!.you.action).toEqual({ text: secretText, visibility: 'secret' });
+    expect(a.lastRoom()!.you.action).toEqual({ text: secretText, visibility: 'secret', rest: false });
     expect(a.lastRoom()!.status).toBe('collecting');
     expect(script.calls).toEqual([]);
 
@@ -175,9 +175,9 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
     await submitAndAccept(b, 'สั่งเบียร์');
     await submitAndAccept(c, 'นั่งฟังเพลง');
     const got = await a.waitFor(isEntry);
-    expect(got.entry).toMatchObject({ kind: 'narration', text: narration, day: 1, phase: 'MORNING' });
-    await a.waitFor(phaseIs(1, 'AFTERNOON'));
-    await b.waitFor(phaseIs(1, 'AFTERNOON'));
+    expect(got.entry).toMatchObject({ kind: 'narration', text: narration, day: 1, phase: 'EOSORIA', turn: 1 });
+    await a.waitFor(phaseIs(1, 'EOSORIA', 2));
+    await b.waitFor(phaseIs(1, 'EOSORIA', 2));
 
     expect(b.entries()).toEqual([]);
     for (const frame of [...b.raw, ...c.raw]) expect(frame).not.toContain(narration);
@@ -215,7 +215,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
       await submitAndAccept(a, 'เดินตลาด');
       await submitAndAccept(b, 'ซื้อขนมปัง');
       await submitAndAccept(c, 'คุยกับพ่อค้า');
-      await a.waitFor(phaseIs(1, 'MORNING', 'resolving'));
+      await a.waitFor(phaseIs(1, 'EOSORIA', 1, 'resolving'));
       expect(a.lastRoom()!.you.lock?.code).toBe('resolving');
 
       const from = a.messages.length;
@@ -225,7 +225,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
       expect(reply.message).toMatch(/[ก-๙]/);
 
       release();
-      await a.waitFor(phaseIs(1, 'AFTERNOON'));
+      await a.waitFor(phaseIs(1, 'EOSORIA', 2));
       await submitAndAccept(a, 'กลับโรงเตี๊ยม');
     });
 
@@ -236,8 +236,8 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
       await submitAndAccept(a, 'วิ่งรอบเมือง');
       await submitAndAccept(b, 'ท้าดวลทหารยาม');
       await submitAndAccept(c, 'นั่งพัก');
-      await a.waitFor(phaseIs(1, 'AFTERNOON'));
-      await b.waitFor(phaseIs(1, 'AFTERNOON'));
+      await a.waitFor(phaseIs(1, 'EOSORIA', 2));
+      await b.waitFor(phaseIs(1, 'EOSORIA', 2));
       expect(a.lastRoom()!.you.lock?.code).toBe('exhausted');
       expect(b.lastRoom()!.you.lock?.code).toBe('unconscious');
 
@@ -255,7 +255,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
       // Only C must act now, so C's action closes the phase.
       script.respond(() => ({}));
       await submitAndAccept(c, 'ไปตามหมอ');
-      await c.waitFor((m) => m.type === 'room' && m.phase === 'NIGHT');
+      await c.waitFor((m) => m.type === 'room' && m.phase === 'SOLARION' && m.turn === 1);
       expect(script.calls).toHaveLength(2);
       expect(script.calls[1]!.actions.map((x) => x.memberId)).toEqual([t.c.memberId]);
     });
@@ -266,8 +266,8 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
       await submitAndAccept(a, 'แอบตาม', 'secret');
       await submitAndAccept(b, 'เดิน');
       await submitAndAccept(c, 'เดิน');
-      await a.waitFor(phaseIs(1, 'AFTERNOON'));
-      expect(a.lastRoom()!.you.secretUsedToday).toBe(true);
+      await a.waitFor(phaseIs(1, 'EOSORIA', 2));
+      expect(a.lastRoom()!.you.secretUsed).toBe(true);
       const from = a.messages.length;
       a.action('แอบอีกรอบ', 'secret');
       const reply = await a.waitFor(isRejected, from);
@@ -293,7 +293,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
 
     // Round 1 while A is online.
     for (const [client, text] of [[a, 'หนึ่ง'], [b, 'สอง'], [c, 'สาม']] as const) await submitAndAccept(client, text);
-    await a.waitFor(phaseIs(1, 'AFTERNOON'));
+    await a.waitFor(phaseIs(1, 'EOSORIA', 2));
     const online = a.entries();
     expect(online.map((e) => e.text)).toEqual(['ฟีดรอบ 1', 'เล่าให้ A รอบ 1']);
     const lastSeq = online.at(-1)!.seq;
@@ -301,14 +301,17 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
     // A drops; rounds 2 and 3 happen without A. A is not exhausted, so the phase waits: A's action is sent
     // from a short second tab that closes before the results arrive.
     await a.close();
-    for (const day of [{ phase: 'NIGHT' }, { phase: 'MORNING' }]) {
+    for (const day of [
+      { phase: 'SOLARION', turn: 1 },
+      { phase: 'SOLARION', turn: 2 },
+    ]) {
       const tab = await enter(t.a);
       await submitAndAccept(tab, 'ขณะหลุด');
       await tab.close();
       await submitAndAccept(b, 'ต่อ');
       const from = b.messages.length;
       await submitAndAccept(c, 'ต่อ');
-      await b.waitFor((m) => m.type === 'room' && m.phase === day.phase && m.status === 'collecting', from);
+      await b.waitFor((m) => m.type === 'room' && m.phase === day.phase && m.turn === day.turn && m.status === 'collecting', from);
     }
 
     a = await enter(t.a, lastSeq);
@@ -348,9 +351,9 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
     const solo = await enter({ token: created.token });
     expect(solo.lastRoom()!.mode).toBe('single');
     await submitAndAccept(solo, 'สำรวจโรงเตี๊ยม');
-    await solo.waitFor(phaseIs(1, 'AFTERNOON'));
+    await solo.waitFor(phaseIs(1, 'EOSORIA', 2));
     expect(script.calls).toHaveLength(1);
-    expect(script.calls[0]!.actions).toEqual([{ memberId: created.member.id, text: 'สำรวจโรงเตี๊ยม', visibility: 'public', locationId: 'inn' }]);
+    expect(script.calls[0]!.actions).toEqual([{ memberId: created.member.id, text: 'สำรวจโรงเตี๊ยม', visibility: 'public', rest: false, locationId: 'inn' }]);
   });
 
   it('C8: B\'s Public result at the market reaches A at the market, not C in the forest', async () => {
@@ -371,7 +374,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
     const seenByA = await a.waitFor(isEntry);
     expect(seenByA.entry).toMatchObject({ kind: 'feed', text: result, place: { id: 'market', name: 'ลานตลาด' } });
     expect((await b.waitFor(isEntry)).entry.text).toBe(result);
-    await c.waitFor(phaseIs(1, 'AFTERNOON'));
+    await c.waitFor(phaseIs(1, 'EOSORIA', 2));
 
     expect(c.entries()).toEqual([]);
     for (const frame of c.raw) expect(frame).not.toContain(result);
@@ -399,7 +402,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
     expect((await gm.waitFor(isRejected, from)).code).toBe('not_a_player');
 
     for (const [, client] of players) await submitAndAccept(client, 'ทำอะไรสักอย่าง');
-    await gm.waitFor(phaseIs(1, 'AFTERNOON'));
+    await gm.waitFor(phaseIs(1, 'EOSORIA', 2));
     expect(gm.entries().map((e) => e.text)).toEqual(['เสียงกิ่งไม้หักในป่า', 'ความลับของ A']);
     expect(players[1]![1].entries()).toEqual([]);
   });

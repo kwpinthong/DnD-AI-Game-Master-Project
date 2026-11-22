@@ -133,11 +133,12 @@ const template: ScenarioInput = {
     { id: 'dark-spirit', name: 'นอกซ์', alias: 'ภูตรับใช้แห่งความมืด', rank: 'S', locationId: 'cult-altar' },
   ],
   // GDD §6.2: these always happen; players can change the outcome. Phases are PLACEHOLDERS except day 10 (night).
+  // GEN-063: the GEN-045 phases mapped by LEGACY_PHASES (MORNING -> EOSORIA, AFTERNOON -> SOLARION, NIGHT -> HESPERION).
   timeline: [
     {
       id: 'd1-bread',
       day: 1,
-      phase: 'MORNING',
+      phase: 'EOSORIA',
       title: 'นักบวชลัทธิแจกจ่ายขนมปังให้ชาวเมือง',
       description: 'จุดเริ่มต้นการแทรกซึมของลัทธิ',
       locationId: 'market',
@@ -146,15 +147,15 @@ const template: ScenarioInput = {
     {
       id: 'd2-first-companion',
       day: 2,
-      phase: 'AFTERNOON',
+      phase: 'SOLARION',
       title: 'พบ NPC คู่หูคนแรก (เกรด F)',
       npcIds: ['beggar', 'orphan', 'prisoner'],
     },
-    { id: 'd3-cult-clue', day: 3, phase: 'NIGHT', title: 'ล่วงรู้เบาะแสแผนการร้ายเบื้องหลังของลัทธิ' },
+    { id: 'd3-cult-clue', day: 3, phase: 'HESPERION', title: 'ล่วงรู้เบาะแสแผนการร้ายเบื้องหลังของลัทธิ' },
     {
       id: 'd5-disaster',
       day: 5,
-      phase: 'MORNING',
+      phase: 'EOSORIA',
       title: 'ภัยพิบัติทางธรรมชาติ/เวทมนตร์ ตัดขาดเส้นทางออกจากเมือง',
       description: 'ออกจากเมืองและขอความช่วยเหลือจากภายนอกไม่ได้อีก',
       locationId: 'gate',
@@ -162,14 +163,14 @@ const template: ScenarioInput = {
     {
       id: 'd7-kidnapping',
       day: 7,
-      phase: 'NIGHT',
+      phase: 'HESPERION',
       title: 'ลัทธิก่อความวุ่นวายครั้งใหญ่ ลักพาตัวชาวบ้านไปเตรียมเป็นเครื่องสังเวย',
       crisis: true,
     },
     {
       id: 'd10-summoning',
       day: 10,
-      phase: 'NIGHT',
+      phase: 'HESPERION',
       kind: 'climax',
       title: 'คืนจันทร์ดับ ลัทธิทำพิธีอัญเชิญเทพมารจันทราโลหิต (ระดับ SS)',
       description: 'พิธีเพื่อทำลายล้างโลก (Climax 1)',
@@ -180,7 +181,7 @@ const template: ScenarioInput = {
     {
       id: 'd12-meteor',
       day: 12,
-      phase: 'NIGHT',
+      phase: 'HESPERION',
       kind: 'finale',
       title: 'อุกกาบาตหมูเด้งพุ่งชนโลก',
       description: 'ฉากจบ ผลขึ้นอยู่กับการกระทำตลอด 12 วันและระดับพลังของปาร์ตี้/คู่หู',

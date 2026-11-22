@@ -87,14 +87,14 @@ describe('Scenario editor (GEN-046)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'เพิ่มเหตุการณ์' }));
     const added = events()[before]!;
     fireEvent.change(within(added).getByLabelText('วัน'), { target: { value: '4' } });
-    fireEvent.change(within(added).getByLabelText('ช่วง'), { target: { value: 'AFTERNOON' } });
+    fireEvent.change(within(added).getByLabelText('ช่วง'), { target: { value: 'NOCTHERION' } });
     fireEvent.change(within(added).getByLabelText('หัวข้อ'), { target: { value: 'คาราวานมาถึง' } });
     fireEvent.change(within(added).getByLabelText('ผลตั้งต้น'), { target: { value: 'ถูกปล้นตอนค่ำ' } });
     fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
 
     expect(await screen.findByText('บันทึกแล้ว')).toBeTruthy();
     const sent = bodyOf(callsTo(fetchMock, 'PUT', '/api/game/scenario')[0]);
-    expect(sent.timeline.at(-1)).toMatchObject({ day: 4, phase: 'AFTERNOON', title: 'คาราวานมาถึง', outcome: 'ถูกปล้นตอนค่ำ' });
+    expect(sent.timeline.at(-1)).toMatchObject({ day: 4, phase: 'NOCTHERION', title: 'คาราวานมาถึง', outcome: 'ถูกปล้นตอนค่ำ' });
     expect(sent.timeline.at(-1)!.id).toMatch(/^[a-z0-9][a-z0-9-]*$/);
     // Shown in day order now: the new event sits between day 3 and day 5.
     const titles = events().map((g) => (within(g).getByLabelText('หัวข้อ') as HTMLInputElement).value);

@@ -1,8 +1,9 @@
-import { ACTION_MAX_LENGTH, actionTextProblem, type ActionVisibility, type RoomEntry, type RoomState } from '@isekai/protocol';
+import { ACTION_MAX_LENGTH, PHASE_LABEL, actionTextProblem, type ActionVisibility, type RoomEntry, type RoomState } from '@isekai/protocol';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { connectRoom, type RoomConnection, type RoomConnectionStatus } from './room-api.ts';
 
-const phaseLabel = { MORNING: 'เช้า', AFTERNOON: 'บ่าย', NIGHT: 'ค่ำ' } as const;
+/** "วันที่ 1 · EOSORIA (เช้า 06:00-11:59) · เทิร์น 1/2" (GEN-063: 4 periods x 2 turns). */
+const timeLabel = (t: Pick<RoomEntry, 'day' | 'phase' | 'turn'>) => `วันที่ ${t.day} · ${PHASE_LABEL[t.phase]} · เทิร์น ${t.turn}/2`;
 const statusLabel = {
   collecting: 'รอ action จากผู้เล่น',
   resolving: 'ปิดรับแล้ว กำลังสรุปผล…',
@@ -17,7 +18,7 @@ const connectionLabel: Record<RoomConnectionStatus, string> = {
 };
 
 function entryHeading(e: RoomEntry): string {
-  return `วันที่ ${e.day} ${phaseLabel[e.phase]}${e.place ? ` · ${e.place.name}` : ''}`;
+  return `${timeLabel(e)}${e.place ? ` · ${e.place.name}` : ''}`;
 }
 
 function EntryList({ label, entries, empty }: { label: string; entries: RoomEntry[]; empty: string }) {
@@ -41,9 +42,9 @@ function EntryList({ label, entries, empty }: { label: string; entries: RoomEntr
 }
 
 /**
- * The play room (GEN-056, Online and Single alike): who is online and who has sent this phase's action
- * (never what they sent), your action form (Public / Secret), the feed of your place and your private
- * narration. Reconnects by itself and fills in what it missed.
+ * The play room (GEN-056, Online and Single alike): who is online and who has sent this turn's action
+ * (never what they sent), your action form (Public / Secret, REST / SLEEP), the feed of your place and your
+ * private narration. Reconnects by itself and fills in what it missed.
  */
 export function PlayRoom({
   apiBaseUrl,
@@ -65,6 +66,7 @@ export function PlayRoom({
   const [fatal, setFatal] = useState<string>();
   const [text, setText] = useState('');
   const [visibility, setVisibility] = useState<ActionVisibility>('public');
+  const [rest, setRest] = useState(false);
   const [problem, setProblem] = useState<string>();
   const [waitingReply, setWaitingReply] = useState(false);
   const conn = useRef<RoomConnection | undefined>(undefined);
@@ -79,6 +81,7 @@ export function PlayRoom({
         if (reply.ok) {
           setProblem(undefined);
           setText('');
+          setRest(false);
         } else setProblem(reply.message);
       },
       fatal: (code, message) => {
@@ -96,7 +99,7 @@ export function PlayRoom({
     event.preventDefault();
     const local = actionTextProblem(text);
     if (local) return setProblem(local.message);
-    if (!conn.current?.sendAction(text, visibility)) return setProblem('ยังเชื่อมต่อไม่ได้ ลองอีกครั้งเมื่อขึ้นว่าเชื่อมต่อแล้ว');
+    if (!conn.current?.sendAction(text, visibility, rest)) return setProblem('ยังเชื่อมต่อไม่ได้ ลองอีกครั้งเมื่อขึ้นว่าเชื่อมต่อแล้ว');
     setWaitingReply(true);
   }
 
@@ -110,7 +113,7 @@ export function PlayRoom({
     <section aria-label="ห้องเล่น">
       <h2>
         ห้องเล่น
-        {room && ` · วันที่ ${room.day} · ${phaseLabel[room.phase]}`}
+        {room && ` · ${timeLabel(room)}`}
         {room?.mode === 'single' && ' · เล่นคนเดียว'}
       </h2>
       <p role="status" aria-label="การเชื่อมต่อห้อง" data-connection={connection}>
@@ -125,6 +128,10 @@ export function PlayRoom({
         <>
           <p>{statusLabel[room.status]}</p>
           {you.place && <p>คุณอยู่ที่: {you.place.name}</p>}
+          {you.drowsy && <p role="note">คุณง่วงซึม (Drowsy) ทั้งวันนี้: ทอย d20 -2 และทุก action เสีย Stamina เพิ่ม 1</p>}
+          {room.phase === 'NOCTHERION' && you.role === 'player' && (
+            <p>ช่วง NOCTHERION: ส่ง Secret ได้ฟรี 1 เทิร์น และควรนอน (REST / SLEEP) อย่างน้อย 1 เทิร์น ไม่อย่างนั้นวันถัดไปจะง่วงซึม</p>
+          )}
 
           <ul aria-label="ผู้เล่นในห้อง">
             {room.members.map((m) => (
@@ -140,8 +147,9 @@ export function PlayRoom({
             <form onSubmit={submit} aria-label="ส่ง action">
               {you.action && (
                 <p>
-                  ส่งแล้ว ({you.action.visibility === 'secret' ? 'Secret' : 'Public'}): {you.action.text}
-                  {room.status === 'collecting' && <small> (ส่งใหม่เพื่อแทนของเดิมได้จนกว่า phase จะปิด)</small>}
+                  ส่งแล้ว ({you.action.visibility === 'secret' ? 'Secret' : 'Public'}
+                  {you.action.rest ? ' · REST / SLEEP' : ''}): {you.action.text}
+                  {room.status === 'collecting' && <small> (ส่งใหม่เพื่อแทนของเดิมได้จนกว่าเทิร์นจะปิด)</small>}
                 </p>
               )}
               {you.lock && <p role="note">{you.lock.message}</p>}
@@ -161,12 +169,17 @@ export function PlayRoom({
                     type="radio"
                     name="visibility"
                     checked={visibility === 'secret'}
-                    disabled={you.secretUsedToday}
+                    disabled={you.secretUsed}
                     onChange={() => setVisibility('secret')}
                   />
-                  Secret (เห็นคนเดียว ได้วันละ 1 phase{you.secretUsedToday ? ' · วันนี้ใช้แล้ว' : ''})
+                  Secret (เห็นคนเดียว ได้วันละ 1 เทิร์น + ฟรี 1 เทิร์นในช่วง NOCTHERION
+                  {you.secretUsed ? (room.phase === 'NOCTHERION' ? ' · คืนนี้ใช้แล้ว' : ' · วันนี้ใช้แล้ว') : ''})
                 </label>
               </fieldset>
+              <label>
+                <input type="checkbox" checked={rest} disabled={locked} onChange={(e) => setRest(e.target.checked)} />
+                REST / SLEEP (พักหรือนอนในเทิร์นนี้ แทนการลงมือทำ)
+              </label>
               <button type="submit" disabled={locked || waitingReply}>
                 {you.action ? 'ส่งแทนของเดิม' : 'ส่ง action'}
               </button>

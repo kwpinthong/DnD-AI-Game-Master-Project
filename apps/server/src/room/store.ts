@@ -1,21 +1,37 @@
 import type { ActionVisibility, RoomEntryKind } from '@isekai/protocol';
-import { createPhaseState, type PhasePoint, type PhaseState } from '@isekai/rules';
+import { createPhaseState, restorePhaseState, type PhaseState, type TurnPoint } from '@isekai/rules';
 import { and, asc, eq, gt, inArray } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
 import { character, gamePhase, phaseAction, roomEntry, roomEntryRecipient } from '../db/schema.ts';
 import { activeMembers } from '../game/service.ts';
 
-/** The game's day / phase engine state; made on first use after the start from the players' characters. */
+/** Current karma of each of `ids` from their character (the engine's copy only decides Drowsy, Q-087). */
+export function karmaOf(db: DbOrTx, ids: readonly string[]): Map<string, number> {
+  if (ids.length === 0) return new Map();
+  return new Map(
+    db
+      .select({ memberId: character.memberId, karma: character.karma })
+      .from(character)
+      .where(inArray(character.memberId, [...ids]))
+      .all()
+      .map((c) => [c.memberId, c.karma]),
+  );
+}
+
+/**
+ * The game's day / period / turn engine state; made on first use after the start from the players'
+ * characters. A state stored before GEN-063 is read through `restorePhaseState` (C8).
+ */
 export function ensurePhaseState(db: DbOrTx, gameId: string, now: number): PhaseState {
   const row = db.select({ state: gamePhase.state }).from(gamePhase).where(eq(gamePhase.gameId, gameId)).get();
-  if (row) return JSON.parse(row.state) as PhaseState;
+  if (row) return restorePhaseState(JSON.parse(row.state));
 
   const players = activeMembers(db, gameId).filter((m) => m.role === 'player');
   const stats = new Map(
     players.length === 0
       ? []
       : db
-          .select({ memberId: character.memberId, hp: character.hp, stamina: character.stamina })
+          .select({ memberId: character.memberId, hp: character.hp, stamina: character.stamina, karma: character.karma })
           .from(character)
           .where(inArray(character.memberId, players.map((m) => m.id)))
           .all()
@@ -25,7 +41,7 @@ export function ensurePhaseState(db: DbOrTx, gameId: string, now: number): Phase
   const state = createPhaseState({
     players: players.flatMap((m) => {
       const c = stats.get(m.id);
-      return c ? [{ id: m.id, hp: c.hp, stamina: c.stamina }] : [];
+      return c ? [{ id: m.id, hp: c.hp, stamina: c.stamina, karma: c.karma }] : [];
     }),
   });
   db.insert(gamePhase).values({ gameId, state: JSON.stringify(state), updatedAt: now }).run();
@@ -36,21 +52,21 @@ export function savePhaseState(db: DbOrTx, gameId: string, state: PhaseState, no
   db.update(gamePhase).set({ state: JSON.stringify(state), updatedAt: now }).where(eq(gamePhase.gameId, gameId)).run();
 }
 
-/** Keeps the action that stands for (game, phase, member); a resubmit replaces it. */
+/** Keeps the action that stands for (game, turn, member); a resubmit replaces it. */
 export function recordAction(
   db: DbOrTx,
   gameId: string,
-  at: PhasePoint,
+  at: TurnPoint,
   memberId: string,
-  action: { text: string; visibility: ActionVisibility },
+  action: { text: string; visibility: ActionVisibility; rest: boolean },
   now: number,
 ): void {
-  const row = { gameId, day: at.day, phase: at.phase, memberId, ...action, submittedAt: now };
+  const row = { gameId, day: at.day, phase: at.phase, turn: at.turn, memberId, ...action, submittedAt: now };
   db.insert(phaseAction)
     .values(row)
     .onConflictDoUpdate({
-      target: [phaseAction.gameId, phaseAction.day, phaseAction.phase, phaseAction.memberId],
-      set: { text: row.text, visibility: row.visibility, submittedAt: now },
+      target: [phaseAction.gameId, phaseAction.day, phaseAction.phase, phaseAction.turn, phaseAction.memberId],
+      set: { text: row.text, visibility: row.visibility, rest: row.rest, submittedAt: now },
     })
     .run();
 }
@@ -67,7 +83,7 @@ export type RoomEntryRow = typeof roomEntry.$inferSelect;
 
 export interface NewEntry {
   readonly kind: RoomEntryKind;
-  readonly at: PhasePoint;
+  readonly at: TurnPoint;
   readonly locationId: string | null;
   readonly text: string;
 }
@@ -81,6 +97,7 @@ export function insertEntry(db: DbOrTx, gameId: string, entry: NewEntry, recipie
       kind: entry.kind,
       day: entry.at.day,
       phase: entry.at.phase,
+      turn: entry.at.turn,
       locationId: entry.locationId,
       text: entry.text,
       createdAt: now,

@@ -22,7 +22,8 @@ export function trigger(gameId = 'game-1') {
     gameId,
     purpose: 'gm_adjudicate' as const,
     day: 1,
-    phase: 'MORNING' as const,
+    phase: 'EOSORIA' as const,
+    turn: 2,
     system: [{ id: 'rules', text: 'คุณคือ Game Master ผู้ตัดสินอย่างเคร่งครัด', cache: true }],
     messages: [{ role: 'user' as const, text: `{{p:p_a}} (${NAME_CANARY}) ขอเปิดประตู` }],
     output: { name: 'verdict', schema: Verdict },
@@ -75,6 +76,7 @@ export type UsageRow = {
   game_id: string;
   day: number | null;
   phase: string | null;
+  turn: number | null;
   purpose: string;
   provider: string;
   model: string;

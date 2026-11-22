@@ -25,11 +25,23 @@ describe('default scenario template (GDD §5-6)', () => {
     const { timeline } = defaultScenario();
 
     expect(timeline.map((e) => e.day)).toEqual([1, 2, 3, 5, 7, 10, 12]);
-    for (const event of timeline) expect(['MORNING', 'AFTERNOON', 'NIGHT']).toContain(event.phase);
+    for (const event of timeline) expect(['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION']).toContain(event.phase);
     const finale = timeline.filter((e) => e.kind === 'finale');
     expect(finale).toHaveLength(1);
     expect(finale[0]?.day).toBe(12);
     expect(timeline.find((e) => e.day === 10)?.kind).toBe('climax');
+  });
+
+  it('GEN-063 C8: a scenario saved with MORNING / AFTERNOON / NIGHT loads as EOSORIA / SOLARION / HESPERION', () => {
+    const old = draft();
+    old.timeline[0].phase = 'MORNING';
+    old.timeline[1].phase = 'AFTERNOON';
+    old.timeline[2].phase = 'NIGHT';
+    const result = parseScenario(old);
+    if (!result.ok) throw new Error(JSON.stringify(result.errors));
+    expect(result.scenario.timeline.slice(0, 3).map((e) => e.phase)).toEqual(['EOSORIA', 'SOLARION', 'HESPERION']);
+    old.timeline[0].phase = 'EVENING';
+    expect(expectInvalid(old)).toContainEqual({ path: 'timeline.0.phase', message: expect.stringContaining('NOCTHERION') });
   });
 
   it('is itself a valid scenario at the current schema version', () => {

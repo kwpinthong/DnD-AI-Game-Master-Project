@@ -10,6 +10,7 @@ function spend(harness: ServiceHarness, gameId: string, costUsd: number, at: num
     gameId,
     day: null,
     phase: null,
+    turn: null,
     purpose: 'gm_adjudicate',
     provider: 'mock',
     model: 'claude-sonnet-5-5',

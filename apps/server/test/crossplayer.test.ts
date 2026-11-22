@@ -296,7 +296,7 @@ describe('cross-player actions on the server (GEN-060)', { timeout: 60_000 }, ()
     const t = await table(true);
     move(t.a, 'market');
     move(t.b, 'forest');
-    advanceTimeline(server!.orm, t.gameId, { day: 5, phase: 'MORNING' }, CLOCK);
+    advanceTimeline(server!.orm, t.gameId, { day: 5, phase: 'EOSORIA' }, CLOCK);
     const timeline = async (who: { token: string }) => GameTimelineResponse.parse((await t.call('GET', '/api/game/timeline', { token: who.token })).body);
 
     // d1-bread is at the market, d5-disaster at the gate, d2 / d3 have no place (town-wide).

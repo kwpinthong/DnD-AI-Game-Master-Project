@@ -1,10 +1,14 @@
 import type { ActionVisibility } from '@isekai/protocol';
-import type { PhasePoint, PhaseState, PlayerResult } from '@isekai/rules';
+import type { PhaseState, PlayerResult, TurnPoint } from '@isekai/rules';
 
 /**
- * The hand-off to the AI GM phase loop (GEN-057). When a phase closes, the room calls `resolve` once with the
+ * The hand-off to the AI GM phase loop (GEN-057). When a turn closes, the room calls `resolve` once with the
  * actions that stood; whatever it returns is published through the visibility layer and fed to the day /
- * phase engine as its `resolved` event. Turn order and cross-player effects (GEN-060) live behind it too.
+ * period / turn engine as its `resolved` event. Turn order and cross-player effects (GEN-060) live behind it too.
+ *
+ * GEN-063 time rules for the resolver: a Drowsy actor (`isDrowsy(state.players[id], state.day)`) rolls with
+ * `DROWSY_STATUS` in `ActorState.statuses` (d20 -2); the +1 Stamina per action is added by the engine, so the
+ * resolver's `stamina` must not include it. Karma the room does not get back is read from the character.
  */
 export interface PhaseResolver {
   resolve(input: ClosedPhase): Promise<PhaseResolution>;
@@ -14,13 +18,15 @@ export interface ClosedAction {
   readonly memberId: string;
   readonly text: string;
   readonly visibility: ActionVisibility;
-  /** Where the actor was when the phase closed; null = not placed. */
+  /** REST / SLEEP this turn instead of acting. */
+  readonly rest: boolean;
+  /** Where the actor was when the turn closed; null = not placed. */
   readonly locationId: string | null;
 }
 
 export interface ClosedPhase {
   readonly gameId: string;
-  readonly at: PhasePoint;
+  readonly at: TurnPoint;
   /** Seat order. Players who could not act (exhausted, unconscious) have no entry. */
   readonly actions: readonly ClosedAction[];
   /** The engine state at the close (status `resolving`). */
