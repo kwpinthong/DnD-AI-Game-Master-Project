@@ -24,6 +24,8 @@ import {
   type TabRecords,
   type WorldEventRecord,
 } from './model.ts';
+import type { KarmaTier } from '@isekai/rules';
+import { KARMA_TIERS_CATEGORY, karmaTiersFrom } from './karma.ts';
 
 export const DEFAULT_ASSETS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets');
 
@@ -52,6 +54,8 @@ export interface GameAssets {
   /** By the full name cell or a short name ("ซิสเตอร์เอเลน่า", "Noa"). */
   npc(nameOrAlias: string): NpcRecord | undefined;
   location(name: string): LocationRecord | undefined;
+  /** Karma bands from the System_Rules "Karma Tiers" rows (GEN-067), checked to cover -100..+100. */
+  readonly karmaTiers: readonly KarmaTier[];
 }
 
 function fieldPath(path: readonly PropertyKey[]): string {
@@ -90,13 +94,22 @@ export function loadGameAssets(dir: string = DEFAULT_ASSETS_DIR): GameAssets {
     Day10_Strategies?: Day10StrategyRecord[];
   };
 
+  const systemRules = readTab(dir, 'System_Rules')!;
+  const karma = karmaTiersFrom(systemRules);
+  if (!karma.ok) {
+    throw new AssetLoadError(
+      `asset file ${join(dir, TAB_FILES.System_Rules)} has unusable "${KARMA_TIERS_CATEGORY}" rows (field mechanics): ${karma.problems.join('; ')}`,
+    );
+  }
+
   return {
     abilities,
     items,
     npcs,
     locations,
     startScenarios: readTab(dir, 'Start_Scenarios')!,
-    systemRules: readTab(dir, 'System_Rules')!,
+    systemRules,
+    karmaTiers: karma.tiers,
     worldTimeline: readTab(dir, 'World_Timeline')!,
     ...(optional.NPC_Schedule ? { npcSchedule: optional.NPC_Schedule } : {}),
     ...(optional.Day10_Strategies ? { day10Strategies: optional.Day10_Strategies } : {}),
