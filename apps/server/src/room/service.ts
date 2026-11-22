@@ -196,6 +196,8 @@ export function createRoomService(
   /** Weather picks still running (GEN-068), awaited on shutdown. */
   const picking = new Set<Promise<unknown>>();
   const rng = new CryptoRng();
+  /** GEN-116: dialogue stages still running (the next turn does not wait for them), awaited on shutdown. */
+  const dialogues = new Set<Promise<void>>();
   let stopped = false;
 
   function memberOf(socket: RoomSocket): MemberRow | undefined {
@@ -408,6 +410,8 @@ export function createRoomService(
   function publishTurn(gameId: string, turn: HeldTurn): boolean {
     const { state, actions, resolution } = turn;
     const outcome: { ended: 'finale' | 'game_over' | null } = { ended: null };
+    /** Who read each place's feed of this turn: the late NPC lines of that place go to the same people, wherever they stand by then. */
+    const placeAudience = new Map<string, ReadonlySet<string>>();
     const publish = () => db.transaction((tx) => {
           outcome.ended = null;
           const t = now();
@@ -421,6 +425,7 @@ export function createRoomService(
           const rows =(resolution.entries ?? []).map((entry) => {
             const recipients = recipientsOf(tx, gameId, current, entry);
             const locationId = entry.kind === 'narration' ? null : entry.locationId;
+            if (entry.kind === 'feed' && entry.locationId !== null && entry.actorMemberId === null) placeAudience.set(entry.locationId, recipients);
             const fallback = entry.fallback ? { fallback: entry.fallback } : {};
             const meta =
               entry.kind === 'narration' && entry.roll
@@ -513,6 +518,7 @@ export function createRoomService(
     broadcastRoom(gameId);
     // GEN-115: counts only, never text.
     log(`[room] game=${gameId} publish db_ms=${Math.round(socketStart - dbStart)} socket_ms=${Math.round(performance.now() - socketStart)}`);
+    if (resolution.dialogue) startDialogue(gameId, turn.at, resolution.dialogue, placeAudience);
     if (published.ended) startFinale(gameId);
     if (outcome.ended !== null) {
       try {
@@ -522,6 +528,38 @@ export function createRoomService(
       }
     }
     return true;
+  }
+
+  /**
+   * GEN-116: runs the second stage of a published turn in the background. Each batch it hands over is stored under the
+   * turn's own day / phase / turn (a late line still belongs to its turn) and sent to the readers of the narration it
+   * follows; nothing here holds the game, and a failure only costs the lines.
+   */
+  function startDialogue(
+    gameId: string,
+    at: HeldTurn['at'],
+    run: NonNullable<PhaseResolution['dialogue']>,
+    places: ReadonlyMap<string, ReadonlySet<string>>,
+  ): void {
+    if (stopped) return;
+    const publishLate = (entries: readonly NonNullable<PhaseResolution['entries']>[number][]) => {
+      if (stopped || entries.length === 0) return;
+      const rows = db.transaction((tx) => {
+        const t = now();
+        const state = ensurePhaseState(tx, gameId, t);
+        return entries.map((entry) => {
+          const recipients = (entry.kind === 'npc' && entry.locationId !== null ? places.get(entry.locationId) : undefined) ?? recipientsOf(tx, gameId, state, entry);
+          const meta = entry.kind === 'npc' ? { meta: { npc: { id: entry.npcId, kind: entry.npcKind, ...(entry.memberId !== null ? { private: true as const } : {}) } } } : {};
+          const locationId = entry.kind === 'narration' ? null : entry.locationId;
+          return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text, ...meta }, [...recipients], t), recipients };
+        });
+      });
+      deliver(gameId, rows);
+    };
+    const task: Promise<void> = run(publishLate)
+      .catch((error) => log(`[room] game=${gameId} dialogue stage failed: ${error instanceof Error ? error.name : 'unknown error'}`))
+      .finally(() => dialogues.delete(task));
+    dialogues.add(task);
   }
 
   /**
@@ -874,7 +912,7 @@ export function createRoomService(
       stopped = true;
       rooms.clear();
       shutdown.abort();
-      while (resolving.size > 0 || picking.size > 0 || finaling.size > 0) await Promise.allSettled([...resolving.values(), ...picking, ...finaling.values()]);
+      while (resolving.size > 0 || picking.size > 0 || finaling.size > 0 || dialogues.size > 0) await Promise.allSettled([...resolving.values(), ...picking, ...finaling.values(), ...dialogues]);
     },
   };
 }

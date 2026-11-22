@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GmNarration } from '../src/gm/schema.ts';
+import { GmDialogue, GmNarration } from '../src/gm/schema.ts';
 import { NPC_LINE_LIMITS, capTotal, cleanNpcLines, cutLine, type CleanLine, type RawLine } from '../src/gm/npc-lines.ts';
 
 /** GEN-110: what the server keeps of the NPC lines the AI GM wrote with a narration (limits, ids, names, Thai-safe cut). */
@@ -103,13 +103,13 @@ describe('GEN-110 NPC lines: the server trims what the AI sends', () => {
     expect([priv('low'), priv(), priv('high')]).toEqual([1, 2, 4]);
   });
 
-  it('C8: a narration without npcLines (the AI sent none, or an old stored one) parses with none', () => {
-    const parsed = GmNarration.parse({ segments: [{ actionId: 'act-1', text: 'เล่า' }] });
-    expect(parsed.npcLines).toEqual([]);
+  it('GEN-116: a narration carries no npcLines; an old stored one that has them still parses (the key is dropped)', () => {
+    const parsed = GmNarration.parse({ segments: [{ actionId: 'act-1', text: 'เล่า' }], npcLines: [line('a', 'dialogue', 'เก่า')] });
+    expect(parsed).toEqual({ segments: [{ actionId: 'act-1', text: 'เล่า' }] });
   });
 
-  it('the schema accepts a long answer so the server (not a repair) trims it', () => {
+  it('the dialogue schema accepts a long answer so the server (not a repair) trims it', () => {
     const lines = Array.from({ length: 15 }, () => line('a', 'dialogue', 'ก'.repeat(300)));
-    expect(GmNarration.safeParse({ segments: [{ actionId: 'act-1', text: 'เล่า' }], npcLines: lines }).success).toBe(true);
+    expect(GmDialogue.safeParse({ npcLines: lines }).success).toBe(true);
   });
 });

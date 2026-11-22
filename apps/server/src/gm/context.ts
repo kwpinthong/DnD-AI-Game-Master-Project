@@ -42,6 +42,8 @@ export const CONTEXT_BUDGET = {
   gm_adjudicate: 20_000,
   narrate_player: 6_000,
   narrate_place: 5_000,
+  /** GEN-116: the narration context without the journal, plus the narration. */
+  npc_dialogue: 6_000,
   summarize_day: 14_000,
   summarize_journal: 6_000,
   /** GEN-059: the ending (every event outcome + one entry per player). */
@@ -334,6 +336,15 @@ export interface NarrationContext {
   journal: { saga: string | null; yesterday: string | null } | null;
 }
 
+/** GEN-116: what the dialogue stage is given for one audience: its narration context (no journal) and the narration it follows. */
+export interface DialogueContext extends Omit<NarrationContext, 'kind' | 'journal'> {
+  kind: 'gm_dialogue';
+  /** The narration the players already read, tokens only. */
+  narration: string[];
+  /** What the server will keep (the game's level): the AI should not write more. */
+  limits: { dialoguePerNpc: number; reactionNpcs: number; privatePerPlayer: number };
+}
+
 /** `summarize_journal` (ADR §6.3, Q-153): one player's day from the entries that player received. */
 export interface JournalContext {
   kind: 'gm_journal';
@@ -388,10 +399,16 @@ const NARRATOR_TEXT = [
   'คุณคือผู้เล่าเรื่องของ Game Master เล่าเฉพาะ beats ที่ให้มา ตามลำดับ ทุก beat ต้องมีอย่างน้อย 1 segment ที่ actionId ตรงกับ beat',
   'ห้ามเล่าเรื่องที่ไม่อยู่ใน beats ห้ามอ้างคนที่ไม่อยู่ใน cast ใช้ {{p:ref}} / {{n:id}} แทนชื่อเสมอ ห้ามเขียนชื่อจริง',
   'audience แบบ place = ทุกคนที่อยู่ที่นั่นอ่านร่วมกัน / แบบ player = อ่านคนเดียว (self = คุณ)',
-  // GEN-110
-  'npcLines = บทพูดของ NPC ที่อยู่ที่นี่ตอนนี้ (npcs ของ context เท่านั้น npcId ต้องตรง) ตอบ [] ได้เสมอ ไม่ต้องพูดทุกเทิร์น',
-  '- audience place (ทุกคนอ่านร่วมกัน): kind dialogue = NPC พูดเรื่องที่ beat นั้นทำ / พูดกับผู้ทำ ได้สูงสุด 3 บรรทัดของ NPC เดียว (NPC ที่ beat เล็งถึงด้วย targetNpc) / kind reaction = NPC คนอื่นที่อยู่ที่นั่นตอบสนองคนละ 1 บรรทัด ไม่เกิน 3 คน',
-  '- audience player (อ่านคนเดียว): ใส่ npcLines ได้เฉพาะเมื่อ privateLines เป็น true (action ของผู้อ่านเป็นการกระทำลับ) เป็นสิ่งที่ NPC พูดกับผู้อ่านคนเดียว ไม่เกิน 2 บรรทัด นอกนั้นตอบ [] เสมอ (บทพูดต่อหน้าทุกคนอยู่ใน audience place แล้ว ห้ามซ้ำ)',
+  // GEN-116: บทพูด NPC เป็นขั้นตอนที่สองแยกต่างหาก (DIALOGUE_TEXT) ที่นี่เล่าเฉพาะ segments ไม่ต้องเขียนบทพูด NPC
+  'ห้ามใส่บทพูดของ NPC ลงใน segments (มีขั้นตอนแยกเขียนให้ทีหลัง) เล่าแค่ผลของ beats',
+].join('\n');
+
+/** GEN-116: the second stage. Same rules as GEN-110 had inside the narration; the narration is given so the lines follow it. */
+const DIALOGUE_TEXT = [
+  'คุณคือผู้เขียนบทพูดของ NPC ให้ Game Master ผลของเทิร์นและบทเล่า (narration) แสดงให้ผู้เล่นอ่านไปแล้ว เขียนเฉพาะบทพูด NPC ที่ต่อจากนั้น ห้ามเล่าซ้ำ',
+  'npcLines = บทพูดของ NPC ที่อยู่ที่นี่ตอนนี้ (npcs ที่ here เป็น true ของ context เท่านั้น npcId ต้องตรง) ตอบ [] ได้เสมอ ไม่ต้องพูดทุกเทิร์น จำนวนสูงสุดอยู่ใน limits',
+  '- audience place (ทุกคนอ่านร่วมกัน): kind dialogue = NPC พูดเรื่องที่ beat นั้นทำ / พูดกับผู้ทำ ไม่เกิน limits.dialoguePerNpc บรรทัดของ NPC เดียว (NPC ที่ beat เล็งถึงด้วย targetNpc) / kind reaction = NPC คนอื่นที่อยู่ที่นั่นตอบสนองคนละ 1 บรรทัด ไม่เกิน limits.reactionNpcs คน',
+  '- audience player (อ่านคนเดียว): ใส่ npcLines ได้เฉพาะเมื่อ privateLines เป็น true (action ของผู้อ่านเป็นการกระทำลับ) เป็นสิ่งที่ NPC พูดกับผู้อ่านคนเดียว ไม่เกิน limits.privatePerPlayer บรรทัด นอกนั้นตอบ [] เสมอ (บทพูดต่อหน้าทุกคนอยู่ใน audience place แล้ว ห้ามซ้ำ)',
   '- ช่วงสำคัญ (beat มี targetNpc, ผู้เล่นเจอ NPC ครั้งแรก = bonds met เป็น false, หรือมี beat kind event) ให้พูดมากขึ้น เทิร์นธรรมดาพูดน้อย 0-2 บรรทัด',
   '- แต่ละบรรทัดสั้น ไม่เกิน 120 ตัวอักษร เป็นภาษาไทย พูดตาม persona ของ NPC นั้น และท่าทีต่อผู้เล่นตาม bonds (affinity สูง = เป็นมิตร ต่ำ = ระแวง), karmaBand (-2 โหดร้าย .. +2 ใจบุญ) และ looks / title ของผู้เล่น (NPC รู้จักผู้เล่นแค่รูปลักษณ์กับฉายา ห้ามเรียกชื่อจริง)',
   '- ห้ามเฉลยความลับ ชื่อจริง หรือกรรมเป็นตัวเลข ห้ามพูดถึงสิ่งที่ไม่อยู่ใน beats / ห้ามเล่าเรื่องของ action ลับให้คนอื่นรู้ ใช้ {{p:ref}} / {{n:id}} แทนชื่อ ห้ามใส่ HP / กรรม / เกรด',
@@ -401,6 +418,7 @@ const SUMMARY_TEXT = 'สรุปวันที่จบไปของ Game M
 
 export const RULES_BLOCK: PromptBlock = { id: 'rules', text: RULES_TEXT, cache: true };
 export const NARRATOR_BLOCK: PromptBlock = { id: 'narrator-rules', text: NARRATOR_TEXT, cache: true };
+export const DIALOGUE_BLOCK: PromptBlock = { id: 'dialogue-rules', text: DIALOGUE_TEXT, cache: true };
 export const SUMMARY_BLOCK: PromptBlock = { id: 'summary-rules', text: SUMMARY_TEXT, cache: true };
 
 const JOURNAL_TEXT =

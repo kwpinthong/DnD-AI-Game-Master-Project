@@ -36,6 +36,7 @@ const PURPOSE_LABEL: Record<string, string> = {
   gm_repair: 'ซ่อมคำตอบ (repair)',
   narrate_place: 'เล่าเรื่องสถานที่',
   narrate_player: 'เล่าเรื่องผู้เล่น',
+  npc_dialogue: 'บทพูด NPC',
   summarize_day: 'สรุปความจำรายวัน',
   summarize_journal: 'สรุปบันทึก',
   finale: 'ฉากจบ (finale)',

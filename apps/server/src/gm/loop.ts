@@ -21,7 +21,7 @@ import { applyPhaseActions, crisesOf, crossPlayerState } from '../crossplayer/ph
 import { outdoorLocationIds, tagContexts, weatherTagging, type TaggingOptions } from '../crossplayer/tags.ts';
 import { eq } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db/client.ts';
-import { gamePhase } from '../db/schema.ts';
+import { game, gamePhase } from '../db/schema.ts';
 import type { GmFallbackCause } from '@isekai/protocol';
 import type { ClosedPhase, PhaseResolution, PhaseResolver, ResolutionEntry, ResolutionHit, ResolverStuck } from '../room/resolver.ts';
 import { itemsInGame, skillsInGame } from '../crossplayer/items.ts';
@@ -40,6 +40,7 @@ import { buildFinaleContext, checkFinale, finaleCheckInput, finaleEntries, templ
 import { checkNarration, checkTurnProposal, type GmError } from './check.ts';
 import {
   CONTEXT_BUDGET,
+  DIALOGUE_BLOCK,
   FINALE_BLOCK,
   JOURNAL_BLOCK,
   JOURNAL_BUDGET,
@@ -55,14 +56,15 @@ import {
   withinTokens,
   type Beat,
   type DayContext,
+  type DialogueContext,
   type GmWorld,
   type JournalContext,
   type NarrationContext,
   type TurnAction,
 } from './context.ts';
 import { createStageTimer, type StageTimer } from './timing.ts';
-import { NPC_LINE_LIMITS, capTotal, cleanNpcLines, npcPrompt, npcsPresentAt } from './npc-lines.ts';
-import { GM_OUTPUT, GmDaySummary, GmFinale, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
+import { capTotal, cleanNpcLines, npcLineLimits, npcPrompt, npcsPresentAt } from './npc-lines.ts';
+import { GM_OUTPUT, GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
 import {
   activeConstraints,
   addConstraint,
@@ -426,45 +428,93 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       return [{ ...found, text: found.hit.actor === null ? 'มีใครบางคนลงมือกับคุณโดยที่คุณไม่ทันเห็นตัว' : `${found.hit.actor} ลงมือกับคุณ` }];
     });
 
-    // 6: what the room publishes and applies.
-    // GEN-110: each narration is followed by its NPC lines as `npc` entries (public: the place's witnesses; private: the reader).
-    const realNpcNames = world.npcs.flatMap((n) => n.names.filter((name) => name !== n.alias));
-    let lineBudget = NPC_LINE_LIMITS.total;
-    const entries: ResolutionEntry[] = narrations.flatMap(({ ctx, out, forbidden }) => {
+    // 6: what the room publishes and applies. GEN-116: the result and narration only; the NPC lines are the second stage below.
+    const entries: ResolutionEntry[] = narrations.map(({ ctx, out }) => {
       const reader = 'player' in ctx.audience ? world.byRef.get(ctx.audience.player)!.memberId : null;
       const text = out.segments.map((s) => renderTokens(db, world, s.text, reader)).join('\n');
       const fallback = out.fallback ? { fallback: out.fallback } : {};
       const roll = reader !== null && rollOf.has(reader) ? { roll: rollOf.get(reader)! } : {};
-      const main: ResolutionEntry =
-        reader === null
-          ? { kind: 'feed', locationId: ctx.place.id, actorMemberId: null, text, ...fallback }
-          : { kind: 'narration', memberId: reader, text, ...roll, ...fallback };
-      const lines = capTotal(
-        cleanNpcLines(reader !== null && !ctx.privateLines ? [] : (out.npcLines ?? []), {
-          present: new Set(ctx.npcs.filter((n) => n.here).map((n) => n.id)),
-          audience: reader === null ? 'public' : 'private',
-          forbidden: [...forbidden, ...realNpcNames],
-          cast: new Set(ctx.cast.map((c) => c.ref)),
-        }),
-      ).slice(0, lineBudget);
-      lineBudget -= lines.length;
-      return [
-        main,
-        ...lines.map((l): ResolutionEntry => ({
-          kind: 'npc',
-          npcId: l.npcId,
-          npcKind: l.kind,
-          locationId: reader === null ? ctx.place.id : null,
-          memberId: reader,
-          text: renderTokens(db, world, l.text, reader),
-        })),
-      ];
+      return reader === null
+        ? { kind: 'feed', locationId: ctx.place.id, actorMemberId: null, text, ...fallback }
+        : { kind: 'narration', memberId: reader, text, ...roll, ...fallback };
     });
+
+    // GEN-116: the second stage, run by the room after the entries above are out and not waited for. One call per
+    // audience that has someone to speak; each audience's lines are published as soon as its call is done.
+    const realNpcNames = world.npcs.flatMap((n) => n.names.filter((name) => name !== n.alias));
+    const level = db.select({ level: game.npcDialogue }).from(game).where(eq(game.id, gameId)).get()?.level ?? 'normal';
+    const limits = npcLineLimits(level);
+    const dialogue = async (publish: (e: readonly ResolutionEntry[]) => void): Promise<void> => {
+      const dialogueTimer = createStageTimer();
+      let lineBudget = limits.total;
+      await Promise.all(
+        narrations.map(async ({ key, ctx, out, forbidden }) => {
+          const reader = 'player' in ctx.audience ? world.byRef.get(ctx.audience.player)!.memberId : null;
+          // Nobody here may speak, or a private narration of a public action (what is said in front of everyone is in the place feed once).
+          if (!ctx.npcs.some((n) => n.here) || (reader !== null && !ctx.privateLines)) return;
+          try {
+            const { journal: _journal, kind: _kind, ...rest } = ctx;
+            const context: DialogueContext = { ...rest, kind: 'gm_dialogue', narration: out.segments.map((s) => s.text), limits };
+            const messages = [{ role: 'user' as const, text: JSON.stringify(context) }];
+            if (requestTokens([DIALOGUE_BLOCK], messages) > CONTEXT_BUDGET.npc_dialogue) {
+              log(`[gm] game=${gameId} purpose=npc_dialogue audience=${key} skipped: limit_exceeded`);
+              return;
+            }
+            const callStart = performance.now();
+            const result = await ai.call({
+              gameId,
+              purpose: 'npc_dialogue',
+              day: at.day,
+              phase: at.phase,
+              turn: at.turn,
+              system: [DIALOGUE_BLOCK],
+              messages,
+              output: { name: GM_OUTPUT.dialogue, schema: GmDialogue },
+              maxOutputTokens: 1_000,
+              maxRetries: NARRATION_RETRIES,
+              ...(signal ? { signal } : {}),
+            });
+            dialogueTimer.add('dialogue_calls', performance.now() - callStart);
+            if (!result.ok) {
+              // C3: no lines, no repair, no more retries than the narration gets; the turn is complete without them.
+              log(`[gm] game=${gameId} purpose=npc_dialogue audience=${key} gave up: ${result.error.code}`);
+              return;
+            }
+            dialogueTimer.addTokens(result.usage);
+            const lines = capTotal(
+              cleanNpcLines(result.value.npcLines, {
+                present: new Set(ctx.npcs.filter((n) => n.here).map((n) => n.id)),
+                audience: reader === null ? 'public' : 'private',
+                forbidden: [...forbidden, ...realNpcNames],
+                cast: new Set(ctx.cast.map((c) => c.ref)),
+                level,
+              }),
+              level,
+            ).slice(0, lineBudget);
+            lineBudget -= lines.length;
+            publish(
+              lines.map((l): ResolutionEntry => ({
+                kind: 'npc',
+                npcId: l.npcId,
+                npcKind: l.kind,
+                locationId: reader === null ? ctx.place.id : null,
+                memberId: reader,
+                text: renderTokens(db, world, l.text, reader),
+              })),
+            );
+          } catch (error) {
+            log(`[gm] game=${gameId} purpose=npc_dialogue audience=${key} failed: ${error instanceof Error ? error.name : 'unknown error'}`);
+          }
+        }),
+      );
+      log(`[gm] game=${gameId} day=${at.day} phase=${at.phase} turn=${at.turn} dialogue timing ${dialogueTimer.line()}`);
+    };
     const rolls = stored.rolls;
     log(`[gm] game=${gameId} day=${at.day} phase=${at.phase} turn=${at.turn} timing ${timer.line()}`);
     return {
       results: resultsOf(state, resolved.state, resolved.log),
       entries,
+      dialogue,
       hits,
       checks,
       apply: (tx) => {
@@ -736,7 +786,6 @@ export function templateNarration(ctx: Pick<NarrationContext, 'beats'>): GmNarra
       const text = [who, b.text, outcome].filter((s) => s.length > 0).join(' ');
       return { actionId: b.actionId, text: (text.length > 0 ? text : 'มีบางอย่างเกิดขึ้น').slice(0, 800) };
     }),
-    npcLines: [],
   };
 }
 

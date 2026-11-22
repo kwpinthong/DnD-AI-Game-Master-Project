@@ -138,13 +138,18 @@ export type GmTurnProposal = z.infer<typeof GmTurnProposal>;
 export const GmNpcLine = z.object({ npcId: z.string(), kind: z.enum(['dialogue', 'reaction']), text: z.string() });
 export type GmNpcLine = z.infer<typeof GmNpcLine>;
 
-/** One narration for one audience (a place's feed, or one player's private column). */
+/**
+ * One narration for one audience (a place's feed, or one player's private column). GEN-116: the NPC lines are a second
+ * stage (`GmDialogue`); an old stored narration with `npcLines` still parses (the key is dropped).
+ */
 export const GmNarration = z.object({
   segments: z.array(z.object({ actionId: z.string(), text: z.string().min(1).max(800) })).min(1).max(12),
-  /** GEN-110. Absent in an old stored narration and in the server template: none. */
-  npcLines: z.array(GmNpcLine).default([]),
 });
 export type GmNarration = z.infer<typeof GmNarration>;
+
+/** GEN-116: the second stage of a turn: the NPC lines of one audience, written after its narration was shown. */
+export const GmDialogue = z.object({ npcLines: z.array(GmNpcLine) });
+export type GmDialogue = z.infer<typeof GmDialogue>;
 
 /** The recap of a finished day and the saga folded through it (ADR §6.3). */
 export const GmDaySummary = z.object({
@@ -174,6 +179,7 @@ export type GmFinale = z.infer<typeof GmFinale>;
 export const GM_OUTPUT = {
   turn: 'gm_turn_proposal',
   narration: 'gm_narration',
+  dialogue: 'gm_dialogue',
   daySummary: 'gm_day_summary',
   journal: 'gm_journal',
   finale: 'gm_finale',
