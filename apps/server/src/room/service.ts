@@ -55,6 +55,7 @@ import {
   TRAIN_USED_MESSAGE,
   withLocationRest,
 } from '../game/location-actions.ts';
+import { isOwnRestText } from '../game/rest-text.ts';
 import { weatherAt, type WeatherService } from '../weather/service.ts';
 import { applyCrisisLog, astralMembers, astralViewOf, omenCheck } from '../game/crisis.ts';
 import { settleTurnProgress, withPeriodEndEffects } from '../skills/progress.ts';
@@ -719,7 +720,7 @@ export function createRoomService(
       const problem = actionTextProblem(input.text);
       if (problem) return reject(problem.code, problem.message);
       const text = normalizeActionText(input.text);
-      const rest = input.rest === true;
+      const rest = input.rest === true || isOwnRestText(text); // GEN-113: typed rest words = REST, not the AI's guess
       const train = input.train === true;
       if (travellingTo(db, me.id) !== null) return reject('traveling', TRAVELING_ACTION_MESSAGE);
 
