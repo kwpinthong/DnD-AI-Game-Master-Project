@@ -23,6 +23,7 @@ import type { AbilityRecord, ItemRecord } from '../assets/model.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { character, characterLoot, game } from '../db/schema.ts';
 import type { MemberRow } from './service.ts';
+import { resolveOwnTokens } from './tokens.ts';
 
 /**
  * Personality-driven loot (GEN-048, GDD §4.1), from the Asset sheet since GEN-073. The AI reads the
@@ -216,7 +217,11 @@ function gameStarted(db: DbOrTx, gameId: string): boolean {
   return (row?.startedAt ?? null) !== null;
 }
 
-const publicTrait = (t: StoredTrait): TraitView => ({ label: t.label, description: t.description });
+/** The AI writes {{p:id}} in a trait (RULES_PROMPT); the token stays stored and is the character name only here (GEN-109). */
+const publicTrait = (t: StoredTrait, memberId: string, name: string): TraitView => ({
+  label: resolveOwnTokens(t.label, memberId, name),
+  description: resolveOwnTokens(t.description, memberId, name),
+});
 
 /** The offer still on the table: an old GEN-048 Common one is gone (a new analysis is needed, C5). */
 function currentOffer(row: LootRow | undefined): StoredOffer | null {
@@ -224,7 +229,8 @@ function currentOffer(row: LootRow | undefined): StoredOffer | null {
   return offer && [...offer.skills, ...offer.items].some(isLegacyOption) ? null : offer;
 }
 
-function toView(row: LootRow | undefined, started: boolean): LootView {
+function toView(row: LootRow | undefined, started: boolean, memberId: string, name: string): LootView {
+  const trait = (t: StoredTrait) => publicTrait(t, memberId, name);
   const offer = currentOffer(row);
   const kept = row?.chosenJson ? (JSON.parse(row.chosenJson) as StoredChosen) : null;
   // C5: an old Common set loads; before the start the player must choose again from the sheet.
@@ -234,14 +240,14 @@ function toView(row: LootRow | undefined, started: boolean): LootView {
   const quotaLeft = LOOT_REROLL_LIMIT === null || rerollsUsed < LOOT_REROLL_LIMIT;
   return {
     offer: offer && {
-      strength: publicTrait(offer.strength),
-      weakness: publicTrait(offer.weakness),
+      strength: trait(offer.strength),
+      weakness: trait(offer.weakness),
       skills: offer.skills.map(optionView),
       items: offer.items.map(optionView),
     },
     chosen: chosen && {
-      strength: publicTrait(chosen.strength),
-      weakness: publicTrait(chosen.weakness),
+      strength: trait(chosen.strength),
+      weakness: trait(chosen.weakness),
       skill: optionView(chosen.skill),
       item: optionView(chosen.item),
     },
@@ -268,13 +274,13 @@ const isOutcome = (value: unknown): value is LootOutcome => typeof value === 'ob
 export function getLoot(db: Db, me: MemberRow): LootOutcome {
   const pre = precheck(db, me);
   if (isOutcome(pre)) return pre;
-  return { kind: 'ok', loot: toView(lootRow(db, me.id), gameStarted(db, me.gameId)) };
+  return { kind: 'ok', loot: toView(lootRow(db, me.id), gameStarted(db, me.gameId), me.id, pre.name) };
 }
 
 /** Why a new set cannot be made now, if any. */
 function closedReason(db: DbOrTx, me: MemberRow): LootOutcome | null {
   if (gameStarted(db, me.gameId)) return { kind: 'game_started' };
-  const view = toView(lootRow(db, me.id), false);
+  const view = toView(lootRow(db, me.id), false, me.id, '');
   return view.canReroll ? null : { kind: 'loot_closed' };
 }
 
@@ -333,7 +339,7 @@ export async function rollLoot(db: Db, ai: AiService, assets: GameAssets, me: Me
     const late = closedReason(tx, me);
     if (late) return late;
     // An answer for a personality edited meanwhile (Q-081) is dropped; a retry reads the new one.
-    const current = tx.select({ personality: character.personality }).from(character).where(eq(character.memberId, me.id)).get();
+    const current = tx.select({ personality: character.personality, name: character.name }).from(character).where(eq(character.memberId, me.id)).get();
     if (current?.personality !== pre.personality) return { kind: 'ai_error', error: staleAnswer() };
     const existing = lootRow(tx, me.id);
     const t = now();
@@ -346,7 +352,7 @@ export async function rollLoot(db: Db, ai: AiService, assets: GameAssets, me: Me
     } else {
       tx.insert(characterLoot).values({ memberId: me.id, offerJson: JSON.stringify(offer), chosenJson: null, rerollsUsed: 0, updatedAt: t }).run();
     }
-    return { kind: 'ok', loot: toView(lootRow(tx, me.id), false) };
+    return { kind: 'ok', loot: toView(lootRow(tx, me.id), false, me.id, current?.name ?? pre.name) };
   });
 }
 
@@ -373,7 +379,7 @@ export function chooseLoot(db: Db, me: MemberRow, input: LootChooseRequest, now:
       .set({ offerJson: null, chosenJson: JSON.stringify(chosen), updatedAt: now() })
       .where(eq(characterLoot.memberId, me.id))
       .run();
-    return { kind: 'ok', loot: toView(lootRow(tx, me.id), false) };
+    return { kind: 'ok', loot: toView(lootRow(tx, me.id), false, me.id, pre.name) };
   });
 }
 
