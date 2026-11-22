@@ -844,6 +844,8 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
         expect(reactions.length).toBeLessThanOrEqual(3);
         expect(new Set(reactions.map((e) => e.npc!.ref)).size).toBe(reactions.length);
         expect(lines.length).toBeLessThanOrEqual(12);
+        // GEN-107: AI-written NPC lines get the thumbs buttons like the narration.
+        for (const e of lines) expect(e.myVote).toBeNull();
         for (const e of lines) expect(e.place).toMatchObject({ id: 'fountain' });
       }
       // The same lines in both feeds; C, at the inn, hears none of the fountain's.

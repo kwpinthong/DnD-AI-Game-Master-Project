@@ -170,8 +170,14 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     for (const x of [a, b, c]) await x.waitFor((m) => m.type === 'room' && m.turn === 2 && m.status === 'collecting');
     await a.waitFor((m) => m.type === 'entry' && m.entry.kind === 'narration');
     await hit(call, 'GET /api/game/gm/log', { token: tgm });
-    await hit(call, 'GET /api/game/log', { token: t.a.token });
+    const playLog = GameLogResponse.parse((await hit(call, 'GET /api/game/log', { token: t.a.token })).body);
     await hit(call, 'GET /api/game/log', { token: tgm });
+    // GEN-107: a vote on an AI-written entry, then the refusals (a GM, an unknown id)
+    const votable = playLog.entries.find((e) => e.myVote !== undefined);
+    expect(votable, 'an AI-written entry with myVote').toBeDefined();
+    await hit(call, 'PUT /api/game/entries/:seq/vote', { token: t.a.token, path: `/api/game/entries/${votable!.seq}/vote`, body: { vote: 'up' } });
+    await hit(call, 'PUT /api/game/entries/:seq/vote', { token: tgm, path: `/api/game/entries/${votable!.seq}/vote`, body: { vote: 'up' } });
+    await hit(call, 'PUT /api/game/entries/:seq/vote', { token: t.a.token, path: '/api/game/entries/99999/vote', body: { vote: 'up' } });
 
     // GEN-070: an omen from a living player is refused; C, an Astral Spirit in NOCTHERION, sends one to A.
     await answer(a, () => a.send({ type: 'omen', to: presenceOf(server!.orm, t.b.memberId)!.ref, text: 'ระวัง' }), ['omen_accepted', 'omen_rejected']);

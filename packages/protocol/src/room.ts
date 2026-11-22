@@ -225,6 +225,25 @@ export type NpcLineView = z.infer<typeof NpcLineView>;
 export const RoomViewEntryKind = RoomEntryKind;
 export type RoomViewEntryKind = RoomEntryKind;
 
+/**
+ * GEN-107: the room entry kinds the AI GM writes, so the only ones a player may rate. A new AI-written kind
+ * (NPC dialogue, GEN-110) is added here and gets the buttons with no other change. A `fallback` entry is the
+ * server's template, not the AI's, so it is never votable (`isVotableEntry`).
+ */
+export const VOTABLE_ENTRY_KINDS: readonly RoomEntryKind[] = ['feed', 'narration', 'npc'];
+export const isVotableEntry = (entry: { kind: RoomEntryKind; fallback?: true | null | string }) => VOTABLE_ENTRY_KINDS.includes(entry.kind) && !entry.fallback;
+
+/** A player's rating of one AI-written entry (GEN-107): 👍 `up` ("ถูกใจ") / 👎 `down` ("ไม่ถูกใจ"). */
+export const EntryVote = z.enum(['up', 'down']);
+export type EntryVote = z.infer<typeof EntryVote>;
+
+/** Body of PUT /api/game/entries/:seq/vote: `null` cancels the vote. */
+export const ResponseVoteRequest = z.strictObject({ vote: EntryVote.nullable() });
+export type ResponseVoteRequest = z.infer<typeof ResponseVoteRequest>;
+/** 200: the caller's vote on the entry after the change. */
+export const ResponseVoteResponse = z.strictObject({ seq: z.number().int().min(1), myVote: EntryVote.nullable() });
+export type ResponseVoteResponse = z.infer<typeof ResponseVoteResponse>;
+
 export const RoomEntry = z.strictObject({
   /** Increases within a game; a viewer's entries are a subsequence, so "the last one I have" is enough. */
   seq: z.number().int().min(1),
@@ -252,6 +271,11 @@ export const RoomEntry = z.strictObject({
   changes: z.array(TurnChange).optional(),
   /** `npc` entries (GEN-110): who says `text` (avatar + name + grade for the chat UI) and what kind of line it is. */
   npc: NpcLineView.optional(),
+  /**
+   * GEN-107: this player's own vote on an AI-written entry (`isVotableEntry`): null = not voted. Absent on
+   * every other entry and for the Human GM, so "has the key" = "show the buttons". Others' votes are never sent.
+   */
+  myVote: EntryVote.nullable().optional(),
 });
 export type RoomEntry = z.infer<typeof RoomEntry>;
 

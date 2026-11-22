@@ -100,10 +100,11 @@ const turnChanges: In<typeof p.TurnChange>[] = [
   { stat: 'conduct', from: 'เป็นกลาง', to: 'ใจดี', reason: 'การกระทำของคุณ' },
   { stat: 'status_gained', name: 'ง่วงซึม', reason: 'อดนอน' },
 ];
-const narration: In<typeof p.RoomEntry> = { seq: 12, kind: 'narration', ...AT, place: null, text: 'คุณสังเกตว่านักบวชแจกขนมปังเฉพาะบ้านที่มีเด็ก', roll };
+const narration: In<typeof p.RoomEntry> = { seq: 12, kind: 'narration', ...AT, place: null, text: 'คุณสังเกตว่านักบวชแจกขนมปังเฉพาะบ้านที่มีเด็ก', roll, myVote: 'down' };
 const entries: In<typeof p.RoomEntry>[] = [
-  { seq: 10, kind: 'feed', ...AT, place: FOUNTAIN_ZONED, text: 'ชายผมแดงตะโกนขายยาสมุนไพรเสียงดัง' },
-  { seq: 11, kind: 'feed', ...AT, place: null, text: 'ประกาศเช้า: ทหารปิดท่าเรือ' },
+  // GEN-107: myVote null / 'up' / 'down' = the three button states (none / pressed ถูกใจ / pressed ไม่ถูกใจ)
+  { seq: 10, kind: 'feed', ...AT, place: FOUNTAIN_ZONED, text: 'ชายผมแดงตะโกนขายยาสมุนไพรเสียงดัง', myVote: null },
+  { seq: 11, kind: 'feed', ...AT, place: null, text: 'ประกาศเช้า: ทหารปิดท่าเรือ', myVote: 'up' },
   narration,
   { seq: 13, kind: 'hit', ...AT, place: null, text: 'ถุงเงินของคุณหายไป', hit },
   { seq: 14, kind: 'whisper', ...AT, place: null, text: 'คืนนี้เจอกันที่โบสถ์', whisper: { from: 'ลิน', to: 'ต้น', mine: true } },
@@ -408,6 +409,8 @@ export const CONTRACT_FIXTURES: Fixtures = {
   InventoryEntry: [inventoryEntry],
   GameLogResponse: [gameLog, { ...gameLog, game: { ...gameLog.game, status: 'ended', endReason: 'finale' }, reveal }],
   GameRevealPlayer: [revealPlayer],
+  ResponseVoteRequest: [{ vote: 'up' }, { vote: 'down' }, { vote: null }],
+  ResponseVoteResponse: [{ seq: 11, myVote: 'up' }, { seq: 12, myVote: null }],
   GameRatingRequest: [{ score: 9, comment: 'สนุกมาก' }, { score: 7 }],
   GameRatingResponse: [{ rating }, { rating: { mine: null, liked: [], average: null, raters: 1, members: 4, eligible: false, blocker: 'too_few_raters' } }],
   RoomClientMessage: [{ type: 'hello', token: 't0k3n', afterSeq: 0 }],
