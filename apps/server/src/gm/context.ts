@@ -1,0 +1,299 @@
+import type { ActionVisibility, Phase } from '@isekai/protocol';
+import { karmaBand, socialTitle, type CrossPlayerState, type TagContext, type Turn } from '@isekai/rules';
+import { and, eq, isNull } from 'drizzle-orm';
+import type { GameAssets } from '../assets/load.ts';
+import type { PromptBlock } from '../ai/provider.ts';
+import { chosenLootInGame, itemsInGame } from '../crossplayer/items.ts';
+import type { DbOrTx } from '../db/client.ts';
+import { character, member } from '../db/schema.ts';
+import { getGameScenario } from '../scenario/store.ts';
+import { buildEventContext, type EventContext } from '../timeline/context.ts';
+import { namesVisibleTo, presencesInGame } from '../visibility/store.ts';
+import { activeConstraints, dayLog, memoryFor } from './store.ts';
+
+/**
+ * What the AI GM sees (GEN-057, ADR "Isekai Chronicles - AI GM" §6). Every request is one JSON object in
+ * the user message. Players are `{{p:<ref>}}` tokens (the presence ref other players see, GEN-050), NPCs
+ * `{{n:<id>}}`; a real name never goes into a prompt (Q-045): action text is tokenised before it is sent.
+ * Karma is a band (-2..+2), never the number. No context is logged.
+ */
+
+export const playerToken = (ref: string) => `{{p:${ref}}}`;
+export const npcToken = (id: string) => `{{n:${id}}}`;
+export const TOKEN_PATTERN = /\{\{([pn]):([A-Za-z0-9_-]+)\}\}/g;
+
+/** Rough, on the safe side for Thai (one token per non-ASCII character). Used for the context budget. */
+export function estimateTokens(text: string): number {
+  let ascii = 0;
+  let other = 0;
+  for (const ch of text) {
+    if (ch.charCodeAt(0) < 128) ascii++;
+    else other++;
+  }
+  return other + Math.ceil(ascii / 4);
+}
+
+/** ADR §6.2 hard caps per call. */
+export const CONTEXT_BUDGET = { gm_adjudicate: 20_000, narrate_player: 6_000, narrate_place: 5_000, summarize_day: 14_000 } as const;
+/** How much of today's turn log the adjudicator gets (newest kept). */
+const TODAY_LOG_TOKENS = 3_000;
+
+// --- The game as the GM loop reads it ---
+
+export interface GmPlayer {
+  memberId: string;
+  ref: string;
+  name: string;
+  appearance: string;
+  socialTitle: string;
+  locationId: string;
+}
+
+export interface GmWorld {
+  gameId: string;
+  players: Map<string, GmPlayer>;
+  byRef: Map<string, GmPlayer>;
+  npcs: { id: string; name: string; alias: string; rank: string; locationId: string }[];
+  places: { id: string; name: string; safety: string; tags: string[] }[];
+  /** Who knows whose real name (GEN-050 / GEN-067), by viewer. */
+  knownNames: (viewerMemberId: string) => ReadonlySet<string>;
+  /** Real names → tokens, longest first, for player-written text. */
+  tokenise: (text: string) => string;
+}
+
+export function loadWorld(db: DbOrTx, gameId: string, assets: GameAssets): GmWorld {
+  const scenario = getGameScenario(db, gameId);
+  const presences = new Map(presencesInGame(db, gameId).map((p) => [p.memberId, p]));
+  const rows = db
+    .select({ c: character })
+    .from(character)
+    .innerJoin(member, eq(member.id, character.memberId))
+    .where(and(eq(member.gameId, gameId), isNull(member.kickedAt)))
+    .all();
+  const players = new Map<string, GmPlayer>();
+  for (const { c } of rows) {
+    const p = presences.get(c.memberId);
+    if (!p) continue;
+    players.set(c.memberId, { memberId: c.memberId, ref: p.ref, name: c.name, appearance: c.appearance, socialTitle: socialTitle(c.reputation), locationId: p.locationId });
+  }
+  const npcs = (scenario?.npcs ?? []).map((n) => ({ id: n.id, name: n.name, alias: n.alias, rank: n.rank, locationId: n.locationId }));
+  const places = (scenario?.locations ?? []).map((l) => ({ id: l.id, name: l.name, safety: l.safety, tags: [...(assets.location(l.name)?.tags ?? [])] }));
+  const names = [
+    ...[...players.values()].map((p) => ({ name: p.name, token: playerToken(p.ref) })),
+    ...npcs.map((n) => ({ name: n.name, token: npcToken(n.id) })),
+  ]
+    .filter((n) => n.name.trim().length > 0)
+    .sort((a, b) => b.name.length - a.name.length);
+  const known = new Map<string, ReadonlySet<string>>();
+  return {
+    gameId,
+    players,
+    byRef: new Map([...players.values()].map((p) => [p.ref, p])),
+    npcs,
+    places,
+    knownNames: (viewer) => {
+      let set = known.get(viewer);
+      if (!set) known.set(viewer, (set = namesVisibleTo(db, viewer)));
+      return set;
+    },
+    tokenise: (text) => names.reduce((out, n) => out.split(n.name).join(n.token), text),
+  };
+}
+
+// --- gm_adjudicate ---
+
+export interface TurnAction {
+  actionId: string;
+  memberId: string;
+  text: string;
+  visibility: ActionVisibility;
+}
+
+export interface PlayerContext {
+  ref: string;
+  appearance: string;
+  socialTitle: string;
+  place: string;
+  hp: number;
+  stamina: number;
+  karmaBand: number;
+  drowsy: boolean;
+  items: { id: string; name: string; tier: string }[];
+  skills: { id: string; name: string; tier: string }[];
+  tagSources: { id: string; kind: string; verbTags: string[]; targetTags: string[]; trigger: string; dailyLimit: number; usesToday: number }[];
+  constraints: { id: number; text: string; reason: string; sinceDay: number }[];
+}
+
+export interface TurnContext {
+  kind: 'gm_turn';
+  turn: { day: number; phase: Phase; turn: Turn };
+  /** GEN-068 chooses the weather later (Q-089); null until then. */
+  weather: string | null;
+  /** Action ids in the server's order (GEN-060 §10.5). Answer every one, in this order. */
+  order: string[];
+  actions: { actionId: string; actor: string; place: string; visibility: ActionVisibility; text: string }[];
+  /** Players who rest / sleep this turn (no action to judge). */
+  resting: string[];
+  players: PlayerContext[];
+  places: { id: string; name: string; safety: string; tags: string[] }[];
+  npcs: { id: string; alias: string; rank: string; place: string }[];
+  /** Every verb / target tag the game data has (GEN-064). */
+  tagVocabulary: string[];
+  events: Pick<EventContext, 'active' | 'past'>;
+  memory: { saga: string | null; yesterday: string | null; today: string[] };
+}
+
+export interface TurnContextInput {
+  world: GmWorld;
+  state: CrossPlayerState;
+  tags: Readonly<Record<string, TagContext>>;
+  vocabulary: readonly string[];
+  drowsy: ReadonlySet<string>;
+  at: { day: number; phase: Phase; turn: Turn };
+  /** In the server's order. */
+  actions: readonly TurnAction[];
+  resting: readonly string[];
+}
+
+export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnContext {
+  const { world, state, at } = input;
+  const loot = new Map(chosenLootInGame(db, world.gameId).map((l) => [l.memberId, l.chosen]));
+  const items = [...itemsInGame(db, world.gameId).values()];
+  const constraints = activeConstraints(db, world.gameId);
+  const ref = (memberId: string) => world.players.get(memberId)?.ref ?? memberId;
+
+  const players: PlayerContext[] = Object.values(state.players).flatMap((s) => {
+    const p = world.players.get(s.id);
+    if (!p) return [];
+    const ctx = input.tags[s.id];
+    const skill = loot.get(s.id)?.skill;
+    return [
+      {
+        ref: p.ref,
+        appearance: world.tokenise(p.appearance),
+        socialTitle: p.socialTitle,
+        place: s.locationId,
+        hp: s.hp,
+        stamina: s.stamina,
+        karmaBand: karmaBand(s.karma),
+        drowsy: input.drowsy.has(s.id),
+        items: items.filter((i) => i.holderMemberId === s.id).map((i) => ({ id: i.id, name: world.tokenise(i.name), tier: i.tier })),
+        skills: skill ? [{ id: skill.id, name: world.tokenise(skill.name), tier: skill.tier }] : [],
+        tagSources: (ctx?.sources ?? []).map((src) => ({
+          id: src.id,
+          kind: src.kind,
+          verbTags: [...src.verbTags],
+          targetTags: [...src.targetTags],
+          trigger: src.trigger,
+          dailyLimit: src.dailyLimit,
+          usesToday: ctx?.usesToday[src.id] ?? 0,
+        })),
+        constraints: constraints.filter((c) => c.memberId === s.id).map((c) => ({ id: c.id, text: c.text, reason: c.reason, sinceDay: c.day })),
+      },
+    ];
+  });
+
+  const events = buildEventContext(db, world.gameId, at.day, at.phase);
+  return {
+    kind: 'gm_turn',
+    turn: at,
+    weather: null,
+    order: input.actions.map((a) => a.actionId),
+    actions: input.actions.map((a) => ({
+      actionId: a.actionId,
+      actor: ref(a.memberId),
+      place: state.players[a.memberId]?.locationId ?? '',
+      visibility: a.visibility,
+      text: world.tokenise(a.text),
+    })),
+    resting: input.resting.map(ref),
+    players,
+    places: world.places,
+    npcs: world.npcs.map((n) => ({ id: n.id, alias: n.alias, rank: n.rank, place: n.locationId })),
+    tagVocabulary: [...input.vocabulary],
+    events: { active: events.active, past: events.past },
+    memory: memoryContext(db, world.gameId, at),
+  };
+}
+
+/** Saga + yesterday's recap + today's turn log (newest kept within `TODAY_LOG_TOKENS`). */
+export function memoryContext(db: DbOrTx, gameId: string, at: { day: number; phase: Phase; turn: Turn }): TurnContext['memory'] {
+  const memory = memoryFor(db, gameId, at.day);
+  const today: string[] = [];
+  let used = 0;
+  for (const line of [...dayLog(db, gameId, at.day, at)].reverse()) {
+    const cost = estimateTokens(line);
+    if (used + cost > TODAY_LOG_TOKENS) break;
+    used += cost;
+    today.unshift(line);
+  }
+  return { saga: memory.saga, yesterday: memory.yesterday, today };
+}
+
+// --- narrate_place / narrate_player ---
+
+export type BeatKind = 'own_action' | 'affected' | 'public_action' | 'event' | 'evidence';
+
+export interface Beat {
+  /** The action the beat is about (`event:<id>` for a timeline event, `evidence:<id>` for found evidence). */
+  actionId: string;
+  kind: BeatKind;
+  /** Player ref of who did it; null = unknown to this audience or nobody. */
+  actor: string | null;
+  /** Tokens only. */
+  text: string;
+  /** `crit` | `success` | `fail` | `fumble` | `no_target` | `skipped` | `scene`. */
+  result: string;
+  target: string | null;
+  moved: { from: string; to: string } | null;
+  items: string[];
+}
+
+export interface NarrationContext {
+  kind: 'gm_narration';
+  audience: { place: string } | { player: string };
+  turn: { day: number; phase: Phase; turn: Turn };
+  place: { id: string; name: string };
+  /** The only players the text may name, as {{p:ref}}. `self`: the reader of a private narration. */
+  cast: { ref: string; looks: string; title: string; self: boolean }[];
+  npcs: { id: string; alias: string }[];
+  /** In the server's order; write one or more segments for each, in the same order. */
+  beats: Beat[];
+}
+
+export interface DayContext {
+  kind: 'gm_day';
+  day: number;
+  saga: string | null;
+  log: string[];
+}
+
+// --- Prompts (static, cacheable) ---
+
+const RULES_TEXT = [
+  'คุณคือ Game Master ผู้ตัดสินอย่างเคร่งครัด (Strict Referee) ของเกม Isekai Chronicles ไม่ใช่ผู้ช่วยของผู้เล่น',
+  '1. ห้ามเกราะตัวเอก: ห้ามลด DC หรือเพิ่ม modifier เพื่อช่วยผู้เล่น ความยากมาจากสถานการณ์จริงใน state เท่านั้น',
+  '2. ตอบ action ครบทุกตัวตาม `order` ที่ให้มา ห้ามข้าม ห้ามสลับลำดับ ห้ามแต่ง actionId ใหม่ `actor` คือ ref ของผู้ทำ',
+  '3. DC อยู่บนบันได 5, 8, 11, 14, 17, 20, 23 / staminaCost: general 3, complex 5 (opposed 6), exertion 7-10',
+  '4. verbTags / targetTags ใช้ได้เฉพาะคำใน tagVocabulary / activate ได้เฉพาะ tagSources ของผู้ทำที่ยังไม่ครบ dailyLimit',
+  '5. ผู้เล่นที่ติด constraints (Constraint Lock) ยังติดอยู่จนกว่าคุณจะปลดใน constraints.release พร้อม reason ที่อธิบายว่าทำไมหลุด',
+  '6. คุณไม่รู้ผลเต๋า เสนอ onSuccess และ onFail ให้สมเหตุสมผลทั้งคู่ ห้ามใส่ค่า HP / Stamina ใหม่เอง',
+  '7. ห้ามเขียนชื่อจริงของตัวละคร ใช้ {{p:ref}} / {{n:id}} ที่ให้มาเท่านั้น',
+].join('\n');
+
+const NARRATOR_TEXT = [
+  'คุณคือผู้เล่าเรื่องของ Game Master เล่าเฉพาะ beats ที่ให้มา ตามลำดับ ทุก beat ต้องมีอย่างน้อย 1 segment ที่ actionId ตรงกับ beat',
+  'ห้ามเล่าเรื่องที่ไม่อยู่ใน beats ห้ามอ้างคนที่ไม่อยู่ใน cast ใช้ {{p:ref}} / {{n:id}} แทนชื่อเสมอ ห้ามเขียนชื่อจริง',
+  'audience แบบ place = ทุกคนที่อยู่ที่นั่นอ่านร่วมกัน / แบบ player = อ่านคนเดียว (self = คุณ)',
+].join('\n');
+
+const SUMMARY_TEXT = 'สรุปวันที่จบไปของ Game Master: recap = เรื่องสำคัญของวันนี้ / saga = เรื่องทั้งหมดจนถึงวันนี้ย่อรวมกับ saga เดิม ใช้ token แทนชื่อเสมอ';
+
+export const RULES_BLOCK: PromptBlock = { id: 'rules', text: RULES_TEXT, cache: true };
+export const NARRATOR_BLOCK: PromptBlock = { id: 'narrator-rules', text: NARRATOR_TEXT, cache: true };
+export const SUMMARY_BLOCK: PromptBlock = { id: 'summary-rules', text: SUMMARY_TEXT, cache: true };
+
+/** Tokens of a whole request (system + messages). */
+export function requestTokens(system: readonly PromptBlock[], messages: readonly { text: string }[]): number {
+  return estimateTokens([...system.map((b) => b.text), ...messages.map((m) => m.text)].join('\n'));
+}

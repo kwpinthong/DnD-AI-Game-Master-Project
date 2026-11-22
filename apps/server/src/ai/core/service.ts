@@ -143,6 +143,11 @@ export function createAiService(deps: AiServiceDeps): AiService {
 
       for (let attempt = 1; attempt <= attempts; attempt++) {
         if (attempt > 1 && config.retryDelayMs > 0) await sleep(config.retryDelayMs * (attempt - 1));
+        // Shutdown (GEN-057): no new attempt once the caller gave up.
+        if (trigger.signal?.aborted) {
+          lastFailure = 'aborted';
+          break;
+        }
 
         const at = now();
         const spent = usage.spentThisMonth(trigger.gameId, at);

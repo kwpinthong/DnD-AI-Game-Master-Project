@@ -5,6 +5,7 @@ import {
   normalizeActionText,
   type PlaceView,
   type RoomActionCode,
+  type RoomGmStatus,
   type RoomEntry,
   type RoomLockCode,
   type RoomServerMessage,
@@ -38,7 +39,8 @@ import {
   presencesInGame,
 } from '../visibility/store.ts';
 import { witnessesOf } from '../visibility/views.ts';
-import type { ClosedAction, PhaseResolution, PhaseResolver } from './resolver.ts';
+import { advanceTimeline } from '../timeline/store.ts';
+import type { ClosedAction, PhaseResolution, PhaseResolver, ResolverStuck } from './resolver.ts';
 import {
   ensurePhaseState,
   entriesFor,
@@ -72,6 +74,9 @@ const WHISPER_MESSAGE: Record<RoomWhisperCode, string> = {
   unconscious: LOCK_MESSAGE.unconscious,
 };
 
+/** When the resolver threw: the room shows this and offers `retry`. */
+const GM_STUCK_MESSAGE = 'AI GM ติดขัด สรุปผลเทิร์นนี้ไม่ได้ action ทุกอันยังอยู่ กด "ลองใหม่" ได้';
+
 const SECRET_QUOTA_MESSAGE = 'วันนี้ใช้ Secret ไปแล้ว (ได้วันละ 1 เทิร์น และฟรีอีก 1 เทิร์นในช่วง NOCTHERION) ส่งเป็น Public แทนได้';
 const NIGHT_SECRET_QUOTA_MESSAGE = 'คืนนี้ใช้ Secret ฟรีของช่วง NOCTHERION ไปแล้ว (ได้คืนละ 1 เทิร์น) ส่งเป็น Public แทนได้';
 
@@ -85,6 +90,8 @@ export interface RoomService {
   submit(socket: RoomSocket, input: { text: string; visibility: string; rest?: boolean }): SubmitReply;
   /** A Whisper to one ally (GEN-067): stored as a `whisper` entry for sender, target and the Human GM. */
   whisper(socket: RoomSocket, input: { to: string; text: string }): WhisperReply;
+  /** Tries a stuck turn again (GEN-057 C2); does nothing when the AI GM is not stuck. */
+  retry(socket: RoomSocket): void;
   /** Shutdown: forgets every socket (their close events no longer touch the database), then waits for running resolves. */
   stop(): Promise<void>;
 }
@@ -99,6 +106,9 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
   /** gameId → socket → member. */
   const rooms = new Map<string, Map<RoomSocket, MemberRow>>();
   const resolving = new Map<string, Promise<void>>();
+  /** Games whose closed turn the resolver could not finish (GEN-057); cleared by `retry` or a restart. */
+  const stuck = new Map<string, ResolverStuck>();
+  const shutdown = new AbortController();
   const rng = new CryptoRng();
   let stopped = false;
 
@@ -167,7 +177,21 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
     return condition === 'awake' ? null : condition;
   }
 
-  function roomStateFor(me: MemberRow, state: PhaseState, members: MemberRow[], online: Set<string>, mode: 'online' | 'single'): RoomState {
+  function gmStatusFor(me: MemberRow, state: PhaseState, ownerMemberId: string | null): RoomGmStatus | null {
+    const s = stuck.get(me.gameId);
+    if (!s || state.status !== 'resolving') return null;
+    const toOwner = me.role === 'gm' || me.id === ownerMemberId;
+    return { code: s.code, message: toOwner ? s.ownerMessage : s.message, canRetry: s.code === 'stuck' };
+  }
+
+  function roomStateFor(
+    me: MemberRow,
+    state: PhaseState,
+    members: MemberRow[],
+    online: Set<string>,
+    gameRow: { mode: 'online' | 'single'; ownerMemberId: string | null },
+  ): RoomState {
+    const { mode } = gameRow;
     const lock = lockOf(me, state);
     const mine = state.submissions[me.id];
     const player = state.players[me.id];
@@ -196,6 +220,7 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
         action: mine ? { text: mine.text, visibility: mine.visibility, rest: mine.rest === true } : null,
         allies: alliesOf(me),
       },
+      gmStatus: gmStatusFor(me, state, gameRow.ownerMemberId),
     };
   }
 
@@ -204,9 +229,12 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
     if (!sockets || sockets.size === 0) return;
     const state = ensurePhaseState(db, gameId, now());
     const members = activeMembers(db, gameId);
-    const mode = db.select({ mode: game.mode }).from(game).where(eq(game.id, gameId)).get()?.mode ?? 'online';
+    const gameRow = db.select({ mode: game.mode, ownerMemberId: game.ownerMemberId }).from(game).where(eq(game.id, gameId)).get() ?? {
+      mode: 'online' as const,
+      ownerMemberId: null,
+    };
     const online = new Set([...sockets.values()].map((m) => m.id));
-    for (const [socket, me] of sockets) send(socket, roomStateFor(me, state, members, online, mode));
+    for (const [socket, me] of sockets) send(socket, roomStateFor(me, state, members, online, gameRow));
   }
 
   function deliver(gameId: string, rows: readonly { row: RoomEntryRow; recipients: ReadonlySet<string> }[]): void {
@@ -265,14 +293,25 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
 
         let resolution: PhaseResolution;
         try {
-          resolution = await resolver.resolve({ gameId, at: { day: state.day, phase: state.phase, turn: state.turn }, actions, state });
+          const at = { day: state.day, phase: state.phase, turn: state.turn };
+          resolution = await resolver.resolve({ gameId, at, actions, state, signal: shutdown.signal });
         } catch (error) {
-          // Stays `resolving`; the next player to enter the room starts it again.
+          // Stays `resolving`; after a restart the next player to enter starts it again, otherwise `retry` does.
           log(`[room] resolver failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
+          if (!stopped) {
+            stuck.set(gameId, { code: 'stuck', message: GM_STUCK_MESSAGE, ownerMessage: GM_STUCK_MESSAGE });
+            broadcastRoom(gameId);
+          }
+          return;
+        }
+        if (stopped) return;
+        if (resolution.stuck) {
+          stuck.set(gameId, resolution.stuck);
+          broadcastRoom(gameId);
           return;
         }
 
-        const published = db.transaction((tx) => {
+        const publish = () => db.transaction((tx) => {
           const t = now();
           const current = ensurePhaseState(tx, gameId, t);
           if (current.status !== 'resolving' || current.day !== state.day || current.phase !== state.phase || current.turn !== state.turn) {
@@ -290,6 +329,7 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
               leaveHiddenEvidence(tx, { gameId, locationId: a.locationId, day: at.day, actorMemberId: a.memberId }, t);
             }
           }
+          resolution.apply?.(tx);
           let step = phaseStep(current, { type: 'resolved', results: withKarma(tx, current, resolution.results ?? {}) }, rng);
           if (!step.ok) {
             log(`[room] resolver results refused (game ${gameId}): ${step.error.code}; the turn advances without them`);
@@ -298,11 +338,33 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
           if (!step.ok) throw new Error(`phase engine refused an empty result: ${step.error.code}`);
           savePhaseState(tx, gameId, step.state, t);
           syncCharacterStats(tx, step.state, t);
+          // The timeline follows the period (GEN-053): events of the new period become active for the next turn.
+          const next = step.state;
+          if (next.status === 'finale' || next.status === 'game_over') advanceTimeline(tx, gameId, 'end', t);
+          else if (next.day !== current.day || next.phase !== current.phase) advanceTimeline(tx, gameId, { day: next.day, phase: next.phase }, t);
           return rows;
         });
+        let published: ReturnType<typeof publish>;
+        try {
+          published = publish();
+        } catch (error) {
+          // Rolled back as a whole: nothing of the turn is written; the room offers retry.
+          log(`[room] publish failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
+          stuck.set(gameId, { code: 'stuck', message: GM_STUCK_MESSAGE, ownerMessage: GM_STUCK_MESSAGE });
+          broadcastRoom(gameId);
+          return;
+        }
         if (published === null) return;
+        stuck.delete(gameId);
         deliver(gameId, published);
         broadcastRoom(gameId);
+        if (resolution.after) {
+          try {
+            await resolution.after();
+          } catch (error) {
+            log(`[room] after-turn work failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
+          }
+        }
         // Loop: the next phase may close at once (nobody able to act).
       }
     })().finally(() => resolving.delete(gameId));
@@ -340,8 +402,16 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
       broadcastRoom(me.gameId);
       const lastSeq = entriesFor(db, me.gameId, me.id, 0).at(-1)?.id ?? 0;
       send(socket, { type: 'ready', lastSeq: Math.max(lastSeq, afterSeq) });
-      // After a restart a phase can be left `resolving` with nobody working on it.
-      if (state.status === 'resolving') startResolving(me.gameId);
+      // After a restart a phase can be left `resolving` with nobody working on it. A stuck turn waits for `retry`.
+      if (state.status === 'resolving' && !stuck.has(me.gameId)) startResolving(me.gameId);
+    },
+
+    retry(socket) {
+      const me = memberOf(socket);
+      if (!me || !stuck.has(me.gameId)) return;
+      stuck.delete(me.gameId);
+      broadcastRoom(me.gameId);
+      startResolving(me.gameId);
     },
 
     leave(socket) {
@@ -417,6 +487,7 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
     async stop() {
       stopped = true;
       rooms.clear();
+      shutdown.abort();
       while (resolving.size > 0) await Promise.allSettled([...resolving.values()]);
     },
   };

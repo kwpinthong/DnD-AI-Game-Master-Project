@@ -139,3 +139,6 @@ export * from './schema-items.ts';
 export * from './schema-tags.ts';
 // GEN-054: NPC handles for companions, own file for the same reason.
 export * from './schema-companion.ts';
+
+// GEN-057: the AI GM turn loop (stored turn work, Constraint Lock, day memory), own file for the same reason.
+export * from './schema-gm.ts';

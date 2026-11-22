@@ -78,6 +78,7 @@ function roomState(patch: Partial<RoomState> = {}, you: Partial<RoomState['you']
       { memberId: 'm-bee', name: 'บี', role: 'player', online: false, submitted: false },
     ],
     you: { memberId: me.id, role: 'player', place: { id: 'market', name: 'ลานตลาด' }, lock: null, secretUsed: false, drowsy: false, action: null, allies: [], ...you },
+    gmStatus: null,
     ...patch,
   };
 }
@@ -295,6 +296,23 @@ describe('GEN-056 play room (web)', () => {
     socket.receive(roomState({ mode: 'single', members: [roomState().members[0]!] }));
     expect(screen.getByRole('heading', { name: /ห้องเล่น · วันที่ 1 · EOSORIA \(เช้า 06:00-11:59\) · เทิร์น 1\/2 · เล่นคนเดียว/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'ส่ง action' })).toBeTruthy();
+  });
+});
+
+describe('GEN-057 AI GM status (web)', () => {
+  it('C2: a stuck AI GM is shown with a retry button that sends retry', async () => {
+    const socket = await enterRoom();
+    socket.receive(roomState({ status: 'resolving', gmStatus: { code: 'stuck', message: 'AI GM ติดขัด สรุปผลเทิร์นนี้ไม่ได้', canRetry: true } }));
+    expect(screen.getByRole('alert').textContent).toContain('AI GM ติดขัด');
+    fireEvent.click(screen.getByRole('button', { name: 'ลองใหม่' }));
+    expect(socket.sent.at(-1)).toEqual({ type: 'retry' });
+  });
+
+  it('C7: the ceiling message is shown without a retry button', async () => {
+    const socket = await enterRoom();
+    socket.receive(roomState({ status: 'resolving', gmStatus: { code: 'budget_reached', message: 'ใช้ครบเพดานของเดือนนี้แล้ว', canRetry: false } }));
+    expect(screen.getByRole('alert').textContent).toContain('เพดาน');
+    expect(screen.queryByRole('button', { name: 'ลองใหม่' })).toBeNull();
   });
 });
 

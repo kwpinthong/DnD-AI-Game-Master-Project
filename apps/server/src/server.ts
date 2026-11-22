@@ -16,7 +16,8 @@ import { providerFor } from './ai/registry.ts';
 import { registerTimelineRoutes } from './timeline/routes.ts';
 import { registerVisibilityRoutes } from './visibility/routes.ts';
 import websocket from '@fastify/websocket';
-import { placeholderResolver, type PhaseResolver } from './room/resolver.ts';
+import { createAiGmResolver } from './gm/loop.ts';
+import type { PhaseResolver } from './room/resolver.ts';
 import { registerRoomRoutes } from './room/routes.ts';
 import { DEFAULT_ASSETS_DIR, loadGameAssets, type GameAssets } from './assets/load.ts';
 import { registerCompanionRoutes } from './companions/routes.ts';
@@ -52,7 +53,7 @@ export interface ServerOptions {
   onAiBudgetReached?: (event: BudgetReachedEvent) => void;
   /** Overrides the provider `ai` picks (tests pass a scripted Mock). */
   aiProvider?: AiProvider;
-  /** Resolves a closed phase (GEN-057 plugs in here); default `placeholderResolver`. */
+  /** Resolves a closed turn; default the AI GM turn loop (GEN-057) on `ai`. Tests may plug in their own. */
   phaseResolver?: PhaseResolver;
   /** Folder of the asset JSON files; default apps/server/assets (tests point it at a broken copy). */
   assetsDir?: string;
@@ -100,7 +101,8 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerGameRoutes(app, db, now, { ai, karmaTiers: assets.karmaTiers, ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}) });
   registerTimelineRoutes(app, db, now);
   registerVisibilityRoutes(app, db, now, assets);
-  registerRoomRoutes(app, db, now, { resolver: options.phaseResolver ?? placeholderResolver, webOrigins: config.webOrigins ?? [] });
+  const resolver = options.phaseResolver ?? createAiGmResolver({ db, ai, assets, now, log: options.aiLog ?? ((line) => console.log(line)) });
+  registerRoomRoutes(app, db, now, { resolver, webOrigins: config.webOrigins ?? [] });
   registerCompanionRoutes(app, db, now, assets);
 
   try {

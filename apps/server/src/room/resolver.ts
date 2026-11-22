@@ -1,8 +1,11 @@
-import type { ActionVisibility } from '@isekai/protocol';
+import type { ActionVisibility, RoomGmStatusCode } from '@isekai/protocol';
 import type { PhaseState, PlayerResult, TurnPoint } from '@isekai/rules';
+import type { DbOrTx } from '../db/client.ts';
 
 /**
- * The hand-off to the AI GM phase loop (GEN-057). When a turn closes, the room calls `resolve` once with the
+ * The hand-off to the AI GM turn loop (GEN-057, `../gm/loop.ts` is the real one; tests may plug in their own).
+ * Human GM approval (Q-030, GEN-058) belongs between `resolve` and the room's publish transaction: hold the
+ * returned resolution until the GM approves, then publish it as is. When a turn closes, the room calls `resolve` once with the
  * actions that stood; whatever it returns is published through the visibility layer and fed to the day /
  * period / turn engine as its `resolved` event. Turn order and cross-player effects (GEN-060) live behind it too.
  *
@@ -31,6 +34,8 @@ export interface ClosedPhase {
   readonly actions: readonly ClosedAction[];
   /** The engine state at the close (status `resolving`). */
   readonly state: PhaseState;
+  /** Aborted when the server shuts down: stop calling the AI and return (nothing is applied). */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -42,10 +47,29 @@ export type ResolutionEntry =
   | { readonly kind: 'feed'; readonly locationId: string | null; readonly actorMemberId: string | null; readonly text: string }
   | { readonly kind: 'narration'; readonly memberId: string; readonly text: string };
 
+/** Why the resolver could not finish the turn (GEN-057). The turn stays closed with every action kept. */
+export interface ResolverStuck {
+  readonly code: RoomGmStatusCode;
+  /** For players ("AI GM ติดขัด ..."). */
+  readonly message: string;
+  /** For the game owner and the Human GM: the reason (e.g. the monthly ceiling). */
+  readonly ownerMessage: string;
+}
+
 export interface PhaseResolution {
   /** Per member; missing members keep their HP / Stamina (see `PlayerResult`). */
   readonly results?: Readonly<Record<string, PlayerResult>>;
   readonly entries?: readonly ResolutionEntry[];
+  /**
+   * Writes the turn's own changes (stats, places, items, constraints, ...) inside the room's publish
+   * transaction, after the entries are stored and before the engine step, so they commit together or not
+   * at all (GEN-057 C6: a restart never applies a turn twice).
+   */
+  readonly apply?: (tx: DbOrTx) => void;
+  /** Runs after the turn is published (e.g. the day summary); a failure is logged and never blocks the game. */
+  readonly after?: () => Promise<void>;
+  /** Set instead of everything else when the turn could not be resolved: nothing is published or applied. */
+  readonly stuck?: ResolverStuck;
 }
 
 /**

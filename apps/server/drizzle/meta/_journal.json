@@ -113,6 +113,13 @@
       "when": 1795315289188,
       "tag": "0015_npc_companions",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1795316841591,
+      "tag": "0016_gm_turn_loop",
+      "breakpoints": true
     }
   ]
 }

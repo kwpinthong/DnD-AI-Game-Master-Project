@@ -77,7 +77,11 @@ export const RoomWhisper = z.object({
 });
 export type RoomWhisper = z.infer<typeof RoomWhisper>;
 
-export const RoomClientMessage = z.discriminatedUnion('type', [RoomHello, RoomAction, RoomWhisper]);
+/** Ask the AI GM to try the closed turn again after it got stuck (`RoomState.gmStatus`, GEN-057 C2). Any member may send it. */
+export const RoomRetry = z.object({ type: z.literal('retry') });
+export type RoomRetry = z.infer<typeof RoomRetry>;
+
+export const RoomClientMessage = z.discriminatedUnion('type', [RoomHello, RoomAction, RoomWhisper, RoomRetry]);
 export type RoomClientMessage = z.infer<typeof RoomClientMessage>;
 
 // --- Server → client ---
@@ -123,6 +127,18 @@ export const RoomYou = z.strictObject({
 });
 export type RoomYou = z.infer<typeof RoomYou>;
 
+/**
+ * The AI GM could not resolve the closed turn (GEN-057). The turn stays closed with every action kept.
+ * `stuck`: its answer was still wrong after one repair, or it did not answer; `retry` tries again.
+ * `budget_reached`: the game's monthly AI ceiling (Q-078); no AI call is made until it is raised.
+ * `ai_not_ready`: the provider cannot be used (no API key). `message` is Thai, for this viewer
+ * (the owner / Human GM get the reason; players get "AI GM ติดขัด").
+ */
+export const RoomGmStatusCode = z.enum(['stuck', 'budget_reached', 'ai_not_ready']);
+export type RoomGmStatusCode = z.infer<typeof RoomGmStatusCode>;
+export const RoomGmStatus = z.strictObject({ code: RoomGmStatusCode, message: z.string(), canRetry: z.boolean() });
+export type RoomGmStatus = z.infer<typeof RoomGmStatus>;
+
 /** The room as one viewer sees it; sent after `hello` and whenever presence, submissions or the turn change. */
 export const RoomState = z.strictObject({
   type: z.literal('room'),
@@ -135,6 +151,8 @@ export const RoomState = z.strictObject({
   status: RoomPhaseStatus,
   members: z.array(RoomMember),
   you: RoomYou,
+  /** null = the AI GM is fine (or working). */
+  gmStatus: RoomGmStatus.nullable(),
 });
 export type RoomState = z.infer<typeof RoomState>;
 

@@ -29,6 +29,8 @@ export interface RoomConnection {
   sendAction(text: string, visibility: ActionVisibility, rest?: boolean): boolean;
   /** `to`: the ally's ref from `you.allies`. */
   sendWhisper(to: string, text: string): boolean;
+  /** Asks the AI GM to try a stuck turn again (GEN-057). */
+  sendRetry(): boolean;
   close(): void;
 }
 
@@ -100,6 +102,11 @@ export function connectRoom(baseUrl: string, token: string, listener: RoomListen
     sendWhisper(to, text) {
       if (!socket || socket.readyState !== WebSocket.OPEN) return false;
       socket.send(JSON.stringify({ type: 'whisper', to, text }));
+      return true;
+    },
+    sendRetry() {
+      if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+      socket.send(JSON.stringify({ type: 'retry' }));
       return true;
     },
     close() {

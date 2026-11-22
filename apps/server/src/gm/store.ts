@@ -1,0 +1,141 @@
+import { PERIODS, type Period, type Turn } from '@isekai/rules';
+import { and, asc, desc, eq, isNull, lte } from 'drizzle-orm';
+import type { DbOrTx } from '../db/client.ts';
+import { gmConstraint, gmMemory, gmTurn } from '../db/schema.ts';
+import type { GmNarration, GmTurnProposal } from './schema.ts';
+
+/** Rows of the AI GM turn loop (GEN-057). GM-only data: nothing here is sent to a player. */
+
+export interface TurnAt {
+  readonly day: number;
+  readonly phase: Period;
+  readonly turn: Turn;
+}
+
+export interface StoredTurn {
+  status: 'adjudicated' | 'applied';
+  proposal: GmTurnProposal;
+  rolls: number[];
+  narrations: Record<string, GmNarration>;
+}
+
+const turnKey = (gameId: string, at: TurnAt) =>
+  and(eq(gmTurn.gameId, gameId), eq(gmTurn.day, at.day), eq(gmTurn.phase, at.phase), eq(gmTurn.turn, at.turn));
+
+export function getStoredTurn(db: DbOrTx, gameId: string, at: TurnAt): StoredTurn | null {
+  const row = db.select().from(gmTurn).where(turnKey(gameId, at)).get();
+  if (!row) return null;
+  return {
+    status: row.status,
+    proposal: JSON.parse(row.proposal) as GmTurnProposal,
+    rolls: JSON.parse(row.rolls) as number[],
+    narrations: JSON.parse(row.narrations) as Record<string, GmNarration>,
+  };
+}
+
+/** Stores the validated proposal and the turn's dice (C6: a restart reuses both). */
+export function saveAdjudicated(db: DbOrTx, gameId: string, at: TurnAt, proposal: GmTurnProposal, rolls: readonly number[], now: number): void {
+  const values = { status: 'adjudicated' as const, proposal: JSON.stringify(proposal), rolls: JSON.stringify(rolls), narrations: '{}', updatedAt: now };
+  db.insert(gmTurn)
+    .values({ gameId, ...at, ...values })
+    .onConflictDoUpdate({ target: [gmTurn.gameId, gmTurn.day, gmTurn.phase, gmTurn.turn], set: values })
+    .run();
+}
+
+export function saveNarration(db: DbOrTx, gameId: string, at: TurnAt, key: string, narration: GmNarration, now: number): void {
+  const stored = getStoredTurn(db, gameId, at);
+  if (!stored) return;
+  db.update(gmTurn)
+    .set({ narrations: JSON.stringify({ ...stored.narrations, [key]: narration }), updatedAt: now })
+    .where(turnKey(gameId, at))
+    .run();
+}
+
+export function markApplied(db: DbOrTx, gameId: string, at: TurnAt, now: number): void {
+  db.update(gmTurn).set({ status: 'applied', updatedAt: now }).where(turnKey(gameId, at)).run();
+}
+
+// --- Constraint Lock (C4) ---
+
+export type ConstraintRow = typeof gmConstraint.$inferSelect;
+
+export function activeConstraints(db: DbOrTx, gameId: string): ConstraintRow[] {
+  return db
+    .select()
+    .from(gmConstraint)
+    .where(and(eq(gmConstraint.gameId, gameId), isNull(gmConstraint.releasedDay)))
+    .orderBy(asc(gmConstraint.id))
+    .all();
+}
+
+export function addConstraint(db: DbOrTx, c: { gameId: string; memberId: string; text: string; reason: string; day: number }, now: number): void {
+  db.insert(gmConstraint).values({ ...c, createdAt: now }).run();
+}
+
+export function releaseConstraint(db: DbOrTx, gameId: string, id: number, reason: string, day: number): void {
+  db.update(gmConstraint)
+    .set({ releasedDay: day, releaseReason: reason })
+    .where(and(eq(gmConstraint.gameId, gameId), eq(gmConstraint.id, id)))
+    .run();
+}
+
+// --- Memory (C5) ---
+
+/** The GM's log of one day from its applied turns: what each actor did and the GM's own notes, in turn order. */
+export function dayLog(db: DbOrTx, gameId: string, day: number, before?: TurnAt): string[] {
+  const rank = (phase: string, turn: number) => PERIODS.indexOf(phase as Period) * 2 + turn;
+  const limit = before ? rank(before.phase, before.turn) : Number.POSITIVE_INFINITY;
+  return db
+    .select()
+    .from(gmTurn)
+    .where(and(eq(gmTurn.gameId, gameId), eq(gmTurn.day, day), eq(gmTurn.status, 'applied')))
+    .all()
+    .filter((r) => rank(r.phase, r.turn) < limit)
+    .sort((a, b) => rank(a.phase, a.turn) - rank(b.phase, b.turn))
+    .flatMap((r) => {
+      const p = JSON.parse(r.proposal) as GmTurnProposal;
+      const head = `${r.phase} เทิร์น ${r.turn}`;
+      return [...p.actions.map((a) => `${head}: ${a.intentSummary}`), ...p.remember.map((n) => `${head} (บันทึก GM): ${n}`)];
+    });
+}
+
+/** Saga through the day before yesterday and yesterday's recap, for `day`. */
+export function memoryFor(db: DbOrTx, gameId: string, day: number): { saga: string | null; yesterday: string | null } {
+  const yesterday = db
+    .select({ text: gmMemory.text })
+    .from(gmMemory)
+    .where(and(eq(gmMemory.gameId, gameId), eq(gmMemory.kind, 'day'), eq(gmMemory.day, day - 1)))
+    .get();
+  const saga = db
+    .select({ text: gmMemory.text })
+    .from(gmMemory)
+    .where(and(eq(gmMemory.gameId, gameId), eq(gmMemory.kind, 'saga'), lte(gmMemory.day, day - 2)))
+    .orderBy(desc(gmMemory.day))
+    .get();
+  return { saga: saga?.text ?? null, yesterday: yesterday?.text ?? null };
+}
+
+/** The newest saga (through any day before `day`), as the base for the next one. */
+export function latestSaga(db: DbOrTx, gameId: string, beforeDay: number): string | null {
+  return (
+    db
+      .select({ text: gmMemory.text })
+      .from(gmMemory)
+      .where(and(eq(gmMemory.gameId, gameId), eq(gmMemory.kind, 'saga'), lte(gmMemory.day, beforeDay - 1)))
+      .orderBy(desc(gmMemory.day))
+      .get()?.text ?? null
+  );
+}
+
+export function hasDaySummary(db: DbOrTx, gameId: string, day: number): boolean {
+  return db.select({ day: gmMemory.day }).from(gmMemory).where(and(eq(gmMemory.gameId, gameId), eq(gmMemory.kind, 'day'), eq(gmMemory.day, day))).get() !== undefined;
+}
+
+export function saveDaySummary(db: DbOrTx, gameId: string, day: number, summary: { recap: string; saga: string }, now: number): void {
+  for (const [kind, text] of [['day', summary.recap], ['saga', summary.saga]] as const) {
+    db.insert(gmMemory)
+      .values({ gameId, kind, day, text, createdAt: now })
+      .onConflictDoUpdate({ target: [gmMemory.gameId, gmMemory.kind, gmMemory.day], set: { text, createdAt: now } })
+      .run();
+  }
+}
