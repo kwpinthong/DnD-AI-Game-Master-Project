@@ -15,8 +15,9 @@ import { hashPin } from '../auth/pin.ts';
 import type { Db } from '../db/client.ts';
 import { character, game, member, session } from '../db/schema.ts';
 import { canEditScenario } from '../scenario/editor.ts';
-import { copyTemplateForGame } from '../scenario/store.ts';
+import { copyTemplateForGame, getGameScenario } from '../scenario/store.ts';
 import { advanceTimeline } from '../timeline/store.ts';
+import { placeUnplacedCharacters } from '../visibility/store.ts';
 
 export type GameRow = typeof game.$inferSelect;
 export type MemberRow = typeof member.$inferSelect;
@@ -235,6 +236,9 @@ export function startGame(db: Db, actor: MemberRow, now: Clock): OwnerActionOutc
     tx.update(game).set({ startedAt: t }).where(eq(game.id, row.id)).run();
     // The game starts at day 1 Morning: its events become active (GEN-053).
     advanceTimeline(tx, row.id, { day: 1, phase: 'MORNING' }, t);
+    // Everyone starts at the scenario's first place until origins / spawn points place them (GEN-050).
+    const start = getGameScenario(tx, row.id)?.locations[0];
+    if (start) placeUnplacedCharacters(tx, row.id, start.id, t);
     return undefined;
   });
 }
