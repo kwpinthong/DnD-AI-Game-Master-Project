@@ -232,6 +232,23 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(contextOf<TurnContext>(provider.requests.filter(isTurn).at(-1)!).actions.map((a) => a.text).sort()).toEqual(['ขโมยขนม', 'ร้องเพลง', 'เต้นรำ'].sort());
   });
 
+  it('GEN-068 / Q-156: the AI GM turn applies the period weather (Storm outdoors: Stamina +1; indoors: no extra)', async () => {
+    await boot({}, noRoll);
+    const t = await startedTable(server!, false);
+    const gameId = gameIdOf(t);
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    await clients[0]!.waitFor((m) => m.type === 'room' && m.weather !== null);
+    server!.db.prepare("update period_weather set weather = 'Storm' where game_id = ? and day = 1 and phase = 'EOSORIA'").run(gameId);
+    move(t.a, 'fountain');
+    move(t.b, 'inn');
+    move(t.c, 'inn');
+    const before = [t.a, t.b, t.c].map(stats);
+    await playTurn(clients, ['เดินหาของกินกลางลานน้ำพุ', 'นั่งฟังข่าว', 'ล้างแก้ว'], { day: 1, phase: 'EOSORIA', turn: 2 });
+    expect(stats(t.a).stamina).toBe(before[0]!.stamina - 3 - 1);
+    expect(stats(t.b).stamina).toBe(before[1]!.stamina - 3);
+    expect(stats(t.c).stamina).toBe(before[2]!.stamina - 3);
+  });
+
   it('Q-180: a succeeded action\'s skillFlags and grants are applied with the turn; a wrong flag / grant is repaired first', async () => {
     let refA = '';
     await boot({}, (req, n) => {

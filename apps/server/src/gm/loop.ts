@@ -17,7 +17,7 @@ import type { GameAssets } from '../assets/load.ts';
 import { tagVocabulary } from '../assets/tags.ts';
 import type { Clock } from '../auth/join.ts';
 import { applyPhaseActions, crossPlayerState } from '../crossplayer/phase.ts';
-import { tagContexts, weatherTagging, type TaggingOptions } from '../crossplayer/tags.ts';
+import { outdoorLocationIds, tagContexts, weatherTagging, type TaggingOptions } from '../crossplayer/tags.ts';
 import { eq } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { game, gamePhase } from '../db/schema.ts';
@@ -235,6 +235,11 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     const state = crossPlayerState(db, gameId, drowsy, assets);
     const tagging: TaggingOptions = weatherTagging(assets, at.day, at.phase, input.weather ?? null);
     const tags = tagContexts(db, gameId, state, tagging);
+    // GEN-068: the same weather input as the turn's apply (`applyPhaseActions`), so the results the engine gets
+    // (and writes back to the character) carry the weather's Stamina / d20 too.
+    const weatherInput = tagging.periodWeather
+      ? { weather: { current: tagging.periodWeather, outdoorLocationIds: outdoorLocationIds(db, gameId, assets) } }
+      : {};
 
     const seat = new Map(input.state.order.map((id, i) => [id, i]));
     const acting = input.actions.filter((a) => !a.rest && state.players[a.memberId] !== undefined);
@@ -304,7 +309,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       });
       actions = checked;
       const rng = new TurnRng(new CryptoRng(), orderRng.faces);
-      const result = resolvePhaseActions({ state, actions, tags }, rng);
+      const result = resolvePhaseActions({ state, actions, tags, ...weatherInput }, rng);
       if (!result.ok) return stuck(`rules refused a checked proposal`, gameId);
       resolved = result;
       saveAdjudicated(db, gameId, at, proposal, result.log.rolls, now());
@@ -316,7 +321,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       const r = checkTurnProposal(checkInput(order), stored.proposal);
       if (!r.ok) return stuck('stored proposal no longer fits the game', gameId);
       actions = r.actions;
-      const result = resolvePhaseActions({ state, actions, tags }, new ReplayRng(stored.rolls));
+      const result = resolvePhaseActions({ state, actions, tags, ...weatherInput }, new ReplayRng(stored.rolls));
       if (!result.ok) return stuck('stored dice no longer replay', gameId);
       resolved = result;
     }
