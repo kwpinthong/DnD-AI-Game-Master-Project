@@ -70,6 +70,7 @@ export function PlayRoom({
   const [text, setText] = useState('');
   const [visibility, setVisibility] = useState<ActionVisibility>('public');
   const [rest, setRest] = useState(false);
+  const [train, setTrain] = useState(false);
   const [problem, setProblem] = useState<string>();
   const [waitingReply, setWaitingReply] = useState(false);
   const [whisperTo, setWhisperTo] = useState('');
@@ -88,6 +89,7 @@ export function PlayRoom({
           setProblem(undefined);
           setText('');
           setRest(false);
+          setTrain(false);
         } else setProblem(reply.message);
       },
       whisperReply: (reply) => {
@@ -111,7 +113,7 @@ export function PlayRoom({
     event.preventDefault();
     const local = actionTextProblem(text);
     if (local) return setProblem(local.message);
-    if (!conn.current?.sendAction(text, visibility, rest)) return setProblem('ยังเชื่อมต่อไม่ได้ ลองอีกครั้งเมื่อขึ้นว่าเชื่อมต่อแล้ว');
+    if (!conn.current?.sendAction(text, visibility, rest, train)) return setProblem('ยังเชื่อมต่อไม่ได้ ลองอีกครั้งเมื่อขึ้นว่าเชื่อมต่อแล้ว');
     setWaitingReply(true);
   }
 
@@ -186,7 +188,8 @@ export function PlayRoom({
               {you.action && (
                 <p>
                   ส่งแล้ว ({you.action.visibility === 'secret' ? 'Secret' : 'Public'}
-                  {you.action.rest ? ' · REST / SLEEP' : ''}): {you.action.text}
+                  {you.action.rest ? ' · REST / SLEEP' : ''}
+                  {you.action.train ? ' · TRAIN' : ''}): {you.action.text}
                   {room.status === 'collecting' && <small> (ส่งใหม่เพื่อแทนของเดิมได้จนกว่าเทิร์นจะปิด)</small>}
                 </p>
               )}
@@ -215,8 +218,28 @@ export function PlayRoom({
                 </label>
               </fieldset>
               <label>
-                <input type="checkbox" checked={rest} disabled={locked} onChange={(e) => setRest(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={rest}
+                  disabled={locked}
+                  onChange={(e) => {
+                    setRest(e.target.checked);
+                    if (e.target.checked) setTrain(false);
+                  }}
+                />
                 REST / SLEEP (พักหรือนอนในเทิร์นนี้ แทนการลงมือทำ)
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={train}
+                  disabled={locked}
+                  onChange={(e) => {
+                    setTrain(e.target.checked);
+                    if (e.target.checked) setRest(false);
+                  }}
+                />
+                TRAIN (ฝึกฝนที่กิลด์: Max HP +3 วันละครั้ง สูงสุด 45)
               </label>
               <button type="submit" disabled={locked || waitingReply}>
                 {you.action ? 'ส่งแทนของเดิม' : 'ส่ง action'}

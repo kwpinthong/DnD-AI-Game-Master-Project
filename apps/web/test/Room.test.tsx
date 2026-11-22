@@ -445,6 +445,23 @@ describe('GEN-063 time system (web)', () => {
   });
 });
 
+describe('GEN-069 TRAIN at the guild (web)', () => {
+  it('TRAIN is sent with the action (not with REST), the refusal is shown, and the sent action says TRAIN', async () => {
+    const socket = await enterRoom();
+    socket.receive(roomState({}));
+    fireEvent.change(screen.getByLabelText('action ของคุณ'), { target: { value: 'ฝึกซ้อมที่ลานกิลด์' } });
+    fireEvent.click(screen.getByLabelText(/^REST \/ SLEEP/));
+    fireEvent.click(screen.getByLabelText(/^TRAIN/));
+    expect((screen.getByLabelText(/^REST \/ SLEEP/) as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'ส่ง action' }));
+    expect(socket.sent.at(-1)).toEqual({ type: 'action', text: 'ฝึกซ้อมที่ลานกิลด์', visibility: 'public', rest: false, train: true });
+    socket.receive({ type: 'action_rejected', code: 'train_used', message: 'วันนี้ฝึกที่กิลด์ไปแล้ว ฝึกได้วันละ 1 ครั้ง' });
+    expect(await screen.findByText('วันนี้ฝึกที่กิลด์ไปแล้ว ฝึกได้วันละ 1 ครั้ง')).toBeTruthy();
+    socket.receive(roomState({}, { action: { text: 'ฝึกซ้อมที่ลานกิลด์', visibility: 'public', rest: false, train: true } }));
+    expect(screen.getByText(/ส่งแล้ว \(Public · TRAIN\): ฝึกซ้อมที่ลานกิลด์/)).toBeTruthy();
+  });
+});
+
 describe('GEN-068 weather (web)', () => {
   it('C1: the room shows the period weather in Thai, with Disaster from day 5; nothing before it is picked', async () => {
     const socket = await enterRoom();
