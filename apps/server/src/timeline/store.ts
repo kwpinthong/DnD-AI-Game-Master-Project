@@ -136,10 +136,11 @@ export function eventWitnesses(db: DbOrTx, gameId: string): Map<string, readonly
   return new Map([...readRows(db, gameId)].map(([id, row]) => [id, row.witnesses ?? null]));
 }
 
-/** Who is at `event`'s place right now: the snapshot an event keeps from the moment it begins (Q-104). */
+/** Who is at any of `event`'s places right now (GEN-097): the snapshot an event keeps from the moment it begins (Q-104). */
 function witnessesAtStart(event: Scenario['timeline'][number], locations: () => ReadonlyMap<string, string>): string[] | null {
-  if (event.locationId === null) return null;
-  return witnessesOf({ locationId: event.locationId, actorMemberId: null, visibility: 'public' }, locations());
+  if (event.locationIds === null) return null;
+  const at = locations();
+  return [...new Set(event.locationIds.flatMap((locationId) => witnessesOf({ locationId, actorMemberId: null, visibility: 'public' }, at)))];
 }
 
 export type AdvanceResult =

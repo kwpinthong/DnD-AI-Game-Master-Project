@@ -176,7 +176,7 @@ describe('older template versions', () => {
     for (const event of old.timeline) {
       delete event.crisis;
       delete event.npcIds;
-      delete event.locationId;
+      delete event.locationIds;
       for (const key of ['endPhase', 'interventionEffects', 'foreshadowing', 'foreshadowAt', 'strategyIds']) delete event[key];
     }
     for (const npc of old.npcs) delete npc.otherNames;
@@ -189,7 +189,7 @@ describe('older template versions', () => {
     expect(result.scenario.legendaries).toEqual([]);
     expect(result.scenario.locations.every((l) => l.safety === 'normal' && l.gmNote === '')).toBe(true);
     expect(result.scenario.npcs.every((n) => n.obsTrait === 0)).toBe(true);
-    expect(result.scenario.timeline.every((e) => !e.crisis && e.npcIds.length === 0 && e.locationId === null)).toBe(
+    expect(result.scenario.timeline.every((e) => !e.crisis && e.npcIds.length === 0 && e.locationIds === null)).toBe(
       true,
     );
     expect(
@@ -243,6 +243,48 @@ describe('older template versions', () => {
     twoPeriods.timeline[4].startTurn = 2;
     twoPeriods.timeline[4].endTurn = 1;
     expect(parseScenario(twoPeriods).ok).toBe(true);
+  });
+
+  it('GEN-097 C2: a saved event with one locationId loads as a list of that one place; null stays the whole town', () => {
+    const old = draft();
+    for (const event of old.timeline) delete event.locationIds;
+    old.timeline[0].locationId = 'fountain';
+    old.timeline[1].locationId = null;
+    old.timeline[2].locationId = 'temple';
+    const result = parseScenario(old);
+    if (!result.ok) throw new Error(JSON.stringify(result.errors));
+    expect(result.scenario.timeline.slice(0, 3).map((e) => e.locationIds)).toEqual([['fountain'], null, ['temple']]);
+    expect(result.scenario.timeline.every((e) => !('locationId' in e))).toBe(true);
+  });
+
+  it('GEN-097 C2: an unknown place in an old single locationId is still refused', () => {
+    const old = draft();
+    delete old.timeline[2].locationIds;
+    old.timeline[2].locationId = 'atlantis';
+    expect(expectInvalid(old).map((e) => e.path)).toEqual(['timeline.2.locationIds.0']);
+  });
+
+  it('GEN-097: an event keeps several places', () => {
+    const s = draft();
+    s.timeline[2].locationIds = ['temple', 'fountain'];
+    const result = parseScenario(s);
+    if (!result.ok) throw new Error(JSON.stringify(result.errors));
+    expect(result.scenario.timeline[2]!.locationIds).toEqual(['temple', 'fountain']);
+  });
+
+  it('GEN-097 C5: an unknown place, a repeated place or an empty list is refused and names the field', () => {
+    const s = draft();
+    s.timeline[2].locationIds = ['temple', 'atlantis'];
+    s.timeline[3].locationIds = [];
+    s.timeline[0].locationIds = ['fountain', 'fountain'];
+    const errors = expectInvalid(s);
+    expect(paths(errors).sort()).toEqual(['timeline.0.locationIds.1', 'timeline.2.locationIds.1', 'timeline.3.locationIds']);
+    expect(errors.find((e) => e.path === 'timeline.2.locationIds.1')!.message).toContain('atlantis');
+  });
+
+  it('GEN-097 C6: the sheet events of day 10 have two places', () => {
+    const day10 = defaultScenario().timeline.find((e) => e.day === 10)!;
+    expect(day10.locationIds).toEqual(['temple', 'fountain']);
   });
 
   it('rejects a template from a newer schema version than this server knows', () => {

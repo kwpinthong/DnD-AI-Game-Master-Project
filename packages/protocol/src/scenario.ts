@@ -149,10 +149,19 @@ export const ScenarioEvent = z.object({
   strategyIds: z.array(StrategyId).default([]),
   /** Crisis events are the ones that can raise an A-grade NPC to S (Rules Spec §8.3). */
   crisis: z.boolean().default(false),
-  locationId: Id.nullable().default(null),
+  /**
+   * GEN-097 (Q-160): the places of the event; whoever is at any of them when it starts witnesses it (Q-104).
+   * null = the whole town (Q-080). An empty list is refused: town-wide is null, not "nowhere".
+   */
+  locationIds: z.array(Id).min(1, 'ต้องมีสถานที่อย่างน้อย 1 แห่ง (ถ้าเป็นทั้งเมืองให้เลือก "ทั้งเมือง")').nullable().optional(),
+  /** Before GEN-097: one place. Read only, as `locationIds: [locationId]`; never written back. */
+  locationId: Id.nullable().optional(),
   npcIds: z.array(Id).default([]),
   gmNote: GmNote,
-});
+}).transform(({ locationId, locationIds, ...event }) => ({
+  ...event,
+  locationIds: locationIds !== undefined ? locationIds : locationId ? [locationId] : null,
+}));
 
 const OriginWeight = z.number().int('น้ำหนักต้องเป็นจำนวนเต็ม').min(0).max(100);
 
@@ -265,7 +274,12 @@ function crossCheck(s: Shape, ctx: Ctx) {
   s.locations.forEach((l, i) => l.connects.forEach((id, j) => place(id, ['locations', i, 'connects', j])));
   s.npcs.forEach((n, i) => place(n.locationId, ['npcs', i, 'locationId']));
   s.timeline.forEach((e, i) => {
-    place(e.locationId, ['timeline', i, 'locationId']);
+    const seenPlaces = new Set<string>();
+    (e.locationIds ?? []).forEach((id, j) => {
+      if (seenPlaces.has(id)) ctx.addIssue({ code: 'custom', path: ['timeline', i, 'locationIds', j], message: `สถานที่ซ้ำ: "${id}"` });
+      else place(id, ['timeline', i, 'locationIds', j]);
+      seenPlaces.add(id);
+    });
     if (e.endPhase !== null && order(e.endPhase) < order(e.phase)) {
       ctx.addIssue({ code: 'custom', path: ['timeline', i, 'endPhase'], message: 'ช่วงสิ้นสุดต้องไม่อยู่ก่อนช่วงเริ่ม' });
     } else if ((e.endPhase ?? e.phase) === e.phase && e.endTurn < e.startTurn) {

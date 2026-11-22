@@ -31,12 +31,14 @@ export function timelineFor(db: Db, me: Pick<MemberRow, 'id' | 'gameId' | 'role'
   // Q-104: an event at a place is seen by those who were there when it began (kept after they move
   // away; nobody who arrives later). Town-wide events are seen by everyone. Events that began before
   // the snapshot existed fall back to where the player is now (Q-080).
-  const placeOf = new Map((getGameScenario(db, me.gameId)?.timeline ?? []).map((e) => [e.id, e.locationId]));
+  const placesOf = new Map((getGameScenario(db, me.gameId)?.timeline ?? []).map((e) => [e.id, e.locationIds]));
   const witnesses = eventWitnesses(db, me.gameId);
   const here = presenceOf(db, me.id)?.locationId ?? null;
   const sees = (id: string) => {
     const snapshot = witnesses.get(id) ?? null;
-    return snapshot === null ? seesPlace(here, placeOf.get(id) ?? null) : seesEvent(me.id, snapshot);
+    if (snapshot !== null) return seesEvent(me.id, snapshot);
+    const places = placesOf.get(id) ?? null;
+    return places === null ? seesPlace(here, null) : places.some((place) => seesPlace(here, place));
   };
   return {
     view: 'player',
