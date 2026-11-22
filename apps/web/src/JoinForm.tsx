@@ -1,11 +1,13 @@
 import { joinFieldErrors, JoinStyleFields, type JoinField, type Member } from '@isekai/protocol';
 import { useState, type FormEvent } from 'react';
+import keyart from './assets/illustrations/home-keyart.webp';
 import { useFieldErrors } from './form-state.ts';
 import { PENDING_BACKEND_UI } from './pending.ts';
 import { PinInput } from './PinInput.tsx';
 import { postJoin } from './session.ts';
 import { Button, Field, Panel } from './ui/index.ts';
 import './pregame.css';
+import './home-art.css';
 
 type Values = Record<JoinField, string>;
 
@@ -57,6 +59,8 @@ export function JoinForm({
 
   return (
     <div className="pregame">
+      {/* the painting has no words in it, so it is decoration */}
+      <img className="pregame__keyart" src={keyart} alt="" width={1024} height={683} />
       <Panel title="เข้าร่วมเกม" className="pregame__panel">
         <form onSubmit={submit} noValidate>
           <h2 className="pregame__title">เข้าร่วมเกม</h2>

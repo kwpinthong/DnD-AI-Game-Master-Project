@@ -1,0 +1,12 @@
+/* The key art of the home (join) page (GEN-132): one painting above the form, cropped to a banner on a phone. */
+.pregame__keyart {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 240px;
+  object-fit: cover;
+  object-position: center;
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-md);
+  border: var(--line-w) solid var(--ornament);
+}

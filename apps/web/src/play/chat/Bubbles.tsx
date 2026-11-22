@@ -1,6 +1,7 @@
 import type { NpcLineView, RollView } from '@isekai/protocol';
 import type { ReactNode } from 'react';
 import { playText } from '../../ui/strings.ts';
+import { RING_ART, ringFor } from '../ring-art.ts';
 import type { BadgeTone } from './chat-model.ts';
 import { rollBadge } from './chat-model.ts';
 
@@ -11,11 +12,16 @@ import { rollBadge } from './chat-model.ts';
 
 export type Grade = NonNullable<NpcLineView['grade']>;
 
-/** A round avatar with the first letter; the border says the grade when it is known, neutral when not. */
-export function Avatar({ name, grade, size = 'md' }: { name: string; grade?: Grade | undefined; size?: 'md' | 'lg' }) {
+/**
+ * A round avatar with the first letter and the painted ring of its kind (GEN-132): the NPC's grade when the payload gave
+ * it, our own character = player, anyone else (another player, a grade we are not told) = the neutral B ring.
+ */
+export function Avatar({ name, grade, size = 'md', own = false }: { name: string; grade?: Grade | undefined; size?: 'md' | 'lg'; own?: boolean }) {
+  const ring = ringFor({ own, grade });
   return (
-    <span className={`chat-avatar chat-avatar--${size} chat-avatar--${grade ? `g-${grade.toLowerCase()}` : 'plain'}`} aria-hidden="true">
+    <span className={`chat-avatar chat-avatar--${size} chat-avatar--${grade ? `g-${grade.toLowerCase()}` : 'plain'}`} data-ring={ring} aria-hidden="true">
       {[...name][0] ?? '?'}
+      <img className="chat-avatar__ring" src={RING_ART[ring]} alt="" />
     </span>
   );
 }

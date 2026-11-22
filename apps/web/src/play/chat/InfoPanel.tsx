@@ -1,12 +1,12 @@
 import type { RoomEntry, RoomState } from '@isekai/protocol';
 import { useState, type ReactNode } from 'react';
-import fountainArt from '../../assets/illustrations/place-fountain-eosoria.webp';
 import { playText } from '../../ui/index.ts';
 import { HereList, PlaceTitle } from '../PlaceColumn.tsx';
 import { Whispers, type WhisperText } from '../PrivateColumn.tsx';
 import { Companions, Entry, Part, SelfStatus } from '../SelfColumn.tsx';
 import type { PlayData } from '../play-api.ts';
 import { changeBadges } from './chat-model.ts';
+import { PlaceArt } from './PlaceArt.tsx';
 import { RovingTabs, panelId, tabId, type TabDef } from './RovingTabs.tsx';
 
 const t = playText.chat.panel;
@@ -15,9 +15,6 @@ const PREFIX = 'info';
 export const INFO_TABS = ['place', 'self', 'bag', 'people'] as const;
 export type InfoTab = (typeof INFO_TABS)[number];
 export const TAB_DEFS:readonly TabDef<InfoTab>[] = INFO_TABS.map((id) => ({ id, label: t[id] }));
-
-/** A painted place when we have one (more come with the scenario art); the name is also text over it. */
-const PLACE_ART: Readonly<Record<string, string>> = { fountain: fountainArt };
 
 /** Everything the four panels read; the same object feeds the desktop side panel and the phone's tabs (GEN-123). */
 export interface InfoData {
@@ -47,10 +44,10 @@ function Fold({ title, open, children }: { title: string; open?: boolean; childr
 
 /** สถานที่: the place (art, name, zone, [เดินทาง]) and who is here. */
 export function PlacePanel({ room, data, onTravel, onSave }: Pick<InfoData, 'room' | 'data' | 'onTravel' | 'onSave'>) {
-  const art = room.you.place ? PLACE_ART[room.you.place.id] : undefined;
+  const place = room.you.astral ? null : room.you.place;
   return (
     <div className="info-body">
-      {art && <div className="info-art" style={{ backgroundImage: `url("${art}")` }} aria-hidden="true" />}
+      {place && <PlaceArt place={place} phase={room.phase} weather={room.weather} />}
       <PlaceTitle room={room} onTravel={onTravel} />
       <HereList room={room} data={data} onSave={onSave} />
     </div>

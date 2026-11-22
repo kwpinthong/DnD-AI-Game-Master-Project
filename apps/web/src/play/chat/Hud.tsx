@@ -7,6 +7,7 @@ import { injuryWord, staminaWord, topBar } from '../../screen-models.ts';
 import { Button, MaskIcon, playText } from '../../ui/index.ts';
 import { Avatar } from './Bubbles.tsx';
 import { PERIOD_WORD, dialAngle, dialLabel } from './chat-model.ts';
+import { ClockHud } from './ClockHud.tsx';
 
 const t = playText.chat.hud;
 
@@ -14,7 +15,7 @@ const t = playText.chat.hud;
 export function CharacterTag({ character }: { character: Pick<CharacterView, 'name' | 'appearance'> | null | undefined }) {
   return (
     <div className="hud-who" role="group" aria-label={t.label}>
-      <Avatar name={character?.name ?? '?'} size="lg" />
+      <Avatar name={character?.name ?? '?'} size="lg" own />
       <div>
         <div className="hud-who__name display">{character?.name ?? t.loading}</div>
         <div className="hud-who__seen">
@@ -89,14 +90,14 @@ export function HudBar({ room, character, menuOpen, onMenu, onHistory }: { room:
     <div className="hud">
       {character !== null && <CharacterTag character={character} />}
       {character !== null && <StatusHud character={character} />}
-      <TimeHud room={room}>
+      <ClockHud room={room}>
         <div className="hud-menu">
           <Button onClick={onHistory}>{t2.history}</Button>
           <Button aria-expanded={menuOpen} onClick={onMenu}>
             {t2.menu}
           </Button>
         </div>
-      </TimeHud>
+      </ClockHud>
     </div>
   );
 }

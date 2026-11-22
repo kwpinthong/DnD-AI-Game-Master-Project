@@ -11,6 +11,7 @@
 | `ornaments/` | ลายเส้นแฟนตาซี: เส้นคั่น, มุมกรอบ, ตราหัวหน้า (ตาม tone v2 ของ GEN-085) | SVG |
 | `illustrations/` | ภาพประกอบใหญ่: หน้า empty state, หน้าจบเกม, ภาพสถานที่ / ภาพ NPC | WebP (ภาพวาด / ภาพถ่าย) หรือ SVG (ภาพลายเส้น) |
 | `textures/` | พื้นผิวเบา ๆ ที่ปูซ้ำ (noise, กระดาษ, ดาว) | WebP หรือ SVG ที่ต่อขอบกันได้ (seamless) |
+| `frames/` | กรอบและพื้นปุ่มที่วาดไว้: `frame-clock` (นาฬิกา HUD), `frame-panel` (แผงขวา), `btn-primary` (ปุ่มหลัก), `avatar-ring-{f,b,a,s,ss,player}` (กรอบรูปตามเกรด) ดูวิธีใช้ใน `frames/CREDITS.md` ไฟล์ชั่วคราว จะถูกแทนด้วยชื่อเดิม | WebP พื้นโปร่ง |
 | `fonts/` | ใช้เฉพาะถ้า Q-190 เลือก self-host font | WOFF2 เท่านั้น |
 
 ถ้าไม่แน่ใจว่าใส่ที่ไหน ให้ใส่ `illustrations/` แล้วบอก Claude

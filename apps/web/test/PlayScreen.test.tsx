@@ -137,7 +137,8 @@ describe('C2 the dial follows the period', () => {
     expect(within(bar).getByText('วันที่ 3/12')).toBeTruthy();
     expect(within(bar).getByText('บ่าย · เทิร์น 1/2')).toBeTruthy();
     expect(within(bar).getByText('ฝนตก')).toBeTruthy();
-    expect(within(bar).getByRole('img').getAttribute('aria-label')).toContain('ช่วงบ่าย');
+    expect(within(bar).getByRole('img', { name: /ช่วงบ่าย/ })).toBeTruthy();
+    expect(within(bar).getByRole('img', { name: 'ฝนตก' }).getAttribute('src')).toContain('weather-rain'); // GEN-132
 
     await waitFor(() => expect(within(bar).getByText('บ่าย · เทิร์น 2/2')).toBeTruthy(), { timeout: 3000 });
     await waitFor(() => expect(within(bar).getByText('ค่ำ · เทิร์น 1/2')).toBeTruthy(), { timeout: 3000 });

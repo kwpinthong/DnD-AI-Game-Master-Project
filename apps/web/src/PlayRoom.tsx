@@ -22,6 +22,7 @@ import { secretQuota } from './screen-models.ts';
 import { Button, Skeleton, playText } from './ui/index.ts';
 import './play/play.css';
 import './play/chat/chat.css';
+import './play/chat/art.css';
 
 const t = playText;
 
