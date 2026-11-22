@@ -61,8 +61,8 @@ const EventPhase = z.preprocess(
 );
 
 /**
- * Rest quality of a place, as the sheet's Location `Rest_Quality` (Q-161). The rest engine does not read it
- * yet (night rest is still inn / rough, GEN-052). A scenario saved before Q-161 is upgraded:
+ * Rest quality of a place, as the sheet's Location `Rest_Quality` (Q-161). A night rest there recovers
+ * Stamina poor 15 / normal 20 / good 25 / excellent 30 (Q-218, @isekai/rules `REST_QUALITY_STAMINA`). A scenario saved before Q-161 is upgraded:
  * rough → poor, basic → normal, inn → good.
  */
 export const LEGACY_REST_QUALITIES = { rough: 'poor', basic: 'normal', inn: 'good' } as const;
