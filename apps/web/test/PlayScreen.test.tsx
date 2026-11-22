@@ -40,7 +40,8 @@ const region = (name: string | RegExp) => screen.findByRole('region', { name });
 const tab = async (name: string) => fireEvent.click(await screen.findByRole('tab', { name }));
 const feedRegion = async () => within(await region('เหตุการณ์ที่นี่'));
 const here = dirname(fileURLToPath(import.meta.url));
-const css = (file: string) => readFileSync(join(here, '..', 'src', 'play', file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+// CRLF checkouts (core.autocrlf) must not break the exact-selector matches below
+const css = (file: string) => readFileSync(join(here, '..', 'src', 'play', file), 'utf8').replace(/\r\n/g, '\n').replace(/\/\*[\s\S]*?\*\//g, '');
 const rule = (source: string, selector: string) => new RegExp(`(?:^|[}\\s])${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(source)?.[1] ?? '';
 
 describe('C1 every kind of message, each on its side', () => {
