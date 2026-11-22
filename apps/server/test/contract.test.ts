@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
-import { moveCharacter, setPlayerBond } from '../src/visibility/store.ts';
+import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
+import { ASTRAL_PLANE, moveCharacter, presenceOf, setPlayerBond } from '../src/visibility/store.ts';
 import { heldTurn } from './gm-console-client.ts';
 import { makeTempDir, seedChosenLoot } from './helpers.ts';
 import { isReady, openRoom, type RoomClient } from './room-client.ts';
@@ -169,6 +170,16 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'GET /api/game/gm/log', { token: tgm });
     await hit(call, 'GET /api/game/log', { token: t.a.token });
     await hit(call, 'GET /api/game/log', { token: tgm });
+
+    // GEN-070: an omen from a living player is refused; C, an Astral Spirit in NOCTHERION, sends one to A.
+    await answer(a, () => a.send({ type: 'omen', to: presenceOf(server!.orm, t.b.memberId)!.ref, text: 'ระวัง' }), ['omen_accepted', 'omen_rejected']);
+    const gameId = (server!.db.prepare('select game_id as id from member where id = ?').get(t.c.memberId) as { id: string }).id;
+    const playing = ensurePhaseState(server!.orm, gameId, CLOCK);
+    const ghost = { ...playing.players[t.c.memberId]!, hp: 0, condition: 'astral_spirit' as const, mustSubmit: false, diedAt: { day: 1, phase: 'EOSORIA' as const, turn: 1 as const } };
+    savePhaseState(server!.orm, gameId, { ...playing, phase: 'NOCTHERION', players: { ...playing.players, [t.c.memberId]: ghost } }, CLOCK);
+    moveCharacter(server!.orm, t.c.memberId, ASTRAL_PLANE, CLOCK);
+    await answer(c, () => c.send({ type: 'omen', to: presenceOf(server!.orm, t.a.memberId)!.ref, text: 'เงาใต้แท่นบูชา' }), ['omen_accepted', 'omen_rejected']);
+    await a.waitFor((m) => m.type === 'entry' && m.entry.kind === 'omen');
 
     // A bad message: `error`, then the server closes the socket.
     const bad = await openRoom(server!, { token: t.c.token });

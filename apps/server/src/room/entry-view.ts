@@ -3,11 +3,12 @@ import { eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
 import { character } from '../db/schema.ts';
 import { getGameScenario } from '../scenario/store.ts';
+import { ASTRAL_PLANE } from '../visibility/store.ts';
 import type { RoomEntryRow } from './store.ts';
 
-/** A scenario place as players see it (id + name); null for no place. */
+/** A scenario place as players see it (id + name); null for no place (an Astral Spirit has none, GEN-070). */
 export function placeViewOf(db: DbOrTx, gameId: string, locationId: string | null): PlaceView | null {
-  if (locationId === null) return null;
+  if (locationId === null || locationId === ASTRAL_PLANE) return null;
   const location = getGameScenario(db, gameId)?.locations.find((l) => l.id === locationId);
   return { id: locationId, name: location?.name ?? locationId };
 }

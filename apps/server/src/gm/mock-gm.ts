@@ -9,7 +9,8 @@ import { GM_OUTPUT, type GmAction, type GmJournal, type GmNarration, type GmTurn
  * from the request's own context, so a game runs offline end to end (GEN-057). Dev-only markers in an
  * action's text: `[mock:repair]` makes the first turn answer leave the last action out (forces a repair),
  * `[mock:slow]` makes narration wait 3 s (time to stop the server mid-resolve), `[mock:badnarration]` makes
- * every narration with that beat fail its checks (the server template is used, Q-151).
+ * every narration with that beat fail its checks (the server template is used, Q-151), `[mock:harm=ref]` /
+ * `[mock:execute=ref]` aim the action at a player (GEN-070, see `TARGET_MARKER`).
  */
 
 export const MOCK_REPAIR_MARKER = '[mock:repair]';
@@ -58,6 +59,13 @@ function mockCurse(ctx: TurnContext, action: TurnContext['actions'][number]): Pa
   };
 }
 
+/**
+ * GEN-070 dev markers (no roll): `[mock:harm=<player ref>]` a lethal hit on that player, `[mock:execute=<player ref>]`
+ * an EXECUTE on that player (out cold). The ref is the `{{p:ref}}` of the context (the presence ref).
+ */
+const TARGET_MARKER = /\[mock:(harm|execute)=([A-Za-z0-9_-]+)\]/;
+const NO_PLAYER_EFFECTS = { damage: null, heal: null, takeItem: null, giveItem: null };
+
 /** A plain general action at DC 11 for one action of the context. */
 export function mockAction(ctx: TurnContext, actionId: string): GmAction {
   const action = ctx.actions.find((a) => a.actionId === actionId)!;
@@ -66,8 +74,20 @@ export function mockAction(ctx: TurnContext, actionId: string): GmAction {
   const topic = known(INVESTIGATE_MARKER.exec(action.text)?.[1]);
   const verb = topic !== undefined ? known('INVESTIGATE') : (known(VERB_MARKER.exec(action.text)?.[1]) ?? ctx.tagVocabulary[0]);
   const strategy = STRATEGY_MARKER.exec(action.text) ?? undefined;
+  const aimed = TARGET_MARKER.exec(action.text);
+  const targetPlayer: GmAction['targetPlayer'] = aimed
+    ? {
+        player: aimed[2]!,
+        intent: aimed[1] as 'harm' | 'execute',
+        defenseRef: null,
+        perceptionRef: null,
+        onSuccess: aimed[1] === 'harm' ? { ...NO_PLAYER_EFFECTS, damage: 'lethal' } : NO_PLAYER_EFFECTS,
+        onFail: NO_PLAYER_EFFECTS,
+      }
+    : null;
   const marked = {
     ...(topic !== undefined ? { investigate: true, check: { type: 'none' as const }, targetTags: [topic] } : {}),
+    ...(aimed ? { check: { type: 'none' as const } } : {}),
   };
   return {
     actionId,
@@ -79,7 +99,7 @@ export function mockAction(ctx: TurnContext, actionId: string): GmAction {
     check: marked.check ?? { type: 'dc', dc: 11 },
     modifiers: [{ source: 'stat' }],
     targetNpc: null,
-    targetPlayer: null,
+    targetPlayer,
     witnessNpcIds: [],
     repDeltaIfCaught: 0,
     onSuccess: NO_EFFECTS,

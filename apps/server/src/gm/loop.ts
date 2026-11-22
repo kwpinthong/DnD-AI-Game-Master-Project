@@ -16,7 +16,7 @@ import type { AiPurpose, PromptBlock } from '../ai/provider.ts';
 import type { GameAssets } from '../assets/load.ts';
 import { tagVocabulary } from '../assets/tags.ts';
 import type { Clock } from '../auth/join.ts';
-import { applyPhaseActions, crossPlayerState } from '../crossplayer/phase.ts';
+import { applyPhaseActions, crisesOf, crossPlayerState } from '../crossplayer/phase.ts';
 import { outdoorLocationIds, tagContexts, weatherTagging, type TaggingOptions } from '../crossplayer/tags.ts';
 import { eq } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db/client.ts';
@@ -221,7 +221,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     const { gameId, at, signal } = input;
     const world = loadWorld(db, gameId, assets);
     const drowsy = new Set(input.state.order.filter((id) => input.state.players[id] && isDrowsy(input.state.players[id]!, input.state.day)));
-    const state = crossPlayerState(db, gameId, drowsy, assets);
+    const crises = crisesOf(input.state);
+    const state = crossPlayerState(db, gameId, drowsy, assets, crises);
     const tagging: TaggingOptions = weatherTagging(assets, at.day, at.phase, input.weather ?? null);
     const tags = tagContexts(db, gameId, state, tagging);
     // GEN-068: the same weather input as the turn's apply (`applyPhaseActions`), so the results the engine gets
@@ -384,10 +385,10 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     });
     const rolls = stored.rolls;
     return {
-      results: resultsOf(state, resolved.state, resolved.log, world),
+      results: resultsOf(state, resolved.state, resolved.log),
       entries,
       apply: (tx) => {
-        const applied = applyPhaseActions(tx, gameId, actions, new ReplayRng(rolls), now(), tagging, drowsy);
+        const applied = applyPhaseActions(tx, gameId, actions, new ReplayRng(rolls), now(), tagging, drowsy, crises);
         if (!applied.ok) throw new Error('the stored turn no longer applies');
         // GEN-055: the unlock progress of every action (verb tags, karma) and the library's INVESTIGATE reveal.
         recordTurnProgress(tx, assets, gameId, applied.log, { day: at.day, period: at.phase, now: now() }, investigators);
@@ -682,20 +683,16 @@ function renderTokens(db: DbOrTx, world: GmWorld, text: string, reader: string |
 }
 
 /** HP / Stamina / Karma per player after the turn, for the day / period engine (`PlayerResult`). */
-function resultsOf(before: CrossPlayerState, after: CrossPlayerState, log: PhaseActionsLog, world: GmWorld): Record<string, PlayerResult> {
+function resultsOf(before: CrossPlayerState, after: CrossPlayerState, log: PhaseActionsLog): Record<string, PlayerResult> {
   const results: Record<string, PlayerResult> = {};
   for (const p of Object.values(after.players)) {
     const was = before.players[p.id]!;
     if (p.hp === was.hp && p.stamina === was.stamina && p.karma === was.karma) continue;
-    const safety = world.places.find((l) => l.id === p.locationId)?.safety as PlayerResult['safety'];
-    results[p.id] = { hp: p.hp, stamina: p.stamina, karma: p.karma, ...(p.hp === 0 && safety ? { safety } : {}) };
+    results[p.id] = { hp: p.hp, stamina: p.stamina, karma: p.karma };
   }
+  // GEN-070: a successful EXECUTE on a player out cold kills them for good.
   for (const o of log.outcomes) {
-    if (o.status !== 'resolved' || o.target === null) continue;
-    const action = log.input.actions.find((a) => a.proposal.actionId === o.actionId);
-    if (action?.targetPlayer?.intent === 'rescue' && (o.log.degree === 'success' || o.log.degree === 'crit')) {
-      results[o.target.playerId] = { ...results[o.target.playerId], rescued: true };
-    }
+    if (o.status === 'resolved' && o.target?.executed) results[o.target.playerId] = { ...results[o.target.playerId], executed: true };
   }
   return results;
 }

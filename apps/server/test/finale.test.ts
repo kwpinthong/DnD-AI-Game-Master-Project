@@ -280,8 +280,8 @@ describe('GEN-059 finale', { timeout: 60_000 }, () => {
     expect(reply).toMatchObject({ type: 'action_rejected', code: 'game_ended' });
   });
 
-  it('C6: everyone out for good before day 12 ends: game over at once, the bad ending for everyone, and the summary', async () => {
-    // Every action knocks its actor out (HP 1, lethal self damage): nobody wakes before the game ends.
+  it('C6: everyone out cold before day 12 is no longer a game over (GEN-070: they are carried to the clinic)', async () => {
+    // Every action knocks its actor out (HP 1, lethal self damage).
     await boot((req) => {
       if (isFinale(req)) return markedFinale(req);
       if (!isTurn(req)) return undefined;
@@ -295,7 +295,6 @@ describe('GEN-059 finale', { timeout: 60_000 }, () => {
     const t = await startedTable(server!, false);
     const gameId = gameIdOf(t);
     server!.db.prepare('update character set hp = 1').run();
-    // Turn 1, away from the inn: no period-end restore (SAFE_ZONE items) wakes anyone.
     for (const who of [t.a, t.b, t.c]) move(who, 'fountain');
     jumpTo(t, { day: 12, phase: 'SOLARION', turn: 1 });
     const state = ensurePhaseState(server!.orm, gameId, CLOCK);
@@ -303,14 +302,11 @@ describe('GEN-059 finale', { timeout: 60_000 }, () => {
 
     const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
     for (const [i, c] of clients.entries()) await send(c, ['ปีนหอคอย', 'กระโดดน้ำ', 'วิ่งฝ่าไฟ'][i]!);
-    for (const c of clients) await c.waitFor((m) => m.type === 'room' && m.status === 'game_over');
-    for (const c of clients) await privateEnding(c);
-    expect(ending(t)).toMatchObject({ reason: 'game_over', path: 'none' });
-    expect(Object.values(JSON.parse(ending(t)!.outcomes))).toEqual(['defeated', 'defeated', 'defeated']);
-    expect(contextOf<FinaleContext>(finaleRequests()[0]!).reason).toBe('game_over');
-    const log = GameLogResponse.parse((await t.call('GET', '/api/game/log', { token: t.a.token })).body);
-    expect(log.game).toMatchObject({ status: 'ended', endReason: 'game_over' });
-    expect(log.reveal?.players.map((p) => p.outcome)).toEqual(['defeated', 'defeated', 'defeated']);
+    // Out cold SOLARION turn 2, at the clinic through HESPERION: everyone acts again in NOCTHERION.
+    for (const c of clients) await c.waitFor((m) => m.type === 'room' && m.phase === 'NOCTHERION' && m.turn === 1 && m.status === 'collecting');
+    expect(statusOf(t)).toBe('collecting');
+    expect(ending(t)).toBeUndefined();
+    // Every player dead for good is the game over now: crisis.test.ts C7.
   });
 
   it('Q-205: with a Human GM the ending waits for the GM (Q-030): held, the GM edits a narration, approves, then everyone gets it', async () => {

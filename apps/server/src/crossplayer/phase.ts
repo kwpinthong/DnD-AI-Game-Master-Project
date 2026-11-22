@@ -14,15 +14,16 @@ import {
   type OwnedRef,
   type PhaseAction,
   type PhaseActionsLog,
+  type PhaseState,
   type PlayerState,
   type Rng,
   type StatusEffect,
 } from '@isekai/rules';
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, ne, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
 import { character, characterPresence, member } from '../db/schema.ts';
 import { getGameScenario } from '../scenario/store.ts';
-import { moveCharacter, namesVisibleTo, npcBondsOf, presencesInGame } from '../visibility/store.ts';
+import { ASTRAL_PLANE, moveCharacter, namesVisibleTo, npcBondsOf, presencesInGame } from '../visibility/store.ts';
 import { otherCharacterView, witnessesOf } from '../visibility/views.ts';
 import { isLegacyOption, type StoredOption } from '../game/loot.ts';
 import type { GameAssets } from '../assets/load.ts';
@@ -115,14 +116,14 @@ export type CrossPlayerNotice =
 
 type CharacterRow = typeof character.$inferSelect;
 
-/** Characters of the game's active, placed members in seat (join) order. */
+/** Characters of the game's active, placed members in seat (join) order; an Astral Spirit is out of the world (GEN-070). */
 function seatedCharacters(db: DbOrTx, gameId: string) {
   return db
     .select({ character, locationId: characterPresence.locationId })
     .from(character)
     .innerJoin(member, eq(member.id, character.memberId))
     .innerJoin(characterPresence, eq(characterPresence.memberId, character.memberId))
-    .where(and(eq(member.gameId, gameId), isNull(member.kickedAt)))
+    .where(and(eq(member.gameId, gameId), isNull(member.kickedAt), ne(characterPresence.locationId, ASTRAL_PLANE)))
     .orderBy(asc(member.createdAt), sql`member.rowid`)
     .all();
 }
@@ -132,7 +133,14 @@ function seatedCharacters(db: DbOrTx, gameId: string) {
  * permanent statuses, held items and the chosen skill → OwnedRef plus their Quantitative effect.
  * No loot carries `reach: remote` yet (GEN-055), so `remoteReach` is empty.
  */
-export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet<string> = new Set(), assets?: GameAssets): CrossPlayerState {
+export function crossPlayerState(
+  db: DbOrTx,
+  gameId: string,
+  drowsy: ReadonlySet<string> = new Set(),
+  assets?: GameAssets,
+  /** GEN-070: who is in a forced REST or at the clinic this turn (`crisesOf` of the engine state). */
+  crises: ReadonlyMap<string, NonNullable<PlayerState['crisis']>> = new Map(),
+): CrossPlayerState {
   const loot = new Map(chosenLootInGame(db, gameId).map((l) => [l.memberId, l.chosen]));
   const items = [...itemsInGame(db, gameId).values()];
   const skills = skillsInGame(db, gameId);
@@ -198,6 +206,7 @@ export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet
       afterActionStamina,
       damageReduction,
       remoteReach: [],
+      ...(crises.has(c.memberId) ? { crisis: crises.get(c.memberId)! } : {}),
     };
   });
 
@@ -211,6 +220,19 @@ export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet
   return { players, npcs, ...(Object.keys(publicRepScale).length > 0 ? { publicRepScale } : {}) };
 }
 
+/**
+ * GEN-070: the players the cross-player rules treat apart this turn: a forced REST after Stamina 0 (hits ×1.3)
+ * or recovering at the clinic (out of reach). An Astral Spirit is at `ASTRAL_PLANE`, so not in the state at all.
+ */
+export function crisesOf(state: PhaseState): Map<string, NonNullable<PlayerState['crisis']>> {
+  const out = new Map<string, NonNullable<PlayerState['crisis']>>();
+  for (const id of state.order) {
+    const condition = state.players[id]!.condition;
+    if (condition === 'exhausted' || condition === 'recovering') out.set(id, condition);
+  }
+  return out;
+}
+
 /** Who learns something of an action: everyone `witnessesOf` gives, plus a target it changed or who knows who did it. */
 function witnessesOfOutcome(outcome: ActionOutcome): string[] {
   if (outcome.status === 'skipped') return [outcome.actorId];
@@ -222,7 +244,7 @@ function witnessesOfOutcome(outcome: ActionOutcome): string[] {
   );
   if (outcome.status === 'resolved' && outcome.target !== null) {
     const t = outcome.target;
-    if (t.knowsActor || t.hp.damage > 0 || t.hp.heal > 0 || t.itemsLost.length > 0 || t.itemsGained.length > 0) seen.add(t.playerId);
+    if (t.knowsActor || t.executed || t.hp.damage > 0 || t.hp.heal > 0 || t.itemsLost.length > 0 || t.itemsGained.length > 0) seen.add(t.playerId);
   }
   return [...seen];
 }
@@ -237,9 +259,11 @@ export function applyPhaseActions(
   tagging?: TaggingOptions,
   /** Members who are Drowsy today (GEN-063): they roll with `DROWSY_STATUS`. */
   drowsy: ReadonlySet<string> = new Set(),
+  /** GEN-070: `crisesOf` the engine state at the turn's close. */
+  crises: ReadonlyMap<string, NonNullable<PlayerState['crisis']>> = new Map(),
 ): ApplyPhaseResult {
   return db.transaction((tx) => {
-    const state = crossPlayerState(tx, gameId, drowsy, tagging?.assets);
+    const state = crossPlayerState(tx, gameId, drowsy, tagging?.assets, crises);
     const tags = tagging === undefined ? undefined : tagContexts(tx, gameId, state, tagging);
     const current = tagging?.periodWeather;
     const weather = current ? { current, outdoorLocationIds: outdoorLocationIds(tx, gameId, tagging.assets) } : undefined;

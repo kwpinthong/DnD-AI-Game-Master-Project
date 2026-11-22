@@ -10,6 +10,8 @@ export interface EndingPlayerFacts {
   inSafeZone: boolean;
   /** On the Good side of the karma tiers (`goodSideMin`): the Evil path defeats them (Q-204). */
   goodAligned: boolean;
+  /** GEN-070: dead for good (an Astral Spirit) before the end; never survives. */
+  dead?: boolean;
 }
 
 /**
@@ -46,10 +48,10 @@ export interface EndingDecision {
 
 /**
  * World_Timeline day 12 (GEN-059). Good / Neutral: the impact never comes, so everyone still alive survives
- * (there is no permanent death yet, Q-057: HP 0 = unconscious). Evil (Q-204): the meteor's power is taken by
+ * (an Astral Spirit, dead for good since GEN-070, never does). Evil (Q-204): the meteor's power is taken by
  * Evil; the Good side (`goodAligned`) loses whatever protects them, everyone else survives. No path: the meteor hits; only S /
- * SS protection or a SAFE_ZONE survives (Bad Ending for the rest). A game over (everyone out for good before
- * the finale) is the bad ending for everyone.
+ * SS protection or a SAFE_ZONE survives (Bad Ending for the rest). A game over (every player dead for good
+ * before the finale) is the bad ending for everyone.
  */
 export function decideEnding(input: EndingInput): EndingDecision {
   const path: EndingPath = input.reason === 'game_over' ? 'none' : (input.declaredPath ?? 'none');
@@ -57,6 +59,7 @@ export function decideEnding(input: EndingInput): EndingDecision {
   for (const p of input.players) {
     const survives =
       input.reason === 'finale' &&
+      p.dead !== true &&
       (path === 'evil' ? !p.goodAligned : path !== 'none' || p.protectedBy.length > 0 || p.inSafeZone);
     outcomes[p.memberId] = survives ? 'survived' : 'defeated';
   }

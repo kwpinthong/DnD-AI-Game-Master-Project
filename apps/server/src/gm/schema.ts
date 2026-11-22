@@ -1,4 +1,4 @@
-import { ACTION_KINDS, ACTION_TAGS, SEVERITIES, STATUS_SCOPES } from '@isekai/rules';
+import { ACTION_KINDS, ACTION_TAGS, PLAYER_INTENTS, SEVERITIES, STATUS_SCOPES } from '@isekai/rules';
 import { z } from 'zod';
 import { EventOutcomeProposal } from '../timeline/trigger.ts';
 
@@ -59,7 +59,7 @@ export const GmAction = z.object({
   targetPlayer: z
     .object({
       player: z.string(),
-      intent: z.enum(['harm', 'steal', 'help', 'give', 'rescue']),
+      intent: z.enum(PLAYER_INTENTS),
       defenseRef: GearRef,
       perceptionRef: GearRef,
       onSuccess: PlayerEffects,

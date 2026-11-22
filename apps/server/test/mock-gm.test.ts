@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AiCallRequest } from '../src/ai/provider.ts';
 import { checkNarration } from '../src/gm/check.ts';
 import type { NarrationContext, TurnContext } from '../src/gm/context.ts';
-import { cannedGmAnswer, MOCK_BAD_NARRATION_MARKER } from '../src/gm/mock-gm.ts';
+import { cannedGmAnswer, mockAction, MOCK_BAD_NARRATION_MARKER } from '../src/gm/mock-gm.ts';
 import { GM_OUTPUT, type GmNarration, type GmTurnProposal } from '../src/gm/schema.ts';
 
 /** GEN-095 dev marker (localhost check): `[mock:curse]` casts the actor's CURSE skill on another player at the place; `[mock:curse=npc]` on an NPC there. */
@@ -83,5 +83,19 @@ describe('Mock GM [mock:badnarration]', () => {
   it('without the marker the answer passes', async () => {
     const c = ctx('เช็ดโต๊ะ');
     expect(checkNarration(c, (await cannedGmAnswer(request(c, false))) as GmNarration, [])).toEqual([]);
+  });
+});
+
+/** GEN-070 dev markers for the localhost check: aim an action at a player with no roll. */
+describe('Mock GM [mock:harm=ref] / [mock:execute=ref]', () => {
+  const turn = (text: string) => ({ actions: [{ actionId: 'act-1', actor: 'r1', text }], tagVocabulary: ['ATTACK'] }) as unknown as TurnContext;
+
+  it('a lethal hit or an EXECUTE on that ref, no roll; no marker = no target', () => {
+    expect(mockAction(turn('ฟาด [mock:harm=Ab-9_x]'), 'act-1')).toMatchObject({
+      check: { type: 'none' },
+      targetPlayer: { player: 'Ab-9_x', intent: 'harm', onSuccess: { damage: 'lethal' } },
+    });
+    expect(mockAction(turn('ปลิดชีพ [mock:execute=Ab-9_x]'), 'act-1')).toMatchObject({ check: { type: 'none' }, targetPlayer: { player: 'Ab-9_x', intent: 'execute' } });
+    expect(mockAction(turn('เดินเล่น'), 'act-1')).toMatchObject({ check: { type: 'dc', dc: 11 }, targetPlayer: null });
   });
 });

@@ -1,5 +1,4 @@
 import type { Rng } from '../rng.ts';
-import { rollRescue, wakeAfter, type RescueOutcome } from '../resolution/rescue.ts';
 import { RULES } from '../resolution/tables.ts';
 import {
   DROWSY,
@@ -10,7 +9,6 @@ import {
   PERIODS,
   TURNS_PER_PERIOD,
   type Drowsy,
-  type KnockedOut,
   type NewPlayer,
   type Period,
   type PlayerCondition,
@@ -31,15 +29,29 @@ import {
 
 /**
  * Sleep recovery per turn (spec §4, §14 `rest.*`).
- * - NOCTHERION sleep (REST or forced): Stamina by the place's Rest_Quality (Q-218, `REST_QUALITY_STAMINA`;
- *   absent = poor) + on_sleep bonus, HP +5 (+10 at the paid inn, +15 at the infirmary).
- * - Forced sleep outside NOCTHERION: +15 + bonus (spec §4.3). A `rest` action outside NOCTHERION: +8, no HP
- *   (spec §4.2); +10 at the paid inn, HP +15 at the infirmary (GEN-069 Location Special_Mechanics).
+ * - A NOCTHERION `rest`: Stamina by the place's Rest_Quality (Q-218, `REST_QUALITY_STAMINA`; absent = poor)
+ *   + on_sleep bonus, HP +5 (+10 at the paid inn, +15 at the infirmary).
+ * - A `rest` action outside NOCTHERION: +8, no HP (spec §4.2); +10 at the paid inn, HP +15 at the infirmary
+ *   (GEN-069 Location Special_Mechanics).
  * - Infirmary, both turns of one period: HP back to Max HP.
- * - The server's `restBonus` (Q-209 start passives) on top of any of these.
+ * - The forced REST after Stamina 0: `CRISIS.exhaustedRest`, day or night (GEN-070).
+ * - The server's `restBonus` (Q-209 start passives) on top of a `rest` action.
  * Everything is capped at max (System_Rules: Stamina ceiling 30 for the whole game).
  */
-export const REST = { exhaustedDay: 15, day: 8, innDay: 10, hpNight: 5, hpInnNight: 10, hpClinic: 15 } as const;
+export const REST = { day: 8, innDay: 10, hpNight: 5, hpInnNight: 10, hpClinic: 15 } as const;
+
+/**
+ * GEN-070 System_Rules "Stamina 0 / HP 0 / Permadeath": the forced REST after Stamina 0 recovers +6 and hits
+ * on the player that turn count ×1.3 (crossplayer); after the turn out cold at HP 0 the player rests 2 turns at
+ * the central clinic (each a clinic REST: Stamina as a REST there, HP +15; full Max HP when it ends) and keeps
+ * half their coins (`coinsAfterClinic`).
+ */
+export const CRISIS = { exhaustedRest: 6, clinicTurns: 2, coinsKept: 0.5 } as const;
+
+/** Coins left after the clinic takes its share: half, rounded down (25 → 12, 0 → 0). */
+export function coinsAfterClinic(coins: number): number {
+  return Math.floor(coins * CRISIS.coinsKept);
+}
 
 /** Q-218 (Nok's values): night Stamina by Rest_Quality. */
 export const REST_QUALITY_STAMINA: Readonly<Record<RestQuality, number>> = { poor: 15, normal: 20, good: 25, excellent: 30 };
@@ -129,7 +141,8 @@ export function restorePhaseState(raw: unknown): PhaseState {
   const players: Record<string, PlayerPhaseState> = {};
   for (const id of s.order) {
     const p = s.players[id]! as Partial<PlayerPhaseState> & Pick<PlayerPhaseState, 'id' | 'hp' | 'stamina'>;
-    const ko = p.knockedOut ?? null;
+    // Before GEN-070 a knock-out stored its wake point (and the rescue roll's inputs): out cold this turn now.
+    const ko = (p.knockedOut ?? null) as { at?: TurnPoint } | null;
     players[id] = {
       ...newPlayer({ id: p.id }),
       ...p,
@@ -137,7 +150,7 @@ export function restorePhaseState(raw: unknown): PhaseState {
       sleptDay: p.sleptDay ?? null,
       drowsy: p.drowsy ?? null,
       karma: p.karma ?? 0,
-      knockedOut: ko ? { ...ko, wakeAt: point(ko.wakeAt) } : null,
+      knockedOut: ko ? { at: ko.at ? point(ko.at) : point(s) } : null,
     } as PlayerPhaseState;
   }
   return { ...s, ...point(s), players };
@@ -232,17 +245,19 @@ function checkResults(state: PhaseState, results: Readonly<Record<string, Player
     if (bad(r.karma, RULES.rangeMin, RULES.rangeMax)) {
       return { code: 'invalid_result', message: `${id}.karma must be a whole number ${RULES.rangeMin}..${RULES.rangeMax}` };
     }
+    if (r.executed && state.players[id]!.condition !== 'unconscious') {
+      return { code: 'invalid_result', message: `${id} is not out cold; only a player at HP 0 can be executed` };
+    }
   }
   return null;
 }
 
 /** Which recovery a player gets at the end of this turn, if any (spec §4.1-4.3). */
 function recoveryKind(state: PhaseState, p: PlayerPhaseState): RecoveryKind | null {
-  const night = isNight(state);
-  if (p.condition === 'exhausted') return night ? 'exhausted_night' : 'exhausted_day';
+  if (p.condition === 'exhausted') return 'exhausted';
   const action = state.submissions[p.id];
   if (p.condition !== 'awake' || !action?.rest) return null;
-  return night ? 'night_rest' : 'day_rest';
+  return isNight(state) ? 'night_rest' : 'day_rest';
 }
 
 /** Infirmary turn 2 right after an infirmary turn 1 of the same period (GEN-069 C2). */
@@ -253,26 +268,30 @@ function clinicSecondTurn(state: PhaseState, p: PlayerPhaseState): boolean {
 
 function recover(state: PhaseState, p: PlayerPhaseState, kind: RecoveryKind, r: PlayerResult): { player: PlayerPhaseState; entry: PhaseLogEntry } {
   const quality: RestQuality = r.restQuality ?? 'poor';
-  // Special mechanics are for a REST action; a forced sleep only takes the place's quality.
-  const site = kind === 'night_rest' || kind === 'day_rest' ? (r.restSite ?? null) : null;
+  // Special mechanics and REST passives are for a REST action; a clinic recovery is a REST at the clinic.
+  const site = kind === 'clinic' ? 'clinic' : kind === 'night_rest' || kind === 'day_rest' ? (r.restSite ?? null) : null;
   let stamina: number;
   let hp = 0;
   switch (kind) {
     case 'night_rest':
-    case 'exhausted_night':
       stamina = REST_QUALITY_STAMINA[quality] + p.sleepBonus;
       hp = site === 'inn' ? REST.hpInnNight : REST.hpNight;
-      break;
-    case 'exhausted_day':
-      stamina = REST.exhaustedDay + p.sleepBonus;
       break;
     case 'day_rest':
       stamina = site === 'inn' ? REST.innDay : REST.day;
       break;
+    case 'clinic':
+      stamina = isNight(state) ? REST_QUALITY_STAMINA[quality] + p.sleepBonus : REST.day;
+      break;
+    case 'exhausted':
+      stamina = CRISIS.exhaustedRest;
+      break;
   }
   if (site === 'clinic') hp = REST.hpClinic;
-  stamina += r.restBonus?.stamina ?? 0;
-  hp += r.restBonus?.hp ?? 0;
+  if (kind === 'night_rest' || kind === 'day_rest') {
+    stamina += r.restBonus?.stamina ?? 0;
+    hp += r.restBonus?.hp ?? 0;
+  }
   const hpMax = playerHpMax(state, p);
   const staminaAfter = gainStamina(p.stamina, stamina, state.staminaMax);
   const hpAfter = site === 'clinic' && clinicSecondTurn(state, p) ? hpMax : Math.min(hpMax, p.hp + hp);
@@ -297,39 +316,40 @@ function applyTrain(state: PhaseState, p: PlayerPhaseState, log: PhaseLogEntry[]
   return { ...p, hpMax: after, trainedDay: state.day };
 }
 
-function samePoint(a: TurnPoint, b: TurnPoint): boolean {
-  return a.day === b.day && a.phase === b.phase && a.turn === b.turn;
-}
-
-/** Spec §12.2: wake at the start of the next day's EOSORIA, or the next day's SOLARION after a NOCTHERION knock-out. */
-function knockOutWake(at: TurnPoint): TurnPoint {
-  return { day: at.day + 1, phase: at.phase === NIGHT_PERIOD ? 'SOLARION' : 'EOSORIA', turn: 1 };
+/** GEN-070 C7: game over once every player is an Astral Spirit (out cold always ends at the clinic). */
+function isGameOver(order: readonly string[], players: Readonly<Record<string, PlayerPhaseState>>): boolean {
+  return order.every((id) => players[id]!.condition === 'astral_spirit');
 }
 
 /**
- * Game over (C6 read with Q-057, no death): every player is unconscious and none wakes before the game ends,
- * i.e. every wake point is after day 12. Exhausted players always wake next turn, so they never count.
+ * The end of a turn for a player who was out cold or recovering when it closed (GEN-070). Out cold, the
+ * turn's results cannot hurt or heal them (damage on them is 0, spec §12.2), only karma and an EXECUTE count.
+ * At the clinic a hit or a theft counts (Q-257), then the clinic REST; an EXECUTE never reaches them there.
  */
-function isGameOver(order: readonly string[], players: Readonly<Record<string, PlayerPhaseState>>): boolean {
-  return order.every((id) => {
-    const p = players[id]!;
-    return p.condition === 'unconscious' && p.knockedOut !== null && p.knockedOut.wakeAt.day > GAME_DAYS;
-  });
-}
-
-function wake(p: PlayerPhaseState, ko: KnockedOut, rng: Rng): { player: PlayerPhaseState; entry: Omit<Extract<PhaseLogEntry, { type: 'woke' }>, 'at'> } {
-  let outcome: RescueOutcome = 'rescued';
-  let rescueRoll: { d20: number; score: number } | null = null;
-  if (!ko.rescued) {
-    const roll = rollRescue({ safety: ko.safety, primaryAffinity: ko.primaryAffinity }, rng);
-    outcome = roll.outcome;
-    rescueRoll = { d20: roll.d20, score: roll.score };
+function crisisTurn(state: PhaseState, before: PlayerPhaseState, r: PlayerResult, at: TurnPoint, log: PhaseLogEntry[]): PlayerPhaseState {
+  const hurt = before.condition === 'recovering' ? { hp: r.hp ?? before.hp, stamina: r.stamina ?? before.stamina } : {};
+  const p: PlayerPhaseState = { ...before, ...hurt, karma: r.karma ?? before.karma };
+  switch (before.condition) {
+    case 'unconscious':
+      if (r.executed) {
+        log.push({ type: 'died', at, playerId: p.id });
+        return { ...p, hp: 0, condition: 'astral_spirit', mustSubmit: false, knockedOut: null, diedAt: at };
+      }
+      log.push({ type: 'carried_to_clinic', at, playerId: p.id, turns: CRISIS.clinicTurns });
+      return { ...p, condition: 'recovering', mustSubmit: false, knockedOut: null, recoveringLeft: CRISIS.clinicTurns };
+    case 'recovering': {
+      const rec = recover(state, p, 'clinic', r);
+      log.push(rec.entry);
+      const left = (before.recoveringLeft ?? 1) - 1;
+      if (left > 0) return { ...rec.player, recoveringLeft: left };
+      const hp = playerHpMax(state, p);
+      log.push({ type: 'clinic_released', at, playerId: p.id, hp });
+      const { recoveringLeft: _done, ...released } = rec.player;
+      return { ...released, hp, condition: 'awake', mustSubmit: true };
+    }
+    default:
+      return p;
   }
-  const after = wakeAfter(outcome, p.stamina);
-  return {
-    player: { ...p, hp: after.hp, stamina: after.stamina, condition: 'awake', mustSubmit: true, knockedOut: null },
-    entry: { type: 'woke', playerId: p.id, outcome, rescueRoll, hp: after.hp, stamina: after.stamina },
-  };
 }
 
 /**
@@ -381,23 +401,19 @@ function resolved(state: PhaseState, results: Readonly<Record<string, PlayerResu
     const r = results[id] ?? {};
     let p: PlayerPhaseState = { ...before, hp: r.hp ?? before.hp, stamina: r.stamina ?? before.stamina, karma: r.karma ?? before.karma };
 
-    if (before.condition === 'unconscious') {
-      // Damage to an unconscious character is 0 (spec §12.2), so only a rescue changes anything.
-      p = { ...before, karma: p.karma };
-      if (r.rescued && before.knockedOut && !before.knockedOut.rescued) {
-        p = { ...p, knockedOut: { ...before.knockedOut, rescued: true } };
-        log.push({ type: 'rescued_by_player', at, playerId: id });
-      }
-      players[id] = timeRules(state, before, p, at, log);
+    if (before.condition === 'astral_spirit') {
+      players[id] = before;
+      continue;
+    }
+    if (before.condition === 'unconscious' || before.condition === 'recovering') {
+      players[id] = timeRules(state, before, crisisTurn(state, before, r, at, log), at, log);
       continue;
     }
 
     if (p.hp === 0) {
-      // Q-054: lost for the rest of the day; a NOCTHERION knock-out still loses the next EOSORIA. No rest recovery.
-      const wakeAt = knockOutWake(at);
-      const knockedOut: KnockedOut = { wakeAt, safety: r.safety ?? 'normal', primaryAffinity: r.primaryAffinity ?? 0, rescued: false };
-      log.push({ type: 'knocked_out', at, playerId: id, wakeAt });
-      players[id] = timeRules(state, before, { ...p, condition: 'unconscious', mustSubmit: false, knockedOut }, at, log);
+      // GEN-070: out cold through the next turn (no rest recovery), then the clinic or death.
+      log.push({ type: 'knocked_out', at, playerId: id });
+      players[id] = timeRules(state, before, { ...p, condition: 'unconscious', mustSubmit: false, knockedOut: { at } }, at, log);
       continue;
     }
 
@@ -418,7 +434,7 @@ function resolved(state: PhaseState, results: Readonly<Record<string, PlayerResu
   }
 
   if (isGameOver(state.order, players)) {
-    log.push({ type: 'game_over', at, reason: 'all_unconscious' });
+    log.push({ type: 'game_over', at, reason: 'all_dead' });
     return { ok: true, state: { ...state, players, status: 'game_over' }, log };
   }
 
@@ -428,14 +444,7 @@ function resolved(state: PhaseState, results: Readonly<Record<string, PlayerResu
   }
 
   if (point.day !== at.day) {
-    for (const id of state.order) players[id] = startDay(point.day, players[id]!, point, log);
-  }
-  for (const id of state.order) {
-    const p = players[id]!;
-    if (p.condition !== 'unconscious' || !p.knockedOut || !samePoint(p.knockedOut.wakeAt, point)) continue;
-    const woke = wake(p, p.knockedOut, rng);
-    players[id] = woke.player;
-    log.push({ ...woke.entry, at: point });
+    for (const id of state.order) if (players[id]!.condition !== 'astral_spirit') players[id] = startDay(point.day, players[id]!, point, log);
   }
 
   const next: PhaseState = { ...state, ...point, players, status: 'collecting', submissions: {} };

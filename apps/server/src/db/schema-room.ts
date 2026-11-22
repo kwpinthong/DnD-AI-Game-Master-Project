@@ -51,7 +51,8 @@ export const roomEntry = sqliteTable(
     gameId: text('game_id')
       .notNull()
       .references(() => game.id, { onDelete: 'cascade' }),
-    kind: text('kind', { enum: ['feed', 'narration', 'whisper'] }).notNull(),
+    /** `omen` (GEN-070): an Astral Spirit's omen; `from` / `to` like a whisper, the receiver never sees the sender. */
+    kind: text('kind', { enum: ['feed', 'narration', 'whisper', 'omen'] }).notNull(),
     day: integer('day').notNull(),
     phase: text('phase', { enum: PHASES }).notNull(),
     turn: integer('turn').notNull().default(1),
@@ -59,7 +60,7 @@ export const roomEntry = sqliteTable(
     locationId: text('location_id'),
     text: text('text').notNull(),
     /**
-     * Whisper only (GEN-067): sender and target member ids; null for feed / narration. No foreign key:
+     * Whisper (GEN-067) and omen (GEN-070): sender and target member ids; null for feed / narration. No foreign key:
      * SQLite cannot add a column with ON DELETE CASCADE, and the row goes with its game anyway.
      */
     fromMemberId: text('from_member_id'),

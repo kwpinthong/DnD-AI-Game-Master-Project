@@ -13,7 +13,7 @@ import { GameTimelineResponse } from './timeline.ts';
 export const GameLogStatus = z.enum(['lobby', 'playing', 'ended']);
 export type GameLogStatus = z.infer<typeof GameLogStatus>;
 
-/** `finale`: past day 12 NOCTHERION turn 2. `game_over`: everyone unconscious with nobody to wake (GEN-052). */
+/** `finale`: past day 12 NOCTHERION turn 2. `game_over`: every player dead for good, an Astral Spirit (GEN-070). */
 export const GameEndReason = z.enum(['finale', 'game_over']);
 export type GameEndReason = z.infer<typeof GameEndReason>;
 

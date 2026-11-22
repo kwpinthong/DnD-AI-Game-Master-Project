@@ -11,6 +11,7 @@ function targetCurseOf(target: ActorState): { targetCurse?: number } {
 }
 import { validateProposal } from '../resolution/validate.ts';
 import {
+  EXHAUSTED_DAMAGE_SCALE,
   PLAYER_INTENTS,
   type ActionOutcome,
   type Awareness,
@@ -57,8 +58,8 @@ const PVP_DC_BASE = 11;
 const AWARENESS_MOD: Readonly<Record<Awareness, number>> = { watch: 3, asleep: -5, normal: 0 };
 /** Spec §10.4: A acts on B from another place with reach: remote. */
 const REMOTE_AWARENESS = -5;
-/** Spec §10.2: the intents that may target an unconscious player. */
-const UNCONSCIOUS_OK = new Set(['rescue', 'steal']);
+/** Spec §10.2 + GEN-070: the intents that may target an unconscious player. */
+const UNCONSCIOUS_OK = new Set(['rescue', 'steal', 'execute']);
 
 /**
  * Orders the players who act this phase (spec §10.5, T1):
@@ -127,6 +128,8 @@ export function resolvePhaseActions(input: PhaseActionsInput, rng: Rng): PhaseAc
   const players: Record<string, PlayerState> = copy(snapshot.state.players);
   let npcs: Record<string, NpcState> = copy(snapshot.state.npcs);
   const outcomes: ActionOutcome[] = [];
+  /** Executed earlier this phase (GEN-070): out of everyone's reach from then on. */
+  const dead = new Set<string>();
 
   for (const actorId of order.order) {
     const action = byActor.get(actorId)!;
@@ -142,10 +145,11 @@ export function resolvePhaseActions(input: PhaseActionsInput, rng: Rng): PhaseAc
     const target = targetPlayer === null ? null : players[targetPlayer.player]!;
     if (targetPlayer !== null && target !== null) {
       const remote = targetPlayer.reachRef !== null;
-      const reason =
-        target.locationId !== actor.locationId && !remote
+      const reason = dead.has(target.id)
+        ? ('target_dead' as const)
+        : target.locationId !== actor.locationId && !remote
           ? ('not_same_place' as const)
-          : target.hp <= 0 && !UNCONSCIOUS_OK.has(targetPlayer.intent)
+          : target.hp <= 0 && target.crisis !== 'recovering' && !UNCONSCIOUS_OK.has(targetPlayer.intent)
             ? ('target_unconscious' as const)
             : null;
       if (reason !== null) {
@@ -205,6 +209,8 @@ export function resolvePhaseActions(input: PhaseActionsInput, rng: Rng): PhaseAc
         let d = SEVERITY_BASE[effects.damage] + Math.min(5, Math.floor(Math.max(0, log.check?.margin ?? 0) / 2));
         if (log.degree === 'crit') d = Math.floor(d * 1.5);
         damage = Math.max(0, d - target.damageReduction);
+        // GEN-070: hit during the forced REST after Stamina 0. In whole tenths, so 10 is exactly 13 (no float drift).
+        if (target.crisis === 'exhausted') damage = Math.floor((damage * Math.round(EXHAUSTED_DAMAGE_SCALE * 10)) / 10);
       }
       const heal = effects.heal === null ? 0 : SEVERITY_BASE[effects.heal];
       const hpAfter = clamp(target.hp - damage + heal, 0, target.hpMax ?? RULES.hpMax);
@@ -224,6 +230,8 @@ export function resolvePhaseActions(input: PhaseActionsInput, rng: Rng): PhaseAc
       players[target.id] = { ...target, hp: hpAfter, items: targetItems };
 
       const noticed = log.targetObservation?.noticed === true;
+      const executed = targetPlayer.intent === 'execute' && succeeded && target.hp <= 0;
+      if (executed) dead.add(target.id);
       targetResult = {
         playerId: target.id,
         hp: { before: target.hp, damage, heal, after: hpAfter },
@@ -231,6 +239,7 @@ export function resolvePhaseActions(input: PhaseActionsInput, rng: Rng): PhaseAc
         itemsGained,
         observation: log.targetObservation,
         knowsActor: proposal.visibility === 'public' || noticed || (log.degree === 'fumble' && target.hp > 0),
+        ...(executed ? { executed: true as const } : {}),
       };
     }
 
@@ -279,7 +288,14 @@ export function validatePhaseActions(input: PhaseActionsInput): CrossPlayerError
     const target = players[t.player];
     if (target === undefined) return void fail('unknown_target', 'targetPlayer.player', `player ${t.player} is not in the game`);
     if (target.id === actor.id) return void fail('target_is_actor', 'targetPlayer.player', 'an action cannot target its own actor');
-    if (target.hp <= 0 && !UNCONSCIOUS_OK.has(t.intent)) fail('target_unconscious', 'targetPlayer.player', `${target.id} is unconscious (HP 0); only rescue or steal may target them`);
+    // Q-257: at the clinic they can be hit or robbed (even at HP 0, they are not out cold), never executed.
+    if (target.crisis === 'recovering' && t.intent === 'execute') {
+      return void fail('target_recovering', 'targetPlayer.intent', `${target.id} is recovering at the clinic and cannot be executed there`);
+    }
+    if (target.hp <= 0 && target.crisis !== 'recovering' && !UNCONSCIOUS_OK.has(t.intent)) {
+      fail('target_unconscious', 'targetPlayer.player', `${target.id} is unconscious (HP 0); only rescue, steal or execute may target them`);
+    }
+    if (t.intent === 'execute' && target.hp > 0) fail('execute_needs_unconscious', 'targetPlayer.intent', `${target.id} is not out cold (HP 0); execute only targets a player at HP 0`);
 
     const owns = (who: PlayerState, ref: string) => [...who.items, ...who.skills].find((o) => o.id === ref);
     if (t.reachRef !== null) {
