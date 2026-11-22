@@ -140,6 +140,13 @@ export function CharacterScreen({
           <li>ฉายา: {character.socialTitle}</li>
           <li>ความประพฤติ: {character.conduct}</li>
         </ul>
+        {character.statuses.length > 0 ? (
+          <ul aria-label="สถานะ">
+            {character.statuses.map((label) => (
+              <li key={label}>{label}</li>
+            ))}
+          </ul>
+        ) : null}
         {character.editable ? (
           <button type="button" onClick={() => startEditing(character)}>
             แก้ไข

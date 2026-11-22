@@ -59,6 +59,7 @@ const saved: CharacterView = {
   coins: 0,
   socialTitle: 'คนแปลกหน้า',
   conduct: 'เป็นกลางสุดๆ',
+  statuses: [],
   editable: true,
 };
 
@@ -212,6 +213,28 @@ describe('Character creation step 1 (GEN-047)', () => {
     expect(await screen.findByText('ฉายา: คนแปลกหน้า')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'แก้ไข' })).toBeNull();
     expect(screen.getByText(/เกมเริ่มแล้ว แก้ตัวตนไม่ได้/)).toBeTruthy();
+  });
+
+  it('GEN-095 C6: a timed status shows as its word, with no number', async () => {
+    loggedIn(
+      view({ status: 'started', startedAt: '2026-11-22T12:00:00.000Z', members: [{ ...view().members[0]!, hasCharacter: true }] }),
+      { 'GET /api/game/character': () => Response.json({ character: { ...saved, editable: false, statuses: ['หวาดกลัว'] } }) },
+    );
+
+    render(<App apiBaseUrl="" />);
+    await openCharacter(/ดูตัวละคร/);
+
+    const list = await screen.findByRole('list', { name: 'สถานะ' });
+    expect(within(list).getByText('หวาดกลัว')).toBeTruthy();
+    expect(list.textContent).not.toMatch(/\d/);
+  });
+
+  it('GEN-095: without a timed status there is no status list', async () => {
+    loggedIn(view({ members: [{ ...view().members[0]!, hasCharacter: true }] }), { 'GET /api/game/character': () => Response.json({ character: saved }) });
+    render(<App apiBaseUrl="" />);
+    await openCharacter(/ดูตัวละคร/);
+    await screen.findByRole('region', { name: 'ตัวละครของคุณ' });
+    expect(screen.queryByRole('list', { name: 'สถานะ' })).toBeNull();
   });
 
   it('C6: after a reload the saved character is loaded from the server', async () => {

@@ -281,7 +281,7 @@ export function GmConsole({ apiBaseUrl, token, refreshKey }: { apiBaseUrl: strin
         <ul>
           {view.characters.map((c) => (
             <li key={c.memberId}>
-              {`${c.name} (${c.playerName}) · HP ${c.hp.current}/${c.hp.max} · Stamina ${c.stamina.current}/${c.stamina.max} · Karma ${c.karma} (${c.conduct}) · ชื่อเสียง ${c.reputationScore} · อยู่ที่ ${c.locationId ?? '-'}`}
+              {`${c.name} (${c.playerName}) · HP ${c.hp.current}/${c.hp.max} · Stamina ${c.stamina.current}/${c.stamina.max} · Karma ${c.karma} (${c.conduct}) · ชื่อเสียง ${c.reputationScore} · อยู่ที่ ${c.locationId ?? '-'}${c.curses.map((s) => ` · ${s.label} (${s.source}) d20 ${s.value} อีก ${s.turnsLeft} เทิร์น`).join('')}`}
             </li>
           ))}
         </ul>

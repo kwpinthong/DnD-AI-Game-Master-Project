@@ -52,6 +52,7 @@ const saved: CharacterView = {
   coins: 0,
   socialTitle: 'คนแปลกหน้า',
   conduct: 'เป็นกลางสุดๆ',
+  statuses: [],
   editable: true,
 };
 

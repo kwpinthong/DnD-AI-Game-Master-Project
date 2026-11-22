@@ -14,6 +14,7 @@ import { character, member } from '../db/schema.ts';
 import { getCharacter, titleOf } from '../game/character.ts';
 import type { MemberRow } from '../game/service.ts';
 import { getGameScenario } from '../scenario/store.ts';
+import { gmCursesOf } from '../statuses/curses.ts';
 import {
   hiddenEvidenceInGame,
   namesVisibleTo,
@@ -143,6 +144,7 @@ function gmSurroundings(db: DbOrTx, gameId: string, karmaTiers: readonly KarmaTi
     knowsNamesOf: [...namesVisibleTo(db, c.memberId)],
     npcBonds: npcBondsOf(db, c.memberId).map(({ npcId, affinity, nameRevealed }) => ({ npcId, affinity, nameRevealed })),
     playerBonds: [...playerBondsOf(db, c.memberId)].map(([memberId, bond]) => ({ memberId, ...bond })),
+    curses: gmCursesOf(db, gameId, c.memberId),
   }));
   const evidence = hiddenEvidenceInGame(db, gameId).map(({ id, locationId, day, actorMemberId }) => ({ id, locationId, day, actorMemberId }));
   return { view: 'gm', characters, evidence };

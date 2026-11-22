@@ -1,4 +1,4 @@
-import type { ActionKind, ActionTag, ActorState, NpcGrade, Severity, StatUse, Tier } from './types.ts';
+import type { ActionKind, ActionTag, ActorState, NpcGrade, Severity, StatUse, StatusEffect, Tier } from './types.ts';
 
 /** Rules Spec §14 parameters used by the resolution engine. */
 export const RULES = {
@@ -92,11 +92,29 @@ export function computeStat(actor: ActorState, query: StatQuery): number {
   }
   if ('kind' in query && query.kind !== 'general' && query.staminaCost > actor.stamina) value += RULES.overexert;
   for (const status of actor.statuses) {
+    // A curse on the actor's own action roll is its own logged modifier (`curseMods`), never inside stat.
+    if (status.origin === 'curse' && 'kind' in query) continue;
     for (const mod of status.mods) {
       if (mod.scope === use || mod.scope === 'all' || tags.includes(mod.scope)) value += mod.value;
     }
   }
   return clamp(value, -RULES.statCap, RULES.statCap);
+}
+
+/**
+ * GEN-095: what each curse (`origin: 'curse'`) adds to a roll of its holder for `use` (an action kind / tags, or
+ * observe / defense / priority). Not capped by the stat cap; one entry per curse with a non-zero sum.
+ */
+export function curseMods(
+  statuses: readonly StatusEffect[] | undefined,
+  use: ActionKind | StatUse,
+  tags: readonly string[] = [],
+): { readonly ref: string; readonly value: number }[] {
+  return (statuses ?? []).flatMap((s) => {
+    if (s.origin !== 'curse') return [];
+    const value = s.mods.reduce((sum, m) => (m.scope === use || m.scope === 'all' || tags.includes(m.scope) ? sum + m.value : sum), 0);
+    return value === 0 ? [] : [{ ref: s.id, value }];
+  });
 }
 
 export interface RepTier {
