@@ -7,8 +7,10 @@ import { ActionBar, EMPTY_DRAFT, type ActionDraft } from './play/chat/ActionBar.
 import { ChatFeed } from './play/chat/ChatFeed.tsx';
 import { DesktopLayout } from './play/chat/DesktopLayout.tsx';
 import { HitPin } from './play/chat/HitPin.tsx';
-import { HudBar } from './play/chat/Hud.tsx';
-import { InfoPanel } from './play/chat/InfoPanel.tsx';
+import { CompactHudBar, HudBar } from './play/chat/Hud.tsx';
+import { InfoPanel, InfoTabBody, type InfoData } from './play/chat/InfoPanel.tsx';
+import { MobileLayout } from './play/chat/MobileLayout.tsx';
+import { useCompact } from './play/chat/useCompact.ts';
 import { useEntryVotes } from './play/chat/useEntryVotes.ts';
 import { OmenBox, TravelSheet } from './play/PlaceColumn.tsx';
 import { hitAcknowledged, rememberHitAcknowledged } from './play/hit-ack.ts';
@@ -68,6 +70,7 @@ export function PlayRoom({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [companionTick, setCompanionTick] = useState(0);
   const [companionProblem, setCompanionProblem] = useState<string>();
+  const compact = useCompact();
   const votes = useEntryVotes(apiBaseUrl, token);
   const conn = useRef<RoomConnection | undefined>(undefined);
 
@@ -175,6 +178,14 @@ export function PlayRoom({
             setMenuOpen(false);
             onGameList();
           }}
+          {...(compact && isPlayer
+            ? {
+                onHistory: () => {
+                  setMenuOpen(false);
+                  setHistoryOpen(true);
+                },
+              }
+            : {})}
         />
       )}
       <p role="status" aria-label={t.connectionLabel} data-connection={connection} className={online ? 'sr-only' : 'play-conn'}>
@@ -214,65 +225,76 @@ export function PlayRoom({
         </div>
       )}
 
-      {room && you && isPlayer && (
+      {room && you && isPlayer && (() => {
+        const feed = (
+          <>
+            <HitPin pinned={pinned} onAcknowledge={acknowledge} />
+            <ChatFeed entries={entries} day={room.day} placeId={you.place?.id ?? null} placeName={you.place?.name} astral={Boolean(you.astral)} acknowledged={acked} ownAction={you.action} voting={voting} />
+            {travelOpen && (
+              <TravelSheet
+                apiBaseUrl={apiBaseUrl}
+                token={token}
+                problem={moveProblem}
+                busy={moving}
+                onGo={sendMove}
+                onClose={() => {
+                  setTravelOpen(false);
+                  setMoveProblem(undefined);
+                }}
+              />
+            )}
+          </>
+        );
+        const info: InfoData = {
+          room,
+          data,
+          entries,
+          secret: secretQuota(room).status,
+          onTravel: you.astral ? null : () => setTravelOpen(true),
+          onSave: you.astral ? null : (ref) => void companion({ save: ref }),
+          onRelease: you.astral ? null : (ref) => void companion({ release: ref }),
+          onUse: you.lock ? null : (name) => setDraft((d) => ({ ...d, text: `${t.inventory.insert(name)}${d.text}`, editing: d.editing || Boolean(you.action) })),
+          companionProblem,
+          whisper: { text: whisperText, setText: setWhisperText },
+          whisperProblem,
+          onWhisper: sendWhisper,
+        };
+        const actions = you.astral ? (
+          <OmenBox
+            room={room}
+            problem={omenProblem}
+            onSend={(to, text) => {
+              if (!conn.current?.sendOmen(to, text)) setOmenProblem(t.notConnected);
+            }}
+          />
+        ) : (
+          <ActionBar room={room} seenBy={data.seenBy} draft={draft} setDraft={setDraft} problem={problem} sending={waitingReply} onSend={sendAction} onRetry={() => conn.current?.sendRetry()} compact={compact} />
+        );
+        return (
         <>
           <div className="play-frame" hidden={historyOpen}>
-            <DesktopLayout
-              hud={<HudBar room={room} character={data.character} menuOpen={menuOpen} onMenu={() => setMenuOpen((v) => !v)} onHistory={() => setHistoryOpen(true)} />}
-              notices={notices}
-              feed={
-                <>
-                  <HitPin pinned={pinned} onAcknowledge={acknowledge} />
-                  <ChatFeed entries={entries} day={room.day} placeId={you.place?.id ?? null} placeName={you.place?.name} astral={Boolean(you.astral)} acknowledged={acked} ownAction={you.action} voting={voting} />
-                  {travelOpen && (
-                    <TravelSheet
-                      apiBaseUrl={apiBaseUrl}
-                      token={token}
-                      problem={moveProblem}
-                      busy={moving}
-                      onGo={sendMove}
-                      onClose={() => {
-                        setTravelOpen(false);
-                        setMoveProblem(undefined);
-                      }}
-                    />
-                  )}
-                </>
-              }
-              side={
-                <InfoPanel
-                  room={room}
-                  data={data}
-                  entries={entries}
-                  secret={secretQuota(room).status}
-                  onTravel={you.astral ? null : () => setTravelOpen(true)}
-                  onSave={you.astral ? null : (ref) => void companion({ save: ref })}
-                  onRelease={you.astral ? null : (ref) => void companion({ release: ref })}
-                  onUse={you.lock ? null : (name) => setDraft((d) => ({ ...d, text: `${t.inventory.insert(name)}${d.text}`, editing: d.editing || Boolean(you.action) }))}
-                  companionProblem={companionProblem}
-                  whisper={{ text: whisperText, setText: setWhisperText }}
-                  whisperProblem={whisperProblem}
-                  onWhisper={sendWhisper}
-                />
-              }
-              actions={
-                you.astral ? (
-                  <OmenBox
-                    room={room}
-                    problem={omenProblem}
-                    onSend={(to, text) => {
-                      if (!conn.current?.sendOmen(to, text)) setOmenProblem(t.notConnected);
-                    }}
-                  />
-                ) : (
-                  <ActionBar room={room} seenBy={data.seenBy} draft={draft} setDraft={setDraft} problem={problem} sending={waitingReply} onSend={sendAction} onRetry={() => conn.current?.sendRetry()} />
-                )
-              }
-            />
+            {compact ? (
+              <MobileLayout
+                hud={<CompactHudBar room={room} character={data.character} menuOpen={menuOpen} onMenu={() => setMenuOpen((v) => !v)} />}
+                notices={notices}
+                feed={feed}
+                panel={(tab) => <InfoTabBody tab={tab} {...info} />}
+                actions={actions}
+              />
+            ) : (
+              <DesktopLayout
+                hud={<HudBar room={room} character={data.character} menuOpen={menuOpen} onMenu={() => setMenuOpen((v) => !v)} onHistory={() => setHistoryOpen(true)} />}
+                notices={notices}
+                feed={feed}
+                side={<InfoPanel {...info} />}
+                actions={actions}
+              />
+            )}
           </div>
           {history}
         </>
-      )}
+        );
+      })()}
 
       {/* GEN-058: the Human GM has no character: the console (it reloads whenever the turn or the GM status moves), then the room's entries. */}
       {room && you && !isPlayer && (
