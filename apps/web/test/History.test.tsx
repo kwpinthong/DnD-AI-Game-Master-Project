@@ -42,12 +42,40 @@ const endedLog: GameLogResponse = {
       whisper: { from: 'ลิน', to: 'ดาริน', mine: true },
     },
   ],
+  reveal: {
+    path: 'none',
+    players: [
+      {
+        memberId: 'm-a',
+        lobbyName: 'นก',
+        characterName: 'ลิน',
+        karma: -45,
+        karmaTier: 'ชั่วร้าย',
+        outcome: 'survived',
+        spawn: 'โรงเตี๊ยมและกิลด์นักเดินทาง',
+        companions: ['มาร์คัส'],
+        secretActions: [{ day: 3, phase: 'NOCTHERION', turn: 1, text: 'แอบขโมยแผนที่ดาว' }],
+      },
+      {
+        memberId: 'm-b',
+        lobbyName: 'บี',
+        characterName: 'ดาริน',
+        karma: 12,
+        karmaTier: 'ดีเล็กน้อย',
+        outcome: 'defeated',
+        spawn: null,
+        companions: [],
+        secretActions: [],
+      },
+    ],
+  },
 };
 
 const playingLog: GameLogResponse = {
   ...endedLog,
   game: { ...endedLog.game, id: 'g-playing', name: 'เกมคืนวันศุกร์', status: 'playing', endReason: null, at: { day: 5, phase: 'SOLARION', turn: 1 } },
   entries: [],
+  reveal: null,
 };
 
 function stubServer() {
@@ -154,10 +182,44 @@ describe('C3: game list and the summary + log of a finished game', () => {
     expect(log.getByText(/คุณเห็นเงาวิ่งหายไปหลังร้าน/)).toBeTruthy();
     expect(log.getByText(/ลิน → ดาริน/)).toBeTruthy();
     expect(s.queryByRole('textbox')).toBeNull();
-    expect(s.getByText(/ความลับของทุกคนจะเปิดในหน้าฉากจบ/)).toBeTruthy();
 
     fireEvent.click(s.getByRole('button', { name: 'กลับไปรายการเกม' }));
     expect(await screen.findByRole('list', { name: 'เกมของฉัน' })).toBeTruthy();
+  });
+
+  it('C5 (GEN-059): a finished game reveals every player: real name, karma tier (number small), outcome, spawn, companions, Secret actions', async () => {
+    localStorage.setItem(KNOWN_TOKENS_KEY, JSON.stringify(['tok-ended']));
+    stubServer();
+    render(<App apiBaseUrl="" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'รายการเกม' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'ดูสรุป เมืองก่อนอุกกาบาต' }));
+
+    const reveal = within(await screen.findByRole('region', { name: 'ความลับของทุกคน' }));
+    expect(reveal.getByText(/อุกกาบาตชนเมือง/)).toBeTruthy();
+    const lin = within(reveal.getByRole('article', { name: 'นก' }));
+    expect(lin.getByText('ลิน')).toBeTruthy();
+    // Q-196: the tier word is the label, the number small beside it.
+    expect(lin.getByText('ชั่วร้าย')).toBeTruthy();
+    expect(lin.getByText('(-45)').tagName).toBe('SMALL');
+    expect(lin.getByText(/รอด/)).toBeTruthy();
+    expect(lin.getByText(/โรงเตี๊ยมและกิลด์นักเดินทาง/)).toBeTruthy();
+    expect(lin.getByText(/มาร์คัส/)).toBeTruthy();
+    expect(lin.getByText(/แอบขโมยแผนที่ดาว/)).toBeTruthy();
+    const darin = within(reveal.getByRole('article', { name: 'บี' }));
+    expect(darin.getByText(/พ่ายแพ้/)).toBeTruthy();
+    expect(darin.getByText(/ไม่มี Secret action/)).toBeTruthy();
+    // GEN-077 / GEN-078 put the rating form here later.
+    expect(screen.getByRole('region', { name: 'ให้คะแนนเกม' })).toBeTruthy();
+  });
+
+  it('a game still playing has no reveal section', async () => {
+    localStorage.setItem(KNOWN_TOKENS_KEY, JSON.stringify(['tok-playing']));
+    stubServer();
+    render(<App apiBaseUrl="" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'รายการเกม' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'ดูสรุป เกมคืนวันศุกร์' }));
+    await screen.findByRole('region', { name: 'สรุปเกม เกมคืนวันศุกร์' });
+    expect(screen.queryByRole('region', { name: 'ความลับของทุกคน' })).toBeNull();
   });
 
   it('says so when this browser has no game yet', async () => {

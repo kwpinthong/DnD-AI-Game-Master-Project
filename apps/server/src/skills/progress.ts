@@ -41,6 +41,11 @@ function locationRecord(db: DbOrTx, assets: GameAssets, gameId: string, location
   return { record, safe: record ? record.tags.includes(SAFE_ZONE_TAG) : place?.safety === 'safe' };
 }
 
+/** Whether the scenario place `locationId` is a SAFE_ZONE (its Location row's tag, else its own safety). */
+export function isSafeZone(db: DbOrTx, assets: GameAssets, gameId: string, locationId: string): boolean {
+  return locationRecord(db, assets, gameId, locationId).safe;
+}
+
 export function recordTurnProgress(db: DbOrTx, assets: GameAssets, gameId: string, log: PhaseActionsLog, at: SkillTime, investigating: ReadonlySet<string>): void {
   for (const o of log.outcomes) {
     if (o.status !== 'resolved') continue;

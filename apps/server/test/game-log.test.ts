@@ -55,7 +55,8 @@ describe('game summary / log (GEN-037)', { timeout: 120_000 }, () => {
 
     const res = await getLog(t.seats[0].token);
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    expect(forbiddenKeysIn(res.body)).toEqual([]);
+    // GEN-059: once ended, karma appears only inside the secret reveal.
+    expect(forbiddenKeysIn(res.body).filter((path) => !path.startsWith('reveal.'))).toEqual([]);
     const log = GameLogResponse.parse(res.body);
     expect(log.game).toMatchObject({ id: t.gameId, name: 'เกมที่จบแล้ว', mode: 'online', status: 'ended', endReason: 'finale' });
     expect(log.game.at).toEqual({ day: 1, phase: 'EOSORIA', turn: 2 });

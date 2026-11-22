@@ -47,7 +47,9 @@ import type { GameAssets } from '../assets/load.ts';
 import { completeTravel, travel, travellingTo, withHazard } from '../travel/service.ts';
 import { weatherAt, type WeatherService } from '../weather/service.ts';
 import { settleTurnProgress, withPeriodEndEffects } from '../skills/progress.ts';
-import type { ClosedAction, PhaseResolution, PhaseResolver, ResolverStuck } from './resolver.ts';
+import type { ClosedAction, FinaleResolution, PhaseResolution, PhaseResolver, ResolverStuck } from './resolver.ts';
+import { getEnding, markNarrated, settleEnding } from '../finale/store.ts';
+import { templateFinaleEntries } from '../gm/finale.ts';
 import {
   ensurePhaseState,
   entriesFor,
@@ -126,6 +128,8 @@ export interface HeldTurn {
   readonly state: PhaseState;
   readonly actions: readonly ClosedAction[];
   readonly resolution: PhaseResolution;
+  /** GEN-059 (Q-205): the game's ending (entries only); approving publishes it instead of a turn. */
+  readonly finale?: boolean;
 }
 
 const AWAITING_GM_PLAYER_MESSAGE = 'ผลของเทิร์นนี้รอ GM ตรวจและอนุมัติก่อน แล้วจะส่งให้ทุกคน';
@@ -154,6 +158,8 @@ export function createRoomService(
   const stuck = new Map<string, ResolverStuck>();
   /** Games with a Human GM whose resolved turn waits for approval (GEN-058); lost on restart, resolved again then. */
   const held = new Map<string, HeldTurn>();
+  /** Endings being told (GEN-059), awaited on shutdown. */
+  const finaling = new Map<string, Promise<void>>();
   const shutdown = new AbortController();
   /** Weather picks still running (GEN-068), awaited on shutdown. */
   const picking = new Set<Promise<unknown>>();
@@ -201,6 +207,7 @@ export function createRoomService(
     return stored ? { weather: stored.weather, disaster: stored.disaster } : null;
   }
 
+  const isEnded = (state: PhaseState) => state.status === 'finale' || state.status === 'game_over';
   const playing = (state: PhaseState) => state.status === 'collecting' || state.status === 'resolving';
 
   /** The period's weather, picked on first use; null without a weather service or when the pick failed. */
@@ -238,11 +245,12 @@ export function createRoomService(
   }
 
   function gmStatusFor(me: MemberRow, state: PhaseState, ownerMemberId: string | null): RoomGmStatus | null {
-    if (held.has(me.gameId) && state.status === 'resolving') {
+    if (held.has(me.gameId) && (state.status === 'resolving' || isEnded(state))) {
       return { code: 'awaiting_gm', message: me.role === 'gm' ? AWAITING_GM_MESSAGE : AWAITING_GM_PLAYER_MESSAGE, canRetry: false };
     }
     const s = stuck.get(me.gameId);
-    if (!s || state.status !== 'resolving') return null;
+    // GEN-059: an untold ending of an ended game is stuck the same way (retry tells it).
+    if (!s || (state.status !== 'resolving' && !isEnded(state))) return null;
     const toOwner = me.role === 'gm' || me.id === ownerMemberId;
     return { code: s.code, message: toOwner ? s.ownerMessage : s.message, canRetry: s.code === 'stuck' };
   }
@@ -394,12 +402,14 @@ export function createRoomService(
           completeTravel(tx, gameId, t);
           // The timeline follows the period (GEN-053): events of the new period become active for the next turn.
           const next = step.state;
-          // The one place a game ends (GEN-052 engine → finale / game_over). Q-185 hooks its backup here, after commit.
-          if (next.status === 'finale' || next.status === 'game_over') {
+          if (isEnded(next)) {
             advanceTimeline(tx, gameId, 'end', t);
-            outcome.ended = next.status;
+            // The one place a game ends (GEN-052 engine → finale / game_over). Q-185 hooks its backup after commit.
+            outcome.ended = next.status === 'finale' ? 'finale' : 'game_over';
+            // GEN-059: the ending is decided with the end itself (positions and items as this turn left them).
+            settleEnding(tx, assets, gameId, next, t);
           } else if (next.day !== current.day || next.phase !== current.phase) advanceTimeline(tx, gameId, { day: next.day, phase: next.phase }, t);
-          return rows;
+          return { rows, ended: isEnded(next) };
         });
     let published: ReturnType<typeof publish>;
     try {
@@ -413,8 +423,9 @@ export function createRoomService(
     }
     if (published === null) return false;
     stuck.delete(gameId);
-    deliver(gameId, published);
+    deliver(gameId, published.rows);
     broadcastRoom(gameId);
+    if (published.ended) startFinale(gameId);
     if (outcome.ended !== null) {
       try {
         onGameEnded?.(gameId, outcome.ended);
@@ -422,6 +433,70 @@ export function createRoomService(
         log(`[room] game-end hook failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
       }
     }
+    return true;
+  }
+
+  /**
+   * GEN-059: tells the stored ending of an ended game once (whole-town feed + one narration per player). An
+   * AI failure leaves the game ended and the ending untold: the room offers retry, and a restart tries again.
+   */
+  function startFinale(gameId: string): void {
+    if (finaling.has(gameId) || stopped) return;
+    const ending = getEnding(db, gameId);
+    if (!ending || ending.narrated) return;
+    const run = (async () => {
+      let told: FinaleResolution;
+      try {
+        told = resolver.finale ? await resolver.finale({ gameId, signal: shutdown.signal }) : { entries: templateFinaleEntries(db, assets, gameId) };
+      } catch (error) {
+        log(`[room] finale failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
+        told = { stuck: { code: 'stuck', message: GM_STUCK_MESSAGE, ownerMessage: GM_STUCK_MESSAGE } };
+      }
+      if (stopped) return;
+      if (told.stuck) {
+        stuck.set(gameId, told.stuck);
+        broadcastRoom(gameId);
+        return;
+      }
+      stuck.delete(gameId);
+      // Q-205 (Q-030): with a Human GM the ending waits for approval like a turn; without one it goes out at once.
+      if (hasHumanGm(gameId)) {
+        const state = ensurePhaseState(db, gameId, now());
+        held.set(gameId, { at: { day: state.day, phase: state.phase, turn: state.turn }, state, actions: [], resolution: { entries: told.entries }, finale: true });
+        broadcastRoom(gameId);
+        return;
+      }
+      publishFinale(gameId, told.entries);
+    })().finally(() => finaling.delete(gameId));
+    finaling.set(gameId, run);
+  }
+
+  /** Stores and sends the ending entries once; false when the transaction failed (the room then offers retry). */
+  function publishFinale(gameId: string, entries: readonly NonNullable<PhaseResolution['entries']>[number][]): boolean {
+    const publish = () => db.transaction((tx) => {
+      if (getEnding(tx, gameId)?.narrated !== false) return null;
+      const t = now();
+      const state = ensurePhaseState(tx, gameId, t);
+      const at = { day: state.day, phase: state.phase, turn: state.turn };
+      const out = entries.map((entry) => {
+        const recipients = recipientsOf(tx, gameId, entry);
+        const locationId = entry.kind === 'feed' ? entry.locationId : null;
+        return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text }, [...recipients], t), recipients };
+      });
+      markNarrated(tx, gameId, t);
+      return out;
+    });
+    let rows: ReturnType<typeof publish>;
+    try {
+      rows = publish();
+    } catch (error) {
+      log(`[room] finale publish failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
+      stuck.set(gameId, { code: 'stuck', message: GM_STUCK_MESSAGE, ownerMessage: GM_STUCK_MESSAGE });
+      broadcastRoom(gameId);
+      return false;
+    }
+    if (rows) deliver(gameId, rows);
+    broadcastRoom(gameId);
     return true;
   }
 
@@ -494,6 +569,11 @@ export function createRoomService(
     resolving.set(gameId, run);
   }
 
+  /** An ended game whose ending is untold (after a restart): tell it, unless it is stuck (waits for `retry`). */
+  function wakeFinale(gameId: string): void {
+    if (!stuck.has(gameId) && !held.has(gameId)) startFinale(gameId);
+  }
+
   /** A closed turn nobody works on: resolve it, unless it is stuck (waits for `retry`) or held for the GM. */
   function wakeTurn(gameId: string): void {
     if (!stuck.has(gameId) && !held.has(gameId)) startResolving(gameId);
@@ -532,6 +612,7 @@ export function createRoomService(
       send(socket, { type: 'ready', lastSeq: Math.max(lastSeq, afterSeq) });
       // After a restart a phase can be left `resolving` with nobody working on it. A stuck turn waits for `retry`.
       if (state.status === 'resolving') wakeTurn(me.gameId);
+      else if (isEnded(state)) wakeFinale(me.gameId);
       else openPeriodWeather(me.gameId);
     },
 
@@ -544,6 +625,7 @@ export function createRoomService(
       if (!turn || stopped) return false;
       held.delete(gameId);
       const resolution = edit(turn);
+      if (turn.finale) return publishFinale(gameId, resolution.entries ?? []);
       if (!publishTurn(gameId, { ...turn, resolution })) return false;
       // The after-turn work and the new period's weather (GEN-068), then the next turn if it closes at once.
       startResolving(gameId, async () => {
@@ -554,7 +636,9 @@ export function createRoomService(
     },
 
     wake(gameId) {
-      if (ensurePhaseState(db, gameId, now()).status === 'resolving') wakeTurn(gameId);
+      const state = ensurePhaseState(db, gameId, now());
+      if (state.status === 'resolving') wakeTurn(gameId);
+      else if (isEnded(state)) wakeFinale(gameId);
     },
 
     retry(socket) {
@@ -562,7 +646,8 @@ export function createRoomService(
       if (!me || !stuck.has(me.gameId)) return;
       stuck.delete(me.gameId);
       broadcastRoom(me.gameId);
-      startResolving(me.gameId);
+      if (isEnded(ensurePhaseState(db, me.gameId, now()))) startFinale(me.gameId);
+      else startResolving(me.gameId);
     },
 
     leave(socket) {
@@ -657,7 +742,7 @@ export function createRoomService(
       stopped = true;
       rooms.clear();
       shutdown.abort();
-      while (resolving.size > 0 || picking.size > 0) await Promise.allSettled([...resolving.values(), ...picking]);
+      while (resolving.size > 0 || picking.size > 0 || finaling.size > 0) await Promise.allSettled([...resolving.values(), ...picking, ...finaling.values()]);
     },
   };
 }

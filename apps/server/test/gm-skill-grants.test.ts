@@ -9,7 +9,7 @@ import { SKILL_FLAGS } from '../src/skills/unlock-rules.ts';
 const action = (actionId: string, actor: string, flags: string[], grants: GmTurnProposal['actions'][number]['grants'] = []) =>
   ({ actionId, actor, skillFlags: flags, grants }) as unknown as GmTurnProposal['actions'][number];
 
-const proposal = (actions: GmTurnProposal['actions']): GmTurnProposal => ({ actions, constraints: { add: [], release: [] }, eventOutcomes: [], remember: [] });
+const proposal = (actions: GmTurnProposal['actions']): GmTurnProposal => ({ actions, constraints: { add: [], release: [] }, eventOutcomes: [], endingPath: null, remember: [] });
 
 describe('earnedSkillChanges (Q-180)', () => {
   it('keeps success and crit, drops fail, fumble, skipped and no_target', () => {

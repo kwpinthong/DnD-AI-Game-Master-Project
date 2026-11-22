@@ -108,6 +108,12 @@ export const GmTurnProposal = z.object({
     release: z.array(z.object({ id: Int, reason: z.string().max(300) })).max(6),
   }),
   eventOutcomes: EventOutcomeProposal.shape.eventOutcomes,
+  /**
+   * GEN-059, only while the day 12 finale event is active: the ending path the players completed this turn
+   * (Good: the miracle veil, Evil: absorbing the meteor, Neutral: cancelling it with Astra and Serena); null =
+   * none this turn. The server decides who survives from it when the game ends.
+   */
+  endingPath: z.enum(['good', 'evil', 'neutral']).nullable(),
   /** Notes for the GM's own memory of today. */
   remember: z.array(z.string().min(1).max(200)).max(5),
 });
@@ -133,5 +139,21 @@ export const GmJournal = z.object({
 });
 export type GmJournal = z.infer<typeof GmJournal>;
 
+/**
+ * The ending told once the game ended (GEN-059): one text for the whole table and one per player, every
+ * player ref of the context exactly once.
+ */
+export const GmFinale = z.object({
+  overall: z.string().min(1).max(2000),
+  players: z.array(z.object({ player: z.string(), text: z.string().min(1).max(1200) })).max(12),
+});
+export type GmFinale = z.infer<typeof GmFinale>;
+
 /** `output.name` of each GM request; the Mock provider answers by these names when it has no script. */
-export const GM_OUTPUT = { turn: 'gm_turn_proposal', narration: 'gm_narration', daySummary: 'gm_day_summary', journal: 'gm_journal' } as const;
+export const GM_OUTPUT = {
+  turn: 'gm_turn_proposal',
+  narration: 'gm_narration',
+  daySummary: 'gm_day_summary',
+  journal: 'gm_journal',
+  finale: 'gm_finale',
+} as const;

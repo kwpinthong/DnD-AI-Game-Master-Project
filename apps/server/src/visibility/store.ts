@@ -27,7 +27,7 @@ export function placeUnplacedCharacters(db: DbOrTx, gameId: string, locationId: 
     .all();
   for (const { memberId } of rows) {
     db.insert(characterPresence)
-      .values({ memberId, gameId, ref: newRef(), locationId, updatedAt: now })
+      .values({ memberId, gameId, ref: newRef(), locationId, spawnLocationId: locationId, updatedAt: now })
       .onConflictDoNothing()
       .run();
   }

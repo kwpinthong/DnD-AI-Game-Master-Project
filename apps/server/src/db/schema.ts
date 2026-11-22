@@ -152,3 +152,5 @@ export * from './schema-weather.ts';
 export * from './schema-skills.ts';
 // GEN-058: the Human GM's override log, own file for the same reason.
 export * from './schema-gm-console.ts';
+// GEN-059: how the game ended, own file for the same reason.
+export * from './schema-finale.ts';
