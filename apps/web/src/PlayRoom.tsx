@@ -1,53 +1,27 @@
-import { ACTION_MAX_LENGTH, FALLBACK_NARRATION_LABEL, PHASE_LABEL, actionTextProblem, weatherText, type ActionVisibility, type RoomEntry, type RoomState } from '@isekai/protocol';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { PHASE_LABEL, actionTextProblem, type RoomEntry, type RoomState } from '@isekai/protocol';
+import { useEffect, useRef, useState } from 'react';
 import { GmConsole } from './GmConsole.tsx';
+import { ActionBox, EMPTY_DRAFT, Feed, OmenBox, PlaceHead, TravelSheet, type ActionDraft } from './play/PlaceColumn.tsx';
+import { usePlayData } from './play/play-api.ts';
+import { PrivateColumn } from './play/PrivateColumn.tsx';
+import { SelfColumn } from './play/SelfColumn.tsx';
+import { RoomMenu, TopBar } from './play/TopBar.tsx';
 import { connectRoom, type RoomConnection, type RoomConnectionStatus } from './room-api.ts';
-import { InventoryPanel } from './Inventory.tsx';
+import { secretQuota } from './screen-models.ts';
+import { Button, Skeleton, playText } from './ui/index.ts';
+import './play/play.css';
 
-/** "วันที่ 1 · EOSORIA (เช้า 06:00-11:59) · เทิร์น 1/2" (GEN-063: 4 periods x 2 turns). */
-const timeLabel = (t: Pick<RoomEntry, 'day' | 'phase' | 'turn'>) => `วันที่ ${t.day} · ${PHASE_LABEL[t.phase]} · เทิร์น ${t.turn}/2`;
-const statusLabel = {
-  collecting: 'รอ action จากผู้เล่น',
-  resolving: 'ปิดรับแล้ว กำลังสรุปผล…',
-  finale: 'ฉากจบ',
-  game_over: 'เกมจบแล้ว',
-} as const;
-const connectionLabel: Record<RoomConnectionStatus, string> = {
-  connecting: 'กำลังเชื่อมต่อห้อง…',
-  online: 'เชื่อมต่อแล้ว',
-  reconnecting: 'หลุดการเชื่อมต่อ กำลังต่อใหม่… (ของที่พลาดจะตามมาครบ)',
-  closed: 'ปิดการเชื่อมต่อแล้ว',
-};
+const t = playText;
 
-function entryHeading(e: RoomEntry): string {
-  return `${timeLabel(e)}${e.place ? ` · ${e.place.name}` : ''}`;
-}
-
-function EntryList({ label, entries, empty }: { label: string; entries: RoomEntry[]; empty: string }) {
-  return (
-    <section aria-label={label}>
-      <h3>{label}</h3>
-      {entries.length === 0 ? (
-        <p>{empty}</p>
-      ) : (
-        <ol>
-          {entries.map((e) => (
-            <li key={e.seq}>
-              <small>{entryHeading(e)}</small>
-              {e.fallback && <small className="fallback-label">{FALLBACK_NARRATION_LABEL}</small>}
-              <p>{e.text}</p>
-            </li>
-          ))}
-        </ol>
-      )}
-    </section>
-  );
-}
+/** For screen readers: "วันที่ 1 · EOSORIA (เช้า 06:00-11:59) · เทิร์น 1/2" (GEN-063: 4 periods x 2 turns). */
+const timeLabel = (room: Pick<RoomEntry, 'day' | 'phase' | 'turn'>) => `วันที่ ${room.day} · ${PHASE_LABEL[room.phase]} · เทิร์น ${room.turn}/2`;
 
 /**
- * The play room (GEN-056, Online and Single alike): who is online and who has sent this turn's action
- * (never what they sent), your action form (Public / Secret, REST / SLEEP), the feed of your place and your
- * private narration. Reconnects by itself and fills in what it missed.
+ * The Play screen v2 (GEN-088, Screens and Flows v2 §4, layout P1 Q-199): a top bar and three columns by who
+ * sees what. Left 272 = you (status, companions, skills + items), centre = your place and everything public
+ * there (who is here, travel, the feed, the action box), right 340 = yours alone (the pinned hit card, your
+ * story, Whisper). At 1366×620 all of it is in view; only the lists scroll. The socket (GEN-056) reconnects by
+ * itself and fills in what it missed. The Human GM gets the console instead of the columns.
  */
 export function PlayRoom({
   apiBaseUrl,
@@ -67,15 +41,18 @@ export function PlayRoom({
   const [room, setRoom] = useState<RoomState>();
   const [entries, setEntries] = useState<RoomEntry[]>([]);
   const [fatal, setFatal] = useState<string>();
-  const [text, setText] = useState('');
-  const [visibility, setVisibility] = useState<ActionVisibility>('public');
-  const [rest, setRest] = useState(false);
-  const [train, setTrain] = useState(false);
+  const [draft, setDraft] = useState<ActionDraft>(EMPTY_DRAFT);
   const [problem, setProblem] = useState<string>();
   const [waitingReply, setWaitingReply] = useState(false);
-  const [whisperTo, setWhisperTo] = useState('');
   const [whisperText, setWhisperText] = useState('');
   const [whisperProblem, setWhisperProblem] = useState<string>();
+  const [omenProblem, setOmenProblem] = useState<string>();
+  const [travelOpen, setTravelOpen] = useState(false);
+  const [moveProblem, setMoveProblem] = useState<string>();
+  const [moving, setMoving] = useState(false);
+  const [moves, setMoves] = useState(0);
+  const [acknowledged, setAcknowledged] = useState<ReadonlySet<number>>(new Set());
+  const [menuOpen, setMenuOpen] = useState(false);
   const conn = useRef<RoomConnection | undefined>(undefined);
 
   useEffect(() => {
@@ -87,9 +64,7 @@ export function PlayRoom({
         setWaitingReply(false);
         if (reply.ok) {
           setProblem(undefined);
-          setText('');
-          setRest(false);
-          setTrain(false);
+          setDraft(EMPTY_DRAFT);
         } else setProblem(reply.message);
       },
       whisperReply: (reply) => {
@@ -98,6 +73,15 @@ export function PlayRoom({
           setWhisperText('');
         } else setWhisperProblem(reply.message);
       },
+      moveReply: (reply) => {
+        setMoving(false);
+        if (reply.ok) {
+          setMoveProblem(undefined);
+          setTravelOpen(false);
+          setMoves((n) => n + 1);
+        } else setMoveProblem(reply.message);
+      },
+      omenReply: (reply) => setOmenProblem(reply.ok ? undefined : reply.message),
       fatal: (code, message) => {
         if (code === 'no_character') onNeedCharacter();
         else if (code === 'unauthorized') onSessionLost();
@@ -109,197 +93,142 @@ export function PlayRoom({
     // One socket per token; the callbacks are stable enough for the life of the page.
   }, [apiBaseUrl, token]);
 
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    const local = actionTextProblem(text);
-    if (local) return setProblem(local.message);
-    if (!conn.current?.sendAction(text, visibility, rest, train)) return setProblem('ยังเชื่อมต่อไม่ได้ ลองอีกครั้งเมื่อขึ้นว่าเชื่อมต่อแล้ว');
+  const you = room?.you;
+  const isPlayer = you?.role === 'player';
+  const hits = entries.filter((e) => e.kind === 'hit').length;
+  // Your own numbers and who is around change with the turn, a move, a lock or a hit: load them again then.
+  const refreshKey = room && isPlayer ? [room.day, room.phase, room.turn, room.status, you?.place?.id ?? '', you?.lock?.code ?? '', hits, moves].join('|') : null;
+  const data = usePlayData(apiBaseUrl, token, refreshKey, onSessionLost);
+
+  function sendAction(next: ActionDraft) {
+    // A chip or [พัก / นอน] alone is a whole action: its own words stand in for an empty box.
+    const chip = room?.you.placeActions?.find((a) => a.id === next.placeAction);
+    const text = next.text.trim() === '' ? (chip?.label ?? (next.rest ? t.action.rest : next.train ? t.action.trainText : '')) : next.text;
+    const bad = actionTextProblem(text);
+    if (bad) return setProblem(bad.message);
+    if (!conn.current?.sendAction(text, next.visibility, next.rest, next.train, next.placeAction ?? undefined)) return setProblem(t.notConnected);
+    setProblem(undefined);
     setWaitingReply(true);
   }
 
-  function sendWhisper(event: FormEvent, fallbackTo: string) {
-    event.preventDefault();
-    const local = actionTextProblem(whisperText);
-    if (local) return setWhisperProblem(local.code === 'empty' ? 'พิมพ์ข้อความก่อนส่ง Whisper' : local.message);
-    if (!conn.current?.sendWhisper(whisperTo || fallbackTo, whisperText)) {
-      return setWhisperProblem('ยังเชื่อมต่อไม่ได้ ลองอีกครั้งเมื่อขึ้นว่าเชื่อมต่อแล้ว');
-    }
+  function sendWhisper(to: string) {
+    const bad = actionTextProblem(whisperText);
+    if (bad) return setWhisperProblem(bad.code === 'empty' ? t.whisper.empty : bad.message);
+    if (!conn.current?.sendWhisper(to, whisperText)) setWhisperProblem(t.notConnected);
+  }
+
+  function sendMove(to: string) {
+    if (!conn.current?.sendMove(to)) return setMoveProblem(t.notConnected);
+    setMoveProblem(undefined);
+    setMoving(true);
   }
 
   const feed = entries.filter((e) => e.kind === 'feed');
-  const narration = entries.filter((e) => e.kind === 'narration');
-  const whispers = entries.filter((e) => e.kind === 'whisper');
-  const you = room?.you;
-  const allies = you?.allies ?? [];
-  const locked = !you || you.lock !== null;
-  const left = ACTION_MAX_LENGTH - [...text].length;
+  const online = connection === 'online';
 
   return (
-    <section aria-label="ห้องเล่น">
-      <h2>
-        ห้องเล่น
+    <section className={you?.astral ? 'play play--astral' : 'play'} aria-label={t.room}>
+      <h2 className="sr-only">
+        {t.room}
         {room && ` · ${timeLabel(room)}`}
-        {room?.mode === 'single' && ' · เล่นคนเดียว'}
+        {room?.mode === 'single' && ` · ${t.single}`}
       </h2>
-      <p role="status" aria-label="การเชื่อมต่อห้อง" data-connection={connection}>
-        {connectionLabel[connection]}
-      </p>
-      {fatal && <p role="alert">{fatal}</p>}
-      <button type="button" onClick={onBack}>
-        กลับห้องรอ
-      </button>
+      <div className="play-frame">
+        {room && you && <TopBar room={room} menuOpen={menuOpen} onMenu={() => setMenuOpen((v) => !v)} />}
+        {room && menuOpen && (
+          <RoomMenu
+            room={room}
+            onBack={() => {
+              setMenuOpen(false);
+              onBack();
+            }}
+          />
+        )}
+        <p role="status" aria-label={t.connectionLabel} data-connection={connection} className={online ? 'sr-only' : 'play-conn'}>
+          {t.connection[connection]}
+        </p>
+        {fatal && (
+          <p role="alert" className="play-fatal">
+            {fatal}
+          </p>
+        )}
+        {!(room && you) && (
+          <div className="play-wait">
+            {!fatal && <Skeleton lines={4} />}
+            <Button onClick={onBack}>{t.back}</Button>
+          </div>
+        )}
 
-      {room && you && (
-        <>
-          <p>{statusLabel[room.status]}</p>
-          {room.gmStatus && (
-            <div>
-              <p role="alert">{room.gmStatus.message}</p>
-              {room.gmStatus.canRetry && (
-                <button type="button" onClick={() => conn.current?.sendRetry()}>
-                  ลองใหม่
-                </button>
+        {room && you && isPlayer && (
+          <div className="play-body">
+            <SelfColumn data={data} secret={secretQuota(room).status} drowsy={you.drowsy} onUse={you.lock ? null : (name) => setDraft((d) => ({ ...d, text: `${t.inventory.insert(name)}${d.text}`, editing: d.editing || Boolean(you.action) }))} />
+
+            <div className="play-place">
+              <PlaceHead room={room} data={data} onTravel={you.astral ? null : () => setTravelOpen(true)} />
+              <div className="play-place__main">
+                <Feed entries={feed} placeId={you.place?.id ?? null} astral={Boolean(you.astral)} />
+                {travelOpen && (
+                  <TravelSheet
+                    apiBaseUrl={apiBaseUrl}
+                    token={token}
+                    problem={moveProblem}
+                    busy={moving}
+                    onGo={sendMove}
+                    onClose={() => {
+                      setTravelOpen(false);
+                      setMoveProblem(undefined);
+                    }}
+                  />
+                )}
+              </div>
+              {you.astral ? (
+                <OmenBox
+                  room={room}
+                  problem={omenProblem}
+                  onSend={(to, text) => {
+                    if (!conn.current?.sendOmen(to, text)) setOmenProblem(t.notConnected);
+                  }}
+                />
+              ) : (
+                <ActionBox room={room} seenBy={data.seenBy} draft={draft} setDraft={setDraft} problem={problem} sending={waitingReply} onSend={sendAction} onRetry={() => conn.current?.sendRetry()} />
               )}
             </div>
-          )}
-          {you.place && <p>คุณอยู่ที่: {you.place.name}</p>}
-          {room.weather && <p>สภาพอากาศ: {weatherText(room.weather)}</p>}
-          {you.drowsy && <p role="note">คุณง่วงซึม (Drowsy) ทั้งวันนี้: ทอย d20 -2 และทุก action เสีย Stamina เพิ่ม 1</p>}
-          {room.phase === 'NOCTHERION' && you.role === 'player' && (
-            <p>ช่วง NOCTHERION: ส่ง Secret ได้ฟรี 1 เทิร์น และควรนอน (REST / SLEEP) อย่างน้อย 1 เทิร์น ไม่อย่างนั้นวันถัดไปจะง่วงซึม</p>
-          )}
 
-          {/* Q-195: players get only the count; `submitted` is there for their own entry (and every entry for the GM). */}
-          <p>{`ส่ง action แล้ว ${room.submittedCount}/${room.members.filter((m) => m.role === 'player').length} คน`}</p>
-          <ul aria-label="ผู้เล่นในห้อง">
-            {room.members.map((m) => (
-              <li key={m.memberId}>
-                {m.name}
-                {m.memberId === you.memberId && ' (คุณ)'} — {m.online ? 'ออนไลน์' : 'ออฟไลน์'}
-                {m.role === 'gm' ? ' · GM' : m.submitted === undefined ? '' : m.submitted ? ' · ส่งแล้ว' : ' · ยังไม่ส่ง'}
-              </li>
-            ))}
-          </ul>
-
-          {you.role === 'player' && <InventoryPanel apiBaseUrl={apiBaseUrl} token={token} onSessionLost={onSessionLost} />}
-
-          {you.role === 'player' && (
-            <form onSubmit={submit} aria-label="ส่ง action">
-              {you.action && (
-                <p>
-                  ส่งแล้ว ({you.action.visibility === 'secret' ? 'Secret' : 'Public'}
-                  {you.action.rest ? ' · REST / SLEEP' : ''}
-                  {you.action.train ? ' · TRAIN' : ''}): {you.action.text}
-                  {room.status === 'collecting' && <small> (ส่งใหม่เพื่อแทนของเดิมได้จนกว่าเทิร์นจะปิด)</small>}
-                </p>
-              )}
-              {you.lock && <p role="note">{you.lock.message}</p>}
-              <label>
-                action ของคุณ
-                <textarea value={text} disabled={locked} onChange={(e) => setText(e.target.value)} rows={4} />
-              </label>
-              <small>{left >= 0 ? `เหลือ ${left} ตัวอักษร` : `เกิน ${-left} ตัวอักษร`}</small>
-              <fieldset disabled={locked}>
-                <legend>ใครเห็น</legend>
-                <label>
-                  <input type="radio" name="visibility" checked={visibility === 'public'} onChange={() => setVisibility('public')} />
-                  Public (คนที่อยู่ที่เดียวกันเห็นผล)
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="visibility"
-                    checked={visibility === 'secret'}
-                    disabled={you.secretUsed}
-                    onChange={() => setVisibility('secret')}
-                  />
-                  Secret (เห็นคนเดียว ได้วันละ 1 เทิร์น + ฟรี 1 เทิร์นในช่วง NOCTHERION
-                  {you.secretUsed ? (room.phase === 'NOCTHERION' ? ' · คืนนี้ใช้แล้ว' : ' · วันนี้ใช้แล้ว') : ''})
-                </label>
-              </fieldset>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={rest}
-                  disabled={locked}
-                  onChange={(e) => {
-                    setRest(e.target.checked);
-                    if (e.target.checked) setTrain(false);
-                  }}
-                />
-                REST / SLEEP (พักหรือนอนในเทิร์นนี้ แทนการลงมือทำ)
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={train}
-                  disabled={locked}
-                  onChange={(e) => {
-                    setTrain(e.target.checked);
-                    if (e.target.checked) setRest(false);
-                  }}
-                />
-                TRAIN (ฝึกฝนที่กิลด์: Max HP +3 วันละครั้ง สูงสุด 45)
-              </label>
-              <button type="submit" disabled={locked || waitingReply}>
-                {you.action ? 'ส่งแทนของเดิม' : 'ส่ง action'}
-              </button>
-              {problem && <p role="alert">{problem}</p>}
-            </form>
-          )}
-
-          {/* GEN-058: the Human GM's console; reloads whenever the turn or the GM status moves. */}
-          {you.role === 'gm' && (
-            <GmConsole
-              apiBaseUrl={apiBaseUrl}
-              token={token}
-              refreshKey={`${room.day}-${room.phase}-${room.turn}-${room.status}-${room.gmStatus?.code ?? ''}`}
+            <PrivateColumn
+              entries={entries}
+              you={you}
+              acknowledged={acknowledged}
+              onAcknowledge={(seq) => setAcknowledged((set) => new Set(set).add(seq))}
+              whisper={{ text: whisperText, setText: setWhisperText }}
+              whisperProblem={whisperProblem}
+              onWhisper={sendWhisper}
             />
-          )}
+          </div>
+        )}
 
-          <EntryList label="เหตุการณ์ที่นี่" entries={feed} empty="ยังไม่มีอะไรเกิดขึ้นที่นี่" />
-          <EntryList label="สิ่งที่คุณรู้คนเดียว" entries={narration} empty="ยังไม่มี" />
-
-          <section aria-label="Whisper">
-            <h3>Whisper</h3>
-            {you.role === 'player' &&
-              (allies.length === 0 ? (
-                <p>ยังไม่มีพันธมิตรที่สนิทพอจะ Whisper ได้</p>
-              ) : (
-                <form aria-label="ส่ง Whisper" onSubmit={(e) => sendWhisper(e, allies[0]!.ref)}>
-                  <label>
-                    ถึง
-                    <select value={whisperTo || allies[0]!.ref} onChange={(e) => setWhisperTo(e.target.value)}>
-                      {allies.map((a) => (
-                        <option key={a.ref} value={a.ref}>
-                          {a.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    ข้อความ Whisper
-                    <textarea value={whisperText} onChange={(e) => setWhisperText(e.target.value)} rows={2} />
-                  </label>
-                  <button type="submit">ส่ง Whisper</button>
-                  {whisperProblem && <p role="alert">{whisperProblem}</p>}
-                </form>
-              ))}
-            {whispers.length === 0 ? (
-              <p>ยังไม่มี Whisper</p>
-            ) : (
-              <ol>
-                {whispers.map((e) => (
-                  <li key={e.seq}>
-                    <small>{entryHeading(e)}</small>
-                    <p>{e.whisper?.mine ? `ถึง ${e.whisper.to}: ${e.text}` : `จาก ${e.whisper?.from ?? ''}: ${e.text}`}</p>
-                  </li>
-                ))}
-              </ol>
+        {/* GEN-058: the Human GM has no character: the console (it reloads whenever the turn or the GM status moves), then the room's entries. */}
+        {room && you && !isPlayer && (
+          <div className="play-gm">
+            {room.gmStatus && (
+              <div className="play-gm-status">
+                <p role="alert">{room.gmStatus.message}</p>
+                {room.gmStatus.canRetry && <Button onClick={() => conn.current?.sendRetry()}>{t.retry}</Button>}
+              </div>
             )}
-          </section>
-        </>
-      )}
+            <GmConsole apiBaseUrl={apiBaseUrl} token={token} refreshKey={`${room.day}-${room.phase}-${room.turn}-${room.status}-${room.gmStatus?.code ?? ''}`} />
+            <Feed entries={feed} placeId={null} astral={false} />
+            <PrivateColumn
+              entries={entries}
+              you={you}
+              acknowledged={acknowledged}
+              onAcknowledge={(seq) => setAcknowledged((set) => new Set(set).add(seq))}
+              whisper={{ text: whisperText, setText: setWhisperText }}
+              whisperProblem={whisperProblem}
+              onWhisper={sendWhisper}
+            />
+          </div>
+        )}
+      </div>
     </section>
   );
 }

@@ -1,0 +1,798 @@
+/* Play screen v2 (GEN-088, Screens and Flows v2 §4.0, layout P1 Q-199). Tokens only (tokens.css).
+   Designed at 1366 × 620: top bar 44 + body 576, columns 272 / 754 / 340 by who sees what.
+   The page itself never scrolls; each list scrolls inside its own area.
+   Who sees it is told three ways: where it sits, an icon + words, and the surface colour. */
+
+.play {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  container: play / inline-size;
+}
+
+.play [hidden] {
+  display: none;
+}
+
+.play-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: auto;
+}
+
+.play h3,
+.play h4 {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.play h4 {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.play p,
+.play ul,
+.play ol,
+.play dl,
+.play dd {
+  margin: 0;
+  padding: 0;
+}
+
+.play ul,
+.play ol {
+  list-style: none;
+}
+
+.play label {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.play small {
+  font-size: var(--text-xs);
+}
+
+/* Buttons inside the play screen are compact; the one that sends keeps the full height. */
+.play button,
+.play .btn {
+  min-height: 28px;
+  padding: 2px var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.play .play-action__send {
+  min-height: 36px;
+  padding: var(--space-1) var(--space-5);
+  font-size: var(--text-sm);
+}
+
+.play-wait,
+.play-fatal {
+  padding: var(--space-5);
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+/* ---------- connection strip (4l): in the flow under the top bar, so it covers nothing ---------- */
+.play-conn {
+  flex: none;
+  padding: var(--space-1) var(--space-4);
+  background: var(--hit-bg);
+  color: var(--text);
+  border-bottom: var(--line-w) solid var(--danger);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+/* ---------- 4.1 top bar ---------- */
+.play-top {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-1) var(--space-4);
+  background: var(--panel);
+  border-bottom: var(--line-w) solid var(--ornament);
+  white-space: nowrap;
+}
+
+.play-top__day {
+  font-weight: 600;
+}
+
+/* The day's four periods as one track; the thin line under it is the day, the lit segment is now. */
+.play-periods {
+  display: flex;
+  align-self: stretch;
+  flex: 1;
+  min-width: 0;
+}
+
+.play-period {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  border-bottom: 2px solid var(--line);
+}
+
+.play-period__name {
+  letter-spacing: 0.08em;
+}
+
+.play-period__dots {
+  letter-spacing: 0.1em;
+}
+
+.play-period--now {
+  color: var(--highlight);
+  border-bottom-color: var(--highlight);
+  font-weight: 600;
+}
+
+.play-period__now {
+  padding: 0 var(--space-2);
+  border: var(--line-w) solid var(--highlight);
+  border-radius: var(--radius-pill);
+  font-weight: 500;
+}
+
+.play-top__weather,
+.play-top__sent,
+.play-top__gm {
+  font-size: var(--text-xs);
+}
+
+.play-top__sent {
+  font-weight: 600;
+}
+
+.play-top__gm {
+  color: var(--muted);
+}
+
+.play-menu {
+  position: absolute;
+  top: 48px;
+  right: var(--space-3);
+  z-index: 4;
+  width: 260px;
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+  padding: var(--space-3);
+}
+
+/* ---------- body: stacked by default (narrow), three columns from 1280 ---------- */
+.play-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.play-self {
+  order: 3;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  align-content: start;
+}
+
+.play-place {
+  order: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+}
+
+.play-private {
+  order: 2;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--private-bg);
+}
+
+/* Corner brackets say who sees a column: --accent = everyone here, --secret = you alone (with the words next to them). */
+.play-place::before,
+.play-private::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  border-top: 2px solid var(--accent);
+  border-left: 2px solid var(--accent);
+}
+
+.play-private::before {
+  border-color: var(--secret);
+}
+
+.play-gm {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-3) var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+}
+
+.play-gm .play-feed,
+.play-gm .play-private {
+  max-height: 320px;
+}
+
+/* ---------- shared pieces ---------- */
+.play-panel {
+  padding: var(--space-2) var(--space-3);
+  min-height: 0;
+  overflow: auto;
+}
+
+.play-panel__foot {
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+}
+
+.play-list {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.play-list--small {
+  font-size: var(--text-xs);
+}
+
+.play-chips,
+.play-here {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.play-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-3);
+}
+
+.play-empty {
+  padding: var(--space-4) 0;
+}
+
+.play-turn + .play-turn {
+  margin-top: var(--space-3);
+}
+
+/* a turn heading: a short rune line, then the turn */
+.play-turn__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.play-turn__head::before {
+  content: '';
+  width: 16px;
+  border-top: var(--line-w) solid var(--ornament);
+}
+
+.play-entries {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.play-entry {
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--line);
+}
+
+.play-entry__tag {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--highlight);
+}
+
+.play-entry--town {
+  border-left-color: var(--highlight);
+}
+
+.play-entry--hit {
+  border-left: var(--hit-border-w) solid var(--danger);
+}
+
+.play-entry--hit .play-entry__tag {
+  color: var(--danger);
+}
+
+.play-entry .fallback-label {
+  display: block;
+  color: var(--muted);
+}
+
+/* ---------- 4.3 you ---------- */
+.play-status__who {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.play .play-status__name {
+  font-size: var(--text-lg);
+  line-height: 1.2;
+}
+
+.play-status__look {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.play-stats {
+  display: grid;
+  gap: 2px;
+  margin-top: var(--space-1);
+}
+
+.play-stat {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  column-gap: var(--space-2);
+  align-items: baseline;
+}
+
+.play-stat dt {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.play-stat dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-2);
+}
+
+.play-stat__value {
+  font-weight: 600;
+}
+
+.play-stat .meter {
+  flex-basis: 100%;
+  margin-bottom: 2px;
+}
+
+.play-status__title {
+  color: var(--highlight);
+  font-weight: 600;
+}
+
+.play-chips {
+  margin-top: var(--space-1);
+}
+
+.play-companion,
+.play-skill {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
+}
+
+.play-companion__bond {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.play-skill__name {
+  font-weight: 600;
+}
+
+.play-skill__meta {
+  flex-basis: 100%;
+  order: 3;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.play .play-skill__use {
+  margin-left: auto;
+  min-height: 24px;
+}
+
+/* ---------- 4.2 the place ---------- */
+.play-place__head {
+  flex: none;
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: var(--line-w) solid var(--line);
+}
+
+.play-place__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+}
+
+.play .play-place__name {
+  font-size: var(--text-lg);
+  line-height: 1.3;
+  color: var(--accent);
+}
+
+.play .play-place__travel {
+  margin-left: auto;
+  align-self: center;
+}
+
+.play-here--none {
+  min-height: 1.5em;
+  font-size: var(--text-xs);
+}
+
+.play-place__main {
+  position: relative;
+  flex: 1;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+}
+
+.play-feed,
+.play-story {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.play-feed__astral {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4) 0;
+}
+
+.play select {
+  padding: 2px var(--space-2);
+  font-size: var(--text-xs);
+}
+
+/* the travel sheet lies over the feed (754 wide at 1366) */
+.play-travel {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg);
+  border-bottom: var(--line-w) solid var(--ornament);
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+}
+
+.play-travel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.play .play-travel__zone h4 {
+  color: var(--highlight);
+  font-size: var(--text-sm);
+}
+
+.play-travel__dest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: 2px 0;
+  border-bottom: var(--line-w) solid var(--line);
+}
+
+.play-travel__name {
+  font-weight: 600;
+}
+
+.play .play-travel__go {
+  margin-left: auto;
+}
+
+/* ---------- 4.6 the action box ---------- */
+.play-action {
+  flex: none;
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  background: var(--bg);
+  border-top: var(--line-w) solid var(--line);
+}
+
+/* ลับ is picked: the box itself turns to the secret colour, next to the word and the icon */
+.play-action--secret {
+  border-top: 2px solid var(--secret);
+}
+
+.play-action--secret textarea {
+  border-color: var(--secret);
+}
+
+.play-action__write {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: var(--space-3);
+  row-gap: 2px;
+  align-items: baseline;
+}
+
+.play-action__write small {
+  color: var(--muted);
+}
+
+.play-action__write textarea {
+  grid-column: 1 / -1;
+  width: 100%;
+  resize: none;
+  line-height: 1.5;
+}
+
+.play-action__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.play .play-action__send {
+  margin-left: auto;
+}
+
+.play-vis {
+  display: inline-flex;
+  margin: 0;
+  padding: 0;
+  border: var(--line-w) solid var(--muted);
+  border-radius: var(--radius-sm);
+}
+
+.play .play-vis__opt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.play-vis__opt--public {
+  color: var(--accent);
+}
+
+.play-vis__opt--secret {
+  color: var(--secret);
+}
+
+.play-vis__opt:has(input:disabled) {
+  color: var(--muted);
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+.play-action__effect,
+.play-action__hint,
+.play-action__wait {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.play-action__quota {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--secret);
+}
+
+.play-action__sent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.play-lock {
+  padding: var(--space-2) var(--space-3);
+  border: var(--line-w) solid var(--highlight);
+  border-radius: var(--radius-sm);
+}
+
+.play-lock strong {
+  color: var(--highlight);
+}
+
+.play-lock .muted {
+  font-size: var(--text-xs);
+}
+
+.play-gm-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.play-omen__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ---------- 4.5 yours alone ---------- */
+.play-private__label {
+  align-self: flex-start;
+  margin-left: var(--space-2);
+}
+
+.play-pin {
+  flex: none;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.play-pin .hit-card {
+  padding: var(--space-2) var(--space-3);
+}
+
+.play-pin .hit-card p {
+  margin-bottom: var(--space-1);
+}
+
+.play-pin__changes {
+  display: block;
+  font-size: var(--text-sm);
+}
+
+.play-pin__more {
+  font-size: var(--text-xs);
+  color: var(--danger);
+}
+
+.play-tabs {
+  flex: none;
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: var(--line-w) solid var(--line);
+}
+
+.play .play-tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+}
+
+.play .play-tabs button[aria-selected='true'] {
+  color: var(--secret);
+  border-bottom-color: var(--secret);
+  font-weight: 600;
+}
+
+.play-private .play-scroll {
+  padding: var(--space-1) 0;
+}
+
+.play-roll {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  color: var(--highlight);
+}
+
+.play-factors {
+  flex-basis: 100%;
+  color: var(--text);
+}
+
+.play-whisper {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: start;
+  margin-bottom: var(--space-2);
+}
+
+.play-whisper textarea {
+  width: 100%;
+  resize: none;
+}
+
+/* ---------- 4h Astral Spirit: the whole screen is dimmed, and says so in the place header ---------- */
+.play--astral,
+.play--astral .play-place__name {
+  color: var(--muted);
+}
+
+/* ---------- desktop P1: 1366 = 272 + 754 + 340, 620 = 44 + 576 ---------- */
+@container play (min-width: 1280px) {
+  .play-frame {
+    overflow: hidden;
+  }
+
+  .play-top {
+    flex-wrap: nowrap;
+    height: 44px;
+    padding-block: 0;
+  }
+
+  .play-body {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 272px minmax(0, 1fr) 340px;
+    overflow: hidden;
+  }
+
+  .play-self {
+    order: 0;
+    min-height: 0;
+    grid-template-rows: auto auto minmax(72px, 1fr);
+    border-right: var(--line-w) solid var(--line);
+    overflow-y: auto;
+  }
+
+  .play-place {
+    order: 0;
+  }
+
+  .play-place__main {
+    min-height: 0;
+  }
+
+  .play-private {
+    order: 0;
+    border-left: var(--line-w) solid var(--line);
+  }
+
+  .play-pin {
+    max-height: 176px;
+    overflow-y: auto;
+  }
+}

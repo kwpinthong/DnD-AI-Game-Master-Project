@@ -160,25 +160,49 @@
   padding: var(--space-1) var(--space-2);
 }
 
-/* the app's own bar in mock mode (boot.tsx) */
+/* the app's own bar in mock mode (boot.tsx): folded into one small tab at the bottom left, so it does not
+   cover the screen under it (the Play screen fills the viewport); it opens upwards */
 .mock-bar--app {
   position: fixed;
-  right: var(--space-3);
-  bottom: var(--space-3);
+  left: var(--space-2);
+  bottom: var(--space-2);
   z-index: 10;
-  max-width: calc(100% - 2 * var(--space-3));
-  padding: var(--space-2) var(--space-3);
+  max-width: calc(100% - 2 * var(--space-2));
+  padding: 2px var(--space-2);
   background: var(--panel);
   border: var(--line-w) solid var(--ornament);
   border-radius: var(--radius-md);
-  align-items: center;
   font-size: var(--text-xs);
   color: var(--muted);
 }
 
+.mock-bar--app summary {
+  cursor: pointer;
+}
+
+.mock-bar--app[open] {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+
 /* one frame: big enough for a screenshot, no inner scroll */
 .gallery--single .gallery-screen__frames {
-  grid-template-columns: minmax(0, 1200px);
+  grid-template-columns: minmax(0, 1368px);
+}
+
+/* the single view uses the whole width, so a 1366 window shows the desktop layout of a screen */
+.gallery--single {
+  max-width: none;
+  padding-inline: 0;
+}
+
+.gallery--single .gallery__head,
+.gallery--single .gallery-screen > h2,
+.gallery--single .gallery-screen__page,
+.gallery--single .gallery-frame__caption,
+.gallery--single .mock-bar {
+  padding-inline: var(--space-4);
 }
 
 .gallery--single .gallery-frame__plate {
@@ -206,9 +230,16 @@
   padding-left: var(--space-6);
 }
 
-.preview__changes {
-  display: block;
-  font-size: var(--text-sm);
+/* The Play screen fills the viewport in the app (position: fixed). In a plate it fills the plate instead:
+   a small plate gets the stacked layout, the single view (1366 wide) the three desktop columns at 620 high. */
+.gallery-frame__screen > .play {
+  position: relative;
+  height: 560px;
+  z-index: 0;
+}
+
+.gallery--single .gallery-frame__screen > .play {
+  height: 620px;
 }
 
 @media (min-width: 1100px) {

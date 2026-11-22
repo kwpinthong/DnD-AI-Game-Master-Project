@@ -1,7 +1,7 @@
 import { RoomViewLockCode } from '@isekai/protocol';
 import { CONTRACT_FIXTURES } from '@isekai/protocol/contract';
 import { describe, expect, it } from 'vitest';
-import { bondBar, entrySection, lockTitle, rollLine, topBar } from '../src/screen-models.ts';
+import { bondBar, entrySection, injuryWord, lockTitle, nextTurn, omenBlocked, rollLine, secretQuota, staminaWord, topBar, turnName } from '../src/screen-models.ts';
 
 // GEN-099: the web reads the contract's fixtures through its own view-models (the mock layer of GEN-100 uses the same).
 describe('screen view-models over the contract fixtures', () => {
@@ -29,6 +29,28 @@ describe('screen view-models over the contract fixtures', () => {
   it('F5 roll line and F4 bond bar are words / steps, no number but the d20 face', () => {
     expect(rollLine(CONTRACT_FIXTURES.RollView[0] as Parameters<typeof rollLine>[0])).toBe('ทอย d20 = 14 · ยาก · สำเร็จ');
     expect(bondBar({ word: 'สนิท', step: 5 })).toEqual([true, true, true, true, true, false]);
+  });
+
+  it('GEN-088: the turn after this one, and the words for HP / Stamina by their share of the maximum (Q-197)', () => {
+    expect(nextTurn({ day: 3, phase: 'SOLARION', turn: 1 })).toEqual({ day: 3, phase: 'SOLARION', turn: 2 });
+    expect(nextTurn({ day: 3, phase: 'SOLARION', turn: 2 })).toEqual({ day: 3, phase: 'HESPERION', turn: 1 });
+    expect(nextTurn({ day: 3, phase: 'NOCTHERION', turn: 2 })).toEqual({ day: 4, phase: 'EOSORIA', turn: 1 });
+    expect(turnName({ day: 4, phase: 'EOSORIA', turn: 1 }, 3)).toBe('วันที่ 4 · EOSORIA เทิร์น 1');
+    // Max HP 30: 15 is still ปกติ, 8 บาดเจ็บ, 7 สาหัส, 0 สลบ
+    expect([30, 15, 14, 8, 7, 1, 0].map((current) => injuryWord({ current, max: 30 }))).toEqual(['ปกติ', 'ปกติ', 'บาดเจ็บ', 'บาดเจ็บ', 'สาหัส', 'สาหัส', 'สลบ']);
+    expect([30, 15, 8, 7, 0].map((current) => staminaWord({ current, max: 30 }))).toEqual(['ปกติ', 'ปกติ', 'เหนื่อย', 'ใกล้หมดแรง', 'หมดแรง']);
+  });
+
+  it('GEN-088: the Secret quota and the omen say when they come back', () => {
+    const at = (day: number, phase: 'SOLARION' | 'NOCTHERION', secretUsed: boolean) => ({ day, phase, you: { secretUsed } });
+    expect(secretQuota(at(3, 'SOLARION', false))).toEqual({ status: 'วันนี้เหลือ 1', blocked: null });
+    expect(secretQuota(at(3, 'NOCTHERION', false)).status).toBe('คืนนี้ลับฟรี 1');
+    expect(secretQuota(at(3, 'SOLARION', true))).toEqual({ status: 'ใช้แล้ว รีเซ็ตเช้าวันที่ 4', blocked: 'ใช้ลับวันนี้แล้ว รีเซ็ตเช้าวันที่ 4' });
+    // the last day has no next morning to promise
+    expect(secretQuota(at(12, 'NOCTHERION', true))).toEqual({ status: 'ใช้แล้ว', blocked: 'ใช้ลับฟรีของคืนนี้แล้ว' });
+    expect(omenBlocked({ day: 6, phase: 'NOCTHERION' }, true)).toBeNull();
+    expect(omenBlocked({ day: 6, phase: 'SOLARION' }, false)).toBe('ส่งลางสังหรณ์ได้อีกครั้งคืนนี้ ช่วง NOCTHERION');
+    expect(omenBlocked({ day: 6, phase: 'NOCTHERION' }, false)).toMatch(/วันที่ 7$/);
   });
 
   it('every lock code of the contract has a title', () => {

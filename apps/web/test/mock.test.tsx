@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EndingPreview, HitPreview, LibraryPreview } from '../src/dev/previews.tsx';
+import { EndingPreview, LibraryPreview } from '../src/dev/previews.tsx';
 import { mockHttp } from '../src/mock/http.ts';
 import { installMock, MOCK_TOKEN, mockBaseUrl, mockRoom } from '../src/mock/install.ts';
 import { MockRoomServer, type MockPeer } from '../src/mock/room.ts';
@@ -72,25 +72,32 @@ describe('C2 every scenario shows its state', () => {
   it('normal: the room opens online, at the fountain, collecting actions', async () => {
     playRoom('normal');
     expect(await screen.findByText('เชื่อมต่อแล้ว')).toBeTruthy();
-    expect(screen.getByText('รอ action จากผู้เล่น')).toBeTruthy();
-    expect(screen.getByText('คุณอยู่ที่: น้ำพุกลางเมือง')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'น้ำพุกลางเมือง' })).toBeTruthy();
+    // collecting actions: the box is open
     expect((within(form()).getByRole('textbox') as HTMLTextAreaElement).disabled).toBe(false);
+    expect((within(form()).getByRole('button', { name: 'ส่ง action' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('waiting: your action is in and the others are still sending, then the turn closes', { timeout: 10_000 }, async () => {
     slowScripts();
     playRoom('waiting');
-    expect(await screen.findByText(/^ส่งแล้ว \(Public\)/)).toBeTruthy();
-    expect(screen.getByText('ส่ง action แล้ว 2/3 คน')).toBeTruthy();
+    expect(await screen.findByText(/^ส่งแล้ว \(เปิดเผย\)/)).toBeTruthy();
+    expect(screen.getByText('รอผู้เล่นอื่น ส่งแล้ว 2/3')).toBeTruthy();
     // the script plays in order: the last player sends, then the turn closes
-    expect(await screen.findByText('ส่ง action แล้ว 3/3 คน', {}, { timeout: 3000 })).toBeTruthy();
-    expect(await screen.findByText('ปิดรับแล้ว กำลังสรุปผล…', {}, { timeout: 3000 })).toBeTruthy();
+    expect(await screen.findByText('รอผู้เล่นอื่น ส่งแล้ว 3/3', {}, { timeout: 3000 })).toBeTruthy();
+    expect(await screen.findByText('กำลังสรุปผล SOLARION เทิร์น 1…', {}, { timeout: 3000 })).toBeTruthy();
+  });
+
+  it('astral: the action box is gone; the lock message and the omen box are there', async () => {
+    playRoom('astral');
+    expect(await screen.findByText('ลินเป็น Astral Spirit ตั้งแต่วันที่ 6 HESPERION')).toBeTruthy();
+    expect(screen.queryByRole('form', { name: 'ส่ง action' })).toBeNull();
+    expect(screen.getByRole('form', { name: 'ส่งลางสังหรณ์' })).toBeTruthy();
   });
 
   it.each([
     ['exhausted', 'คุณหมดแรง ต้องพักเทิร์นนี้'],
     ['unconscious', 'คุณสลบ 1 เทิร์น'],
-    ['astral', 'ลินเป็น Astral Spirit ตั้งแต่วันที่ 6 HESPERION'],
     ['resolving', 'กำลังสรุปผล SOLARION เทิร์น 1…'],
     ['traveling', 'กำลังเดินทางไป ป่า ถึงเมื่อจบเทิร์นนี้'],
     ['recovering', 'พักฟื้นที่สถานพยาบาลกลาง เหลือ 1 เทิร์น'],
@@ -102,8 +109,9 @@ describe('C2 every scenario shows its state', () => {
 
   it('secret-used: Secret cannot be picked today', async () => {
     playRoom('secret-used');
-    const secret = (await screen.findByText(/วันนี้ใช้แล้ว/)).closest('label')!.querySelector('input')!;
+    const secret = (await screen.findByRole('radio', { name: 'ลับ' })) as HTMLInputElement;
     expect(secret.disabled).toBe(true);
+    expect(screen.getByText(/^ใช้ลับวันนี้แล้ว/)).toBeTruthy();
   });
 
   it('stuck: the AI GM is stuck and the retry button clears it', async () => {
@@ -120,10 +128,9 @@ describe('C2 every scenario shows its state', () => {
   });
 
   it('hit: the hit from someone else arrives after the room opens', async () => {
-    const baseUrl = mockBaseUrl('hit', `t${++cell}`);
-    render(<HitPreview apiBaseUrl={baseUrl} token={MOCK_TOKEN} />);
+    playRoom('hit');
     expect(await screen.findByText('ถุงเงินของคุณหายไป')).toBeTruthy();
-    expect(screen.getByText('เกิดกับคุณ')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'เกิดกับคุณ' })).toBeTruthy();
   });
 
   it('reconnect: the socket drops, comes back and fills in what it missed', { timeout: 10_000 }, async () => {
@@ -139,9 +146,11 @@ describe('C2 every scenario shows its state', () => {
     slowScripts();
     playRoom('period-change');
     expect(await screen.findByRole('heading', { name: /SOLARION.*เทิร์น 1\/2/ })).toBeTruthy();
-    const rain = screen.getByText(/^สภาพอากาศ:/).textContent;
+    const weather = () => document.querySelector('.play-top__weather')!.textContent;
+    const rain = weather();
+    expect(rain).toContain('ฝนตก');
     expect(await screen.findByRole('heading', { name: /HESPERION.*เทิร์น 1\/2/ }, { timeout: 3000 })).toBeTruthy();
-    expect(screen.getByText(/^สภาพอากาศ:/).textContent).not.toBe(rain);
+    expect(weather()).not.toBe(rain);
   });
 
   it('ended: the game log shows the end and everyone\'s secrets', async () => {

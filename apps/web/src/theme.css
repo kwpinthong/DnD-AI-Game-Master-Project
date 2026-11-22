@@ -348,6 +348,63 @@ hr {
   color: var(--muted);
 }
 
+/* ---------- Meter (HP / Stamina) + step bar (bond): shapes next to a number or a word, never alone ---------- */
+.meter {
+  --fill: 0%;
+  display: block;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--line);
+  overflow: hidden;
+}
+
+.meter__fill {
+  display: block;
+  width: var(--fill);
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+
+.meter--low .meter__fill {
+  background: var(--danger);
+}
+
+.meter--spent {
+  background: none;
+  border: var(--line-w) dashed var(--muted);
+}
+
+.step-bar {
+  display: inline-flex;
+  gap: 2px;
+  vertical-align: middle;
+}
+
+.step-bar__cell {
+  width: 12px;
+  height: 8px;
+  border: var(--line-w) solid var(--muted);
+  border-radius: 2px;
+}
+
+.step-bar__cell--on {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+/* ---------- Chip: a word in a thin outline (a status, a person at your place) ---------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border: var(--line-w) solid var(--muted);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
 /* ---------- Toast ---------- */
 .toast {
   display: flex;

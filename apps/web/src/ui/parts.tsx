@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { useId, type CSSProperties, type ReactNode } from 'react';
 import hitIcon from '../assets/icons/status-hit.svg';
 import publicIcon from '../assets/icons/visibility-public.svg';
 import secretIcon from '../assets/icons/visibility-secret.svg';
@@ -54,6 +54,31 @@ export function HitCard({ actor, onAcknowledge, children }: { actor: string | nu
       <p className="hit-card__actor">{actor ?? uiText.hit.unknownActor}</p>
       {onAcknowledge && <Button onClick={onAcknowledge}>{uiText.hit.acknowledge}</Button>}
     </article>
+  );
+}
+
+/**
+ * A thin bar for an own value with a maximum (HP, Stamina). Decoration next to the number and the word:
+ * `label` is what a screen reader hears. `tone`: `low` = running out, `spent` = none left.
+ */
+export function Meter({ label, value, max, tone = 'ok' }: { label: string; value: number; max: number; tone?: 'ok' | 'low' | 'spent' }) {
+  const share = Math.max(0, Math.min(1, max > 0 ? value / max : 0));
+  const style = { '--fill': `${Math.round(share * 100)}%` } as CSSProperties;
+  return (
+    <span className={`meter meter--${tone}`} role="img" aria-label={label}>
+      <span className="meter__fill" style={style} />
+    </span>
+  );
+}
+
+/** A bar of steps (the 6-step companion bond, F4): a filled cell is solid, an open one is an outline. */
+export function StepBar({ label, cells }: { label: string; cells: readonly boolean[] }) {
+  return (
+    <span className="step-bar" role="img" aria-label={label}>
+      {cells.map((on, i) => (
+        <span key={i} className={on ? 'step-bar__cell step-bar__cell--on' : 'step-bar__cell'} />
+      ))}
+    </span>
   );
 }
 

@@ -42,11 +42,11 @@ export function bootMock(root: HTMLElement): void {
   createRoot(root).render(
     <StrictMode>
       {path === '/admin' ? <AdminDashboard apiBaseUrl={baseUrl} /> : <App apiBaseUrl={baseUrl} />}
-      <aside className="mock-bar mock-bar--app" aria-label="mock">
-        <span>mock: {scenario.title}</span>
+      <details className="mock-bar--app" aria-label="mock">
+        <summary>mock: {scenario.title}</summary>
         <a href={GALLERY_PATH}>เปิด gallery</a>
         <MockBar baseUrl={baseUrl} />
-      </aside>
+      </details>
     </StrictMode>,
   );
 }

@@ -95,6 +95,18 @@ const entry = (seq: number, kind: RoomEntry['kind'], text: string): RoomEntry =>
   text,
 });
 
+/** What the Play screen loads besides the socket (GEN-088); a test overrides the one it is about. */
+const PLAY_DATA: Record<string, () => Response> = {
+  'GET /api/game/surroundings': () => Response.json({ view: 'player', you: null, place: null, people: [], npcs: [] }),
+  'GET /api/game/companions': () => Response.json({ companions: [] }),
+  'GET /api/game/inventory': () => Response.json({ inventory: { skills: [], items: [], discoveries: [] } }),
+};
+
+const topBar = () => screen.getByRole('group', { name: 'เวลาและสถานะเกม' });
+const actionText = () => screen.getByLabelText(/^คุณจะทำอะไร/) as HTMLTextAreaElement;
+const FEED = 'เหตุการณ์ที่นี่';
+const STORY = 'เรื่องของคุณ';
+
 function loggedIn(game: GameView, more: Record<string, () => Response> = {}) {
   localStorage.setItem(TOKEN_KEY, 'tok-abc');
   vi.stubGlobal(
@@ -105,7 +117,7 @@ function loggedIn(game: GameView, more: Record<string, () => Response> = {}) {
       if (url.endsWith('/health')) return Response.json({ ok: true, db: 'connected' });
       if (key === 'GET /api/me') return Response.json({ member: me });
       if (key === 'GET /api/game') return Response.json(game);
-      const handler = more[key];
+      const handler = more[key] ?? PLAY_DATA[key];
       if (!handler) throw new Error(`unexpected request ${key}`);
       return handler();
     }),
@@ -150,10 +162,12 @@ describe('GEN-056 play room (web)', () => {
     expect(socket.sent[0]).toEqual({ type: 'hello', token: 'tok-abc', afterSeq: 0 });
     socket.receive(roomState());
     socket.receive({ type: 'ready', lastSeq: 0 });
+    // who is online sits behind [เมนู] in the top bar (Play screen v2)
+    fireEvent.click(within(topBar()).getByRole('button', { name: 'เมนู' }));
     const list = screen.getByRole('list', { name: 'ผู้เล่นในห้อง' });
-    expect(within(list).getByText(/นก \(คุณ\) — ออนไลน์/)).toBeTruthy();
-    expect(within(list).getByText(/บี — ออฟไลน์/)).toBeTruthy();
-    expect(screen.getByText('คุณอยู่ที่: ลานตลาด')).toBeTruthy();
+    expect(within(list).getByText('นก (คุณ) ออนไลน์')).toBeTruthy();
+    expect(within(list).getByText('บี ออฟไลน์')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'ลานตลาด' })).toBeTruthy();
     expect(screen.getByRole('status', { name: 'การเชื่อมต่อห้อง' }).textContent).toBe('เชื่อมต่อแล้ว');
   });
 
@@ -181,19 +195,25 @@ describe('GEN-056 play room (web)', () => {
   it('C3 / Q-195: players see how many sent, never who; your own action is shown back to you', async () => {
     const socket = await enterRoom();
     socket.receive(roomState({ members: [roomState().members[0]!, { memberId: 'm-bee', name: 'บี', role: 'player', online: true }], submittedCount: 1 }));
-    expect(screen.getByText('ส่ง action แล้ว 1/2 คน')).toBeTruthy();
+    expect(within(topBar()).getByText('ส่งแล้ว 1/2')).toBeTruthy();
+    fireEvent.click(within(topBar()).getByRole('button', { name: 'เมนู' }));
     const list = screen.getByRole('list', { name: 'ผู้เล่นในห้อง' });
-    expect(within(list).getByText(/บี — ออนไลน์$/)).toBeTruthy();
-    expect(within(list).getByText(/นก \(คุณ\) — ออนไลน์ · ยังไม่ส่ง/)).toBeTruthy();
-    expect(within(list).queryByText(/บี.*ส่ง/)).toBeNull();
+    expect(within(list).getByText('บี ออนไลน์')).toBeTruthy();
+    expect(within(list).getByText('นก (คุณ) ออนไลน์')).toBeTruthy();
+    expect(list.textContent).not.toMatch(/ส่งแล้ว|ยังไม่ส่ง/);
 
-    fireEvent.change(screen.getByLabelText('action ของคุณ'), { target: { value: 'แอบตามชายเสื้อคลุมดำ' } });
-    fireEvent.click(screen.getByLabelText(/^Secret/));
+    fireEvent.change(actionText(), { target: { value: 'แอบตามชายเสื้อคลุมดำ' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'ลับ' }));
     fireEvent.click(screen.getByRole('button', { name: 'ส่ง action' }));
     expect(socket.sent.at(-1)).toEqual({ type: 'action', text: 'แอบตามชายเสื้อคลุมดำ', visibility: 'secret', rest: false });
     socket.receive({ type: 'action_accepted' });
-    socket.receive(roomState({}, { action: { text: 'แอบตามชายเสื้อคลุมดำ', visibility: 'secret', rest: false } }));
-    expect(screen.getByText(/ส่งแล้ว \(Secret\): แอบตามชายเสื้อคลุมดำ/)).toBeTruthy();
+    socket.receive(roomState({ submittedCount: 1 }, { action: { text: 'แอบตามชายเสื้อคลุมดำ', visibility: 'secret', rest: false } }));
+    // your own action comes back to you, with the count of who has sent and nothing else
+    expect(screen.getByText('ส่งแล้ว (ลับ): แอบตามชายเสื้อคลุมดำ')).toBeTruthy();
+    expect(screen.getByText('รอผู้เล่นอื่น ส่งแล้ว 1/2')).toBeTruthy();
+    // it can be replaced until the turn closes
+    fireEvent.click(screen.getByRole('button', { name: 'แก้ไข' }));
+    expect(actionText().value).toBe('แอบตามชายเสื้อคลุมดำ');
     expect(screen.getByRole('button', { name: 'ส่งแทนของเดิม' })).toBeTruthy();
   });
 
@@ -202,10 +222,13 @@ describe('GEN-056 play room (web)', () => {
     socket.receive({ type: 'entry', entry: entry(1, 'feed', 'ชายร่างสูงล้มแผงผลไม้') });
     socket.receive({ type: 'entry', entry: entry(2, 'narration', 'คุณเห็นรอยเท้าใต้โต๊ะ') });
     socket.receive(roomState());
-    const feed = screen.getByRole('region', { name: 'เหตุการณ์ที่นี่' });
-    const mine = screen.getByRole('region', { name: 'สิ่งที่คุณรู้คนเดียว' });
+    const feed = screen.getByRole('region', { name: FEED });
+    const mine = screen.getByRole('region', { name: STORY });
     expect(within(feed).getByText('ชายร่างสูงล้มแผงผลไม้')).toBeTruthy();
-    expect(within(feed).getByText('วันที่ 1 · EOSORIA (เช้า 06:00-11:59) · เทิร์น 1/2 · ลานตลาด')).toBeTruthy();
+    expect(within(feed).getByRole('heading', { name: 'วันที่ 1 · EOSORIA เทิร์น 1' })).toBeTruthy();
+    // the feed is the centre (public) column, the narration the private one
+    expect(feed.closest('.play-place')).toBeTruthy();
+    expect(mine.closest('.play-private')).toBeTruthy();
     expect(within(feed).queryByText('คุณเห็นรอยเท้าใต้โต๊ะ')).toBeNull();
     expect(within(mine).getByText('คุณเห็นรอยเท้าใต้โต๊ะ')).toBeTruthy();
   });
@@ -215,7 +238,7 @@ describe('GEN-056 play room (web)', () => {
     socket.receive({ type: 'entry', entry: { ...entry(1, 'narration', 'คุณ: เช็ดโต๊ะ สำเร็จ'), fallback: true } });
     socket.receive({ type: 'entry', entry: entry(2, 'narration', 'แสงเทียนสั่นไหว') });
     socket.receive(roomState());
-    const mine = screen.getByRole('region', { name: 'สิ่งที่คุณรู้คนเดียว' });
+    const mine = screen.getByRole('region', { name: STORY });
     const items = within(mine).getAllByRole('listitem');
     expect(within(items[0]!).getByText(FALLBACK_NARRATION_LABEL)).toBeTruthy();
     expect(within(items[1]!).queryByText(FALLBACK_NARRATION_LABEL)).toBeNull();
@@ -225,22 +248,24 @@ describe('GEN-056 play room (web)', () => {
     const socket = await enterRoom();
     socket.receive(roomState());
     const sentBefore = socket.sent.length;
-    fireEvent.change(screen.getByLabelText('action ของคุณ'), { target: { value: '   ' } });
+    fireEvent.change(actionText(), { target: { value: '   ' } });
     fireEvent.click(screen.getByRole('button', { name: 'ส่ง action' }));
     expect(screen.getByRole('alert').textContent).toBe('พิมพ์ action ก่อนส่ง');
-    fireEvent.change(screen.getByLabelText('action ของคุณ'), { target: { value: 'ก'.repeat(1001) } });
+    fireEvent.change(actionText(), { target: { value: 'ก'.repeat(1001) } });
     fireEvent.click(screen.getByRole('button', { name: 'ส่ง action' }));
     expect(screen.getByRole('alert').textContent).toMatch(/ไม่เกิน 1000/);
     expect(socket.sent.length).toBe(sentBefore);
 
-    fireEvent.change(screen.getByLabelText('action ของคุณ'), { target: { value: 'เดินไปตลาด' } });
+    fireEvent.change(actionText(), { target: { value: 'เดินไปตลาด' } });
     fireEvent.click(screen.getByRole('button', { name: 'ส่ง action' }));
     socket.receive({ type: 'action_rejected', code: 'resolving', message: 'phase นี้ปิดรับ action แล้ว กำลังสรุปผล รอ phase ถัดไป' });
     expect(screen.getByRole('alert').textContent).toMatch(/ปิดรับ/);
 
     socket.receive(roomState({}, { lock: { code: 'exhausted', message: 'ตัวละครหมดแรง (Stamina 0) phase นี้ต้องนอนพัก ส่ง action ไม่ได้' } }));
-    expect(screen.getByRole('note').textContent).toMatch(/หมดแรง/);
-    expect((screen.getByLabelText('action ของคุณ') as HTMLTextAreaElement).disabled).toBe(true);
+    const note = screen.getByRole('note', { name: 'หมดแรง' });
+    expect(note.textContent).toContain('ตัวละครหมดแรง (Stamina 0) phase นี้ต้องนอนพัก ส่ง action ไม่ได้');
+    expect(note.textContent).toContain('ส่ง action ได้อีกครั้ง: EOSORIA เทิร์น 2');
+    expect(actionText().disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'ส่ง action' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -251,7 +276,7 @@ describe('GEN-056 play room (web)', () => {
     first.receive({ type: 'entry', entry: entry(5, 'narration', 'เล่าหนึ่ง') });
     first.receive(roomState());
     first.drop();
-    expect(screen.getByRole('status', { name: 'การเชื่อมต่อห้อง' }).textContent).toMatch(/กำลังต่อใหม่/);
+    expect(screen.getByRole('status', { name: 'การเชื่อมต่อห้อง' }).textContent).toMatch(/กำลังเชื่อมต่อใหม่/);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1_500);
@@ -266,7 +291,7 @@ describe('GEN-056 play room (web)', () => {
     second.receive(roomState());
     second.receive({ type: 'ready', lastSeq: 8 });
     expect(screen.getAllByText('เล่าหนึ่ง')).toHaveLength(1);
-    expect(within(screen.getByRole('region', { name: 'เหตุการณ์ที่นี่' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+    expect(within(screen.getByRole('region', { name: FEED })).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
       expect.stringContaining('ฟีดหนึ่ง'),
       expect.stringContaining('ฟีดสอง'),
     ]);
@@ -277,6 +302,8 @@ describe('GEN-056 play room (web)', () => {
     const socket = await enterRoom();
     socket.receive(roomState({}, { allies: [{ ref: 'ref-darin', name: 'ดาริน' }] }));
 
+    // Whisper is the second tab of the private column
+    fireEvent.click(screen.getByRole('tab', { name: 'Whisper' }));
     const form = screen.getByRole('form', { name: 'ส่ง Whisper' });
     fireEvent.change(within(form).getByLabelText('ถึง'), { target: { value: 'ref-darin' } });
     fireEvent.change(within(form).getByLabelText('ข้อความ Whisper'), { target: { value: 'คืนนี้เจอกันหลังวิหาร' } });
@@ -292,8 +319,10 @@ describe('GEN-056 play room (web)', () => {
     expect(within(list).getByText('ถึง ดาริน: คืนนี้เจอกันหลังวิหาร')).toBeTruthy();
     expect(within(list).getByText('จาก ดาริน: ได้ เจอกัน')).toBeTruthy();
     // Not mixed into the feed or the narration.
-    expect(within(screen.getByRole('region', { name: 'เหตุการณ์ที่นี่' })).queryByText(/เจอกัน/)).toBeNull();
-    expect(within(screen.getByRole('region', { name: 'สิ่งที่คุณรู้คนเดียว' })).queryByText(/เจอกัน/)).toBeNull();
+    expect(within(screen.getByRole('region', { name: FEED })).queryByText(/เจอกัน/)).toBeNull();
+    // (the story tab is hidden while Whisper is open, so it has no accessible name to find it by)
+    expect(document.querySelector(`section[aria-label="${STORY}"]`)!.textContent).not.toMatch(/เจอกัน/);
+    expect(list.closest('.play-private')).toBeTruthy();
 
     socket.receive({ type: 'whisper_rejected', code: 'not_allowed', message: 'ส่ง Whisper ถึงคนนี้ไม่ได้ ต้องเป็นพันธมิตรที่สนิทกันพอก่อน' });
     expect(within(form).getByRole('alert').textContent).toMatch(/พันธมิตร/);
@@ -302,6 +331,7 @@ describe('GEN-056 play room (web)', () => {
   it('GEN-067 C4: without an ally above +9 there is no Whisper form, only a note', async () => {
     const socket = await enterRoom();
     socket.receive(roomState());
+    fireEvent.click(screen.getByRole('tab', { name: 'Whisper' }));
     expect(screen.queryByRole('form', { name: 'ส่ง Whisper' })).toBeNull();
     expect(screen.getByText('ยังไม่มีพันธมิตรที่สนิทพอจะ Whisper ได้')).toBeTruthy();
   });
@@ -337,7 +367,7 @@ describe('GEN-055 skills and items (web)', () => {
   const skill = { id: 's-1', name: 'Ward of Light', rank: 'B', alignment: 'Good', category: 'Defensive', triggerType: 'Passive', dailyLimit: 0, description: 'สร้างม่านแสงบาง ๆ' };
   const rosary = { id: 'i-1', name: 'Silver Rosary of Hearth', rank: 'B', alignment: 'Good', category: 'Accessory', triggerType: 'Passive', dailyLimit: 0, description: 'ฟื้นฟู HP +4' };
 
-  it('Q-106 / C7: the button loads your own skills, the items you hold now and what you found at the library', async () => {
+  it('Q-106 / C7: the panel shows your own skills, the items you hold now and what you found at the library', async () => {
     const inventories = [
       { inventory: { skills: [skill], items: [rosary], discoveries: [{ kind: 'skill', name: 'The First Light', text: 'สวดภาวนาอธิษฐาน 3 วัน' }] } },
       // After a steal the list is what the server says you hold now.
@@ -351,16 +381,17 @@ describe('GEN-055 skills and items (web)', () => {
     socket.open();
     socket.receive(roomState());
 
-    fireEvent.click(screen.getByRole('button', { name: 'สกิลและไอเท็มของฉัน' }));
-    const panel = await screen.findByRole('region', { name: 'สกิลและไอเท็มของฉัน' });
-    expect(await within(panel).findByText(/Ward of Light · Rank B · Good · Passive/)).toBeTruthy();
-    expect(within(panel).getByText(/Silver Rosary of Hearth · Rank B/)).toBeTruthy();
-    expect(within(panel).getByText(/The First Light: สวดภาวนาอธิษฐาน 3 วัน/)).toBeTruthy();
+    // Play screen v2: the panel is always there in the left column and loads by itself
+    const panel = await screen.findByRole('region', { name: 'ความสามารถและของ' });
+    expect((await within(panel).findByText('Ward of Light')).closest('li')!.textContent).toContain('Rank B · Passive');
+    expect(within(panel).getByText('Silver Rosary of Hearth').closest('li')!.textContent).toContain('Rank B');
+    expect(within(panel).getByText('The First Light: สวดภาวนาอธิษฐาน 3 วัน')).toBeTruthy();
 
-    fireEvent.click(within(panel).getByRole('button', { name: 'โหลดใหม่' }));
-    expect(await within(panel).findByText('ไม่มีไอเท็มติดตัว')).toBeTruthy();
-    expect(within(panel).queryByText(/Silver Rosary/)).toBeNull();
-    expect(within(panel).getByText('ยังไม่พบเงื่อนไขใด (ค้นได้ด้วย INVESTIGATE ที่หอสมุดหลวง)')).toBeTruthy();
+    // it loads again when the turn moves on: after a steal the list is what the server says you hold now
+    socket.receive(roomState({ turn: 2 }));
+    await waitFor(() => expect(within(panel).queryByText('Silver Rosary of Hearth')).toBeNull());
+    expect(within(panel).getByText('Ward of Light')).toBeTruthy();
+    expect(within(panel).queryByText(/เบาะแสที่ค้นพบ/)).toBeNull();
   });
 });
 
@@ -425,23 +456,32 @@ describe('GEN-063 time system (web)', () => {
   it('C3: in NOCTHERION the free Secret is explained, and once used tonight it is disabled', async () => {
     const socket = await enterRoom();
     socket.receive(roomState({ phase: 'NOCTHERION', turn: 2 }, { secretUsed: true }));
-    expect(screen.getByText(/ส่ง Secret ได้ฟรี 1 เทิร์น/)).toBeTruthy();
-    const secret = screen.getByLabelText(/^Secret/) as HTMLInputElement;
+    expect(screen.getByText(/คืนนี้ลับฟรี 1 เทิร์น/)).toBeTruthy();
+    const secret = screen.getByRole('radio', { name: 'ลับ' }) as HTMLInputElement;
     expect(secret.disabled).toBe(true);
-    expect(screen.getByText(/คืนนี้ใช้แล้ว/)).toBeTruthy();
+    expect(screen.getByText('ใช้ลับฟรีของคืนนี้แล้ว รีเซ็ตเช้าวันที่ 2')).toBeTruthy();
   });
 
   it('C4: REST / SLEEP is sent with the action, and a Drowsy player is told the penalty', async () => {
     const socket = await enterRoom();
     socket.receive(roomState({ phase: 'NOCTHERION' }, { drowsy: true }));
-    expect(screen.getByRole('note').textContent).toMatch(/ง่วงซึม.*d20 -2.*Stamina เพิ่ม 1/);
-    fireEvent.change(screen.getByLabelText('action ของคุณ'), { target: { value: 'นอนที่โรงเตี๊ยม' } });
-    fireEvent.click(screen.getByLabelText(/^REST \/ SLEEP/));
+    // the penalty in words: players never get the d20 change as a number (GEN-088 C3)
+    expect(screen.getByRole('note').textContent).toBe('ง่วงซึมทั้งวัน: ทอยยากขึ้น เหนื่อยขึ้นทุก action');
+    fireEvent.change(actionText(), { target: { value: 'นอนที่โรงเตี๊ยม' } });
+    fireEvent.click(screen.getByRole('button', { name: 'พัก / นอน' }));
     fireEvent.click(screen.getByRole('button', { name: 'ส่ง action' }));
     expect(socket.sent.at(-1)).toEqual({ type: 'action', text: 'นอนที่โรงเตี๊ยม', visibility: 'public', rest: true });
     socket.receive({ type: 'action_accepted' });
     socket.receive(roomState({ phase: 'NOCTHERION' }, { action: { text: 'นอนที่โรงเตี๊ยม', visibility: 'public', rest: true } }));
-    expect(screen.getByText(/ส่งแล้ว \(Public · REST \/ SLEEP\): นอนที่โรงเตี๊ยม/)).toBeTruthy();
+    expect(screen.getByText('ส่งแล้ว (เปิดเผย · พัก / นอน): นอนที่โรงเตี๊ยม')).toBeTruthy();
+  });
+
+  it('[พัก / นอน] alone is a whole action: its own words are sent when the box is empty', async () => {
+    const socket = await enterRoom();
+    socket.receive(roomState());
+    fireEvent.click(screen.getByRole('button', { name: 'พัก / นอน' }));
+    fireEvent.click(screen.getByRole('button', { name: 'ส่ง action' }));
+    expect(socket.sent.at(-1)).toEqual({ type: 'action', text: 'พัก / นอน', visibility: 'public', rest: true });
   });
 });
 
@@ -449,27 +489,29 @@ describe('GEN-069 TRAIN at the guild (web)', () => {
   it('TRAIN is sent with the action (not with REST), the refusal is shown, and the sent action says TRAIN', async () => {
     const socket = await enterRoom();
     socket.receive(roomState({}));
-    fireEvent.change(screen.getByLabelText('action ของคุณ'), { target: { value: 'ฝึกซ้อมที่ลานกิลด์' } });
-    fireEvent.click(screen.getByLabelText(/^REST \/ SLEEP/));
-    fireEvent.click(screen.getByLabelText(/^TRAIN/));
-    expect((screen.getByLabelText(/^REST \/ SLEEP/) as HTMLInputElement).checked).toBe(false);
+    fireEvent.change(actionText(), { target: { value: 'ฝึกซ้อมที่ลานกิลด์' } });
+    fireEvent.click(screen.getByRole('button', { name: 'พัก / นอน' }));
+    fireEvent.click(screen.getByRole('button', { name: 'ฝึก TRAIN' }));
+    expect(screen.getByRole('button', { name: 'พัก / นอน' }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: 'ฝึก TRAIN' }).getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(screen.getByRole('button', { name: 'ส่ง action' }));
     expect(socket.sent.at(-1)).toEqual({ type: 'action', text: 'ฝึกซ้อมที่ลานกิลด์', visibility: 'public', rest: false, train: true });
     socket.receive({ type: 'action_rejected', code: 'train_used', message: 'วันนี้ฝึกที่กิลด์ไปแล้ว ฝึกได้วันละ 1 ครั้ง' });
     expect(await screen.findByText('วันนี้ฝึกที่กิลด์ไปแล้ว ฝึกได้วันละ 1 ครั้ง')).toBeTruthy();
     socket.receive(roomState({}, { action: { text: 'ฝึกซ้อมที่ลานกิลด์', visibility: 'public', rest: false, train: true } }));
-    expect(screen.getByText(/ส่งแล้ว \(Public · TRAIN\): ฝึกซ้อมที่ลานกิลด์/)).toBeTruthy();
+    expect(screen.getByText('ส่งแล้ว (เปิดเผย · TRAIN): ฝึกซ้อมที่ลานกิลด์')).toBeTruthy();
   });
 });
 
 describe('GEN-068 weather (web)', () => {
-  it('C1: the room shows the period weather in Thai, with Disaster from day 5; nothing before it is picked', async () => {
+  it('C1: the top bar shows the period weather in Thai, with Disaster from day 5; "รอ GM" before it is picked', async () => {
     const socket = await enterRoom();
     socket.receive(roomState());
-    expect(screen.queryByText(/สภาพอากาศ/)).toBeNull();
+    expect(within(topBar()).getByText('อากาศ: รอ GM')).toBeTruthy();
     socket.receive(roomState({ weather: { weather: 'Rain', disaster: false } }));
-    expect(screen.getByText('สภาพอากาศ: ฝนตก')).toBeTruthy();
+    expect(within(topBar()).getByText('ฝนตก')).toBeTruthy();
+    expect(within(topBar()).queryByText('อากาศ: รอ GM')).toBeNull();
     socket.receive(roomState({ day: 5, weather: { weather: 'Clear', disaster: true } }));
-    expect(screen.getByText('สภาพอากาศ: แดดจ้า · ภัยพิบัติ')).toBeTruthy();
+    expect(within(topBar()).getByText('แดดจ้า · ภัยพิบัติ')).toBeTruthy();
   });
 });
