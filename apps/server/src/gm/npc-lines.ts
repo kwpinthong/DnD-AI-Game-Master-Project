@@ -1,3 +1,4 @@
+import type { NpcDialogueLevel } from '@isekai/protocol';
 import type { Period, Weather } from '@isekai/rules';
 import type { GameAssets } from '../assets/load.ts';
 import { sheetNpcFor } from '../companions/sheet.ts';
@@ -15,7 +16,7 @@ import type { GmNpcLine } from './schema.ts';
  * many, too long) is dropped or cut, the narration and the turn go on.
  */
 
-/** Normal level (GEN-116 adds low / high). */
+/** Normal level: the GEN-110 limits. */
 export const NPC_LINE_LIMITS = {
   /** Dialogue lines of one NPC (the NPC the action is about) per narration. */
   dialoguePerNpc: 3,
@@ -28,6 +29,16 @@ export const NPC_LINE_LIMITS = {
   /** Lines of the whole turn, all narrations together. */
   total: 12,
 } as const;
+
+export type NpcLineLimits = { [K in keyof typeof NPC_LINE_LIMITS]: number };
+
+/** GEN-116 (Nok): low = half the counts of normal (rounded up), high = double; a line is as long at every level. */
+export function npcLineLimits(level: NpcDialogueLevel = 'normal'): NpcLineLimits {
+  const n = NPC_LINE_LIMITS;
+  if (level === 'high') return { ...n, dialoguePerNpc: n.dialoguePerNpc * 2, reactionNpcs: n.reactionNpcs * 2, privatePerPlayer: n.privatePerPlayer * 2, total: n.total * 2 };
+  if (level === 'low') return { ...n, dialoguePerNpc: Math.ceil(n.dialoguePerNpc / 2), reactionNpcs: Math.ceil(n.reactionNpcs / 2), privatePerPlayer: Math.ceil(n.privatePerPlayer / 2), total: n.total / 2 };
+  return n;
+}
 
 export type RawLine = GmNpcLine;
 export type CleanLine = GmNpcLine;
@@ -127,10 +138,13 @@ export interface CleanOptions {
   forbidden: readonly string[];
   /** Player refs the lines may name as {{p:ref}}. */
   cast: ReadonlySet<string>;
+  /** GEN-116: the game's level; default normal. */
+  level?: NpcDialogueLevel;
 }
 
 /** The lines of one narration the server keeps: ids, names and tokens checked, text cut, limits applied (C3, C5, C7). */
 export function cleanNpcLines(raw: readonly RawLine[], opt: CleanOptions): CleanLine[] {
+  const limits = npcLineLimits(opt.level);
   const ok = raw.flatMap((l): CleanLine[] => {
     if (!opt.present.has(l.npcId)) return [];
     const text = cutLine(l.text);
@@ -141,7 +155,7 @@ export function cleanNpcLines(raw: readonly RawLine[], opt: CleanOptions): Clean
     if (opt.forbidden.some((name) => containsName(text, name))) return [];
     return [{ npcId: l.npcId, kind: l.kind, text }];
   });
-  if (opt.audience === 'private') return ok.slice(0, NPC_LINE_LIMITS.privatePerPlayer);
+  if (opt.audience === 'private') return ok.slice(0, limits.privatePerPlayer);
 
   const spoke = new Set(ok.filter((l) => l.kind === 'dialogue').map((l) => l.npcId));
   const said = new Map<string, number>();
@@ -150,15 +164,15 @@ export function cleanNpcLines(raw: readonly RawLine[], opt: CleanOptions): Clean
     if (l.kind === 'dialogue') {
       const n = said.get(l.npcId) ?? 0;
       said.set(l.npcId, n + 1);
-      return n < NPC_LINE_LIMITS.dialoguePerNpc;
+      return n < limits.dialoguePerNpc;
     }
-    if (spoke.has(l.npcId) || reacted.has(l.npcId) || reacted.size >= NPC_LINE_LIMITS.reactionNpcs) return false;
+    if (spoke.has(l.npcId) || reacted.has(l.npcId) || reacted.size >= limits.reactionNpcs) return false;
     reacted.add(l.npcId);
     return true;
   });
 }
 
-/** The first `NPC_LINE_LIMITS.total` lines of the turn, in publish order. */
-export function capTotal<T>(lines: readonly T[]): T[] {
-  return lines.slice(0, NPC_LINE_LIMITS.total);
+/** The first `total` lines of the turn (of the game's level), in publish order. */
+export function capTotal<T>(lines: readonly T[], level?: NpcDialogueLevel): T[] {
+  return lines.slice(0, npcLineLimits(level).total);
 }

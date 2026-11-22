@@ -117,6 +117,13 @@ export interface PhaseResolution {
    * at all (GEN-057 C6: a restart never applies a turn twice).
    */
   readonly apply?: (tx: DbOrTx) => void;
+  /**
+   * GEN-116: the second stage. The room starts it after the turn is published and does NOT wait for it: the next turn
+   * is open meanwhile. It calls `publish` with the NPC line entries of one audience whenever they are ready (each call
+   * stores and sends them, to the same recipients as the narration they follow, under this turn's day / phase / turn).
+   * A failure inside is the resolver's to swallow (the turn stays complete); if it throws, the room logs it and goes on.
+   */
+  readonly dialogue?: (publish: (entries: readonly ResolutionEntry[]) => void) => Promise<void>;
   /** Runs after the turn is published (e.g. the day summary); a failure is logged and never blocks the game. */
   readonly after?: () => Promise<void>;
   /** Set instead of everything else when the turn could not be resolved: nothing is published or applied. */

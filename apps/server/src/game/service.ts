@@ -106,6 +106,7 @@ export function gameView(db: Db | Tx, gameId: string, viewer: MemberRow): GameVi
     name: row.name,
     mode: row.mode,
     humanGm: row.humanGm,
+    npcDialogue: row.npcDialogue,
     inviteCode: row.inviteCode,
     status: row.startedAt === null ? 'lobby' : 'started',
     startedAt: row.startedAt === null ? null : new Date(row.startedAt).toISOString(),
@@ -160,6 +161,7 @@ export async function createGame(db: Db, input: CreateGameRequest, now: Clock): 
           name: input.gameName,
           mode: input.mode,
           humanGm: input.humanGm,
+          npcDialogue: input.npcDialogue ?? 'normal',
           ownerMemberId: owner.id,
           startedAt: null,
           createdAt: t,
@@ -241,6 +243,7 @@ export function updateGame(db: Db, actor: MemberRow, change: UpdateGameRequest):
     const set: Partial<GameRow> = {};
     if (change.gameName !== undefined) set.name = change.gameName;
     if (change.mode !== undefined) set.mode = change.mode;
+    if (change.npcDialogue !== undefined) set.npcDialogue = change.npcDialogue;
     if (Object.keys(set).length > 0) tx.update(game).set(set).where(eq(game.id, row.id)).run();
     return undefined;
   });

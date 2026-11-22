@@ -1,0 +1,1 @@
+ALTER TABLE `game` ADD `npc_dialogue` text DEFAULT 'normal' NOT NULL;

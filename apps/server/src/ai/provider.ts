@@ -9,6 +9,8 @@ export type AiPurpose =
   | 'gm_weather'
   | 'narrate_place'
   | 'narrate_player'
+  /** GEN-116: the NPC lines of a turn, written after the result and narration (own AiUsage rows, same budget). */
+  | 'npc_dialogue'
   | 'summarize_day'
   | 'summarize_journal'
   | 'finale'

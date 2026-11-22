@@ -1,5 +1,5 @@
 import type { AiCallRequest } from '../ai/provider.ts';
-import type { DayContext, JournalContext, NarrationContext, TurnContext } from './context.ts';
+import type { DayContext, DialogueContext, JournalContext, NarrationContext, TurnContext } from './context.ts';
 import { templateFinale, type FinaleContext } from './finale.ts';
 import { GM_OUTPUT, type GmAction, type GmJournal, type GmNarration, type GmNpcLine, type GmTurnProposal } from './schema.ts';
 
@@ -151,7 +151,7 @@ const RESULT_WORD: Record<string, string> = {
  * GEN-110: the Mock GM's NPC lines. A place narration: 2 dialogue lines of the NPC a beat aims at (else the first NPC),
  * then a reaction of each other NPC (up to 3, in order). A player narration: one private line when the reader's action is Secret.
  */
-export function mockNpcLines(all: NarrationContext): GmNpcLine[] {
+export function mockNpcLines(all: Pick<NarrationContext, 'audience' | 'npcs' | 'beats' | 'privateLines'>): GmNpcLine[] {
   const ctx = { ...all, npcs: all.npcs.filter((n) => n.here) };
   if ('player' in ctx.audience) {
     const first = ctx.npcs[0];
@@ -173,7 +173,6 @@ export function mockNarration(ctx: NarrationContext): GmNarration {
       actionId: b.actionId,
       text: [b.actor === null ? 'มีบางอย่างเกิดขึ้น' : `{{p:${b.actor}}}`, b.text, RESULT_WORD[b.result] ?? ''].filter((s) => s.length > 0).join(' ').slice(0, 800),
     })),
-    npcLines: mockNpcLines(ctx),
   };
 }
 
@@ -205,6 +204,8 @@ export async function cannedGmAnswer(req: AiCallRequest): Promise<unknown> {
       if (ctx.beats.some((b) => b.text.includes(MOCK_BAD_NARRATION_MARKER))) return { segments: [{ actionId: 'mock-not-a-beat', text: 'เรื่องที่ไม่อยู่ใน beat' }] };
       return mockNarration(ctx);
     }
+    case GM_OUTPUT.dialogue:
+      return { npcLines: mockNpcLines(contextOf<DialogueContext>(req)) };
     case GM_OUTPUT.daySummary:
       return mockDaySummary(contextOf<DayContext>(req));
     case GM_OUTPUT.journal:

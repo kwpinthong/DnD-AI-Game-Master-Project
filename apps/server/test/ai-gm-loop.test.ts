@@ -4,9 +4,9 @@ import type { Period, Turn } from '@isekai/rules';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import type { AiCallRequest, AiCallResult, AiProvider } from '../src/ai/provider.ts';
-import { cannedGmAnswer, contextOf, mockTurnProposal } from '../src/gm/mock-gm.ts';
+import { cannedGmAnswer, contextOf, mockNpcLines, mockTurnProposal } from '../src/gm/mock-gm.ts';
 import { mockReply } from '../src/ai/providers/mock.ts';
-import { CONTEXT_BUDGET, requestTokens, type JournalContext, type NarrationContext, type TurnContext } from '../src/gm/context.ts';
+import { CONTEXT_BUDGET, requestTokens, type DialogueContext, type JournalContext, type NarrationContext, type TurnContext } from '../src/gm/context.ts';
 import type { GmTurnProposal } from '../src/gm/schema.ts';
 import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
 import type { RunningServer } from '../src/server.ts';
@@ -49,6 +49,7 @@ const TURN_OUTPUT = 'gm_turn_proposal';
 const NARRATION_OUTPUT = 'gm_narration';
 const isTurn = (req: AiCallRequest) => req.output.name === TURN_OUTPUT;
 const isNarration = (req: AiCallRequest) => req.output.name === NARRATION_OUTPUT;
+const isDialogue = (req: AiCallRequest) => req.output.name === 'gm_dialogue';
 const narrationFor = (req: AiCallRequest) => contextOf<NarrationContext>(req).audience;
 const lastUserText = (req: AiCallRequest) => req.messages.at(-1)!.text;
 
@@ -122,10 +123,20 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     savePhaseState(server!.orm, gameId, { ...ensurePhaseState(server!.orm, gameId, CLOCK), ...to }, CLOCK);
   }
 
-  /** The three players act; resolves once the next turn opens for everyone. */
+  const dialogueLogs = () => logs.filter((l) => l.includes('dialogue timing')).length;
+  const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  /** Polls (never throws): the dialogue stage of a turn (GEN-116) finishes after the next turn is already open. */
+  async function until(done: () => boolean, ms = 3_000) {
+    for (const end = Date.now() + ms; !done() && Date.now() < end; ) await pause(10);
+  }
+
+  /** The three players act; resolves once the next turn opens for everyone and the turn's dialogue stage (GEN-116) is done. */
   async function playTurn(clients: RoomClient[], texts: string[], next: { day: number; phase: Period; turn: Turn }, visibility: ('public' | 'secret')[] = []) {
+    const before = dialogueLogs();
     for (const [i, c] of clients.entries()) await send(c, texts[i]!, visibility[i] ?? 'public');
     for (const c of clients) await c.waitFor(at(next.day, next.phase, next.turn));
+    await until(() => dialogueLogs() > before);
+    await pause(30);
   }
 
   /** Q-045: no real name in any prompt, in every test. */
@@ -174,9 +185,14 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
     const texts = ['สำรวจโรงเตี๊ยมหาเบาะแส', 'ถามข่าวเจ้าของโรงเตี๊ยม', 'แอบค้นห้องเก็บของ'];
     await playTurn(clients, texts, { day: 1, phase: 'EOSORIA', turn: 2 });
-    const timing = logs.filter((l) => l.startsWith('[gm]') && l.includes(' timing '));
+    const timing = logs.filter((l) => l.startsWith('[gm]') && l.includes(' timing ') && !l.includes('dialogue timing'));
     expect(timing).toHaveLength(1);
     for (const key of ['build_ms', 'adjudicate_ms', 'rules_ms', 'narrate_ms', 'db_ms', 'total_ms', 'in', 'out']) expect(timing[0]).toMatch(new RegExp(`\\b${key}=\\d+`));
+    // GEN-116: the dialogue stage has its own line: its calls and tokens, apart from the result stage.
+    const dialogue = logs.filter((l) => l.startsWith('[gm]') && l.includes('dialogue timing'));
+    expect(dialogue).toHaveLength(1);
+    for (const key of ['total_ms', 'in', 'out']) expect(dialogue[0]).toMatch(new RegExp(`\\b${key}=\\d+`));
+    timing.push(...dialogue);
     const publish = logs.filter((l) => l.startsWith('[room]') && l.includes(' publish '));
     expect(publish).toHaveLength(1);
     expect(publish[0]).toMatch(/db_ms=\d+ socket_ms=\d+/);
@@ -810,14 +826,13 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
 
   describe('GEN-110 NPC lines with the narration', () => {
     const npcEntries = (c: RoomClient, day = 1, phase: Period = 'SOLARION', turn: Turn = 1) => turnEntries(c, day, phase, turn).filter((e) => e.kind === 'npc');
-    /** The Mock GM's narration with `npcLines` set by `lines(audience)`; every other request gets the Mock GM's own answer. */
+    /** The dialogue stage's answer set by `lines(audience)` (GEN-116); every other request gets the Mock GM's own answer. */
     const withLines =
-      (lines: (audience: NarrationContext['audience'], ctx: NarrationContext) => unknown[]): Handler =>
+      (lines: (audience: NarrationContext['audience'], ctx: DialogueContext) => unknown[]): Handler =>
       async (req) => {
-        if (!isNarration(req) || req.messages.length > 1) return noRoll(req, 0);
-        const ctx = contextOf<NarrationContext>(req);
-        const answer = (await cannedGmAnswer(req)) as Record<string, unknown>;
-        return mockReply.ok({ ...answer, npcLines: lines(ctx.audience, ctx) });
+        if (!isDialogue(req)) return noRoll(req, 0);
+        const ctx = contextOf<DialogueContext>(req);
+        return mockReply.ok({ npcLines: lines(ctx.audience, ctx) });
       };
     /** A and B at the fountain at SOLARION (Lucia and Noah are scheduled there), C at the inn. */
     async function atFountain(): Promise<{ t: Table; clients: RoomClient[] }> {
@@ -984,20 +999,223 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
 
     it('the Mock GM gives the same NPC lines every time for the same context', async () => {
       const ctx = {
-        kind: 'gm_narration',
+        kind: 'gm_dialogue',
         audience: { place: 'fountain' },
         turn: { day: 1, phase: 'SOLARION', turn: 1 },
         place: { id: 'fountain', name: 'น้ำพุกลางเมือง' },
         cast: [{ ref: 'r1', looks: 'หญิง', title: '', self: false, karmaBand: 0 }],
         npcs: ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, alias: id, grade: 'F', here: true, persona: null, bonds: [] })),
         beats: [{ actionId: 'act-1', kind: 'public_action', actor: 'r1', text: 'ทัก', result: 'success', target: null, targetNpc: null, moved: null, items: [] }],
-        journal: null,
+        privateLines: false,
+        narration: [],
+        limits: { dialoguePerNpc: 3, reactionNpcs: 3, privatePerPlayer: 2 },
       };
-      const req = { output: { name: 'gm_narration' }, messages: [{ text: JSON.stringify(ctx) }] } as unknown as AiCallRequest;
+      const req = { output: { name: 'gm_dialogue' }, messages: [{ text: JSON.stringify(ctx) }] } as unknown as AiCallRequest;
       const first = (await cannedGmAnswer(req)) as { npcLines: { npcId: string; kind: string }[] };
       expect(first).toEqual(await cannedGmAnswer(req));
       expect(first.npcLines.filter((l) => l.kind === 'dialogue').length).toBeGreaterThan(0);
       expect(first.npcLines.filter((l) => l.kind === 'reaction').map((l) => l.npcId)).toEqual(['b', 'c', 'd']);
+    });
+
+    describe('GEN-116 two stages: the result and narration first, the NPC lines after', () => {
+      /** A gate the dialogue stage waits on; `open()` lets every waiting (and later) dialogue call go. */
+      function gate() {
+        let open = () => {};
+        const opened = new Promise<void>((r) => (open = r));
+        return { opened, open };
+      }
+      const dialogueRequests = () => provider.requests.filter(isDialogue);
+      const kindsOf = (c: RoomClient) => c.entries().filter((e) => e.kind !== 'changes');
+      /** Sends the turn's actions and waits for the next turn to open, without waiting for the dialogue stage. */
+      async function playWithoutDialogue(clients: RoomClient[], texts: string[], next: { day: number; phase: Period; turn: Turn }, visibility: ('public' | 'secret')[] = []) {
+        for (const [i, c] of clients.entries()) await send(c, texts[i]!, visibility[i] ?? 'public');
+        for (const c of clients) await c.waitFor(at(next.day, next.phase, next.turn));
+      }
+      const turn1 = (c: RoomClient) => turnEntries(c, 1, 'SOLARION', 1);
+
+      it('C1 + C2: the narration is out and the next turn is open while the lines are still being written; players act at once, then the late lines arrive under their own turn, after the narration', async () => {
+        const g = gate();
+        await boot({}, async (req, n) => {
+          if (isDialogue(req)) {
+            await g.opened;
+            return mockReply.ok({ npcLines: mockNpcLines(contextOf<DialogueContext>(req)) });
+          }
+          return noRoll(req, n);
+        });
+        const { clients } = await atFountain();
+        await playWithoutDialogue(clients, ['ขอร้องลูเซียให้เล่าเรื่องนาฬิกา', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+
+        // C1: result + narration are there, the dialogue stage was asked but has not answered, no line yet.
+        expect(turnRows()).toEqual([expect.objectContaining({ status: 'applied' })]);
+        for (const c of clients) expect(turn1(c).some((e) => e.kind === 'narration' || e.kind === 'feed')).toBe(true);
+        await until(() => dialogueRequests().length > 0);
+        expect(dialogueRequests().length).toBeGreaterThan(0);
+        for (const c of clients) expect(turn1(c).filter((e) => e.kind === 'npc')).toEqual([]);
+
+        // C2: the next turn is open and takes actions while the dialogue is still pending; turn 2 resolves too.
+        for (const c of clients) expect(c.lastRoom()).toMatchObject({ status: 'collecting', turn: 2 });
+        await playWithoutDialogue(clients, ['ทักลูเซียอีกครั้ง', 'เดินรอบน้ำพุ', 'ล้างแก้วต่อ'], { day: 1, phase: 'HESPERION', turn: 1 });
+        const lastSeqBefore = Math.max(...clients[0]!.entries().map((e) => e.seq));
+        expect(npcEntries(clients[0]!)).toEqual([]);
+
+        // Now the lines come. They belong to turn 1 (day / phase / turn) and come after everything already shown (seq).
+        g.open();
+        await until(() => npcEntries(clients[0]!).length > 0);
+        const late = npcEntries(clients[0]!);
+        expect(late.length).toBeGreaterThan(0);
+        for (const e of late) {
+          expect(e).toMatchObject({ day: 1, phase: 'SOLARION', turn: 1 });
+          expect(e.seq).toBeGreaterThan(lastSeqBefore - 1);
+        }
+        const seqs = clients[0]!.entries().map((e) => e.seq);
+        expect(new Set(seqs).size).toBe(seqs.length);
+        // Nothing of turn 2 was held back or confused by the late lines.
+        expect(turnEntries(clients[0]!, 1, 'HESPERION', 1).length).toBe(0);
+        expect(turnEntries(clients[0]!, 1, 'SOLARION', 2).some((e) => e.kind === 'narration' || e.kind === 'feed')).toBe(true);
+        // C at the inn never hears the fountain's lines.
+        expect(npcEntries(clients[2]!).filter((e) => e.place?.id === 'fountain')).toEqual([]);
+        expect(kindsOf(clients[0]!).length).toBeGreaterThan(late.length);
+      });
+
+      it('C3: the dialogue stage times out, or answers rubbish: the turn stays complete, no lines, at most the one retry, then a log line', async () => {
+        await boot({}, (req, n) => {
+          if (isDialogue(req)) return mockReply.fail('timeout');
+          return noRoll(req, n);
+        });
+        const { clients } = await atFountain();
+        await playTurn(clients, ['ทักลูเซีย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+        expect(turnRows()).toEqual([expect.objectContaining({ status: 'applied' })]);
+        for (const c of clients) {
+          expect(npcEntries(c)).toEqual([]);
+          expect(turn1(c).filter((e) => e.kind === 'narration' || e.kind === 'feed').length).toBeGreaterThan(0);
+          for (const e of c.entries()) expect(e.fallback).toBeFalsy();
+        }
+        // The existing narration policy: one retry, so two attempts per audience, never more.
+        const perAudience = dialogueRequests().length;
+        expect(perAudience).toBeGreaterThan(0);
+        expect(perAudience).toBeLessThanOrEqual(dialogueAudiences() * 2);
+        expect(logs.some((l) => l.includes('purpose=npc_dialogue') && l.includes('gave up'))).toBe(true);
+        for (const c of clients) expect(c.lastRoom()).toMatchObject({ status: 'collecting', turn: 2, gmStatus: null });
+
+        // An answer that does not fit the schema counts the same.
+        provider.use((req, n) => (isDialogue(req) ? mockReply.ok({ npcLines: 'nope' }) : noRoll(req, n)));
+        const before = dialogueRequests().length;
+        await playTurn(clients, ['ถามต่อ', 'มองน้ำ', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 1 });
+        expect(dialogueRequests().length - before).toBeLessThanOrEqual(dialogueAudiences() * 2);
+        for (const c of clients) expect(npcEntries(c, 1, 'SOLARION', 2)).toEqual([]);
+      });
+
+      /** Distinct audiences that were asked for lines (the first request of each). */
+      const dialogueAudiences = () => new Set(dialogueRequests().map((r) => JSON.stringify(contextOf<DialogueContext>(r).audience))).size;
+
+      it('C4: reload while lines are still arriving: the lines already there are all there once, the rest follow live, nothing twice (replay too)', async () => {
+        const g = gate();
+        let refA = '';
+        await boot({}, async (req, n) => {
+          if (!isDialogue(req)) return noRoll(req, n);
+          const ctx = contextOf<DialogueContext>(req);
+          // The place's lines are quick; A's private line waits for the gate.
+          if ('player' in ctx.audience) await g.opened;
+          return mockReply.ok({ npcLines: ctx.audience && 'player' in ctx.audience ? (ctx.audience.player === refA ? [{ npcId: 'amnesiac', kind: 'dialogue', text: 'ข้าเห็นสิ่งที่เจ้าซ่อนอยู่นะ' }] : []) : mockNpcLines(ctx) });
+        });
+        const { t, clients } = await atFountain();
+        refA = refOf(t.a);
+        await playWithoutDialogue(clients, ['แอบเปิดกระเป๋าลูเซีย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 }, ['secret', 'public', 'public']);
+        await until(() => npcEntries(clients[0]!).length > 0);
+        const arrived = npcEntries(clients[0]!).map((e) => e.text);
+        expect(arrived.length).toBeGreaterThan(0);
+
+        // Reload A mid-way (a new socket asks for everything).
+        await clients[0]!.close();
+        const again = await enter(t.a);
+        expect(npcEntries(again).map((e) => e.text)).toEqual(arrived);
+
+        g.open();
+        await until(() => npcEntries(again).some((e) => e.npc?.private));
+        const seqs = again.entries().map((e) => e.seq);
+        expect(new Set(seqs).size).toBe(seqs.length);
+        expect(npcEntries(again).map((e) => e.text)).toEqual([...arrived, 'ข้าเห็นสิ่งที่เจ้าซ่อนอยู่นะ']);
+
+        // A reconnect with afterSeq = the last seq seen gets nothing twice, and a full replay equals what was shown live.
+        const lastSeq = Math.max(...seqs);
+        const resumed = await openRoom(server!, { token: t.a.token, afterSeq: lastSeq });
+        sockets.push(resumed);
+        await resumed.waitFor(isReady);
+        expect(resumed.entries()).toEqual([]);
+        const full = await openRoom(server!, { token: t.a.token, afterSeq: 0 });
+        sockets.push(full);
+        await full.waitFor(isReady);
+        expect(full.entries().map((e) => e.seq)).toEqual(seqs);
+      });
+
+      it('C8: the dialogue stage has its own usage rows (npc_dialogue), apart from the result stage, and the lines follow the game level', async () => {
+        await boot({}, noRoll);
+        const t = await startedTable(server!, false);
+        move(t.a, 'fountain');
+        move(t.b, 'fountain');
+        jumpTo(t, { day: 1, phase: 'SOLARION', turn: 1 });
+        server!.db.prepare('update game set npc_dialogue = ? where id = ?').run('low', gameIdOf(t));
+        const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+        await playTurn(clients, ['ทักลูเซีย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+
+        const rows = server!.db.prepare('select purpose, count(*) as n, sum(input_tokens) as inTok, sum(cost_usd_micros) as cost from ai_usage group by purpose').all() as { purpose: string; n: number; inTok: number; cost: number }[];
+        const byPurpose = Object.fromEntries(rows.map((r) => [r.purpose, r]));
+        expect(byPurpose.npc_dialogue!.n).toBeGreaterThan(0);
+        expect(byPurpose.gm_adjudicate!.n).toBe(1);
+        expect(Object.keys(byPurpose).some((p) => p.startsWith('narrate_'))).toBe(true);
+        expect(byPurpose.npc_dialogue!.cost).toBeGreaterThan(0);
+        // low = half of normal: 2 dialogue lines + 2 reactions at most
+        const lines = npcEntries(clients[0]!);
+        expect(lines.filter((e) => e.npc?.kind === 'dialogue').length).toBeLessThanOrEqual(2);
+        expect(lines.filter((e) => e.npc?.kind === 'reaction').length).toBeLessThanOrEqual(2);
+        expect(lines.length).toBeGreaterThan(0);
+      });
+
+      it('C5: the same answer is cut differently by the level of the game (low < normal < high)', async () => {
+        const many = Array.from({ length: 8 }, (_, i) => ({ npcId: 'amnesiac', kind: 'dialogue', text: `พูดครั้งที่ ${i + 1}` }));
+        const counts: number[] = [];
+        const told: number[] = [];
+        await boot({}, withLines((audience) => ('place' in audience ? many : [])));
+        const t = await startedTable(server!, false);
+        move(t.a, 'fountain');
+        move(t.b, 'fountain');
+        const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+        for (const [i, level] of ['low', 'normal', 'high'].entries()) {
+          const day = i + 1;
+          jumpTo(t, { day, phase: 'SOLARION', turn: 1 });
+          server!.db.prepare('update game set npc_dialogue = ? where id = ?').run(level, gameIdOf(t));
+          await playTurn(clients, ['ทักลูเซีย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day, phase: 'SOLARION', turn: 2 });
+          counts.push(npcEntries(clients[0]!, day).length);
+          told.push(contextOf<DialogueContext>(dialogueRequests().at(-1)!).limits.dialoguePerNpc);
+        }
+        expect(counts).toEqual([2, 3, 6]);
+        // the AI is told what will be kept
+        expect(told).toEqual([2, 3, 6]);
+      });
+
+      it('C8: the budget runs out after the narration: the dialogue stage is stopped (no call) and the turn is complete with the AI narration', async () => {
+        // The result stage costs 3000 (adjudicate) + 1000 per narration; the ceiling 3500 is reached before the dialogue asks.
+        const usage = (inputTokens: number, outputTokens: number) => ({ inputTokens, cachedInputTokens: 0, cacheWriteTokens: 0, outputTokens });
+        await boot({ AI_GAME_MONTHLY_USD: '0.0035' }, async (req, n) => {
+          if (isTurn(req)) {
+            const r = await noRoll(req, n);
+            return r && r.ok ? { ...r, usage: usage(1000, 0) } : r;
+          }
+          return mockReply.ok(await cannedGmAnswer(req), isNarration(req) ? usage(0, 200) : usage(0, 0));
+        });
+        const { clients } = await atFountain();
+        await playTurn(clients, ['ทักลูเซีย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+
+        expect(turnRows()).toEqual([expect.objectContaining({ status: 'applied' })]);
+        expect(provider.requests.filter(isNarration).length).toBeGreaterThan(0);
+        expect(dialogueRequests()).toEqual([]);
+        for (const c of clients) {
+          expect(npcEntries(c)).toEqual([]);
+          for (const e of turn1(c).filter((x) => x.kind === 'narration' || x.kind === 'feed')) expect(e.fallback).toBeFalsy();
+        }
+        expect(logs.some((l) => l.includes('purpose=npc_dialogue') && l.includes('budget_reached'))).toBe(true);
+        expect(server!.db.prepare("select count(*) as n from ai_usage where purpose = 'npc_dialogue'").get()).toEqual({ n: 0 });
+      });
     });
   });
 });

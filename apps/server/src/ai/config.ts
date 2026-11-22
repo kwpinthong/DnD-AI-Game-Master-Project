@@ -50,6 +50,7 @@ const PURPOSES = [
   'gm_weather',
   'narrate_place',
   'narrate_player',
+  'npc_dialogue',
   'summarize_day',
   'summarize_journal',
   'finale',
