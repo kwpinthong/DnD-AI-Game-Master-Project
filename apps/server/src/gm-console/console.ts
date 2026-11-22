@@ -414,6 +414,8 @@ export function insertEvent(db: Db, gm: MemberRow, input: unknown, now: number):
     phase: req.phase,
     // GEN-071 fields: a GM-inserted event is one period, with no foreshadowing or strategies.
     endPhase: null,
+    startTurn: 1,
+    endTurn: 2,
     kind: 'event',
     title: req.title,
     description: req.description,

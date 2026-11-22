@@ -1,4 +1,4 @@
-import { eventPeriods, PHASE_LABEL, PHASES as PERIODS, TURNS_PER_PERIOD, type Phase, type Scenario } from '@isekai/protocol';
+import { eventTurnCount, PHASE_LABEL, PHASES as PERIODS, TURNS_PER_PERIOD, type Phase, type Scenario } from '@isekai/protocol';
 import { useEffect, useState, type ReactNode } from 'react';
 import { scenarioCall, type ScenarioAction } from './scenario-api.ts';
 
@@ -7,7 +7,7 @@ type Npc = Scenario['npcs'][number];
 type Legendary = Scenario['legendaries'][number];
 type Tab = 'events' | 'npcs' | 'legendaries';
 
-/** GEN-063 / GEN-071: an event runs from one of the 4 periods to an end period of the same day, both turns of each. */
+/** GEN-063 / GEN-071 / GEN-096: an event runs from a turn of one of the 4 periods to a turn of an end period of the same day. */
 const PHASES: { value: Phase; label: string }[] = PERIODS.map((value) => ({ value, label: PHASE_LABEL[value] }));
 const phaseLabel = (p: Phase) => PHASE_LABEL[p];
 const RANKS = ['F', 'B', 'A', 'S'] as const;
@@ -131,7 +131,12 @@ export function ScenarioEditor({
   const eventRow = (e: Event, i: number) => {
     const p = `timeline.${i}`;
     const kindNote = e.kind === 'finale' ? ' (ฉากจบ)' : e.kind === 'climax' ? ' (จุดไคลแมกซ์)' : '';
-    const range = e.endPhase && e.endPhase !== e.phase ? ` ถึง ${phaseLabel(e.endPhase) ?? e.endPhase}` : '';
+    // GEN-096: a turn shows only when it is not the whole period (start 2 / end 1).
+    const startNote = e.startTurn !== 1 ? ` เทิร์น ${shown(e.startTurn)}` : '';
+    const endNote = e.endTurn !== TURNS_PER_PERIOD ? ` เทิร์น ${shown(e.endTurn)}` : '';
+    const range =
+      e.endPhase && e.endPhase !== e.phase ? ` ถึง ${phaseLabel(e.endPhase) ?? e.endPhase}${endNote}` : endNote && ` ถึง${endNote}`;
+    const turns = eventTurnCount(e);
     const hint = e.foreshadowAt;
     const setHint = (patch: Partial<NonNullable<Event['foreshadowAt']>>) =>
       setAt('timeline', i, { foreshadowAt: { day: hint?.day ?? e.day - 1, phase: hint?.phase ?? 'EOSORIA', ...patch } });
@@ -139,7 +144,8 @@ export function ScenarioEditor({
       <fieldset key={e.id}>
         <legend>
           เหตุการณ์ {i + 1}: วัน {shown(e.day)} {phaseLabel(e.phase) ?? e.phase}
-          {range} · {eventPeriods(e).length * TURNS_PER_PERIOD} เทิร์น
+          {startNote}
+          {range} · {Number.isInteger(turns) && turns > 0 ? turns : '?'} เทิร์น
           {kindNote}
         </legend>
         {numberInput(`${e.id}-day`, 'วัน', `${p}.day`, e.day, (day) => setAt('timeline', i, { day }))}
@@ -147,6 +153,9 @@ export function ScenarioEditor({
         {select<Phase | ''>(`${e.id}-end`, 'ถึงช่วง', `${p}.endPhase`, e.endPhase ?? '', [{ value: '', label: 'ช่วงเดียว' }, ...PHASES], (end) =>
           setAt('timeline', i, { endPhase: end === '' ? null : end }),
         )}
+        {/* GEN-096: number inputs, so a wrong turn reaches the server and comes back named by its field. */}
+        {numberInput(`${e.id}-start-turn`, 'เริ่มเทิร์น', `${p}.startTurn`, e.startTurn, (n) => setAt('timeline', i, { startTurn: n as Event['startTurn'] }))}
+        {numberInput(`${e.id}-end-turn`, 'จบเทิร์น', `${p}.endTurn`, e.endTurn, (n) => setAt('timeline', i, { endTurn: n as Event['endTurn'] }))}
         {textInput(`${e.id}-title`, 'หัวข้อ', `${p}.title`, e.title, (title) => setAt('timeline', i, { title }))}
         {textInput(`${e.id}-desc`, 'รายละเอียด', `${p}.description`, e.description, (description) => setAt('timeline', i, { description }), true)}
         {textInput(`${e.id}-effects`, 'ผลที่ผู้เล่นแทรกแซงได้', `${p}.interventionEffects`, e.interventionEffects, (interventionEffects) =>
@@ -249,6 +258,8 @@ export function ScenarioEditor({
             day: 1,
             phase: 'EOSORIA',
             endPhase: null,
+            startTurn: 1,
+            endTurn: 2,
             kind: 'event',
             title: '',
             description: '',
