@@ -11,6 +11,7 @@ import { registerGameRoutes } from './game/routes.ts';
 import { loadAiConfig, type AiConfig } from './ai/config.ts';
 import { createAiService, type AiService, type BudgetReachedEvent } from './ai/core/service.ts';
 import { createUsageStore } from './ai/core/usage.ts';
+import type { AiProvider } from './ai/provider.ts';
 import { providerFor } from './ai/registry.ts';
 import { registerTimelineRoutes } from './timeline/routes.ts';
 
@@ -39,6 +40,8 @@ export interface ServerOptions {
   aiLog?: (line: string) => void;
   /** Where the per-game ceiling notice goes until rooms (GEN-056) deliver it to the owner / GM. */
   onAiBudgetReached?: (event: BudgetReachedEvent) => void;
+  /** Overrides the provider `ai` picks (tests pass a scripted Mock). */
+  aiProvider?: AiProvider;
 }
 
 export async function startServer(config: ServerConfig, options: ServerOptions = {}): Promise<RunningServer> {
@@ -46,7 +49,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
 
   const aiConfig = options.ai ?? loadAiConfig({});
   const ai = createAiService({
-    provider: providerFor(aiConfig),
+    provider: options.aiProvider ?? providerFor(aiConfig),
     config: aiConfig,
     usage: createUsageStore(db),
     now: options.now ?? Date.now,

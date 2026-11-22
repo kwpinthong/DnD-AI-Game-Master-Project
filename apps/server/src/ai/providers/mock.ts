@@ -30,7 +30,7 @@ export function createMockProvider(_config: AiConfig, script?: MockScript): Mock
       requests.push(req);
       if (!steps) {
         const input = estimateTokens([...req.system.map((b) => b.text), ...req.messages.map((m) => m.text)].join('\n'));
-        const json = sampleFor(req.output.jsonSchema);
+        const json = req.purpose === 'character_analyze' ? cannedLoot(requests.length) : sampleFor(req.output.jsonSchema);
         return {
           ok: true,
           json,
@@ -56,6 +56,36 @@ export const mockReply = {
     return { ok: false, error, detail: `mock ${error}`, usage, retryable: true, latencyMs: 0 };
   },
 };
+
+/**
+ * A fixed loot answer for offline dev (GEN-048): the smallest schema sample has no options, so the
+ * loot step would always fail. Call n picks 3 skills / 3 items from rotating pools, so a reroll
+ * shows a different set.
+ */
+const CANNED_SKILLS = [
+  { name: 'อ่านสีหน้า', description: 'รู้ว่าคู่สนทนาโกหกเมื่อสังเกตนาน ๆ', tier: 'Common', buffType: 'Qualitative', effect: null },
+  { name: 'สายตาเหยี่ยว', description: 'เห็นของที่ซ่อนอยู่ได้ไวกว่าคนทั่วไป', tier: 'Common', buffType: 'Quantitative', effect: { type: 'check_bonus', scope: 'perception', value: 2 } },
+  { name: 'ก้าวเงียบ', description: 'เดินไม่มีเสียงบนพื้นไม้', tier: 'Common', buffType: 'Quantitative', effect: { type: 'check_bonus', scope: 'stealth', value: 1 } },
+  { name: 'ต่อรองเก่ง', description: 'พ่อค้ามักยอมลดราคาให้', tier: 'Common', buffType: 'Qualitative', effect: null },
+  { name: 'ถึกทน', description: 'ทนแรงกระแทกได้ดีกว่าคนอื่น', tier: 'Common', buffType: 'Quantitative', effect: { type: 'damage_reduction', value: 1 } },
+];
+const CANNED_ITEMS = [
+  { name: 'เสื้อหนังเก่า', description: 'กันมีดได้บ้าง', tier: 'Common', buffType: 'Quantitative', effect: { type: 'damage_reduction', value: 2 } },
+  { name: 'สมุดจดลับ', description: 'จดเรื่องที่ได้ยินไว้อ่านทีหลัง', tier: 'Common', buffType: 'Qualitative', effect: null },
+  { name: 'ยาบำรุงกำลัง', description: 'จิบแล้วเหนื่อยน้อยลง', tier: 'Common', buffType: 'Quantitative', effect: { type: 'stamina_refund', value: 1 } },
+  { name: 'ตะเกียงพกพา', description: 'ส่องทางในที่มืด', tier: 'Common', buffType: 'Quantitative', effect: { type: 'check_bonus', scope: 'perception', value: 1 } },
+  { name: 'จี้เงินของแม่', description: 'ของที่ระลึกจากบ้านเกิด', tier: 'Common', buffType: 'Qualitative', effect: null },
+];
+
+function cannedLoot(n: number) {
+  const pick = <T>(pool: T[]) => [0, 1, 2].map((i) => pool[(n - 1 + i) % pool.length]!);
+  return {
+    strength: { label: 'ช่างสังเกต', scope: 'observe', description: 'บุคลิกบอกว่าคอยมองรายละเอียดรอบตัว' },
+    weakness: { label: 'ลังเล', scope: 'priority', description: 'คิดนานก่อนลงมือ' },
+    skills: pick(CANNED_SKILLS),
+    items: pick(CANNED_ITEMS),
+  };
+}
 
 type JsonSchema = {
   type?: string | string[];
