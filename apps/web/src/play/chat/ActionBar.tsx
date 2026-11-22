@@ -1,5 +1,5 @@
 import { ACTION_MAX_LENGTH, type ActionVisibility, type PlaceActionId, type RoomState } from '@isekai/protocol';
-import { useId, useRef, type FormEvent } from 'react';
+import { useId, useRef, useState, type FormEvent } from 'react';
 import attackIcon from '../../assets/icons/action-attack.svg';
 import defendIcon from '../../assets/icons/action-defend.svg';
 import investigateIcon from '../../assets/icons/action-investigate.svg';
@@ -50,6 +50,8 @@ export interface ActionBarProps {
   sending: boolean;
   onSend: (draft: ActionDraft) => void;
   onRetry: () => void;
+  /** The phone (GEN-123): icon buttons and [อื่นๆ] instead of the row of words. */
+  compact?: boolean;
 }
 
 /**
@@ -57,8 +59,9 @@ export interface ActionBarProps {
  * rounded box and [ส่ง]. Nothing is sent until [ส่ง]. When it cannot be used it says why in words (a lock, a sent
  * action waiting for the turn, the AI GM stuck).
  */
-export function ActionBar({ room, seenBy, draft, setDraft, problem, sending, onSend, onRetry }: ActionBarProps) {
+export function ActionBar({ room, seenBy, draft, setDraft, problem, sending, onSend, onRetry, compact }: ActionBarProps) {
   const { you } = room;
+  const [more, setMore] = useState(false);
   const textId = useId();
   const input = useRef<HTMLInputElement>(null);
   const quota = secretQuota(room);
@@ -80,13 +83,49 @@ export function ActionBar({ room, seenBy, draft, setDraft, problem, sending, onS
       const on = !(draft.rest && !draft.placeAction);
       setDraft({ ...draft, rest: on, train: false, placeAction: null, text: on ? prefillAction(draft.text, word) : draft.text === word ? '' : draft.text });
     } else setDraft({ ...draft, rest: false, train: false, placeAction: null, text: prefillAction(draft.text, word) });
+    setMore(false);
     input.current?.focus();
   }
 
   function pickChip(id: PlaceActionId, label: string) {
     const on = draft.placeAction !== id;
     setDraft({ ...draft, placeAction: on ? id : null, rest: on && id !== 'train', train: on && id === 'train', text: on && draft.text.trim() === '' ? label : draft.text });
+    setMore(false);
   }
+
+  /** One of the eight words; `iconOnly` (the phone's row) leaves the word to the aria-label. */
+  function wordButton(word: QuickWord, iconOnly: boolean) {
+    return (
+      <button
+        key={word}
+        type="button"
+        className={iconOnly ? 'chat-quick__btn chat-quick__btn--icon' : 'chat-quick__btn'}
+        disabled={off}
+        aria-label={iconOnly ? bar.actions[word] : undefined}
+        aria-pressed={word === 'พัก' ? draft.rest && !draft.placeAction : undefined}
+        onClick={() => quick(word)}
+      >
+        <MaskIcon src={QUICK_ICON[word]} />
+        {!iconOnly && bar.actions[word]}
+      </button>
+    );
+  }
+
+  // The server does not send the place's chips yet (GEN-069 pending): TRAIN stays reachable without them.
+  const extraButtons = (
+    <>
+      {chips === undefined && (
+        <button type="button" className="chat-quick__btn" disabled={off} aria-pressed={draft.train} onClick={() => setDraft({ ...draft, train: !draft.train, rest: false, placeAction: null })}>
+          {t.action.train}
+        </button>
+      )}
+      {chips?.map((chip) => (
+        <button key={chip.id} type="button" className="chat-quick__btn" disabled={off || chip.blocked !== null} title={chip.blocked ?? undefined} aria-pressed={draft.placeAction === chip.id} onClick={() => pickChip(chip.id, chip.label)}>
+          {chip.label}
+        </button>
+      ))}
+    </>
+  );
 
   return (
     <form className={visibility === 'secret' && !off ? 'chat-bar chat-bar--secret' : 'chat-bar'} onSubmit={submit} aria-label={t.action.form}>
@@ -107,25 +146,28 @@ export function ActionBar({ room, seenBy, draft, setDraft, problem, sending, onS
           )}
         </div>
       )}
-      <div className="chat-quick" role="group" aria-label={bar.group}>
-        {QUICK_WORDS.map((word) => (
-          <button key={word} type="button" className="chat-quick__btn" disabled={off} aria-pressed={word === 'พัก' ? draft.rest && !draft.placeAction : undefined} onClick={() => quick(word)}>
-            <MaskIcon src={QUICK_ICON[word]} />
-            {bar.actions[word]}
-          </button>
-        ))}
-        {/* The server does not send the place's chips yet (GEN-069 pending): TRAIN stays reachable without them. */}
-        {chips === undefined && (
-          <button type="button" className="chat-quick__btn" disabled={off} aria-pressed={draft.train} onClick={() => setDraft({ ...draft, train: !draft.train, rest: false, placeAction: null })}>
-            {t.action.train}
-          </button>
-        )}
-        {chips?.map((chip) => (
-          <button key={chip.id} type="button" className="chat-quick__btn" disabled={off || chip.blocked !== null} title={chip.blocked ?? undefined} aria-pressed={draft.placeAction === chip.id} onClick={() => pickChip(chip.id, chip.label)}>
-            {chip.label}
-          </button>
-        ))}
-      </div>
+      {compact ? (
+        <>
+          {/* Phone: the eight words as 44 x 44 icons (the word is the aria-label) and [อื่นๆ], which lists every action with words. */}
+          <div className="chat-quick chat-quick--icons" role="group" aria-label={bar.group}>
+            <div className="chat-quick__scroll">{QUICK_WORDS.map((word) => wordButton(word, true))}</div>
+            <button type="button" className="chat-quick__more" aria-expanded={more} aria-haspopup="true" onClick={() => setMore(!more)}>
+              {bar.more}
+            </button>
+          </div>
+          {more && (
+            <div className="chat-quick chat-quick--list" role="group" aria-label={bar.moreGroup}>
+              {QUICK_WORDS.map((word) => wordButton(word, false))}
+              {extraButtons}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="chat-quick" role="group" aria-label={bar.group}>
+          {QUICK_WORDS.map((word) => wordButton(word, false))}
+          {extraButtons}
+        </div>
+      )}
       <div className="chat-compose">
         <label className="chat-secret">
           <input type="checkbox" checked={visibility === 'secret'} disabled={off || you.secretUsed} onChange={(e) => setDraft({ ...draft, visibility: e.target.checked ? 'secret' : 'public' })} />

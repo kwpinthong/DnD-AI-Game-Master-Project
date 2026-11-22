@@ -52,7 +52,7 @@ export function TopBar({ room, menuOpen, onMenu, onHistory }: { room: RoomState;
 }
 
 /** The menu under [เมนู]: who is in the room (names + online, never who has sent: Q-195) and the way back. */
-export function RoomMenu({ room, onBack, onGameList }: { room: RoomState; onBack: () => void; onGameList: () => void }) {
+export function RoomMenu({ room, onBack, onGameList, onHistory }: { room: RoomState; onBack: () => void; onGameList: () => void; onHistory?: () => void }) {
   const gmView = room.you.role === 'gm';
   return (
     <div className="play-menu panel panel--ornament">
@@ -73,6 +73,7 @@ export function RoomMenu({ room, onBack, onGameList }: { room: RoomState; onBack
           </li>
         ))}
       </ul>
+      {onHistory && <Button onClick={onHistory}>{t.history}</Button>}
       <Button onClick={onBack}>{playText.back}</Button>
       <Button onClick={onGameList}>{t.gameList}</Button>
     </div>
