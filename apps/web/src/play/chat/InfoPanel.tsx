@@ -1,6 +1,6 @@
 import type { RoomEntry, RoomState } from '@isekai/protocol';
 import { useState, type ReactNode } from 'react';
-import fountainArt from '../../assets/illustrations/place-fountain.webp';
+import fountainArt from '../../assets/illustrations/place-fountain-eosoria.webp';
 import { playText } from '../../ui/index.ts';
 import { HereList, PlaceTitle } from '../PlaceColumn.tsx';
 import { Whispers, type WhisperText } from '../PrivateColumn.tsx';
