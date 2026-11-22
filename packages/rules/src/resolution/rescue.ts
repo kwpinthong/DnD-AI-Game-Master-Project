@@ -6,7 +6,7 @@ import { affinityMod } from './tables.ts';
 export type Safety = 'safe' | 'normal' | 'danger' | 'restricted';
 export type RescueOutcome = 'rescued' | 'alone' | 'exploited';
 
-/** `restricted` (the sheet's RESTRICTED, Q-161) has no number of its own yet: same as normal. */
+/** Spec §12.2: safe +4 / normal 0 / danger -4. Q-217 (Nok): `restricted` (the sheet's RESTRICTED, Q-161) counts as 0. */
 export const SAFETY_MOD: Readonly<Record<Safety, number>> = { safe: 4, normal: 0, danger: -4, restricted: 0 };
 
 /** Another player's general action against the unconscious character at this DC rescues at once (Q-056). */
