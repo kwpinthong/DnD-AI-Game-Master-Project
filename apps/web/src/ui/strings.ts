@@ -16,6 +16,13 @@ export const uiText = {
   },
 } as const;
 
+// GEN-107: rate what the AI GM wrote.
+export const voteText = {
+  group: 'ให้คะแนนข้อความของ AI GM',
+  up: { label: 'ถูกใจ', icon: '👍' },
+  down: { label: 'ไม่ถูกใจ', icon: '👎' },
+} as const;
+
 // GM console v2 (GEN-091, Screens and Flows v2 §5).
 export const gmText = {
   phoneNote: 'GM console ทำมาสำหรับจอคอมพิวเตอร์ บนมือถือทุกส่วนจะเรียงเป็นแถวเดียวและยาวมาก เปิดบนคอมเพื่อดูครบในจอเดียว',

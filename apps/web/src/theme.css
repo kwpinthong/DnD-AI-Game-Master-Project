@@ -167,6 +167,26 @@ button[aria-busy='true'] {
   color: var(--muted);
 }
 
+/* ---------- Vote buttons (GEN-107): words + aria-pressed, 44px tap target everywhere, tokens only ---------- */
+.vote-buttons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.vote-btn {
+  min-height: 44px;
+  min-width: 44px;
+  font-size: var(--text-xs);
+}
+
+/* up pressed uses the global aria-pressed fill (accent); down pressed is danger text + a thick border, the words differ too. */
+.vote-btn--down[aria-pressed='true'] {
+  background: var(--panel);
+  border: 2px solid var(--danger);
+  color: var(--danger);
+}
+
 /* ---------- Form fields ---------- */
 /* Q-201: label sits on its own line with a gap below, so it no longer touches its input. */
 label {

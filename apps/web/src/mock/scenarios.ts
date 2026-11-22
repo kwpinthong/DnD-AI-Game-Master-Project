@@ -51,6 +51,8 @@ const lockState = (code: string) => ROOM_STATES.find((s) => s.you.lock?.code ===
 
 /** The entries a player has at the start: everything but the hit (it arrives live) and the omen (Astral only). */
 const START_ENTRIES = ENTRIES.filter((e) => e.kind !== 'hit' && e.kind !== 'omen' && e.kind !== 'changes');
+/** GEN-107 C6: the Human GM never gets `myVote`, so no vote buttons. */
+const GM_ENTRIES = START_ENTRIES.map(({ myVote: _myVote, ...entry }) => entry);
 /** The pinned hit of the fixtures, sent by the `hit` op. */
 export const HIT_ENTRY = ENTRIES.find((e) => e.kind === 'hit')!;
 /** The whisper of the fixtures: the sender's name for a Whisper the player sends. */
@@ -303,6 +305,15 @@ export const SCENARIOS: readonly MockScenario[] = [
     room: room(ROOM_STATES.find((s) => s.you.secretUsed)!),
   },
   {
+    id: 'vote',
+    title: 'ให้คะแนน AI GM',
+    note: 'ข้อความ AI GM 3 สถานะ: ยังไม่โหวต (seq 10) / ถูกใจ (11) / ไม่ถูกใจ (12); entry ที่ไม่ใช่ AI ไม่มี myVote',
+    session: 'player',
+    screens: ['play-action'],
+    http: {},
+    room: room(BASE_ROOM),
+  },
+  {
     id: 'hit',
     title: 'โดนผลจากคนอื่น',
     note: 'ผู้เล่นอื่นขโมยของ: การ์ด "เกิดกับคุณ" มาหลังเปิดห้อง',
@@ -341,7 +352,7 @@ export const SCENARIOS: readonly MockScenario[] = [
     session: 'gm',
     screens: ['gm-console', 'scenario-editor', 'play-top-bar'],
     http: { 'GET /api/game': ok(gmGame) },
-    room: room(gmRoom),
+    room: room(gmRoom, [], GM_ENTRIES),
   },
   {
     id: 'gm-finale',
@@ -350,7 +361,7 @@ export const SCENARIOS: readonly MockScenario[] = [
     session: 'gm',
     screens: ['gm-console'],
     http: { 'GET /api/game': ok(gmGame), 'GET /api/game/gm/console': ok({ ...F.GmConsoleResponse[0], at: FINALE_TURN.at, status: 'finale', pending: FINALE_TURN }) },
-    room: room(gmRoom),
+    room: room(gmRoom, [], GM_ENTRIES),
   },
   {
     id: 'gm-budget',
@@ -359,7 +370,7 @@ export const SCENARIOS: readonly MockScenario[] = [
     session: 'gm',
     screens: ['gm-console'],
     http: { 'GET /api/game': ok(gmGame), 'GET /api/game/gm/console': ok({ ...F.GmConsoleResponse[0], status: 'resolving', pending: null }) },
-    room: room({ ...gmRoom, status: 'resolving', gmStatus: { code: 'budget_reached', message: 'ใช้ครบงบ AI ของเดือนนี้แล้ว AI GM จะกลับมาเมื่อขึ้นเดือนใหม่หรือเมื่อปรับเพดาน', canRetry: false } }),
+    room: room({ ...gmRoom, status: 'resolving', gmStatus: { code: 'budget_reached', message: 'ใช้ครบงบ AI ของเดือนนี้แล้ว AI GM จะกลับมาเมื่อขึ้นเดือนใหม่หรือเมื่อปรับเพดาน', canRetry: false } }, [], GM_ENTRIES),
   },
   {
     id: 'ended',
