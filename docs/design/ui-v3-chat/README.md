@@ -50,3 +50,24 @@ navy `#0F1A2B` · พื้นลึก `#0B1422` · panel `#16243A` / `#13203A`
 | `ornaments/divider-star.svg`, `ornaments/corner.svg` | เส้นคั่นหัวข้อ / มุมกรอบ panel |
 
 ไอคอนและ ornament เป็น SVG `currentColor` ใช้กับ `MaskIcon` ตาม `assets/README.md`
+
+## Asset ภาพวาดจาก Scenario (เพิ่ม 2026-11-22, ชั่วคราว)
+
+| ไฟล์ | ใช้ที่ |
+|---|---|
+| `frames/frame-clock.webp` | นาฬิกา HUD desktop (เข็ม + ข้อความวางทับด้วยโค้ด ดูพิกัดใน `frames/CREDITS.md`) |
+| `frames/btn-primary.webp` | พื้นปุ่มหลัก (ส่ง) |
+| `frames/frame-panel.webp` | กรอบแผงข้อมูลขวา (`border-image` 9-slice) |
+| `frames/avatar-ring-*.webp` | กรอบ avatar: NPC ตามเกรด f / b / a / s / ss, ผู้เล่นเรา = player, ผู้เล่นอื่น = b |
+| `textures/texture-stars.webp` | พื้นหลังส่วนกลางทั้งหมดระหว่าง HUD กับแถบ action (เต็มความกว้าง) |
+| `illustrations/weather-*.webp` | ภาพอากาศ 5 แบบ บนนาฬิกาและแท็บสถานที่ |
+
+ไฟล์เหล่านี้ตัดพื้นจากภาพ preview จะถูกแทนที่ด้วยไฟล์จริง (ชื่อเดิม) ตาม `HANDOFF-scenario-ui-assets.md`
+`frames/` เป็นโฟลเดอร์ใหม่ ให้เพิ่มแถวในตาราง "โฟลเดอร์" ของ `apps/web/src/assets/README.md` ตอนทำ GEN-122
+
+## ภาพสถานที่ (Nok 2026-11-22)
+
+`illustrations/place-<id>.webp` (800px) + `place-<id>@2x.webp` (1600px) ครบ 13 แห่ง: inn, fountain, temple, forest, farmland, theater, manor, market, barracks, sea, dawn-church, clinic, library
+- ใช้ใน: การ์ดสถานที่ในแท็บ "สถานที่" (และพื้นหลังจางของ feed ได้ถ้าต้องการ) เลือกไฟล์จาก `PlaceView.id` ใช้ `srcset` 1x/2x
+- ยังไม่มีภาพ: `church-crypt`, `community`, `astral-rift` → แสดงกรอบว่างพื้น navy + ชื่อสถานที่ (ห้ามแตก)
+- ต้นฉบับ PNG (~43 MB) อยู่ใน `assets/place/` **ห้าม commit** (README ห้ามไฟล์ต้นฉบับใหญ่ใน repo) ให้ย้ายออกหรือใส่ .gitignore

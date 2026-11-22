@@ -25,3 +25,6 @@ Thumbs.db
 
 # Agent worktrees (Claude Code)
 .claude/worktrees/
+
+# ต้นฉบับภาพสถานที่ PNG (ใหญ่) — ใช้ไฟล์ webp ใน assets/illustrations แทน
+apps/web/src/assets/place/
