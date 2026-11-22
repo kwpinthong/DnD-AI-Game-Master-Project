@@ -1,4 +1,4 @@
-import type { ActionVisibility, GmFallbackCause, RoomGmStatusCode } from '@isekai/protocol';
+import type { ActionVisibility, GmCheckView, GmFallbackCause, HitView, RollView, RoomGmStatusCode } from '@isekai/protocol';
 import type { PeriodWeather, PhaseState, PlayerResult, TurnPoint } from '@isekai/rules';
 import type { DbOrTx } from '../db/client.ts';
 
@@ -64,7 +64,13 @@ export interface ClosedPhase {
  */
 export type ResolutionEntry = (
   | { readonly kind: 'feed'; readonly locationId: string | null; readonly actorMemberId: string | null; readonly text: string }
-  | { readonly kind: 'narration'; readonly memberId: string; readonly text: string }
+  | {
+      readonly kind: 'narration';
+      readonly memberId: string;
+      readonly text: string;
+      /** Q-229 (F5): the roll of this player's own action, shown on this narration only. */
+      readonly roll?: RollView;
+    }
 ) & {
   /** Q-177: set when the text is the server template, with why. */
   readonly fallback?: GmFallbackCause;
@@ -79,10 +85,20 @@ export interface ResolverStuck {
   readonly ownerMessage: string;
 }
 
+/** Q-229: another player's act that cost `memberId` something; published as one `hit` entry for them (and the Human GM). */
+export interface ResolutionHit {
+  readonly memberId: string;
+  readonly text: string;
+  readonly hit: HitView;
+}
+
 export interface PhaseResolution {
   /** Per member; missing members keep their HP / Stamina (see `PlayerResult`). */
   readonly results?: Readonly<Record<string, PlayerResult>>;
   readonly entries?: readonly ResolutionEntry[];
+  readonly hits?: readonly ResolutionHit[];
+  /** Q-229: every number of each roll, for the Human GM's console (never sent to players). */
+  readonly checks?: readonly GmCheckView[];
   /**
    * Writes the turn's own changes (stats, places, items, constraints, ...) inside the room's publish
    * transaction, after the entries are stored and before the engine step, so they commit together or not

@@ -415,8 +415,15 @@ export function createRoomService(
             const recipients = recipientsOf(tx, gameId, current, entry);
             const locationId = entry.kind === 'feed' ? entry.locationId : null;
             const fallback = entry.fallback ? { fallback: entry.fallback } : {};
-            return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text, ...fallback }, [...recipients], t), recipients };
+            const meta = entry.kind === 'narration' && entry.roll ? { meta: { roll: entry.roll } } : {};
+            return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text, ...meta, ...fallback }, [...recipients], t), recipients };
           });
+          // Q-229: what another player did to someone, for them (and the Human GM) only.
+          const gmIds = activeMembers(tx, gameId).filter((m) => m.role === 'gm').map((m) => m.id);
+          for (const h of resolution.hits ?? []) {
+            const recipients = new Set([h.memberId, ...gmIds]);
+            rows.push({ row: insertEntry(tx, gameId, { kind: 'hit', at, locationId: null, text: h.text, meta: { hit: h.hit } }, [...recipients], t), recipients });
+          }
           // GEN-067: every Secret action that stood leaves a Hidden Evidence Tag at its place for this game day.
           for (const a of actions) {
             if (a.visibility === 'secret' && a.locationId !== null) {

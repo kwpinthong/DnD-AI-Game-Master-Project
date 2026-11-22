@@ -22,7 +22,10 @@ import { eq } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { gamePhase } from '../db/schema.ts';
 import type { GmFallbackCause } from '@isekai/protocol';
-import type { ClosedPhase, PhaseResolution, PhaseResolver, ResolutionEntry, ResolverStuck } from '../room/resolver.ts';
+import type { ClosedPhase, PhaseResolution, PhaseResolver, ResolutionEntry, ResolutionHit, ResolverStuck } from '../room/resolver.ts';
+import { itemsInGame, skillsInGame } from '../crossplayer/items.ts';
+import { castCurseLabels } from '../statuses/curses.ts';
+import { checkViewOf, hitOf, rollViewOf } from './roll-view.ts';
 import { CryptoRng } from '../rng.ts';
 import { buildEventContext } from '../timeline/context.ts';
 import { setEventOutcome } from '../timeline/store.ts';
@@ -374,19 +377,45 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       narrations.push({ key: audience.key, ctx, out });
     }
 
+    // Q-229: each player's own roll (F5) and the hit card of whoever another player cost something.
+    const items = itemsInGame(db, gameId);
+    const skillNames = new Map([...skillsInGame(db, gameId).values()].flat().map((s) => [s.id, s.name]));
+    const nameOf = (ref: string) => items.get(ref)?.name ?? skillNames.get(ref);
+    const rollOf = new Map(
+      resolved.log.outcomes.flatMap((o) => {
+        const view = o.status === 'resolved' ? rollViewOf(o.log, nameOf) : null;
+        return view ? [[o.actorId, view] as const] : [];
+      }),
+    );
+    // Screens and Flows v2 §5: the Human GM sees every number of each roll of the held turn.
+    const closed = new Map(input.actions.map((a) => [a.memberId, a]));
+    const checks = resolved.log.outcomes.flatMap((o) => checkViewOf(o, closed.get(o.actorId), nameOf) ?? []);
+    const hits: ResolutionHit[] = resolved.log.outcomes.flatMap((o) => {
+      const actor = world.players.get(o.actorId);
+      const target = o.status === 'resolved' ? o.target : null;
+      if (!actor || !target) return [];
+      const looks = world.knownNames(target.playerId).has(o.actorId) ? actor.name : actor.appearance;
+      const found = hitOf(o, looks, (id) => nameOf(id) ?? 'ไอเทม', castCurseLabels(db, gameId, assets, o));
+      if (!found) return [];
+      return [{ ...found, text: found.hit.actor === null ? 'มีใครบางคนลงมือกับคุณโดยที่คุณไม่ทันเห็นตัว' : `${found.hit.actor} ลงมือกับคุณ` }];
+    });
+
     // 6: what the room publishes and applies.
     const entries: ResolutionEntry[] = narrations.map(({ ctx, out }) => {
       const reader = 'player' in ctx.audience ? world.byRef.get(ctx.audience.player)!.memberId : null;
       const text = out.segments.map((s) => renderTokens(db, world, s.text, reader)).join('\n');
       const fallback = out.fallback ? { fallback: out.fallback } : {};
+      const roll = reader !== null && rollOf.has(reader) ? { roll: rollOf.get(reader)! } : {};
       return reader === null
         ? { kind: 'feed', locationId: ctx.place.id, actorMemberId: null, text, ...fallback }
-        : { kind: 'narration', memberId: reader, text, ...fallback };
+        : { kind: 'narration', memberId: reader, text, ...roll, ...fallback };
     });
     const rolls = stored.rolls;
     return {
       results: resultsOf(state, resolved.state, resolved.log),
       entries,
+      hits,
+      checks,
       apply: (tx) => {
         const applied = applyPhaseActions(tx, gameId, actions, new ReplayRng(rolls), now(), tagging, drowsy, crises);
         if (!applied.ok) throw new Error('the stored turn no longer applies');
