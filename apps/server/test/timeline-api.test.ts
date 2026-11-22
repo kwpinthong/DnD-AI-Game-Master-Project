@@ -2,6 +2,7 @@ import { CreateGameResponse, defaultScenario, GameTimelineResponse, JoinResponse
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
+import { getGameScenario, updateGameScenario } from '../src/scenario/store.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
 import { advanceTimeline, getTimeline, setEventOutcome } from '../src/timeline/store.ts';
 import { moveCharacter } from '../src/visibility/store.ts';
@@ -65,7 +66,7 @@ describe('timeline over the API: start = day 1 Morning, players see no future ev
    * An Online game with a Human GM and three players, started. The first player is at the market when
    * the game starts, so it witnesses d1-bread (market, day 1 Morning); the others start at the inn.
    */
-  async function startedGame() {
+  async function startedGame(beforeStart: (gameId: string) => void = () => {}) {
     const created = CreateGameResponse.parse(
       (
         await call('POST', '/api/games', {
@@ -83,6 +84,7 @@ describe('timeline over the API: start = day 1 Morning, players see no future ev
       players.push(joined);
     }
     seedPresence(players[0]!.member.id, gameId, 'market');
+    beforeStart(gameId);
     const started = await call('POST', '/api/game/start', { token: created.token });
     expect(started.status, started.text).toBe(200);
     return {
@@ -217,6 +219,20 @@ describe('timeline over the API: start = day 1 Morning, players see no future ev
       moveCharacter(server!.orm, b!.id, 'gate', Date.now());
       expect(await seenIds(a!.token)).toContain('d5-disaster');
       expect(await seenIds(b!.token)).not.toContain('d5-disaster');
+    });
+
+    it('a day 1 Morning event at the starting place is seen by everyone the start places there', async () => {
+      await start();
+      const { members } = await startedGame((gameId) => {
+        const scenario = getGameScenario(server!.orm, gameId)!;
+        const timeline = scenario.timeline.map((e) => (e.id === 'd1-bread' ? { ...e, locationId: scenario.locations[0]!.id } : e));
+        expect(updateGameScenario(server!.orm, gameId, { ...scenario, timeline }).ok).toBe(true);
+      });
+      const [a, b, c] = members;
+      // A was placed at the market before the start, so it missed it; B and C start at the inn.
+      expect(await seenIds(a!.token)).toEqual([]);
+      expect(await seenIds(b!.token)).toEqual(['d1-bread']);
+      expect(await seenIds(c!.token)).toEqual(['d1-bread']);
     });
 
     it('the Human GM still sees every event with its outcome', async () => {
