@@ -94,6 +94,15 @@ export const GmAction = z.object({
     .array(z.object({ kind: z.enum(['skill', 'item']), name: z.string(), npcId: z.string().nullable() }))
     .max(2)
     .default([]),
+  /**
+   * GEN-093 (Q-203), only on the night of day 10 while its event is active: the Day10_Strategies plan this
+   * action is part of (`id`, never D10-DRIFT) and the actor's role in it; null = no plan. The server records it
+   * per player with the action's result; the day 12 finale reads it.
+   */
+  strategy: z
+    .object({ id: z.string(), role: z.enum(['leader', 'support']) })
+    .nullable()
+    .default(null),
   /** What the actor does, in tokens: the GM's own log and memory (not narration). */
   intentSummary: z.string().min(1).max(200),
   reason: z.string().max(300),
