@@ -346,6 +346,28 @@ describe('GEN-056 play room (web)', () => {
   });
 });
 
+describe('GEN-115 GM is narrating (web)', () => {
+  it('C2: while the turn resolves the room shows "GM กำลังเล่า..." with the elapsed seconds, and clears when it is over', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const socket = await enterRoom();
+    expect(screen.queryByRole('status', { name: 'GM กำลังเล่า' })).toBeNull();
+    socket.receive(roomState({ status: 'resolving' }));
+    const status = screen.getByRole('status', { name: 'GM กำลังเล่า' });
+    expect(status.textContent).toBe('GM กำลังเล่า... 0 วินาที');
+    act(() => void vi.advanceTimersByTime(7_000));
+    expect(status.textContent).toBe('GM กำลังเล่า... 7 วินาที');
+    socket.receive(roomState({ status: 'collecting', turn: 2 }));
+    expect(screen.queryByRole('status', { name: 'GM กำลังเล่า' })).toBeNull();
+  });
+
+  it('C5: a stuck AI GM shows its message and retry instead of the narrating status', async () => {
+    const socket = await enterRoom();
+    socket.receive(roomState({ status: 'resolving', gmStatus: { code: 'stuck', message: 'AI GM ติดขัด', canRetry: true } }));
+    expect(screen.queryByRole('status', { name: 'GM กำลังเล่า' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'ลองใหม่' })).toBeTruthy();
+  });
+});
+
 describe('GEN-057 AI GM status (web)', () => {
   it('C2: a stuck AI GM is shown with a retry button that sends retry', async () => {
     const socket = await enterRoom();

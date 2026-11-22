@@ -19,7 +19,7 @@ async function scenario(provider: AiProvider, config: AiConfig): Promise<Service
   const harness = makeService(provider, config);
   expect(harness.service.ready().ok).toBe(true);
   const result = await harness.service.call(trigger('game-c2'));
-  expect(result).toEqual({ ok: true, value: VERDICT, attempts: 1 });
+  expect(result).toMatchObject({ ok: true, value: VERDICT, attempts: 1 });
   const rows = usageRows(harness.opened.sqlite);
   expect(rows).toHaveLength(1);
   expect(rows[0]).toMatchObject({ game_id: 'game-c2', ok: 1, provider: provider.id });

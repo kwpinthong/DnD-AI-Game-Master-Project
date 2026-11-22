@@ -462,6 +462,7 @@ export function createRoomService(
           return { rows, ended: isEnded(next) };
         });
     let published: ReturnType<typeof publish>;
+    const dbStart = performance.now();
     try {
       published = publish();
     } catch (error) {
@@ -473,8 +474,11 @@ export function createRoomService(
     }
     if (published === null) return false;
     stuck.delete(gameId);
+    const socketStart = performance.now();
     deliver(gameId, published.rows);
     broadcastRoom(gameId);
+    // GEN-115: counts only, never text.
+    log(`[room] game=${gameId} publish db_ms=${Math.round(socketStart - dbStart)} socket_ms=${Math.round(performance.now() - socketStart)}`);
     if (published.ended) startFinale(gameId);
     if (outcome.ended !== null) {
       try {

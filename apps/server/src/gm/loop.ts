@@ -56,6 +56,7 @@ import {
   type NarrationContext,
   type TurnAction,
 } from './context.ts';
+import { createStageTimer, type StageTimer } from './timing.ts';
 import { GM_OUTPUT, GmDaySummary, GmFinale, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
 import {
   activeConstraints,
@@ -175,6 +176,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
      */
     fallback?: { label: string; make: () => T; onCallFailure?: boolean };
     signal?: AbortSignal;
+    /** GEN-115: where the call time and tokens go (stage = the first call; the repair is always `repair`). */
+    timer?: { timer: StageTimer; stage: string };
   }): Promise<{ value: T; fallback: GmFallbackCause | null }> {
     const first: { role: 'user' | 'assistant'; text: string }[] = [{ role: 'user', text: JSON.stringify(opts.context) }];
     if (requestTokens(opts.system, first) > opts.budget) stuck(`limit_exceeded ${opts.purpose}`, opts.gameId);
@@ -183,7 +186,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       return { value: opts.fallback!.make(), fallback: cause };
     };
     let messages = first;
-    for (const purpose of [opts.purpose, opts.repairPurpose]) {
+    for (const [i, purpose] of [opts.purpose, opts.repairPurpose].entries()) {
+      const callStart = performance.now();
       const result = await ai.call({
         gameId: opts.gameId,
         purpose,
@@ -197,6 +201,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         ...(opts.fallback ? { maxRetries: NARRATION_RETRIES } : {}),
         ...(opts.signal ? { signal: opts.signal } : {}),
       });
+      opts.timer?.timer.add(i === 0 ? opts.timer.stage : 'repair', performance.now() - callStart);
+      if (result.ok) opts.timer?.timer.addTokens(result.usage);
       if (!result.ok) {
         // A shutdown is not a failure of the AI: the turn resumes after the restart (C6).
         // GEN-059 C7: the ending (onCallFailure: false) stays untold and retryable when the call fails; nothing waits on it.
@@ -219,6 +225,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
 
   async function resolveTurn(input: ClosedPhase): Promise<PhaseResolution> {
     const { gameId, at, signal } = input;
+    const timer = createStageTimer();
+    const buildStart = performance.now();
     const world = loadWorld(db, gameId, assets);
     const drowsy = new Set(input.state.order.filter((id) => input.state.players[id] && isDrowsy(input.state.players[id]!, input.state.day)));
     const crises = crisesOf(input.state);
@@ -282,6 +290,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         weather: input.weather ?? null,
         assets,
       });
+      timer.add('build', performance.now() - buildStart);
       let checked: PhaseAction[] = [];
       const { value: proposal } = await ask({
         gameId,
@@ -293,22 +302,24 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         output: { name: GM_OUTPUT.turn, schema: GmTurnProposal },
         maxOutputTokens: 8_000,
         budget: CONTEXT_BUDGET.gm_adjudicate,
-        check: (p) => {
-          const r = checkTurnProposal(checkInput(order), p);
-          if (!r.ok) return r.errors;
-          // Q-180: flags and grants go through the sheet / unlock rules too (dry run, nothing kept).
-          const refused = checkSkillChanges(db, assets, memberOfRef, p, skillTime());
-          if (refused.length === 0) checked = r.actions;
-          return refused;
-        },
+        check: (p) =>
+          timer.time('rules', () => {
+            const r = checkTurnProposal(checkInput(order), p);
+            if (!r.ok) return r.errors;
+            // Q-180: flags and grants go through the sheet / unlock rules too (dry run, nothing kept).
+            const refused = checkSkillChanges(db, assets, memberOfRef, p, skillTime());
+            if (refused.length === 0) checked = r.actions;
+            return refused;
+          }),
+        timer: { timer, stage: 'adjudicate' },
         ...(signal ? { signal } : {}),
       });
       actions = checked;
       const rng = new TurnRng(new CryptoRng(), orderRng.faces);
-      const result = resolvePhaseActions({ state, actions, tags, ...weatherInput }, rng);
+      const result = timer.time('rules', () => resolvePhaseActions({ state, actions, tags, ...weatherInput }, rng));
       if (!result.ok) return stuck(`rules refused a checked proposal`, gameId);
       resolved = result;
-      saveAdjudicated(db, gameId, at, proposal, result.log.rolls, now());
+      timer.time('db', () => saveAdjudicated(db, gameId, at, proposal, result.log.rolls, now()));
       stored = { status: 'adjudicated', proposal, rolls: [...result.log.rolls], narrations: {} };
     } else {
       // Restart: the stored proposal is in the server's order already; the stored dice replay everything.
@@ -343,8 +354,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           }))
         : [];
     const audiences = narrationAudiences(world, resolved.log, textOf, start, events.active, evidenceFor);
-    const narrations: { key: string; ctx: NarrationContext; out: StoredNarration }[] = [];
-    for (const audience of audiences) {
+    // GEN-115: the narrations do not depend on each other, so they run together: the wait is the slowest one, not the sum.
+    const narrations = await timer.time('narrate', () => Promise.all(audiences.map(async (audience): Promise<{ key: string; ctx: NarrationContext; out: StoredNarration }> => {
       const ctx: NarrationContext = {
         kind: 'gm_narration',
         ...audience.ctx,
@@ -368,11 +379,12 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           budget: 'player' in ctx.audience ? CONTEXT_BUDGET.narrate_player : CONTEXT_BUDGET.narrate_place,
           check: (n) => checkNarration(ctx, n, forbidden),
           fallback: { label: audience.key, make: () => templateNarration(ctx) },
+          timer: { timer, stage: 'narrate_calls' },
           ...(signal ? { signal } : {}),
         }).then(({ value, fallback }) => (fallback === null ? value : { ...value, fallback })));
-      if (!saved) saveNarration(db, gameId, at, audience.key, out, now());
-      narrations.push({ key: audience.key, ctx, out });
-    }
+      if (!saved) timer.time('db', () => saveNarration(db, gameId, at, audience.key, out, now()));
+      return { key: audience.key, ctx, out };
+    })));
 
     // 6: what the room publishes and applies.
     const entries: ResolutionEntry[] = narrations.map(({ ctx, out }) => {
@@ -384,6 +396,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         : { kind: 'narration', memberId: reader, text, ...fallback };
     });
     const rolls = stored.rolls;
+    log(`[gm] game=${gameId} day=${at.day} phase=${at.phase} turn=${at.turn} timing ${timer.line()}`);
     return {
       results: resultsOf(state, resolved.state, resolved.log),
       entries,
