@@ -159,4 +159,24 @@ describe('GEN-055 skills and items in the play room', { timeout: 60_000 }, () =>
     // Nothing of the condition reached anyone through the room.
     for (const c of clients) expect(JSON.stringify(c.messages)).not.toContain('สวดภาวนาอธิษฐาน');
   });
+
+  it('the Mock GM reads dev markers [mock:verb=TAG] / [mock:investigate=TAG] (localhost checks without a script)', async () => {
+    server = await startTestServer(dataDir, { ai: loadAiConfig({ AI_PROVIDER: 'mock', AI_MAX_RETRIES: '0', AI_RETRY_DELAY_MS: '0' }) });
+    const t = await startedTable(server, false);
+    const gameId = gameIdOf(t);
+    const scenario = getGameScenario(server.orm, gameId)!;
+    const locations = scenario.locations.map((l) => (l.id === 'inn' ? { ...l, name: 'หอสมุดหลวง' } : l));
+    expect(updateGameScenario(server.orm, gameId, { ...scenario, locations }, CLOCK).ok).toBe(true);
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    for (const [c, text] of [
+      [clients[0]!, 'สวดภาวนา [mock:verb=PRAY]'],
+      [clients[1]!, 'ค้นตำรา [mock:investigate=MIRACLE]'],
+      [clients[2]!, 'เดินดูรอบ ๆ'],
+    ] as const) await send(c, text);
+    for (const c of clients) await c.waitFor(at(1, 'EOSORIA', 2));
+    const res = async (who: Seat) => InventoryResponse.parse((await t.call('GET', '/api/game/inventory', { token: who.token })).body).inventory;
+    expect((await res(t.a)).skills.map((s) => s.name)).toEqual(['Ward of Light']);
+    expect((await res(t.b)).discoveries.map((d) => d.name)).toEqual(['The First Light']);
+    expect((await res(t.c)).skills).toEqual([]);
+  });
 });
