@@ -13,6 +13,12 @@ const apiBaseUrl = import.meta.env.VITE_API_URL ?? '';
 // <web>/admin: the server owner's AI usage dashboard (GEN-061); Netlify serves index.html for every path.
 const isAdmin = window.location.pathname.replace(/\/+$/, '') === '/admin';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>{isAdmin ? <AdminDashboard apiBaseUrl={apiBaseUrl} /> : <App apiBaseUrl={apiBaseUrl} />}</StrictMode>,
-);
+const root = document.getElementById('root')!;
+
+// GEN-100 mock mode (VITE_MOCK=1, dev only): `import.meta.env.DEV` is false in a build, so this branch and
+// the mock / gallery chunk are dropped from it (scripts/check-bundle.ts checks).
+if (import.meta.env.DEV && import.meta.env.VITE_MOCK === '1') {
+  void import('./mock/boot.tsx').then((m) => m.bootMock(root));
+} else {
+  createRoot(root).render(<StrictMode>{isAdmin ? <AdminDashboard apiBaseUrl={apiBaseUrl} /> : <App apiBaseUrl={apiBaseUrl} />}</StrictMode>);
+}

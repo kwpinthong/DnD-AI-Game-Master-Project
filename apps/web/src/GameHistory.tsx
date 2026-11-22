@@ -123,8 +123,8 @@ function Reveal({ reveal }: { reveal: GameReveal }) {
   );
 }
 
-/** One game, read-only; after the end with the secret reveal (GEN-059). */
-function GameLog({ log, onBack }: { log: GameLogResponse; onBack: () => void }) {
+/** One game, read-only; after the end with the secret reveal (GEN-059). Exported for the dev gallery (GEN-100). */
+export function GameLog({ log, onBack }: { log: GameLogResponse; onBack: () => void }) {
   return (
     <section aria-label={`สรุปเกม ${log.game.name}`}>
       <h2>{log.game.name}</h2>
