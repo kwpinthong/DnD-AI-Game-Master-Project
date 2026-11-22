@@ -249,6 +249,29 @@ describe('GEN-069 location actions', { timeout: 60_000 }, () => {
     }
   });
 
+  it('GEN-113: the text "นอน" alone is a REST with no rest flag: inn pays 5, forest poor quality; not enough coins is refused; an action on another is not REST', async () => {
+    const t = await boot();
+    const night = { day: 1, phase: 'NOCTHERION' as const, turn: 1 as const };
+    for (const [place, gain, coins] of [['inn', 25, 5], ['forest', 15, 10]] as const) {
+      put(t.a, place);
+      setCoins(t.a, 10);
+      setPlayer(t, t.a, { stamina: 0 }, night);
+      const clients = await everyone(t);
+      await turn(t, clients, {}, 'นอน');
+      expect(me(t, t.a).stamina, place).toBe(gain);
+      expect(row(t.a).coins, place).toBe(coins);
+      await Promise.all(clients.map((c) => c.close()));
+    }
+    put(t.a, 'inn');
+    setCoins(t.a, 4);
+    const clients = await everyone(t);
+    const refused = await send(clients[0]!, 'พักผ่อน');
+    expect(refused).toMatchObject({ type: 'action_rejected', code: 'not_enough_coins' });
+    expect(refused.type === 'action_rejected' ? refused.message : '').toContain('เงินไม่พอ');
+    expect(await send(clients[0]!, 'หลอกให้ยามนอนหลับ')).toEqual({ type: 'action_accepted' });
+    expect(row(t.a).coins).toBe(4);
+  });
+
   it('Q-209: the castaway RESTs on the coast HP +3, not inland; the patient RESTs HP +5 anywhere', async () => {
     const t = await boot(new ScriptedRng([CASTAWAY, PATIENT, MUSICIAN]));
     setPlayer(t, t.a, { hp: 10, stamina: 10 });
