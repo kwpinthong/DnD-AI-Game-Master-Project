@@ -21,7 +21,15 @@ export interface PlayerState extends ActorState {
   readonly seat: number;
   /** Ids of owned items / skills tagged `reach: remote` (spec §10.2), e.g. a cursed doll. */
   readonly remoteReach: readonly string[];
+  /**
+   * GEN-070, from the day / period engine: `exhausted` (forced REST this turn: damage on them ×1.3),
+   * `recovering` (at the clinic after HP 0: nobody may target them). Absent = neither; HP 0 = out cold.
+   */
+  readonly crisis?: 'exhausted' | 'recovering';
 }
+
+/** GEN-070: damage on an exhausted target ×1.3, rounded toward zero like ×1.5 (GEN-042). */
+export const EXHAUSTED_DAMAGE_SCALE = 1.3;
 
 export interface CrossPlayerState {
   readonly players: Readonly<Record<string, PlayerState>>;
@@ -30,8 +38,11 @@ export interface CrossPlayerState {
   readonly publicRepScale?: Readonly<Record<string, number>>;
 }
 
-/** What A means to do to B. `rescue` and `steal` may target an unconscious player (spec §10.2). */
-export const PLAYER_INTENTS = ['harm', 'steal', 'help', 'give', 'rescue'] as const;
+/**
+ * What A means to do to B. `rescue` and `steal` may target an unconscious player (spec §10.2); `execute`
+ * only targets one (GEN-070: a success kills them for good, an Astral Spirit).
+ */
+export const PLAYER_INTENTS = ['harm', 'steal', 'help', 'give', 'rescue', 'execute'] as const;
 export type PlayerIntent = (typeof PLAYER_INTENTS)[number];
 
 /** Effects of A's action on the target player B. Items move between the two only. */
@@ -116,7 +127,8 @@ export interface OrderLog {
 
 // --- Outcomes ---
 
-export type NoTargetReason = 'not_same_place' | 'target_unconscious';
+/** `target_dead`: executed by an earlier action of the same phase (GEN-070). */
+export type NoTargetReason = 'not_same_place' | 'target_unconscious' | 'target_dead';
 
 export interface TargetResult {
   readonly playerId: string;
@@ -128,6 +140,8 @@ export interface TargetResult {
   readonly observation: { readonly d20: number; readonly modifier: number; readonly total: number; readonly noticed: boolean } | null;
   /** B knows who did it: the action was Public, or B noticed the Secret (spec §10.1, §10.4). */
   readonly knowsActor: boolean;
+  /** GEN-070: a successful EXECUTE on B out cold; present only then. */
+  readonly executed?: true;
 }
 
 export type ActionOutcome =
@@ -179,6 +193,10 @@ export type CrossPlayerErrorCode =
   | 'unknown_target'
   | 'target_is_actor'
   | 'target_unconscious'
+  /** GEN-070: the target rests at the clinic after HP 0; nobody may act on them. */
+  | 'target_recovering'
+  /** GEN-070: EXECUTE only on a player out cold (HP 0). */
+  | 'execute_needs_unconscious'
   | 'unknown_intent'
   | 'reach_not_remote'
   | 'pvp_without_target'

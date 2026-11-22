@@ -57,15 +57,15 @@ describe('Q-218: a night rest recovers Stamina by the place\'s Rest_Quality', ()
     expect(me(play(at('NOCTHERION', 1, { stamina: 0 }), rest)).stamina).toBe(15);
   });
 
-  it('a forced sleep in NOCTHERION (Stamina 0 last turn) uses the same quality', () => {
+  it('a forced sleep in NOCTHERION (Stamina 0 last turn) is the GEN-070 forced REST +6, whatever the quality', () => {
     let s = at('HESPERION', 2, { stamina: 5 });
     s = play(s, { text: 'วิ่ง', visibility: 'public' }, { stamina: 0 }).state;
     expect(s.phase).toBe('NOCTHERION');
     expect(s.players['pc-a']!.condition).toBe('exhausted');
     expect(s.status).toBe('resolving');
     const r = ok(phaseStep(s, { type: 'resolved', results: { 'pc-a': { restQuality: 'good' } } }, new SeededRng(1)));
-    expect(me(r).stamina).toBe(25);
-    expect(r.log).toContainEqual(expect.objectContaining({ type: 'recovered', kind: 'exhausted_night' }));
+    expect(me(r).stamina).toBe(6);
+    expect(r.log).toContainEqual(expect.objectContaining({ type: 'recovered', kind: 'exhausted' }));
   });
 
   it('a day rest stays +8 whatever the quality', () => {

@@ -286,7 +286,8 @@ describe('C8 a game stored with the 3-phase model is converted to period + turn'
     };
     const s = restorePhaseState(legacy);
     expect(at(s)).toEqual({ day: 5, phase: 'HESPERION', turn: 1 });
-    expect(s.players['pc-a']!.knockedOut!.wakeAt).toEqual({ day: 6, phase: 'SOLARION', turn: 1 });
+    // GEN-070: an old knock-out is out cold this turn (no wake point any more).
+    expect(s.players['pc-a']!.knockedOut).toEqual({ at: { day: 5, phase: 'HESPERION', turn: 1 } });
     expect(s.players['pc-b']).toMatchObject({ stamina: 12, secretDay: null, nightSecretDay: null, drowsy: null, karma: 0 });
     expect(s.submissions['pc-b']!.text).toBe('ไปตลาด');
     // It plays on: the next turn is HESPERION turn 2.

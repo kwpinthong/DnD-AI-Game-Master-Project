@@ -1,6 +1,7 @@
 import {
   ACTION_MAX_LENGTH,
   ActionVisibility,
+  OMEN_MAX_LENGTH,
   actionTextProblem,
   normalizeActionText,
   type PlaceView,
@@ -9,6 +10,7 @@ import {
   type RoomEntry,
   type RoomLockCode,
   type RoomMoveCode,
+  type RoomOmenCode,
   type RoomServerMessage,
   type RoomState,
   type RoomWhisperCode,
@@ -34,6 +36,7 @@ import { CryptoRng } from '../rng.ts';
 import { characterNameOf, entryViewOf, placeViewOf } from './entry-view.ts';
 import { forbiddenKeysIn } from '../visibility/guard.ts';
 import {
+  ASTRAL_PLANE,
   closeAlliesOf,
   leaveHiddenEvidence,
   locationSnapshot,
@@ -53,6 +56,7 @@ import {
   withLocationRest,
 } from '../game/location-actions.ts';
 import { weatherAt, type WeatherService } from '../weather/service.ts';
+import { applyCrisisLog, astralMembers, astralViewOf, omenCheck } from '../game/crisis.ts';
 import { settleTurnProgress, withPeriodEndEffects } from '../skills/progress.ts';
 import type { ClosedAction, FinaleResolution, PhaseResolution, PhaseResolver, ResolverStuck } from './resolver.ts';
 import { getEnding, markNarrated, settleEnding } from '../finale/store.ts';
@@ -75,8 +79,10 @@ export interface RoomSocket {
 
 const LOCK_MESSAGE: Record<RoomLockCode, string> = {
   not_a_player: 'GM ไม่มีตัวละคร จึงส่ง action ไม่ได้',
-  exhausted: 'ตัวละครหมดแรง (Stamina 0) เทิร์นนี้ต้องนอนพัก ส่ง action ไม่ได้',
-  unconscious: 'ตัวละครหมดสติ (HP 0) ส่ง action ไม่ได้จนกว่าจะฟื้น',
+  exhausted: 'ตัวละครหมดแรง (Stamina 0) เทิร์นนี้ถูกบังคับพัก (REST ฟื้น +6) และถ้าโดนโจมตีจะเจ็บหนักขึ้น ส่ง action ไม่ได้',
+  unconscious: 'ตัวละครสลบ (HP 0) 1 เทิร์น ส่ง action ไม่ได้ ระหว่างนี้คนอื่นขโมยของหรือปลิดชีพได้',
+  recovering: 'ตัวละครถูกหามมาพักฟื้นที่สถานพยาบาลกลาง (2 เทิร์น) ส่ง action ไม่ได้จนกว่าจะหาย',
+  astral_spirit: 'ตัวละครตายถาวร กลายเป็น Astral Spirit ส่ง action ไม่ได้อีก เห็นเหตุการณ์สาธารณะได้ทุกที่ และส่งลางสังหรณ์ได้คืนละครั้งในช่วง NOCTHERION',
   resolving: 'เทิร์นนี้ปิดรับ action แล้ว กำลังสรุปผล รอเทิร์นถัดไป',
   game_ended: 'เกมจบแล้ว ส่ง action ไม่ได้',
 };
@@ -88,6 +94,17 @@ const WHISPER_MESSAGE: Record<RoomWhisperCode, string> = {
   not_allowed: 'ส่ง Whisper ถึงคนนี้ไม่ได้ ต้องเป็นพันธมิตรที่สนิทกันพอก่อน',
   game_ended: 'เกมจบแล้ว ส่ง Whisper ไม่ได้',
   unconscious: LOCK_MESSAGE.unconscious,
+  astral_spirit: 'Astral Spirit ส่ง Whisper ไม่ได้ ส่งได้แค่ลางสังหรณ์ในช่วง NOCTHERION',
+};
+
+const OMEN_MESSAGE: Record<RoomOmenCode, string> = {
+  empty: 'พิมพ์ลางสังหรณ์ก่อนส่ง',
+  too_long: `ลางสังหรณ์ยาวได้ไม่เกิน ${OMEN_MAX_LENGTH} ตัวอักษร`,
+  not_astral: 'ส่งลางสังหรณ์ได้เฉพาะ Astral Spirit',
+  not_noctherion: 'ส่งลางสังหรณ์ได้เฉพาะช่วง NOCTHERION',
+  already_sent: 'คืนนี้ส่งลางสังหรณ์ไปแล้ว (ได้คืนละครั้ง)',
+  unknown_target: 'ไม่มีผู้เล่นคนนี้ให้ส่งลางสังหรณ์ถึง',
+  game_ended: 'เกมจบแล้ว ส่งลางสังหรณ์ไม่ได้',
 };
 
 /** When the resolver threw: the room shows this and offers `retry`. */
@@ -98,6 +115,7 @@ const NIGHT_SECRET_QUOTA_MESSAGE = 'คืนนี้ใช้ Secret ฟรี
 
 export type SubmitReply = { type: 'action_accepted' } | { type: 'action_rejected'; code: RoomActionCode; message: string };
 export type WhisperReply = { type: 'whisper_accepted' } | { type: 'whisper_rejected'; code: RoomWhisperCode; message: string };
+export type OmenReply = { type: 'omen_accepted' } | { type: 'omen_rejected'; code: RoomOmenCode; message: string };
 export type MoveReply =
   | { type: 'move_accepted'; kind: 'same_zone' | 'cross_zone' | 'rift'; place: PlaceView; arrives: 'now' | 'next_turn' }
   | { type: 'move_rejected'; code: RoomMoveCode; message: string };
@@ -111,6 +129,8 @@ export interface RoomService {
   submit(socket: RoomSocket, input: { text: string; visibility: string; rest?: boolean; train?: boolean }): SubmitReply;
   /** A Whisper to one ally (GEN-067): stored as a `whisper` entry for sender, target and the Human GM. */
   whisper(socket: RoomSocket, input: { to: string; text: string }): WhisperReply;
+  /** GEN-070 (Q-193): an Astral Spirit's one omen a night, stored as an `omen` entry for the target (and the Human GM). */
+  omen(socket: RoomSocket, input: { to: string; text: string }): OmenReply;
   /** Tries a stuck turn again (GEN-057 C2); does nothing when the AI GM is not stuck. */
   retry(socket: RoomSocket): void;
   /** A walk to another place (GEN-066): no weather, start right, password or INFILTRATE from the room yet. */
@@ -203,7 +223,8 @@ export function createRoomService(
     const visible = closeAlliesOf(db, me.id);
     if (visible.size === 0) return [];
     const active = new Set(activeMembers(db, me.gameId).map((m) => m.id));
-    const presences = new Map(presencesInGame(db, me.gameId).map((p) => [p.memberId, p.ref]));
+    // GEN-070: the dead are nobody's Whisper ally.
+    const presences = new Map(presencesInGame(db, me.gameId).flatMap((p) => (p.locationId === ASTRAL_PLANE ? [] : [[p.memberId, p.ref] as const])));
     return [...visible].flatMap((id) => {
       const ref = presences.get(id);
       return ref !== undefined && active.has(id) ? [{ ref, name: characterName(id) }] : [];
@@ -306,6 +327,7 @@ export function createRoomService(
         drowsy: player ? isDrowsy(player, state.day) : false,
         action: mine ? { text: mine.text, visibility: mine.visibility, rest: mine.rest === true, ...(mine.train ? { train: true as const } : {}) } : null,
         allies: alliesOf(me),
+        astral: me.role === 'gm' ? null : astralViewOf(db, me.gameId, state, me.id),
       },
       gmStatus: gmStatusFor(me, state, gameRow.ownerMemberId),
     };
@@ -332,8 +354,11 @@ export function createRoomService(
     }
   }
 
-  /** Who receives an entry: the GEN-050 witnesses (feed) or the one player (narration), plus the Human GM. */
-  function recipientsOf(tx: DbOrTx, gameId: string, entry: NonNullable<PhaseResolution['entries']>[number]): Set<string> {
+  /**
+   * Who receives an entry: the GEN-050 witnesses (feed) or the one player (narration), plus the Human GM.
+   * GEN-070 (Q-192): every Astral Spirit gets every feed, whatever the place (a feed is public by definition).
+   */
+  function recipientsOf(tx: DbOrTx, gameId: string, state: PhaseState, entry: NonNullable<PhaseResolution['entries']>[number]): Set<string> {
     const members = activeMembers(tx, gameId);
     const ids = new Set(members.map((m) => m.id));
     const recipients = new Set(members.filter((m) => m.role === 'gm').map((m) => m.id));
@@ -341,6 +366,7 @@ export function createRoomService(
       if (ids.has(entry.memberId)) recipients.add(entry.memberId);
       return recipients;
     }
+    for (const id of astralMembers(state)) if (ids.has(id)) recipients.add(id);
     const locations = locationSnapshot(tx, gameId);
     const actor = entry.actorMemberId !== null && ids.has(entry.actorMemberId) ? entry.actorMemberId : null;
     const witnesses =
@@ -385,7 +411,7 @@ export function createRoomService(
           }
           const at = { day: current.day, phase: current.phase, turn: current.turn };
           const rows = (resolution.entries ?? []).map((entry) => {
-            const recipients = recipientsOf(tx, gameId, entry);
+            const recipients = recipientsOf(tx, gameId, current, entry);
             const locationId = entry.kind === 'feed' ? entry.locationId : null;
             const fallback = entry.fallback ? { fallback: entry.fallback } : {};
             return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text, ...fallback }, [...recipients], t), recipients };
@@ -415,6 +441,8 @@ export function createRoomService(
           }
           if (!step.ok) throw new Error(`phase engine refused an empty result: ${step.error.code}`);
           applyLocationLog(tx, step.log, t);
+          // GEN-070: carried to the clinic (half the coins), or dead for good (no place any more).
+          applyCrisisLog(tx, assets, gameId, step.log, t);
           savePhaseState(tx, gameId, step.state, t);
           syncCharacterStats(tx, step.state, t);
           // GEN-055: karma per day / period for the unlock rules, then the skills that unlock now.
@@ -500,7 +528,7 @@ export function createRoomService(
       const state = ensurePhaseState(tx, gameId, t);
       const at = { day: state.day, phase: state.phase, turn: state.turn };
       const out = entries.map((entry) => {
-        const recipients = recipientsOf(tx, gameId, entry);
+        const recipients = recipientsOf(tx, gameId, state, entry);
         const locationId = entry.kind === 'feed' ? entry.locationId : null;
         return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text }, [...recipients], t), recipients };
       });
@@ -734,11 +762,13 @@ export function createRoomService(
         const t = now();
         const state = ensurePhaseState(tx, me.gameId, t);
         if (state.status === 'finale' || state.status === 'game_over') return 'game_ended' as const;
-        // Q-136: HP 0 locks Whisper like an action.
-        if (state.players[me.id]?.condition === 'unconscious') return 'unconscious' as const;
+        // Q-136: HP 0 locks Whisper like an action. GEN-070: the dead speak only through the omen.
+        const condition = state.players[me.id]?.condition;
+        if (condition === 'unconscious') return 'unconscious' as const;
+        if (condition === 'astral_spirit') return 'astral_spirit' as const;
         const target = presencesInGame(tx, me.gameId).find((p) => p.ref === input.to);
         const members = activeMembers(tx, me.gameId);
-        if (!target || target.memberId === me.id || !members.some((m) => m.id === target.memberId)) return 'not_allowed' as const;
+        if (!target || target.memberId === me.id || target.locationId === ASTRAL_PLANE || !members.some((m) => m.id === target.memberId)) return 'not_allowed' as const;
         if (!revealsPlayerName(playerBondBetween(tx, me.id, target.memberId))) return 'not_allowed' as const;
 
         const recipients = new Set([me.id, target.memberId, ...members.filter((m) => m.role === 'gm').map((m) => m.id)]);
@@ -748,6 +778,28 @@ export function createRoomService(
       if (typeof published === 'string') return rejectWhisper(published);
       deliver(me.gameId, [published]);
       return { type: 'whisper_accepted' };
+    },
+
+    omen(socket, input) {
+      const me = memberOf(socket);
+      const refuse = (code: RoomOmenCode): OmenReply => ({ type: 'omen_rejected', code, message: OMEN_MESSAGE[code] });
+      if (!me || me.role === 'gm') return refuse('not_astral');
+      const text = normalizeActionText(input.text);
+      const published = db.transaction((tx) => {
+        const t = now();
+        const state = ensurePhaseState(tx, me.gameId, t);
+        const checked = omenCheck(tx, me.gameId, state, me.id, { to: input.to, text });
+        if (!checked.ok) return checked.code;
+        // Q-193: the target (and the Human GM) only; the sender is stored, never shown to the target.
+        const gms = activeMembers(tx, me.gameId).filter((m) => m.role === 'gm').map((m) => m.id);
+        const recipients = new Set([checked.to, ...gms]);
+        const entry = { kind: 'omen' as const, at: { day: state.day, phase: state.phase, turn: state.turn }, locationId: null, text, fromMemberId: me.id, toMemberId: checked.to };
+        return { row: insertEntry(tx, me.gameId, entry, [...recipients], t), recipients };
+      });
+      if (typeof published === 'string') return refuse(published);
+      deliver(me.gameId, [published]);
+      broadcastRoom(me.gameId);
+      return { type: 'omen_accepted' };
     },
 
     move(socket, input) {

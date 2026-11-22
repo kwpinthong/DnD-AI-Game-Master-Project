@@ -173,7 +173,7 @@ export const AstralView = z.strictObject({
 });
 export type AstralView = z.infer<typeof AstralView>;
 
-/** Client → server (pending: GEN-070 adds it to `RoomClientMessage`). Same text rules as an action, ≤ 200. */
+/** Client → server (`RoomClientMessage`). `to` = a target's `ref`; same text rules as an action, ≤ 200 characters. */
 export const RoomOmen = z.object({ type: z.literal('omen'), to: z.string(), text: z.string() });
 export type RoomOmen = z.infer<typeof RoomOmen>;
 

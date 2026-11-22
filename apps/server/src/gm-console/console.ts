@@ -255,7 +255,7 @@ function fallbacksOf(db: DbOrTx, gameId: string): GmFallbackView[] {
     .orderBy(asc(roomEntry.id))
     .all();
   return rows.flatMap(({ e }) => {
-    if (e.fallback === null || e.kind === 'whisper') return [];
+    if (e.fallback === null || e.kind === 'whisper' || e.kind === 'omen') return [];
     const reader =
       e.kind === 'narration'
         ? (db

@@ -96,6 +96,7 @@ export function endingFacts(db: DbOrTx, assets: GameAssets, gameId: string, stat
       protectedBy: [...protectionsOf(db, assets, gameId, memberId, skills), ...(refuges.buffs.get(memberId) ?? [])],
       inSafeZone: place !== undefined && (isSafeZone(db, assets, gameId, place) || refuges.places.has(place)),
       goodAligned: karma >= goodFrom,
+      dead: state.players[memberId]?.condition === 'astral_spirit',
     };
   });
 }

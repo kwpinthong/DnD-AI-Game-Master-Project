@@ -48,6 +48,12 @@ export function moveCharacter(db: DbOrTx, memberId: string, locationId: string, 
   return result.changes > 0;
 }
 
+/**
+ * GEN-070: where an Astral Spirit's presence goes (not a scenario place): nobody else is ever there, so it
+ * meets, witnesses and is targeted by nobody, while its ref (name tokens, the finale, the reveal) stays.
+ */
+export const ASTRAL_PLANE = '~astral';
+
 export function presenceOf(db: DbOrTx, memberId: string): PresenceRow | undefined {
   return db.select().from(characterPresence).where(eq(characterPresence.memberId, memberId)).get();
 }

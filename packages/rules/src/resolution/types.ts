@@ -274,7 +274,7 @@ export interface ResolutionLog {
   readonly hp: { readonly actor: HpLog; readonly target: ({ readonly npcId: string } & HpLog) | null };
   readonly statusesAdded: readonly StatusEffect[];
   readonly statusesRemoved: readonly string[];
-  /** Q-036 / Q-057: HP 0 is unconscious; there is no death. */
+  /** HP 0 is unconscious (out cold one turn); death comes only from an EXECUTE then (GEN-070, phase engine). */
   readonly actorCondition: 'ok' | 'unconscious';
 }
 

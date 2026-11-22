@@ -99,6 +99,7 @@ export function registerRoomRoutes(app: FastifyInstance, db: Db, now: Clock, opt
         if (message.type === 'retry') return room.retry(socket);
         if (message.type === 'whisper') return reply(room.whisper(socket, message));
         if (message.type === 'move') return reply(room.move(socket, message));
+        if (message.type === 'omen') return reply(room.omen(socket, message));
         reply(room.submit(socket, message));
       });
 

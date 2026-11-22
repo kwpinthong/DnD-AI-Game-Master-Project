@@ -3,7 +3,7 @@ import { MemberRole } from './game.ts';
 import { Phase } from './scenario.ts';
 import { PlaceView } from './visibility.ts';
 import { PeriodWeather } from './weather.ts';
-import { AstralView, HitView, PlaceActionId, PlaceActionView, RollView, RoomOmenAccepted, RoomOmenRejected } from './view-models.ts';
+import { AstralView, HitView, PlaceActionId, PlaceActionView, RollView, RoomOmen, RoomOmenAccepted, RoomOmenRejected } from './view-models.ts';
 
 /**
  * The play room (GEN-056): one WebSocket per browser tab at `ROOM_PATH`. The browser cannot set an
@@ -98,7 +98,7 @@ export const RoomMove = z.object({
 });
 export type RoomMove = z.infer<typeof RoomMove>;
 
-export const RoomClientMessage = z.discriminatedUnion('type', [RoomHello, RoomAction, RoomWhisper, RoomRetry, RoomMove]);
+export const RoomClientMessage = z.discriminatedUnion('type', [RoomHello, RoomAction, RoomWhisper, RoomRetry, RoomMove, RoomOmen]);
 export type RoomClientMessage = z.infer<typeof RoomClientMessage>;
 
 // --- Server → client ---
@@ -121,17 +121,19 @@ export const RoomMember = z.strictObject({
 });
 export type RoomMember = z.infer<typeof RoomMember>;
 
-/** Why this viewer cannot send an action now (the codes the server sends today); null = they can. */
-export const RoomLockCode = z.enum(['not_a_player', 'exhausted', 'unconscious', 'resolving', 'game_ended']);
+/**
+ * Why this viewer cannot send an action now (the codes the server sends today); null = they can. GEN-070:
+ * `exhausted` (Stamina 0: this turn is a forced REST), `unconscious` (HP 0: out cold this turn), `recovering`
+ * (resting at the central clinic after HP 0), `astral_spirit` (dead for good; `you.astral` has the omen box).
+ */
+export const RoomLockCode = z.enum(['not_a_player', 'exhausted', 'unconscious', 'recovering', 'astral_spirit', 'resolving', 'game_ended']);
 export type RoomLockCode = z.infer<typeof RoomLockCode>;
 
 /**
  * Lock codes the screens need that the server does not send yet (docs/contract.md): `traveling` (this turn
- * is the trip to another zone, GEN-066 gap), `recovering` (resting at the clinic after HP 0, GEN-070) and
- * `astral_spirit` (permanent death; `you.astral` has the omen box, GEN-070). The owner moves a code into
- * `RoomLockCode` when the server sends it.
+ * is the trip to another zone, GEN-066 gap). The owner moves a code into `RoomLockCode` when the server sends it.
  */
-export const RoomLockCodePending = z.enum(['traveling', 'recovering', 'astral_spirit']);
+export const RoomLockCodePending = z.enum(['traveling']);
 /** Every lock the web must handle: `RoomYou.lock.code`. */
 export const RoomViewLockCode = z.enum([...RoomLockCode.options, ...RoomLockCodePending.options]);
 export type RoomViewLockCode = z.infer<typeof RoomViewLockCode>;
@@ -157,7 +159,7 @@ export const RoomYou = z.strictObject({
   allies: z.array(z.strictObject({ ref: z.string(), name: z.string() })),
   /** GEN-069: the action chips of your place (pending, see docs/contract.md). */
   placeActions: z.array(PlaceActionView).optional(),
-  /** GEN-070: you are an Astral Spirit; null / absent = you are not (pending, see docs/contract.md). */
+  /** GEN-070: you are an Astral Spirit; null = you are not. Optional for older servers. */
   astral: AstralView.nullable().optional(),
 });
 export type RoomYou = z.infer<typeof RoomYou>;
@@ -200,17 +202,17 @@ export type RoomState = z.infer<typeof RoomState>;
  * `feed`: something that happened at a place, sent only to who was there (witnesses, GEN-050).
  * `narration`: private GM text for one player. `place` null = the whole town (feed) or none (narration).
  * `whisper`: one ally to another (GEN-067); `place` null, `whisper` says who to whom.
+ * `omen`: an Astral Spirit's one-sentence omen to you (GEN-070, Q-193); `place` null, the sender is not named.
  */
-export const RoomEntryKind = z.enum(['feed', 'narration', 'whisper']);
+export const RoomEntryKind = z.enum(['feed', 'narration', 'whisper', 'omen']);
 export type RoomEntryKind = z.infer<typeof RoomEntryKind>;
 
 /**
  * Entry kinds the screens need that the server does not send yet (docs/contract.md): `hit` = another
- * player's act landed on you (GEN-060 gap; the pinned card, `RoomEntry.hit` has the details); `omen` = an
- * Astral Spirit's one-sentence omen to you (GEN-070, Q-193; the sender is not named). The owner moves a kind
- * into `RoomEntryKind` when the server sends it.
+ * player's act landed on you (GEN-060 gap; the pinned card, `RoomEntry.hit` has the details). The owner moves
+ * a kind into `RoomEntryKind` when the server sends it.
  */
-export const RoomEntryKindPending = z.enum(['hit', 'omen']);
+export const RoomEntryKindPending = z.enum(['hit']);
 /** Every kind the web must handle: `RoomEntry.kind`. */
 export const RoomViewEntryKind = z.enum([...RoomEntryKind.options, ...RoomEntryKindPending.options]);
 export type RoomViewEntryKind = z.infer<typeof RoomViewEntryKind>;
@@ -256,6 +258,10 @@ export const RoomActionCode = z.enum([
   'not_a_player',
   'exhausted',
   'unconscious',
+  /** GEN-070: resting at the central clinic after HP 0. */
+  'recovering',
+  /** GEN-070: dead for good (an Astral Spirit). */
+  'astral_spirit',
   'resolving',
   'secret_quota_used',
   'game_ended',
@@ -302,8 +308,9 @@ export const RoomActionRejected = z.strictObject({ type: z.literal('action_rejec
 /**
  * `not_allowed`: no ally with that ref at relationship > +9 (an unknown ref gets the same answer, so a
  * Whisper cannot probe who exists). `unconscious`: the sender is at HP 0, the same lock as an action (Q-136).
+ * `astral_spirit`: the dead speak only through the omen (GEN-070).
  */
-export const RoomWhisperCode = z.enum(['empty', 'too_long', 'not_a_player', 'not_allowed', 'game_ended', 'unconscious']);
+export const RoomWhisperCode = z.enum(['empty', 'too_long', 'not_a_player', 'not_allowed', 'game_ended', 'unconscious', 'astral_spirit']);
 export type RoomWhisperCode = z.infer<typeof RoomWhisperCode>;
 export const RoomWhisperAccepted = z.strictObject({ type: z.literal('whisper_accepted') });
 export const RoomWhisperRejected = z.strictObject({ type: z.literal('whisper_rejected'), code: RoomWhisperCode, message: z.string() });
@@ -327,7 +334,7 @@ export const RoomServerMessage = z.discriminatedUnion('type', [
   RoomMoveAccepted,
   RoomMoveRejected,
   RoomError,
-  // Pending GEN-070 (docs/contract.md): the answer to a `RoomOmen`.
+  // GEN-070: the answer to a `RoomOmen`.
   RoomOmenAccepted,
   RoomOmenRejected,
 ]);

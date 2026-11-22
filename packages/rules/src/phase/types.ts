@@ -7,7 +7,6 @@
  * can act has sent (GEN-052). The period is kept under the key `phase` (stored games, the scenario timeline
  * and the room protocol all use that key); its values are the periods.
  */
-import type { RescueOutcome, Safety } from '../resolution/rescue.ts';
 import type { StatusEffect, Visibility } from '../resolution/types.ts';
 
 /**
@@ -61,21 +60,17 @@ export interface Drowsy {
 }
 
 /**
- * What a player is in the current turn.
- * - `awake`: must submit one action.
- * - `exhausted`: Stamina hit 0 last turn, so this turn the input is locked and the character sleeps (spec §4.3).
- * - `unconscious`: HP 0 (Q-036 / Q-054 / Q-057, no death); locked until `wakeAt`.
+ * What a player is in the current turn (GEN-070, System_Rules "Crisis & Death"). Only `awake` submits.
+ * - `exhausted`: Stamina hit 0 last turn: this turn is a forced REST (+6) and hits on them count ×1.3.
+ * - `unconscious`: HP hit 0 last turn: out cold this one turn; others may STEAL or EXECUTE them.
+ * - `recovering`: carried to the central clinic after the turn out cold: `recoveringLeft` turns of rest.
+ * - `astral_spirit`: executed while out cold; dead for good, never acts again.
  */
-export type PlayerCondition = 'awake' | 'exhausted' | 'unconscious';
+export type PlayerCondition = 'awake' | 'exhausted' | 'unconscious' | 'recovering' | 'astral_spirit';
 
 export interface KnockedOut {
-  /** The turn the character wakes at the start of: next day's EOSORIA, or next day's SOLARION after a NOCTHERION knock-out. */
-  readonly wakeAt: TurnPoint;
-  /** Safety of the place they fell (spec §12.2); location rules are GEN-060. */
-  readonly safety: Safety;
-  readonly primaryAffinity: number;
-  /** Another player's general action at DC 8 succeeded (Q-056): wake as `rescued` with no roll. */
-  readonly rescued: boolean;
+  /** The turn whose end left them at HP 0; they are out cold the turn after. */
+  readonly at: TurnPoint;
 }
 
 export interface PlayerPhaseState {
@@ -97,6 +92,10 @@ export interface PlayerPhaseState {
   /** Σ on_sleep item/skill bonus added to sleep recovery (spec §4.1, §4.3). */
   readonly sleepBonus: number;
   readonly knockedOut: KnockedOut | null;
+  /** GEN-070: turns of clinic rest left, this one included, while `recovering`. */
+  readonly recoveringLeft?: number;
+  /** GEN-070: the turn they were executed in (an `astral_spirit`). */
+  readonly diedAt?: TurnPoint;
   /** The character's own Max HP (GEN-065 / Q-210); absent (older saved states) = the state's `hpMax`. */
   readonly hpMax?: number;
   /** GEN-069 (Q-088): the day of the last TRAIN at the guild (once a day); absent = never. */
@@ -162,11 +161,8 @@ export interface PlayerResult {
    * Whole numbers >= 0, capped at max like the recovery; nothing when the player does not recover.
    */
   readonly restBonus?: { readonly stamina?: number; readonly hp?: number };
-  /** Needed only when HP reaches 0. Default `normal` / 0. */
-  readonly safety?: Safety;
-  readonly primaryAffinity?: number;
-  /** An unconscious player was rescued this turn by another player's general action at DC 8 (Q-056). */
-  readonly rescued?: boolean;
+  /** GEN-070: a player out cold this turn was executed (a successful EXECUTE): Astral Spirit for good. */
+  readonly executed?: boolean;
 }
 
 export type PhaseEvent =
@@ -176,7 +172,8 @@ export type PhaseEvent =
 /** Why a player sleeps through a turn. Q-046: the feed labels these turns "ระหว่างคุณหลับ". */
 export type SleepReason = 'exhausted' | 'night_rest';
 
-export type RecoveryKind = 'night_rest' | 'day_rest' | 'exhausted_day' | 'exhausted_night';
+/** `exhausted`: the forced REST after Stamina 0 (+6). `clinic`: a turn recovering at the clinic after HP 0. */
+export type RecoveryKind = 'night_rest' | 'day_rest' | 'exhausted' | 'clinic';
 
 export type PhaseLogEntry =
   | { readonly type: 'submitted'; readonly at: TurnPoint; readonly playerId: string; readonly action: PlayerAction; readonly replaced: boolean }
@@ -206,21 +203,17 @@ export type PhaseLogEntry =
   /** GEN-069 TRAIN at the guild: Max HP up (HP unchanged). */
   | { readonly type: 'trained'; readonly at: TurnPoint; readonly playerId: string; readonly hpMax: { readonly before: number; readonly after: number } }
   | { readonly type: 'exhausted'; readonly at: TurnPoint; readonly playerId: string; readonly sleepsAt: TurnPoint }
-  | { readonly type: 'knocked_out'; readonly at: TurnPoint; readonly playerId: string; readonly wakeAt: TurnPoint }
-  | { readonly type: 'rescued_by_player'; readonly at: TurnPoint; readonly playerId: string }
-  | {
-      readonly type: 'woke';
-      readonly at: TurnPoint;
-      readonly playerId: string;
-      readonly outcome: RescueOutcome;
-      /** null when a player rescued them (no roll). */
-      readonly rescueRoll: { readonly d20: number; readonly score: number } | null;
-      readonly hp: number;
-      readonly stamina: number;
-    }
+  /** HP 0: out cold through the next turn. */
+  | { readonly type: 'knocked_out'; readonly at: TurnPoint; readonly playerId: string }
+  /** Not executed while out cold: carried to the central clinic (the server moves them and takes half the coins). */
+  | { readonly type: 'carried_to_clinic'; readonly at: TurnPoint; readonly playerId: string; readonly turns: number }
+  /** The clinic rest is over: awake again at full Max HP. */
+  | { readonly type: 'clinic_released'; readonly at: TurnPoint; readonly playerId: string; readonly hp: number }
+  /** Executed while out cold: an Astral Spirit for good. */
+  | { readonly type: 'died'; readonly at: TurnPoint; readonly playerId: string }
   | { readonly type: 'phase_started'; readonly at: TurnPoint }
   | { readonly type: 'finale'; readonly at: TurnPoint }
-  | { readonly type: 'game_over'; readonly at: TurnPoint; readonly reason: 'all_unconscious' };
+  | { readonly type: 'game_over'; readonly at: TurnPoint; readonly reason: 'all_dead' };
 
 export type PhaseErrorCode =
   | 'not_collecting'

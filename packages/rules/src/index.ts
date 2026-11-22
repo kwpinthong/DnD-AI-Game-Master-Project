@@ -69,9 +69,11 @@ export * from './crossplayer/types.ts';
 export { orderPhaseActions, replayPhaseActions, resolvePhaseActions, validatePhaseActions } from './crossplayer/phase.ts';
 export * from './phase/types.ts';
 export {
+  CRISIS,
   REST,
   REST_QUALITY_STAMINA,
   TRAIN,
+  coinsAfterClinic,
   createPhaseState,
   gainStamina,
   playerHpMax,

@@ -3,9 +3,7 @@ import {
   SeededRng,
   createPhaseState,
   phaseStep,
-  rollRescue,
   turnNumber,
-  wakeAfter,
   type PhaseEvent,
   type PhaseState,
   type PhaseStepResult,
@@ -153,8 +151,9 @@ describe('C3 one Secret turn per day (outside NOCTHERION)', () => {
   });
 });
 
+// GEN-070 replaced the +15 / Rest_Quality forced sleep with a forced REST of +6 (see crisis.test.ts).
 describe('C4 Stamina 0 locks the next turn and the character sleeps through it', () => {
-  it('locks input, does not wait for the sleeper, and recovers +15 + on_sleep outside NOCTHERION', () => {
+  it('locks input, does not wait for the sleeper, and recovers +6 (GEN-070)', () => {
     let s = start({ 'pc-a': { sleepBonus: 2 } });
     const first = ok(phaseStep(submitAll(s), { type: 'resolved', results: { 'pc-a': { stamina: 0 } } }, new SeededRng(1)));
     expect(first.log).toContainEqual(
@@ -173,28 +172,27 @@ describe('C4 Stamina 0 locks the next turn and the character sleeps through it',
 
     s = resolve(closed.state);
     expect(s.phase).toBe('SOLARION');
-    expect(s.players['pc-a']!.stamina).toBe(17);
+    expect(s.players['pc-a']!.stamina).toBe(6);
     expect(s.players['pc-a']!.condition).toBe('awake');
     expect(s.players['pc-a']!.mustSubmit).toBe(true);
   });
 
-  it('a forced sleep in NOCTHERION recovers like a night rest where the player is (Q-218: the inn is good, 25)', () => {
+  it('a forced sleep in NOCTHERION counts as sleeping that night (not Drowsy)', () => {
     let s = playTo(start(), 1, 'HESPERION', 2);
     s = playTurn(s, { 'pc-a': { stamina: 0 } });
-    expect(s.phase).toBe('NOCTHERION');
     expect(s.players['pc-a']!.condition).toBe('exhausted');
-    const night = ok(phaseStep(submitAll(s), { type: 'resolved', results: { 'pc-a': { restQuality: 'good' } } }, new SeededRng(7)));
-    const rec = night.log.find((e) => e.type === 'recovered');
-    expect(rec).toMatchObject({ playerId: 'pc-a', kind: 'exhausted_night', stamina: { before: 0, gain: 25, after: 25 } });
-    expect(night.state.players['pc-a']!.stamina).toBe(25);
-    expect(night.state.turn).toBe(2);
+    // Awake again for NOCTHERION turn 2, which pc-a spends acting, not sleeping.
+    s = playTurn(s);
+    s = resolve(submitAll(s, act()));
+    expect(s.day).toBe(2);
+    expect(s.players['pc-a']!.drowsy).toBeNull();
   });
 
   it('when every player is asleep the turn closes at once', () => {
     const s = playTurn(start(), { 'pc-a': { stamina: 0 }, 'pc-b': { stamina: 0 }, 'pc-c': { stamina: 0 } });
     expect(s.turn).toBe(2);
     expect(s.status).toBe('resolving');
-    expect(resolve(s).players['pc-b']!.stamina).toBe(15);
+    expect(resolve(s).players['pc-b']!.stamina).toBe(6);
   });
 });
 
@@ -231,84 +229,27 @@ describe('C5 NOCTHERION rest at the inn: Rest_Quality good +25 + bonus, capped a
   });
 });
 
-describe('C6 unconscious players (HP 0, no death: Q-057) are not waited for; all out for good = game over', () => {
-  it('HP 0 in EOSORIA: locked for the rest of the day, wakes next EOSORIA with the rescue roll', () => {
-    let s = start();
-    const ko = ok(
-      phaseStep(submitAll(s), { type: 'resolved', results: { 'pc-a': { hp: 0, stamina: 0, safety: 'safe', primaryAffinity: 52 } } }, new SeededRng(1)),
-    );
-    expect(ko.log).toContainEqual(
-      expect.objectContaining({ type: 'knocked_out', playerId: 'pc-a', wakeAt: { day: 2, phase: 'EOSORIA', turn: 1 } }),
-    );
-    s = ko.state;
+// GEN-070 replaced the GEN-052 knock-out (out until the next day + rescue roll, Q-057 no death): see crisis.test.ts.
+describe('C6 unconscious players (HP 0) are not waited for', () => {
+  it('HP 0: locked the next turn, the turn closes without them; out cold through NOCTHERION is sleep (not Drowsy)', () => {
+    let s = playTo(start(), 1, 'HESPERION', 2);
+    s = playTurn(s, { 'pc-a': { hp: 0, stamina: 0 } });
     expect(s.players['pc-a']!.condition).toBe('unconscious');
-    expect(s.players['pc-a']!.mustSubmit).toBe(false);
     expect(rejected(phaseStep(s, { type: 'submit', playerId: 'pc-a', action: act() }, new SeededRng(1)))).toBe('cannot_act');
 
-    s = submit(s, 'pc-b');
-    const closed = ok(phaseStep(s, { type: 'submit', playerId: 'pc-c', action: act() }, new SeededRng(1)));
-    expect(closed.log).toContainEqual(expect.objectContaining({ type: 'phase_closed', unconscious: ['pc-a'], asleep: [] }));
-    s = playTo(resolve(closed.state), 1, 'NOCTHERION', 2);
-    expect(s.players['pc-a']!.condition).toBe('unconscious');
-
-    const seed = 9;
-    const woke = ok(phaseStep(submitAll(s), { type: 'resolved', results: {} }, new SeededRng(seed)));
-    const roll = rollRescue({ safety: 'safe', primaryAffinity: 52 }, new SeededRng(seed));
-    const wake = wakeAfter(roll.outcome, 0);
-    expect(woke.log).toContainEqual(
-      expect.objectContaining({ type: 'woke', playerId: 'pc-a', outcome: roll.outcome, rescueRoll: { d20: roll.d20, score: roll.score } }),
-    );
-    expect(woke.state.day).toBe(2);
-    expect(woke.state.players['pc-a']).toMatchObject({ condition: 'awake', mustSubmit: true, hp: wake.hp, stamina: wake.stamina, knockedOut: null });
-    // Out cold through the night counts as sleep: not Drowsy.
-    expect(woke.state.players['pc-a']!.drowsy).toBeNull();
-  });
-
-  it('HP 0 in NOCTHERION: wakes at the next SOLARION (spec §12.2) and gets no night rest', () => {
-    let s = playTo(start(), 1, 'NOCTHERION', 2);
-    s = submit(s, 'pc-a', act('นอนที่โรงเตี๊ยม', { rest: true }));
-    s = playTurn(s, { 'pc-a': { hp: 0, stamina: 4 } });
+    s = submit(s, 'pc-b', act('นอน', { rest: true }));
+    const closed = ok(phaseStep(s, { type: 'submit', playerId: 'pc-c', action: act('นอน', { rest: true }) }, new SeededRng(1)));
+    expect(closed.log).toContainEqual(expect.objectContaining({ type: 'phase_closed', unconscious: ['pc-a'] }));
+    s = playTurn(resolve(closed.state));
     expect(s.day).toBe(2);
-    expect(s.phase).toBe('EOSORIA');
-    expect(s.players['pc-a']).toMatchObject({
-      condition: 'unconscious',
-      stamina: 4,
-      knockedOut: { wakeAt: { day: 2, phase: 'SOLARION', turn: 1 } },
-    });
-    s = playTo(s, 2, 'EOSORIA', 2);
-    expect(s.players['pc-a']!.condition).toBe('unconscious');
-    s = playTurn(s);
-    expect(s.phase).toBe('SOLARION');
-    expect(s.players['pc-a']!.condition).toBe('awake');
+    expect(s.players['pc-a']!.drowsy).toBeNull();
   });
 
-  it("another player's DC 8 aid rescues: wakes as rescued with no roll", () => {
-    let s = playTurn(start(), { 'pc-a': { hp: 0, stamina: 12 } });
-    const aided = ok(phaseStep(submitAll(s), { type: 'resolved', results: { 'pc-a': { rescued: true } } }, new SeededRng(1)));
-    expect(aided.log).toContainEqual(expect.objectContaining({ type: 'rescued_by_player', playerId: 'pc-a' }));
-    s = playTo(aided.state, 2, 'EOSORIA');
-    expect(s.players['pc-a']).toMatchObject({ condition: 'awake', hp: 30, stamina: 20 });
-  });
-
-  it('all unconscious but someone wakes before the end: the game goes on without waiting', () => {
-    let s = playTo(start(), 5, 'EOSORIA');
-    s = playTurn(s, { 'pc-a': { hp: 0 }, 'pc-b': { hp: 0 }, 'pc-c': { hp: 0 } });
-    expect(s.turn).toBe(2);
-    expect(s.status).toBe('resolving');
-    for (let guard = 0; guard < 20 && s.status === 'resolving'; guard++) s = resolve(s);
-    expect(s.day).toBe(6);
-    expect(s.status).toBe('collecting');
-    expect(IDS.every((id) => s.players[id]!.condition === 'awake')).toBe(true);
-  });
-
-  it('all unconscious with nobody able to wake before the end of day 12: game over', () => {
-    let s = playTo(start(), 12, 'EOSORIA');
-    s = playTurn(s, { 'pc-a': { hp: 0 }, 'pc-b': { hp: 0 } });
-    expect(s.status).toBe('collecting');
-    const end = ok(phaseStep(submitAll(s), { type: 'resolved', results: { 'pc-c': { hp: 0 } } }, new SeededRng(1)));
-    expect(end.state.status).toBe('game_over');
-    expect(end.log).toContainEqual(expect.objectContaining({ type: 'game_over', reason: 'all_unconscious' }));
-    expect(rejected(phaseStep(end.state, { type: 'submit', playerId: 'pc-a', action: act() }, new SeededRng(1)))).toBe('game_ended');
+  it('a game that ended rejects every submit', () => {
+    let s = playTurn(start(), { 'pc-a': { hp: 0 }, 'pc-b': { hp: 0 }, 'pc-c': { hp: 0 } });
+    s = resolve(s, { 'pc-a': { executed: true }, 'pc-b': { executed: true }, 'pc-c': { executed: true } });
+    expect(s.status).toBe('game_over');
+    expect(rejected(phaseStep(s, { type: 'submit', playerId: 'pc-a', action: act() }, new SeededRng(1)))).toBe('game_ended');
   });
 });
 
