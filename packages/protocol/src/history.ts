@@ -45,7 +45,20 @@ export const GameRevealPlayer = z.strictObject({
   /** Companion NPC names at the end, main first. */
   companions: z.array(z.string()),
   /** Every Secret action that stood, oldest first. */
-  secretActions: z.array(z.strictObject({ day: z.number().int(), phase: Phase, turn: Turn, text: z.string() })),
+  secretActions: z.array(
+    z.strictObject({
+      day: z.number().int(),
+      phase: Phase,
+      turn: Turn,
+      text: z.string(),
+      /** GEN-078: the action's ref the 👍 names (GEN-077 ADR); pending, see docs/contract.md. */
+      sourceRef: z.string().optional(),
+    }),
+  ),
+  /** Screens and Flows v2 §6 (pending, see docs/contract.md): appearance, the last Social Title, the AI epilogue. */
+  appearance: z.string().optional(),
+  finalTitle: z.string().optional(),
+  epilogue: z.string().nullable().optional(),
 });
 export type GameRevealPlayer = z.infer<typeof GameRevealPlayer>;
 

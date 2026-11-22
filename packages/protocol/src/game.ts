@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { JoinRequest, Member } from './join.ts';
+import { GameMemoryView } from './view-models.ts';
 
 /** Online: 2-6 players. Single: exactly 1. A Human GM is not a player and has no character. */
 export const ONLINE_MIN_PLAYERS = 2;
@@ -98,6 +99,8 @@ export const GameView = z.object({
   canEditScenario: z.boolean(),
   /** Why the owner cannot start yet (Thai, one line each); empty when the game can start. */
   startBlockers: z.array(z.string()),
+  /** GEN-083: the "ความทรงจำจากเกมก่อน" setting the lobby shows (pending, see docs/contract.md). */
+  memory: GameMemoryView.optional(),
 });
 export type GameView = z.infer<typeof GameView>;
 

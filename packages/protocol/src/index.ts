@@ -29,5 +29,9 @@ export * from './inventory.ts';
 // GEN-037: the read-only game summary / log, own file so parallel protocol work merges cleanly.
 export * from './history.ts';
 
+// GEN-099: view-models of Screens and Flows v2 the server does not send yet (see docs/contract.md).
+// The registry + fixtures are `@isekai/protocol/contract`.
+export * from './view-models.ts';
+
 // GEN-065: the start scenario (origin) and its private narration, own file for the same reason.
 export * from './origin.ts';
