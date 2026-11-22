@@ -54,14 +54,18 @@ const saved: CharacterView = {
   editable: true,
 };
 
-const option = (id: string, kind: 'skill' | 'item', name: string, quantitative = false): LootOption => ({
+/** A Rank B row of the Asset sheet (GEN-073); `active` = Trigger_Type Active, else Passive. */
+const option = (id: string, kind: 'skill' | 'item', name: string, active = false): LootOption => ({
   id,
   kind,
   name,
   description: `${name} คำอธิบาย`,
-  tier: 'Common',
-  buffType: quantitative ? 'Quantitative' : 'Qualitative',
-  effect: quantitative ? { type: 'damage_reduction', value: 2 } : null,
+  rank: 'B',
+  triggerType: active ? 'Active' : 'Passive',
+  dailyLimit: active ? 3 : 0,
+  verbTags: ['OBSERVE'],
+  targetTags: ['NPC'],
+  effects: active ? [{ type: 'dice_bonus', stats: ['d20'], value: 2, duration: { unit: 'instant' } }] : [],
 });
 
 function offerView(prefix = '', patch: Partial<LootView> = {}): LootView {
@@ -76,6 +80,7 @@ function offerView(prefix = '', patch: Partial<LootView> = {}): LootView {
     rerollsUsed: 0,
     rerollLimit: null,
     canReroll: true,
+    needsNewChoice: false,
     ...patch,
   };
 }
@@ -86,7 +91,7 @@ function chosenOf(index: number): LootView['chosen'] {
   return { strength, weakness, skill: skills[index]!, item: items[index]! };
 }
 
-const empty: LootView = { offer: null, chosen: null, rerollsUsed: 0, rerollLimit: null, canReroll: true };
+const empty: LootView = { offer: null, chosen: null, rerollsUsed: 0, rerollLimit: null, canReroll: true, needsNewChoice: false };
 const loot = (view: LootView, status = 200) => Response.json({ loot: view }, { status });
 
 function loggedIn(routes: Record<string, Handler>) {
@@ -114,7 +119,7 @@ describe('Character loot step (GEN-048)', () => {
     localStorage.clear();
   });
 
-  it('C1: the AI offer is shown; picking one skill + one item saves them and shows Common + buffType', async () => {
+  it('C1: the AI offer is shown; picking one skill + one item saves them and shows Rank B + how it is used', async () => {
     const chosen: LootView = { ...empty, canReroll: false, chosen: chosenOf(1) };
     const fetchMock = loggedIn({
       'GET /api/game/character/loot': () => loot(empty),
@@ -129,16 +134,17 @@ describe('Character loot step (GEN-048)', () => {
     expect(within(section).getByText(/จุดอ่อน: กลัวความมืด/)).toBeTruthy();
     const skills = within(section).getByRole('radiogroup', { name: 'เลือก skill 1 อย่าง' });
     expect(within(skills).getAllByRole('radio')).toHaveLength(2);
-    expect(within(skills).getByLabelText(/สายตาเหยี่ยว.*Common.*เชิงปริมาณ/)).toBeTruthy();
-    expect(within(skills).getByLabelText(/อ่านสีหน้า.*Common.*เชิงคุณภาพ/)).toBeTruthy();
+    expect(within(skills).getByLabelText(/สายตาเหยี่ยว · Rank B · กดใช้ \(วันละ 3 ครั้ง\)/)).toBeTruthy();
+    expect(within(skills).getByLabelText(/อ่านสีหน้า · Rank B · ติดตัว/)).toBeTruthy();
+    expect(section.textContent).not.toContain('Common');
 
     fireEvent.click(within(skills).getByLabelText(/สายตาเหยี่ยว/));
     fireEvent.click(within(section).getByLabelText(/สมุดจด/));
     fireEvent.click(within(section).getByRole('button', { name: 'ยืนยันของติดตัว' }));
 
     const kept = await within(section).findByRole('list', { name: 'ของติดตัวที่เลือก' });
-    expect(kept.textContent).toMatch(/สายตาเหยี่ยว.*Common.*เชิงปริมาณ/);
-    expect(kept.textContent).toMatch(/สมุดจด.*Common.*เชิงคุณภาพ/);
+    expect(kept.textContent).toMatch(/สายตาเหยี่ยว · Rank B · กดใช้/);
+    expect(kept.textContent).toMatch(/สมุดจด · Rank B · ติดตัว/);
     const [call] = callsTo(fetchMock, 'POST', '/api/game/character/loot/choose');
     expect(JSON.parse(String(call![1]?.body))).toEqual({ skillIds: ['s2'], itemIds: ['i2'] });
   });
@@ -304,5 +310,34 @@ describe('Character loot step (GEN-048)', () => {
     expect(await within(again).findByRole('button', { name: 'ให้ AI วิเคราะห์บุคลิก' })).toBeTruthy();
     expect(within(again).queryByRole('list', { name: 'ของติดตัวที่เลือก' })).toBeNull();
     expect(callsTo(fetchMock, 'GET', '/api/game/character/loot')).toHaveLength(2);
+  });
+
+  it('GEN-073 C5: a kept Common set from before the sheet asks the player to choose again before the start', async () => {
+    const fetchMock = loggedIn({
+      'GET /api/game/character/loot': () => loot({ ...empty, needsNewChoice: true }),
+      'POST /api/game/character/loot': () => loot(offerView()),
+    });
+
+    const section = await openLoot();
+
+    expect((await within(section).findByRole('alert')).textContent).toContain('ของติดตัวชุดเดิม (Common) ใช้ไม่ได้แล้ว กรุณาเลือกใหม่ก่อนเกมเริ่ม');
+    fireEvent.click(within(section).getByRole('button', { name: 'ให้ AI วิเคราะห์บุคลิก' }));
+    expect(await within(section).findByRole('radiogroup', { name: 'เลือก skill 1 อย่าง' })).toBeTruthy();
+    expect(callsTo(fetchMock, 'POST', '/api/game/character/loot')).toHaveLength(1);
+  });
+
+  it('GEN-073 C5: after the start an old Common set is still shown, marked as the old kind', async () => {
+    const old: LootOption = { ...option('old-s1', 'skill', 'ก้าวเงียบ'), rank: null, triggerType: null, verbTags: [], targetTags: [] };
+    const { strength, weakness, items } = offerView().offer!;
+    loggedIn({
+      'GET /api/game/character': () => Response.json({ character: { ...saved, editable: false } }),
+      'GET /api/game/character/loot': () => loot({ ...empty, canReroll: false, chosen: { strength, weakness, skill: old, item: items[0]! } }),
+    });
+
+    const section = await openLoot();
+
+    const kept = await within(section).findByRole('list', { name: 'ของติดตัวที่เลือก' });
+    expect(kept.textContent).toContain('skill: ก้าวเงียบ · ของเดิม (Common)');
+    expect(kept.textContent).toMatch(/เสื้อหนัง · Rank B/);
   });
 });

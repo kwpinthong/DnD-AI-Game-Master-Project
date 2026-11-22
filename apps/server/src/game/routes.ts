@@ -14,6 +14,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { memberRowForToken, type Clock } from '../auth/join.ts';
 import { bearerToken, sendError } from '../auth/routes.ts';
 import type { AiService } from '../ai/core/service.ts';
+import type { GameAssets } from '../assets/load.ts';
 import type { Db } from '../db/client.ts';
 import { readScenario, resetScenario, saveScenario, type ScenarioEditOutcome } from '../scenario/editor.ts';
 import { createCharacter, getCharacter, updateCharacter, type CharacterOutcome } from './character.ts';
@@ -40,6 +41,8 @@ export interface GameRouteOptions {
   ai: AiService;
   /** Karma bands from the assets (GEN-067): the owner's own Karma word in their character. */
   karmaTiers: readonly KarmaTier[];
+  /** Game data (GEN-062): the loot step offers its Rank B Ability / Item rows (GEN-073). */
+  assets: GameAssets;
 }
 
 const minutesUntil = (at: number, t: number) => Math.max(1, Math.ceil((at - t) / 60_000));
@@ -265,7 +268,7 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
     return sendCharacter(reply, updateCharacter(db, me, input, now, options.karmaTiers), 200);
   });
 
-  // --- Loot (GEN-048): the caller's own strength / weakness + Common skill / item. ---
+  // --- Loot (GEN-048, GEN-073): the caller's own strength / weakness + Rank B skill / item. ---
 
   function sendLoot(reply: FastifyReply, outcome: LootOutcome) {
     switch (outcome.kind) {
@@ -304,7 +307,7 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
   app.post('/api/game/character/loot', async (request, reply) => {
     const me = caller(request, reply);
     if (!me) return reply;
-    return sendLoot(reply, await rollLoot(db, options.ai, me, now));
+    return sendLoot(reply, await rollLoot(db, options.ai, options.assets, me, now));
   });
 
   app.post('/api/game/character/loot/choose', async (request, reply) => {

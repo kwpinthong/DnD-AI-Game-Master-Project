@@ -2,13 +2,20 @@ import type { LootOption, LootView } from '@isekai/protocol';
 import { useEffect, useState, type FormEvent } from 'react';
 import { lootCall, type LootAction } from './game-api.ts';
 
-const BUFF_LABEL: Record<LootOption['buffType'], string> = {
-  Qualitative: 'เชิงคุณภาพ',
-  Quantitative: 'เชิงปริมาณ',
+/** The sheet's Trigger_Type in words. */
+const TRIGGER_LABEL: Record<string, string> = {
+  Active: 'กดใช้',
+  Passive: 'ติดตัว',
+  'Passive + Active': 'ติดตัว + กดใช้',
 };
 
-/** "name · Common · เชิงปริมาณ" — no numbers: players see words, the engine keeps the values. */
-const summary = (o: LootOption) => `${o.name} · ${o.tier} · ${BUFF_LABEL[o.buffType]}`;
+function useText(o: LootOption): string {
+  const trigger = (o.triggerType && TRIGGER_LABEL[o.triggerType]) ?? o.triggerType ?? '';
+  return o.dailyLimit > 0 ? `${trigger} (วันละ ${o.dailyLimit} ครั้ง)` : trigger;
+}
+
+/** "name · Rank B · กดใช้ (วันละ 3 ครั้ง)"; an old GEN-048 option (not in the sheet) says so. */
+const summary = (o: LootOption) => (o.rank === null ? `${o.name} · ของเดิม (Common)` : `${o.name} · Rank ${o.rank} · ${useText(o)}`);
 
 function quotaText(loot: LootView): string {
   if (loot.rerollLimit === null) return 'สุ่มใหม่ได้ไม่จำกัด';
@@ -17,8 +24,9 @@ function quotaText(loot: LootView): string {
 }
 
 /**
- * Character creation step 2 "ของติดตัว" (GDD §4.1, GEN-048): the AI reads the personality and
- * offers a strength, a weakness and up to 3 Common skills / items; the player keeps one of each.
+ * Character creation step 2 "ของติดตัว" (GDD §4.1, GEN-048, GEN-073): the AI reads the personality
+ * and offers a strength, a weakness and up to 3 Rank B skills / items from the Asset sheet; the
+ * player keeps one of each. A kept set from before the sheet (Common) must be chosen again.
  * Rerolls are unlimited (Q-029); the button is disabled only while a request runs or when the
  * server says the quota is used up. A failed AI call keeps the shown set and offers a retry (C5).
  * The kept set can be changed until the game starts (Q-081).
@@ -121,7 +129,12 @@ export function LootStep({ apiBaseUrl, token, onSessionLost }: { apiBaseUrl: str
     return (
       <section aria-label="ของติดตัว">
         <h3>ของติดตัว</h3>
-        <p>AI จะอ่านบุคลิก (ไม่มีใครเห็น) แล้วเสนอจุดแข็ง จุดอ่อน skill และไอเท็ม ระดับ Common</p>
+        {loot.needsNewChoice && (
+          <p className="setup-error" role="alert">
+            ของติดตัวชุดเดิม (Common) ใช้ไม่ได้แล้ว กรุณาเลือกใหม่ก่อนเกมเริ่ม
+          </p>
+        )}
+        <p>AI จะอ่านบุคลิก (ไม่มีใครเห็น) แล้วเสนอจุดแข็ง จุดอ่อน skill และไอเท็ม Rank B ที่เข้ากับบุคลิก</p>
         {loot.canReroll ? (
           <button type="button" disabled={busy} onClick={() => void run({ kind: 'roll' })}>
             ให้ AI วิเคราะห์บุคลิก
