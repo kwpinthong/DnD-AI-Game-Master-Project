@@ -12,6 +12,7 @@ import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
 import type { RunningServer } from '../src/server.ts';
 import { advanceTimeline } from '../src/timeline/store.ts';
 import { moveCharacter, presenceOf } from '../src/visibility/store.ts';
+import { approveHeldTurn, heldTurn } from './gm-console-client.ts';
 import { makeTempDir } from './helpers.ts';
 import { isReady, openRoom, type RoomClient } from './room-client.ts';
 import { CLOCK, DARIN, LIN, MEKHA, startedTable, startTestServer, type Seat, type Table } from './visibility-fixture.ts';
@@ -310,6 +311,47 @@ describe('GEN-059 finale', { timeout: 60_000 }, () => {
     const log = GameLogResponse.parse((await t.call('GET', '/api/game/log', { token: t.a.token })).body);
     expect(log.game).toMatchObject({ status: 'ended', endReason: 'game_over' });
     expect(log.reveal?.players.map((p) => p.outcome)).toEqual(['defeated', 'defeated', 'defeated']);
+  });
+
+  it('Q-205: with a Human GM the ending waits for the GM (Q-030): held, the GM edits a narration, approves, then everyone gets it', async () => {
+    await boot((req, n) => (isFinale(req) ? markedFinale(req) : turnWith()(req, n)));
+    const t = await startedTable(server!, true);
+    jumpTo(t, { day: 12, phase: 'NOCTHERION', turn: 2 });
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    for (const [i, c] of clients.entries()) await send(c, ['มองฟ้า', 'สวดมนต์', 'เขียนจดหมาย'][i]!);
+    // The last turn itself is held first (GEN-058), then the game ends.
+    await approveHeldTurn(t.call, t.gm!.token);
+    for (const c of clients) await c.waitFor(ended);
+
+    // The ending is held: the console shows it, players get nothing yet and see that the GM is checking.
+    const pending = await heldTurn(t.call, t.gm!.token);
+    expect(pending.finale).toBe(true);
+    expect(pending.entries.map((e) => e.kind)).toEqual(['feed', 'narration', 'narration', 'narration']);
+    await clients[0]!.waitFor((m) => m.type === 'room' && m.status === 'finale' && m.gmStatus?.code === 'awaiting_gm');
+    expect(ending(t)).toMatchObject({ narrated_at: null });
+    for (const c of clients) expect(c.entries().filter((e) => e.text.startsWith('ฉากจบ'))).toEqual([]);
+
+    const mine = pending.entries.find((e) => e.memberId === t.a.memberId)!;
+    const edit = await t.call('POST', '/api/game/gm/turn/edit', { token: t.gm!.token, body: { reason: 'ปรับตอนจบ', narrations: [{ index: mine.index, text: 'ฉากจบส่วนตัว ที่ GM แก้' }] } });
+    expect(edit.status, JSON.stringify(edit.body)).toBe(200);
+    // A result edit makes no sense after the end: refused.
+    const results = await t.call('POST', '/api/game/gm/turn/edit', { token: t.gm!.token, body: { reason: 'x', results: [{ memberId: t.a.memberId, hp: 50 }] } });
+    expect(results.status).toBe(400);
+
+    expect((await t.call('POST', '/api/game/gm/turn/approve', { token: t.gm!.token })).status).toBe(200);
+    expect(await privateEnding(clients[0]!)).toMatchObject({ entry: { text: 'ฉากจบส่วนตัว ที่ GM แก้' } });
+    for (const c of clients.slice(1)) await privateEnding(c);
+    await clients[1]!.waitFor((m) => m.type === 'entry' && m.entry.kind === 'feed' && m.entry.text === 'ฉากจบรวมของทุกคน');
+    await expect.poll(() => ending(t)?.narrated_at ?? null).not.toBeNull();
+    expect(statusOf(t)).toBe('finale');
+  });
+
+  it('Q-205: without a Human GM the ending is published at once (nothing waits for approval)', async () => {
+    await boot((req, n) => (isFinale(req) ? markedFinale(req) : turnWith()(req, n)));
+    const t = await startedTable(server!, false);
+    const clients = await playLastTurn(t);
+    for (const c of clients) await privateEnding(c);
+    expect(clients[0]!.messages.some((m) => m.type === 'room' && m.gmStatus?.code === 'awaiting_gm')).toBe(false);
   });
 
   it('C7: the AI fails telling the ending: the game stays ended, the room offers retry, and retry tells it', async () => {

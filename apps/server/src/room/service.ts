@@ -128,6 +128,8 @@ export interface HeldTurn {
   readonly state: PhaseState;
   readonly actions: readonly ClosedAction[];
   readonly resolution: PhaseResolution;
+  /** GEN-059 (Q-205): the game's ending (entries only); approving publishes it instead of a turn. */
+  readonly finale?: boolean;
 }
 
 const AWAITING_GM_PLAYER_MESSAGE = 'ผลของเทิร์นนี้รอ GM ตรวจและอนุมัติก่อน แล้วจะส่งให้ทุกคน';
@@ -241,7 +243,7 @@ export function createRoomService(
   }
 
   function gmStatusFor(me: MemberRow, state: PhaseState, ownerMemberId: string | null): RoomGmStatus | null {
-    if (held.has(me.gameId) && state.status === 'resolving') {
+    if (held.has(me.gameId) && (state.status === 'resolving' || isEnded(state))) {
       return { code: 'awaiting_gm', message: me.role === 'gm' ? AWAITING_GM_MESSAGE : AWAITING_GM_PLAYER_MESSAGE, canRetry: false };
     }
     const s = stuck.get(me.gameId);
@@ -440,34 +442,46 @@ export function createRoomService(
         broadcastRoom(gameId);
         return;
       }
-      const entries = told.entries;
-      const publish = () => db.transaction((tx) => {
-        if (getEnding(tx, gameId)?.narrated !== false) return null;
-        const t = now();
-        const state = ensurePhaseState(tx, gameId, t);
-        const at = { day: state.day, phase: state.phase, turn: state.turn };
-        const out = entries.map((entry) => {
-          const recipients = recipientsOf(tx, gameId, entry);
-          const locationId = entry.kind === 'feed' ? entry.locationId : null;
-          return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text }, [...recipients], t), recipients };
-        });
-        markNarrated(tx, gameId, t);
-        return out;
-      });
-      let rows: ReturnType<typeof publish>;
-      try {
-        rows = publish();
-      } catch (error) {
-        log(`[room] finale publish failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
-        stuck.set(gameId, { code: 'stuck', message: GM_STUCK_MESSAGE, ownerMessage: GM_STUCK_MESSAGE });
+      stuck.delete(gameId);
+      // Q-205 (Q-030): with a Human GM the ending waits for approval like a turn; without one it goes out at once.
+      if (hasHumanGm(gameId)) {
+        const state = ensurePhaseState(db, gameId, now());
+        held.set(gameId, { at: { day: state.day, phase: state.phase, turn: state.turn }, state, actions: [], resolution: { entries: told.entries }, finale: true });
         broadcastRoom(gameId);
         return;
       }
-      stuck.delete(gameId);
-      if (rows) deliver(gameId, rows);
-      broadcastRoom(gameId);
+      publishFinale(gameId, told.entries);
     })().finally(() => finaling.delete(gameId));
     finaling.set(gameId, run);
+  }
+
+  /** Stores and sends the ending entries once; false when the transaction failed (the room then offers retry). */
+  function publishFinale(gameId: string, entries: readonly NonNullable<PhaseResolution['entries']>[number][]): boolean {
+    const publish = () => db.transaction((tx) => {
+      if (getEnding(tx, gameId)?.narrated !== false) return null;
+      const t = now();
+      const state = ensurePhaseState(tx, gameId, t);
+      const at = { day: state.day, phase: state.phase, turn: state.turn };
+      const out = entries.map((entry) => {
+        const recipients = recipientsOf(tx, gameId, entry);
+        const locationId = entry.kind === 'feed' ? entry.locationId : null;
+        return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text }, [...recipients], t), recipients };
+      });
+      markNarrated(tx, gameId, t);
+      return out;
+    });
+    let rows: ReturnType<typeof publish>;
+    try {
+      rows = publish();
+    } catch (error) {
+      log(`[room] finale publish failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
+      stuck.set(gameId, { code: 'stuck', message: GM_STUCK_MESSAGE, ownerMessage: GM_STUCK_MESSAGE });
+      broadcastRoom(gameId);
+      return false;
+    }
+    if (rows) deliver(gameId, rows);
+    broadcastRoom(gameId);
+    return true;
   }
 
   /** Work after a published turn (the day summary); a failure is logged and never blocks the game. */
@@ -541,7 +555,7 @@ export function createRoomService(
 
   /** An ended game whose ending is untold (after a restart): tell it, unless it is stuck (waits for `retry`). */
   function wakeFinale(gameId: string): void {
-    if (!stuck.has(gameId)) startFinale(gameId);
+    if (!stuck.has(gameId) && !held.has(gameId)) startFinale(gameId);
   }
 
   /** A closed turn nobody works on: resolve it, unless it is stuck (waits for `retry`) or held for the GM. */
@@ -595,6 +609,7 @@ export function createRoomService(
       if (!turn || stopped) return false;
       held.delete(gameId);
       const resolution = edit(turn);
+      if (turn.finale) return publishFinale(gameId, resolution.entries ?? []);
       if (!publishTurn(gameId, { ...turn, resolution })) return false;
       // The after-turn work and the new period's weather (GEN-068), then the next turn if it closes at once.
       startResolving(gameId, async () => {

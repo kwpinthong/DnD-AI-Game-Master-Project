@@ -53,6 +53,8 @@ export const GmPendingTurn = z.strictObject({
   at: GmTurnPoint,
   entries: z.array(GmPendingEntry),
   results: z.array(GmPendingResult),
+  /** GEN-059 (Q-205): this is the game's ending (narration only; results cannot be edited). */
+  finale: z.boolean().optional(),
 });
 export type GmPendingTurn = z.infer<typeof GmPendingTurn>;
 

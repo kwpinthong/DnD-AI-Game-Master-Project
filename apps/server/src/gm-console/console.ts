@@ -164,6 +164,7 @@ function pendingView(db: DbOrTx, gameId: string, turn: HeldTurn): GmPendingTurn 
   const edited = editedResolution(turn, edits);
   const karma = karmaOf(db, turn.state.order);
   return {
+    ...(turn.finale ? { finale: true } : {}),
     at: turn.at,
     entries: (edited.entries ?? []).map((e, index) => ({
       index,
@@ -254,6 +255,8 @@ export function editTurn(db: Db, room: RoomService, gm: MemberRow, input: unknow
 
   const entries = turn.resolution.entries ?? [];
   const problems: Record<string, string> = {};
+  // GEN-059 (Q-205): the ending is text only; the game is over, so no HP / Stamina / Karma changes.
+  if (turn.finale && results.length > 0) problems.results = 'ตอนจบแก้ได้เฉพาะข้อความ เกมจบแล้วจึงแก้ HP / Stamina / Karma ไม่ได้';
   narrations.forEach((n, i) => {
     if (n.index < 0 || n.index >= entries.length) problems[`narrations.${i}.index`] = 'ไม่มีข้อความลำดับนี้ในผลของเทิร์น';
   });
@@ -275,7 +278,7 @@ export function editTurn(db: Db, room: RoomService, gm: MemberRow, input: unknow
   const current = editedResolution(turn, turnEdits(db, gm.gameId, turn.at));
   const merged: Record<string, PlayerResult> = { ...current.results };
   for (const r of results) merged[r.memberId] = { ...merged[r.memberId], ...withoutUndefined(r) };
-  const step = phaseStep(turn.state, { type: 'resolved', results: merged }, new CryptoRng());
+  const step = turn.finale ? { ok: true } : phaseStep(turn.state, { type: 'resolved', results: merged }, new CryptoRng());
   if (!step.ok) return invalid({ results: 'ผลนี้ผิดกฎของเกม ตรวจ HP / Stamina / Karma อีกครั้ง' });
 
   const before = pendingView(db, gm.gameId, turn);
