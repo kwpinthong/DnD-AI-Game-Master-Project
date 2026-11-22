@@ -4,8 +4,9 @@ import type { DbOrTx } from '../db/client.ts';
 
 /**
  * The hand-off to the AI GM turn loop (GEN-057, `../gm/loop.ts` is the real one; tests may plug in their own).
- * Human GM approval (Q-030, GEN-058) belongs between `resolve` and the room's publish transaction: hold the
- * returned resolution until the GM approves, then publish it as is. When a turn closes, the room calls `resolve` once with the
+ * Human GM approval (Q-030, GEN-058) sits between `resolve` and the room's publish transaction: in a game with
+ * a Human GM the room holds the returned resolution (`RoomService.heldTurn`) and publishes it with the GM's
+ * edits on approval (`../gm-console/`); the resolver does not change. When a turn closes, the room calls `resolve` once with the
  * actions that stood; whatever it returns is published through the visibility layer and fed to the day /
  * period / turn engine as its `resolved` event. Turn order and cross-player effects (GEN-060) live behind it too.
  *

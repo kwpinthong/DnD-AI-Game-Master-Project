@@ -1,5 +1,6 @@
 import { ACTION_MAX_LENGTH, PHASE_LABEL, actionTextProblem, type ActionVisibility, type RoomEntry, type RoomState } from '@isekai/protocol';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { GmConsole } from './GmConsole.tsx';
 import { connectRoom, type RoomConnection, type RoomConnectionStatus } from './room-api.ts';
 
 /** "วันที่ 1 · EOSORIA (เช้า 06:00-11:59) · เทิร์น 1/2" (GEN-063: 4 periods x 2 turns). */
@@ -215,6 +216,15 @@ export function PlayRoom({
               </button>
               {problem && <p role="alert">{problem}</p>}
             </form>
+          )}
+
+          {/* GEN-058: the Human GM's console; reloads whenever the turn or the GM status moves. */}
+          {you.role === 'gm' && (
+            <GmConsole
+              apiBaseUrl={apiBaseUrl}
+              token={token}
+              refreshKey={`${room.day}-${room.phase}-${room.turn}-${room.status}-${room.gmStatus?.code ?? ''}`}
+            />
           )}
 
           <EntryList label="เหตุการณ์ที่นี่" entries={feed} empty="ยังไม่มีอะไรเกิดขึ้นที่นี่" />
