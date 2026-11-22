@@ -8,6 +8,7 @@ import {
   WEATHERS,
   actionTextProblem,
   normalizeActionText,
+  type EntryVote,
   type RoomEntry,
   type RoomState,
 } from '@isekai/protocol';
@@ -83,6 +84,14 @@ export class MockRoomServer {
         this.state.you.place = clone(F.RoomMoveAccepted[0]!.place);
         return this.broadcastState();
     }
+  }
+
+  /** PUT /api/game/entries/:seq/vote (GEN-107): only an entry that has `myVote` can be rated; the vote stays in the room, so a re-open of the page shows it. */
+  vote(seq: number, vote: EntryVote | null): { status: number; body: unknown } {
+    const entry = this.entries.find((e) => e.seq === seq);
+    if (!entry || entry.myVote === undefined) return { status: 404, body: { code: 'response_not_found', message: 'ไม่พบข้อความที่ให้คะแนนได้' } };
+    entry.myVote = vote;
+    return { status: 200, body: { seq, myVote: vote } };
   }
 
   leave(peer: MockPeer): void {
