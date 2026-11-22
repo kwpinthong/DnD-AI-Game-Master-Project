@@ -114,7 +114,7 @@ describe('GEN-055 skills and items in the play room', { timeout: 60_000 }, () =>
 
   it('C1 + C7 through the AI GM: a PRAY action is counted (Ward of Light), and INVESTIGATE at the library reveals one condition', async () => {
     let mode: 'pray' | 'investigate' = 'pray';
-    let investigator = '';
+    let investigators: string[] = [];
     server = await startTestServer(dataDir, {
       aiProvider: gmProvider((req) => {
         if (req.output.name !== 'gm_turn_proposal') return undefined;
@@ -122,7 +122,7 @@ describe('GEN-055 skills and items in the play room', { timeout: 60_000 }, () =>
         for (const a of proposal.actions) {
           a.check = { type: 'none' };
           if (mode === 'pray') a.tagging = { verbTags: ['PRAY'], targetTags: [], activate: [] };
-          else if (a.actor === investigator) {
+          else if (investigators.includes(a.actor)) {
             a.investigate = true;
             a.tagging = { verbTags: ['INVESTIGATE'], targetTags: ['MIRACLE'], activate: [] };
           }
@@ -147,11 +147,11 @@ describe('GEN-055 skills and items in the play room', { timeout: 60_000 }, () =>
     for (const who of [t.a, t.b, t.c]) expect((await inventory(who)).skills.map((s) => s.name)).toEqual(['Ward of Light']);
     expect(server.db.prepare("select count(*) as n from skill_activity where activity = 'verb:PRAY'").get()).toEqual({ n: 3 });
 
-    // A investigates at the library (the market); B investigates nothing; C is at the inn.
+    // A investigates at the library (the market); B is there but investigates nothing; C investigates at the inn.
     moveCharacter(server.orm, t.a.memberId, 'market', CLOCK);
     moveCharacter(server.orm, t.b.memberId, 'market', CLOCK);
     mode = 'investigate';
-    investigator = presenceOf(server.orm, t.a.memberId)!.ref;
+    investigators = [t.a, t.c].map((who) => presenceOf(server!.orm, who.memberId)!.ref);
     await playTurn(clients, { day: 1, phase: 'SOLARION', turn: 1 });
     expect((await inventory(t.a)).discoveries).toEqual([{ kind: 'skill', name: 'The First Light', text: server.assets.ability('The First Light')!.condition }]);
     expect((await inventory(t.b)).discoveries).toEqual([]);
