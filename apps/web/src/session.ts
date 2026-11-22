@@ -21,6 +21,38 @@ export function saveToken(token: string | null) {
   }
 }
 
+/**
+ * Every session token this browser got (GEN-037): one per game joined or created, so the game list can
+ * open old games read-only. A session is per game (GEN-024), so this list is the browser's "my games".
+ */
+export const KNOWN_TOKENS_KEY = 'isekai.knownSessions';
+
+/** Newest first; a broken or missing value reads as none. */
+export function loadKnownTokens(): string[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(KNOWN_TOKENS_KEY) ?? '[]');
+    return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === 'string' && t.length > 0) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveKnownTokens(tokens: string[]) {
+  try {
+    localStorage.setItem(KNOWN_TOKENS_KEY, JSON.stringify(tokens));
+  } catch {
+    // ignore: see loadToken
+  }
+}
+
+export function rememberToken(token: string): void {
+  saveKnownTokens([token, ...loadKnownTokens().filter((t) => t !== token)]);
+}
+
+export function forgetToken(token: string): void {
+  saveKnownTokens(loadKnownTokens().filter((t) => t !== token));
+}
+
 /** A server that accepts the connection but never answers counts as unreachable after this long. */
 export const REQUEST_TIMEOUT_MS = 8_000;
 

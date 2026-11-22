@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import { CreateGameForm } from './CreateGameForm.tsx';
 import { JoinForm } from './JoinForm.tsx';
 import { Lobby } from './Lobby.tsx';
-import { apiUrl, fetchMe, fetchWithTimeout, loadToken, postLogout, saveToken } from './session.ts';
+import { GameHistory } from './GameHistory.tsx';
+import { apiUrl, fetchMe, fetchWithTimeout, forgetToken, loadToken, postLogout, rememberToken, saveToken } from './session.ts';
 
 type Status = 'checking' | 'connected' | 'unreachable';
 
@@ -34,6 +35,7 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
   const [status, setStatus] = useState<Status>('checking');
   const [auth, setAuth] = useState<Auth>(() => (loadToken() ? { state: 'restoring' } : { state: 'guest' }));
   const [guestView, setGuestView] = useState<'join' | 'create'>('join');
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -50,6 +52,8 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
     fetchMe(apiBaseUrl, token).then((member) => {
       if (cancelled) return;
       if (member === null) saveToken(null);
+      // A login kept from before the game list existed joins the list too.
+      if (member && member !== 'unreachable') rememberToken(token);
       // Server unreachable: keep the token for the next visit, show the form meanwhile.
       setAuth(member && member !== 'unreachable' ? { state: 'member', member, token } : { state: 'guest' });
     });
@@ -60,18 +64,24 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
 
   function joined(member: Member, token: string, game?: GameView) {
     saveToken(token);
+    rememberToken(token);
     setAuth({ state: 'member', member, token, ...(game ? { game } : {}) });
   }
 
   /** The server refused the session (kicked or expired): back to the join form. */
   function sessionLost() {
+    if (auth.state === 'member') forgetToken(auth.token);
     saveToken(null);
     setGuestView('join');
     setAuth({ state: 'guest' });
   }
 
   function logout() {
-    if (auth.state === 'member') void postLogout(apiBaseUrl, auth.token);
+    if (auth.state === 'member') {
+      void postLogout(apiBaseUrl, auth.token);
+      // The server ends the session, so this game can no longer be opened from the list.
+      forgetToken(auth.token);
+    }
     saveToken(null);
     setAuth({ state: 'guest' });
   }
@@ -82,6 +92,12 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
       <p role="status" data-status={status}>
         {label[status]}
       </p>
+      {auth.state !== 'restoring' && (
+        <button type="button" aria-pressed={showHistory} onClick={() => setShowHistory((v) => !v)}>
+          รายการเกม
+        </button>
+      )}
+      {showHistory && <GameHistory apiBaseUrl={apiBaseUrl} onClose={() => setShowHistory(false)} />}
       {auth.state === 'guest' && guestView === 'join' && (
         <>
           <JoinForm apiBaseUrl={apiBaseUrl} onJoined={joined} />
