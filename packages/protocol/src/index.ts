@@ -21,3 +21,6 @@ export * from './visibility.ts';
 
 export * from './room.ts';
 export * from './companion.ts';
+
+// GEN-037: the read-only game summary / log, own file so parallel protocol work merges cleanly.
+export * from './history.ts';
