@@ -199,6 +199,7 @@ describe('Q-243 AI GM loop + store', { timeout: 60_000 }, () => {
     };
     expect(stored('Good: อพยพชาวนาได้ทัน')).toEqual({ outcome: 'อพยพชาวนาได้ทัน', outcomeSide: 'good' });
     expect(stored(' good/Neutral:อพยพชาวนา')).toEqual({ outcome: 'อพยพชาวนา', outcomeSide: 'good' });
+    expect(stored('Neutral/Good: ขายสมุนไพรก่อน')).toEqual({ outcome: 'ขายสมุนไพรก่อน', outcomeSide: 'neutral' });
     expect(stored('Evil: กักตุนเสบียง')).toEqual({ outcome: 'กักตุนเสบียง', outcomeSide: 'evil' });
     expect(stored('Neutral: ขายสมุนไพรให้ทั้งสองฝ่าย')).toEqual({ outcome: 'ขายสมุนไพรให้ทั้งสองฝ่าย', outcomeSide: 'neutral' });
     expect(stored('ชาวนาหนีได้ครึ่งหนึ่ง')).toEqual({ outcome: 'ชาวนาหนีได้ครึ่งหนึ่ง', outcomeSide: null });
@@ -283,6 +284,8 @@ describe('Q-243 migration event_outcome_side', () => {
     add.run('e-both', 'resolved', 'Good/Neutral: อพยพชาวนา: ครบทุกคน', 'ai');
     add.run('e-evil', 'active', 'evil:กักตุนเสบียง', 'ai');
     add.run('e-neutral', 'resolved', ' Neutral:  ขายให้ทั้งสองฝ่าย', 'ai');
+    // Q-281: the side is the one the text starts with: "Good..." → good, "Neutral..." → neutral.
+    add.run('e-neutral-first', 'resolved', 'Neutral/Good: ขายสมุนไพรก่อนแล้วค่อยอพยพ', 'ai');
     add.run('e-plain', 'resolved', 'ชาวนาหนีได้ครึ่งหนึ่ง: ที่เหลือติดหมอก', 'ai');
     add.run('e-goodness', 'resolved', 'Goodwill ของชาวเมืองเพิ่มขึ้น', 'ai');
     add.run('e-drift', 'resolved', 'Good: ข้อความของ scenario เอง', 'default');
@@ -298,6 +301,7 @@ describe('Q-243 migration event_outcome_side', () => {
       { id: 'e-good', outcome: 'อพยพชาวนาได้ทัน', side: 'good', updatedAt: 5 },
       { id: 'e-goodness', outcome: 'Goodwill ของชาวเมืองเพิ่มขึ้น', side: null, updatedAt: 5 },
       { id: 'e-neutral', outcome: 'ขายให้ทั้งสองฝ่าย', side: 'neutral', updatedAt: 5 },
+      { id: 'e-neutral-first', outcome: 'ขายสมุนไพรก่อนแล้วค่อยอพยพ', side: 'neutral', updatedAt: 5 },
       { id: 'e-pending', outcome: null, side: null, updatedAt: 5 },
       { id: 'e-plain', outcome: 'ชาวนาหนีได้ครึ่งหนึ่ง: ที่เหลือติดหมอก', side: null, updatedAt: 5 },
     ]);
