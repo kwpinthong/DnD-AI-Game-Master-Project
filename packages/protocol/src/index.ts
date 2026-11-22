@@ -16,3 +16,5 @@ export * from './game.ts';
 
 export * from './character.ts';
 export * from './loot.ts';
+
+export * from './visibility.ts';

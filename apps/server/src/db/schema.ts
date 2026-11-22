@@ -125,3 +125,6 @@ export * from './schema-timeline.ts';
 
 // GEN-048: the character loot step, own file for the same reason.
 export * from './schema-loot.ts';
+
+// GEN-050: who is where and who knows whose name, own file for the same reason.
+export * from './schema-visibility.ts';

@@ -57,6 +57,13 @@
       "when": 1795307359444,
       "tag": "0007_character_loot",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1795308445549,
+      "tag": "0008_visibility",
+      "breakpoints": true
     }
   ]
 }

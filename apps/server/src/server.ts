@@ -14,6 +14,7 @@ import { createUsageStore } from './ai/core/usage.ts';
 import type { AiProvider } from './ai/provider.ts';
 import { providerFor } from './ai/registry.ts';
 import { registerTimelineRoutes } from './timeline/routes.ts';
+import { registerVisibilityRoutes } from './visibility/routes.ts';
 
 export interface RunningServer {
   url: string;
@@ -24,6 +25,8 @@ export interface RunningServer {
   orm: Db;
   /** The AI GM boundary (GEN-038): check `ai.ready()` before creating / starting a game. */
   ai: AiService;
+  /** `METHOD /url` of every HTTP route (HEAD left out). */
+  routes: readonly string[];
   close(): Promise<void>;
 }
 
@@ -58,6 +61,11 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   });
 
   const app = Fastify({ logger: false });
+  // Every route, so the GEN-050 scan test can check it covers all of them (a new route cannot slip by).
+  const routes: string[] = [];
+  app.addHook('onRoute', (route) => {
+    for (const method of [route.method].flat()) if (method !== 'HEAD') routes.push(`${method} ${route.url}`);
+  });
   // PUT, PATCH and DELETE are not all in @fastify/cors's default methods; the web uses them.
   await app.register(cors, { origin: config.webOrigins ?? [], methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] });
 
@@ -76,6 +84,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerAuthRoutes(app, db, now);
   registerGameRoutes(app, db, now, { ai, ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}) });
   registerTimelineRoutes(app, db, now);
+  registerVisibilityRoutes(app, db, now);
 
   try {
     await app.listen({ host: config.host, port: config.port });
@@ -94,6 +103,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     db: sqlite,
     orm: db,
     ai,
+    routes,
     async close() {
       await app.close();
       if (sqlite.open) sqlite.close();
