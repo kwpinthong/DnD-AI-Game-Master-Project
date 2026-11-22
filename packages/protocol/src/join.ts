@@ -149,5 +149,7 @@ export const ApiError = z.discriminatedUnion('code', [
   z.object({ code: z.literal('npc_not_found'), message: z.string() }),
   /** 404 (GEN-078): the `sourceRef` names no action → result row the end page of the caller's game shows. */
   z.object({ code: z.literal('ruling_not_found'), message: z.string() }),
+  /** 404 (GEN-107): no AI-written room entry with that id in the caller's game (also a player's own text, or a server template). */
+  z.object({ code: z.literal('response_not_found'), message: z.string() }),
 ]);
 export type ApiError = z.infer<typeof ApiError>;

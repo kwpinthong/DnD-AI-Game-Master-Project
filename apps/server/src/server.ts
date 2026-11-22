@@ -28,6 +28,7 @@ import { registerGmConsoleRoutes } from './gm-console/routes.ts';
 import { startBackupSchedule, type BackupSchedule } from './backup/schedule.ts';
 import { registerHistoryRoutes } from './history/routes.ts';
 import { registerRatingRoutes } from './rating/routes.ts';
+import { registerVoteRoutes } from './room/vote-routes.ts';
 import type { Rng } from '@isekai/rules';
 import { CryptoRng } from './rng.ts';
 import { registerWebStatic } from './web-static.ts';
@@ -154,6 +155,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerGmConsoleRoutes(app, db, now, room, assets);
   registerHistoryRoutes(app, db, now, assets);
   registerRatingRoutes(app, db, now);
+  registerVoteRoutes(app, db, now);
   if (options.webDistDir) registerWebStatic(app, options.webDistDir);
 
   try {
