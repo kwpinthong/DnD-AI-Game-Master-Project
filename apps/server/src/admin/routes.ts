@@ -4,7 +4,8 @@ import type { Clock } from '../auth/join.ts';
 import { bearerToken, sendError } from '../auth/routes.ts';
 import type { AiConfig } from '../ai/config.ts';
 import type { Db } from '../db/client.ts';
-import { createCodeChecker } from '../game/create-code.ts';
+import { clientIp, maskIp } from '../auth/client-ip.ts';
+import { CREATE_CODE_LIMIT, createKeyedCodeChecker } from '../game/create-code.ts';
 import { createAdminSessions } from './session.ts';
 import { gameUsageReport, overviewUsageReport } from './usage-report.ts';
 
@@ -13,6 +14,8 @@ export interface AdminRouteOptions {
   adminCodeHash?: string;
   /** Prices and the per-game ceiling the dashboard compares against. */
   ai: AiConfig;
+  /** Server log; gets one line when an IP is locked out (masked IP, never the code). */
+  log?: (line: string) => void;
 }
 
 const FORBIDDEN = 'หน้านี้สำหรับเจ้าของ server เท่านั้น';
@@ -21,11 +24,14 @@ const minutesUntil = (at: number, t: number) => Math.max(1, Math.ceil((at - t) /
 /**
  * The server owner's AI usage dashboard (GEN-061, Q-058). Only an admin token from
  * POST /api/admin/session opens the data routes; a player's, game owner's or GM's session is 403.
- * Wrong codes are limited like the create code (10 in 10 minutes block 10 minutes, server-wide).
- * The code and tokens are never logged or echoed.
+ * Wrong codes are limited like the create code (10 in 10 minutes block 10 minutes), counted per client
+ * IP (Q-170: X-Forwarded-For first hop, else the socket address), so one guesser cannot lock the owner out.
+ * The code and tokens are never logged or echoed; IPs only masked.
  */
 export function registerAdminRoutes(app: FastifyInstance, db: Db, now: Clock, options: AdminRouteOptions) {
-  const checkCode = createCodeChecker(options.adminCodeHash, now);
+  const checkCode = createKeyedCodeChecker(options.adminCodeHash, now, (ip, until) =>
+    options.log?.(`[admin] wrong admin code ${CREATE_CODE_LIMIT.maxFailures} times from ${maskIp(ip)}: locked until ${new Date(until).toISOString()}`),
+  );
   const sessions = createAdminSessions(now);
 
   /** Sends 403 and returns true unless the request carries a live admin token. */
@@ -40,7 +46,7 @@ export function registerAdminRoutes(app: FastifyInstance, db: Db, now: Clock, op
     if (!parsed.success) {
       return sendError(reply, 400, { code: 'invalid_input', message: 'ข้อมูลไม่ถูกต้อง', fields: { code: 'ใส่ admin code' } });
     }
-    const check = await checkCode(parsed.data.code);
+    const check = await checkCode(parsed.data.code, clientIp(request.headers['x-forwarded-for'], request.socket.remoteAddress));
     switch (check.kind) {
       case 'disabled':
         return sendError(reply, 503, { code: 'admin_disabled', message: 'server นี้ยังไม่ได้ตั้ง admin code (ADMIN_CODE_HASH) จึงเปิดหน้านี้ไม่ได้' });

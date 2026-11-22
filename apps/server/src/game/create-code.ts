@@ -18,22 +18,44 @@ export type CreateCodeCheck = { kind: 'ok' } | { kind: 'disabled' } | { kind: 'w
  * Counts live in memory: one process, one replica; a restart clears them.
  */
 export function createCodeChecker(hash: string | undefined, now: Clock) {
-  let failures: number[] = [];
-  let blockedUntil = 0;
+  const keyed = createKeyedCodeChecker(hash, now);
+  return (code: string): Promise<CreateCodeCheck> => keyed(code, 'server');
+}
 
-  return async function check(code: string): Promise<CreateCodeCheck> {
+/** What `createKeyedCodeChecker`'s `onLock` gets: the key that just got locked, and until when. */
+export type CodeLockListener = (key: string, until: number) => void;
+
+/**
+ * The same limit counted per `key` (Q-170: the admin code, per client IP). One key's failures never
+ * lock another key. Keys with nothing left to remember are dropped, so the map stays small.
+ */
+export function createKeyedCodeChecker(hash: string | undefined, now: Clock, onLock?: CodeLockListener) {
+  const state = new Map<string, { failures: number[]; blockedUntil: number }>();
+
+  const prune = (t: number) => {
+    for (const [key, s] of state) {
+      if (s.blockedUntil <= t && s.failures.every((at) => at <= t - CREATE_CODE_LIMIT.windowMs)) state.delete(key);
+    }
+  };
+
+  return async function check(code: string, key: string): Promise<CreateCodeCheck> {
     if (!hash) return { kind: 'disabled' };
+    const blockedUntil = state.get(key)?.blockedUntil ?? 0;
     if (now() < blockedUntil) return { kind: 'blocked', retryAt: blockedUntil };
 
     if (await verifySecret(code, hash)) return { kind: 'ok' };
 
     const t = now();
-    failures = failures.filter((at) => at > t - CREATE_CODE_LIMIT.windowMs);
-    failures.push(t);
-    if (failures.length >= CREATE_CODE_LIMIT.maxFailures) {
-      blockedUntil = t + CREATE_CODE_LIMIT.lockMs;
-      failures = [];
+    prune(t);
+    const s = state.get(key) ?? { failures: [], blockedUntil: 0 };
+    s.failures = s.failures.filter((at) => at > t - CREATE_CODE_LIMIT.windowMs);
+    s.failures.push(t);
+    if (s.failures.length >= CREATE_CODE_LIMIT.maxFailures) {
+      s.blockedUntil = t + CREATE_CODE_LIMIT.lockMs;
+      s.failures = [];
+      onLock?.(key, s.blockedUntil);
     }
+    state.set(key, s);
     return { kind: 'wrong' };
   };
 }

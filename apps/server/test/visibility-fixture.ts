@@ -23,12 +23,12 @@ export const MEKHA = { name: 'เมฆา', appearance: 'เด็กหนุ�
 export type Call = (
   method: string,
   path: string,
-  options?: { body?: unknown; token?: string },
+  options?: { body?: unknown; token?: string; headers?: Record<string, string> },
 ) => Promise<{ status: number; body: unknown }>;
 
 export function caller(server: RunningServer): Call {
   return async (method, path, options = {}) => {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...options.headers };
     if (options.body !== undefined) headers['content-type'] = 'application/json';
     if (options.token) headers.authorization = `Bearer ${options.token}`;
     const res = await fetch(`${server.url}${path}`, {

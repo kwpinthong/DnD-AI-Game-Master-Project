@@ -117,7 +117,11 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   const resolver = options.phaseResolver ?? createAiGmResolver({ db, ai, assets, now, log: options.aiLog ?? ((line) => console.log(line)) });
   const room = registerRoomRoutes(app, db, now, { resolver, assets, webOrigins: config.webOrigins ?? [], weather });
   registerCompanionRoutes(app, db, now, assets);
-  registerAdminRoutes(app, db, now, { ai: aiConfig, ...(config.adminCodeHash ? { adminCodeHash: config.adminCodeHash } : {}) });
+  registerAdminRoutes(app, db, now, {
+    ai: aiConfig,
+    log: options.aiLog ?? ((line) => console.log(line)),
+    ...(config.adminCodeHash ? { adminCodeHash: config.adminCodeHash } : {}),
+  });
   registerInventoryRoutes(app, db, now, assets);
   registerGmConsoleRoutes(app, db, now, room, assets);
   registerHistoryRoutes(app, db, now);

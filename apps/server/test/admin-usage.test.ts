@@ -21,10 +21,12 @@ describe('AI usage dashboard (GEN-061)', { timeout: 60_000 }, () => {
   let server: RunningServer | undefined;
   let clock = CLOCK;
   let call: Call;
+  let logLines: string[] = [];
 
   beforeEach(() => {
     ({ dir: dataDir, cleanup } = makeTempDir());
     clock = CLOCK;
+    logLines = [];
   });
 
   afterEach(async () => {
@@ -43,7 +45,7 @@ describe('AI usage dashboard (GEN-061)', { timeout: 60_000 }, () => {
         createCodeHash: await hashPin(CREATE_CODE),
         ...(withAdmin ? { adminCodeHash: await hashPin(ADMIN_CODE) } : {}),
       },
-      { now: () => clock, ai: loadAiConfig({ AI_PROVIDER: 'mock', AI_GAME_MONTHLY_USD: '1' }), aiLog: () => {} },
+      { now: () => clock, ai: loadAiConfig({ AI_PROVIDER: 'mock', AI_GAME_MONTHLY_USD: '1' }), aiLog: (line) => logLines.push(line) },
     );
     call = caller(server);
     return server;
@@ -120,6 +122,40 @@ describe('AI usage dashboard (GEN-061)', { timeout: 60_000 }, () => {
       const blocked = await call('POST', '/api/admin/session', { body: { code: ADMIN_CODE } });
       expect(blocked.status).toBe(429);
       expect(blocked.body).toMatchObject({ code: 'too_many_attempts' });
+    });
+
+    it('Q-170: wrong codes count per client IP (X-Forwarded-For first hop): one IP locked, another still logs in', async () => {
+      await boot();
+      const from = (ip: string) => ({ 'x-forwarded-for': `${ip}, 10.0.0.1` });
+      for (let i = 0; i < CREATE_CODE_LIMIT.maxFailures; i++) {
+        await call('POST', '/api/admin/session', { body: { code: `ผิด-${i}` }, headers: from('203.0.113.5') });
+      }
+      const blocked = await call('POST', '/api/admin/session', { body: { code: ADMIN_CODE }, headers: from('203.0.113.5') });
+      expect(blocked.status).toBe(429);
+      // One log line for the lock: masked IP, no code.
+      const lockLines = logLines.filter((l) => l.startsWith('[admin]'));
+      expect(lockLines).toHaveLength(1);
+      expect(lockLines[0]).toContain('203.0.113.x');
+      expect(lockLines.join('\n')).not.toMatch(/203\.0\.113\.5|ผิด-|เจ้าของเซิร์ฟเวอร์/);
+      // Same first hop, different proxy chain after it: still the same client.
+      expect((await call('POST', '/api/admin/session', { body: { code: ADMIN_CODE }, headers: { 'x-forwarded-for': '203.0.113.5' } })).status).toBe(429);
+      const other = await call('POST', '/api/admin/session', { body: { code: ADMIN_CODE }, headers: from('198.51.100.7') });
+      expect(other.status).toBe(200);
+      // No header: the socket address is the client, and it has no failures.
+      expect((await call('POST', '/api/admin/session', { body: { code: ADMIN_CODE } })).status).toBe(200);
+      // The lock still ends after 10 minutes.
+      clock += CREATE_CODE_LIMIT.lockMs;
+      expect((await call('POST', '/api/admin/session', { body: { code: ADMIN_CODE }, headers: from('203.0.113.5') })).status).toBe(200);
+    });
+
+    it('Q-170: 9 wrong codes from one IP and 9 from another lock nobody', async () => {
+      await boot();
+      for (const ip of ['203.0.113.5', '198.51.100.7']) {
+        for (let i = 0; i < CREATE_CODE_LIMIT.maxFailures - 1; i++) {
+          await call('POST', '/api/admin/session', { body: { code: `ผิด-${i}` }, headers: { 'x-forwarded-for': ip } });
+        }
+      }
+      expect((await call('POST', '/api/admin/session', { body: { code: ADMIN_CODE }, headers: { 'x-forwarded-for': '203.0.113.5' } })).status).toBe(200);
     });
 
     it('the token expires after its TTL and stops working after logout', async () => {
