@@ -201,7 +201,7 @@ export function resolvePhaseActions(input: PhaseActionsInput, rng: Rng): PhaseAc
       nextActor = { ...nextActor, items: actorItems };
       players[target.id] = { ...target, hp: hpAfter, items: targetItems };
 
-      const noticed = log.targetObservation !== null && log.check !== null && log.targetObservation.total > log.check.total;
+      const noticed = log.targetObservation?.noticed === true;
       targetResult = {
         playerId: target.id,
         hp: { before: target.hp, damage, heal, after: hpAfter },

@@ -188,7 +188,10 @@ describe('C3 Secret steal that B does not notice', () => {
 
   it('a tie is unseen', () => {
     const tie = expectOk(resolvePhaseActions({ state: thiefAndMark(), actions: [steal('secret'), bargain()] }, new ReplayRng([15, 5, 14, 14])));
-    expect(resolved(outcomeOf(tie, 'pc-a')).target!.knowsActor).toBe(false);
+    const outcome = resolved(outcomeOf(tie, 'pc-a'));
+    expect(outcome.target!.knowsActor).toBe(false);
+    expect(outcome.log.caught).toBe(false);
+    expect(outcome.target!.itemsLost).toEqual(['item-purse']);
   });
 });
 
@@ -216,10 +219,10 @@ describe('C4 Secret steal that B notices', () => {
     const watch = { ...bargain(), awareness: 'watch' as const };
     // d20 12 + 3 = 15 > 14 -> noticed
     const watched = expectOk(resolvePhaseActions({ state: thiefAndMark(), actions: [steal('secret'), watch] }, new ReplayRng([15, 5, 14, 12])));
-    expect(resolved(outcomeOf(watched, 'pc-a')).target!.observation).toEqual({ d20: 12, modifier: 3, total: 15 });
+    expect(resolved(outcomeOf(watched, 'pc-a')).target!.observation).toEqual({ d20: 12, modifier: 3, total: 15, noticed: true });
     const asleep = { ...bargain(), awareness: 'asleep' as const };
     const slept = expectOk(resolvePhaseActions({ state: thiefAndMark(), actions: [steal('secret'), asleep] }, new ReplayRng([15, 5, 14, 18])));
-    expect(resolved(outcomeOf(slept, 'pc-a')).target!.observation).toEqual({ d20: 18, modifier: -5, total: 13 });
+    expect(resolved(outcomeOf(slept, 'pc-a')).target!.observation).toEqual({ d20: 18, modifier: -5, total: 13, noticed: false });
   });
 });
 

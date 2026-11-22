@@ -103,8 +103,9 @@ export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
   let targetObservation: ResolutionLog['targetObservation'] = null;
   if (proposal.visibility === 'secret' && check !== null && degree !== 'fumble' && pvp?.observeModifier != null) {
     const d20 = rollDice('1d20', dice).faces[0]!;
-    targetObservation = { d20, modifier: pvp.observeModifier, total: d20 + pvp.observeModifier };
-    if (targetObservation.total > check.total) {
+    const total = d20 + pvp.observeModifier;
+    targetObservation = { d20, modifier: pvp.observeModifier, total, noticed: total > check.total };
+    if (targetObservation.noticed) {
       caught = true;
       if (degree === 'success' || degree === 'crit') {
         degree = 'fail';

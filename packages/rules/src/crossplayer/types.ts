@@ -117,7 +117,7 @@ export interface TargetResult {
   readonly itemsLost: readonly string[];
   readonly itemsGained: readonly string[];
   /** B rolled to notice a Secret action: d20 + modifier vs A's total (tie = unseen). */
-  readonly observation: { readonly d20: number; readonly modifier: number; readonly total: number } | null;
+  readonly observation: { readonly d20: number; readonly modifier: number; readonly total: number; readonly noticed: boolean } | null;
   /** B knows who did it: the action was Public, or B noticed the Secret (spec §10.1, §10.4). */
   readonly knowsActor: boolean;
 }

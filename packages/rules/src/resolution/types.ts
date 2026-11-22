@@ -236,7 +236,7 @@ export interface ResolutionLog {
   readonly caught: boolean;
   readonly observation: { readonly npcId: string; readonly d20: number; readonly total: number } | null;
   /** The target player's roll to notice a Secret (GEN-060): rolled after the action d20, before any NPC witness. */
-  readonly targetObservation: { readonly d20: number; readonly modifier: number; readonly total: number } | null;
+  readonly targetObservation: { readonly d20: number; readonly modifier: number; readonly total: number; readonly noticed: boolean } | null;
   /** The target player noticed, so a success / crit became a fail (spec §10.4). */
   readonly interrupted: boolean;
   readonly stamina: { readonly before: number; readonly cost: number; readonly net: number; readonly after: number };
