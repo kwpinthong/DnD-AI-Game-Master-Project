@@ -1,5 +1,6 @@
-import type { PlaceView, RoomEntry } from '@isekai/protocol';
+import type { NpcLineView, PlaceView, RoomEntry } from '@isekai/protocol';
 import { eq } from 'drizzle-orm';
+import { npcSpeaker } from '../companions/store.ts';
 import type { DbOrTx } from '../db/client.ts';
 import { character } from '../db/schema.ts';
 import { getGameScenario } from '../scenario/store.ts';
@@ -21,6 +22,11 @@ export function characterNameOf(db: DbOrTx, memberId: string | null): string {
   return db.select({ name: character.name }).from(character).where(eq(character.memberId, memberId)).get()?.name ?? '';
 }
 
+function npcOf(db: DbOrTx, npc: NonNullable<EntryMeta['npc']>, viewerId: string, assets: GameAssets): { npc: NpcLineView } | Record<string, never> {
+  const speaker = npcSpeaker(db, assets, viewerId, npc.id);
+  return speaker ? { npc: { ...speaker, kind: npc.kind, ...(npc.private ? { private: true as const } : {}) } } : {};
+}
+
 /** A stored feed / narration / whisper / hit entry as `viewer` receives it, live, on replay and in the game log (GEN-037). */
 export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string }, assets: GameAssets): RoomEntry {
   const meta = row.meta === null ? {} : (JSON.parse(row.meta) as EntryMeta);
@@ -36,6 +42,8 @@ export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string 
     ...(meta.roll ? { roll: meta.roll } : {}),
     ...(meta.hit ? { hit: meta.hit } : {}),
     ...(meta.changes ? { changes: [...meta.changes] } : {}),
+    // GEN-110: who says the line, as this viewer may know them (alias until the name is learned, grade only then).
+    ...(row.kind === 'npc' && meta.npc ? npcOf(db, meta.npc, viewer.id, assets) : {}),
     ...(row.kind === 'whisper'
       ? { whisper: { from: characterNameOf(db, row.fromMemberId), to: characterNameOf(db, row.toMemberId), mine: row.fromMemberId === viewer.id } }
       : {}),

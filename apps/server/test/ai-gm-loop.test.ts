@@ -807,4 +807,186 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(turnEntries(clients[2]!, 1, 'EOSORIA', 1).some((e) => e.text.includes('ตัดไม้ไผ่'))).toBe(true);
     expectNoNamesInPrompts();
   });
+
+  describe('GEN-110 NPC lines with the narration', () => {
+    const npcEntries = (c: RoomClient, day = 1, phase: Period = 'SOLARION', turn: Turn = 1) => turnEntries(c, day, phase, turn).filter((e) => e.kind === 'npc');
+    /** The Mock GM's narration with `npcLines` set by `lines(audience)`; every other request gets the Mock GM's own answer. */
+    const withLines =
+      (lines: (audience: NarrationContext['audience'], ctx: NarrationContext) => unknown[]): Handler =>
+      async (req) => {
+        if (!isNarration(req) || req.messages.length > 1) return noRoll(req, 0);
+        const ctx = contextOf<NarrationContext>(req);
+        const answer = (await cannedGmAnswer(req)) as Record<string, unknown>;
+        return mockReply.ok({ ...answer, npcLines: lines(ctx.audience, ctx) });
+      };
+    /** A and B at the fountain at SOLARION (Lucia and Noah are scheduled there), C at the inn. */
+    async function atFountain(): Promise<{ t: Table; clients: RoomClient[] }> {
+      const t = await startedTable(server!, false);
+      move(t.a, 'fountain');
+      move(t.b, 'fountain');
+      jumpTo(t, { day: 1, phase: 'SOLARION', turn: 1 });
+      return { t, clients: [await enter(t.a), await enter(t.b), await enter(t.c)] };
+    }
+
+    it('C1 + C2: a public action at a place with NPCs gets 1-3 dialogue lines of one NPC and 1-3 reactions of the others, 1 line each, for everyone there only', async () => {
+      await boot({}, noRoll);
+      const { clients } = await atFountain();
+      await playTurn(clients, ['ขอร้องลูเซียให้เล่าเรื่องนาฬิกา', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+
+      for (const c of clients.slice(0, 2)) {
+        const lines = npcEntries(c);
+        const dialogue = lines.filter((e) => e.npc?.kind === 'dialogue');
+        const reactions = lines.filter((e) => e.npc?.kind === 'reaction');
+        expect(dialogue.length).toBeGreaterThanOrEqual(1);
+        expect(dialogue.length).toBeLessThanOrEqual(3);
+        expect(new Set(dialogue.map((e) => e.npc!.ref)).size).toBe(1);
+        expect(reactions.length).toBeGreaterThanOrEqual(1);
+        expect(reactions.length).toBeLessThanOrEqual(3);
+        expect(new Set(reactions.map((e) => e.npc!.ref)).size).toBe(reactions.length);
+        expect(lines.length).toBeLessThanOrEqual(12);
+        for (const e of lines) expect(e.place).toMatchObject({ id: 'fountain' });
+      }
+      // The same lines in both feeds; C, at the inn, hears none of the fountain's.
+      expect(npcEntries(clients[0]!).map((e) => e.text)).toEqual(npcEntries(clients[1]!).map((e) => e.text));
+      expect(npcEntries(clients[2]!).filter((e) => e.place?.id === 'fountain')).toEqual([]);
+      // The AI was given exactly the NPCs the schedule puts at the fountain at SOLARION.
+      const place = provider.requests.filter(isNarration).map((r) => contextOf<NarrationContext>(r)).find((c) => 'place' in c.audience && c.audience.place === 'fountain')!;
+      expect(place.npcs.filter((n) => n.here).map((n) => n.id).sort()).toEqual(['amnesiac', 'beggar']);
+    });
+
+    it('C3 + C7: an NPC the schedule does not put at the place, an id that does not exist, 15 lines and a 300-character line: trimmed, the turn still applies', async () => {
+      await boot(
+        {},
+        withLines((audience) =>
+          'place' in audience
+            ? [
+                { npcId: 'guard', kind: 'dialogue', text: 'ข้าไม่ได้อยู่ที่นี่' },
+                { npcId: 'ghost', kind: 'reaction', text: 'ข้าไม่มีจริง' },
+                { npcId: 'amnesiac', kind: 'dialogue', text: 'ก'.repeat(300) },
+                ...Array.from({ length: 12 }, (_, i) => ({ npcId: 'amnesiac', kind: 'dialogue', text: `พูดครั้งที่ ${i + 1}` })),
+                { npcId: 'beggar', kind: 'reaction', text: 'เด็กขอทานเงยหน้ามอง' },
+              ]
+            : [],
+        ),
+      );
+      const { clients } = await atFountain();
+      await playTurn(clients, ['ทักลูเซีย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+
+      expect(turnRows()).toEqual([expect.objectContaining({ status: 'applied' })]);
+      const lines = npcEntries(clients[0]!);
+      expect(lines.map((e) => e.npc!.kind)).toEqual(['dialogue', 'dialogue', 'dialogue', 'reaction']);
+      expect(lines.slice(0, 3).map((e) => e.text.length).every((n) => n <= 120)).toBe(true);
+      expect(lines[0]!.text.endsWith('…')).toBe(true);
+      expect(JSON.stringify(lines)).not.toContain('ไม่ได้อยู่ที่นี่');
+      expect(provider.requests.filter(isNarration).every((r) => r.messages.length === 1)).toBe(true);
+    });
+
+    it('C3: at EOSORIA nobody is scheduled at the fountain, so a line from an NPC of the place is dropped too', async () => {
+      await boot({}, withLines(() => [{ npcId: 'amnesiac', kind: 'dialogue', text: 'ข้ามาแล้ว' }]));
+      const t = await startedTable(server!, false);
+      move(t.a, 'fountain');
+      move(t.b, 'fountain');
+      const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+      await playTurn(clients, ['ทักทายคนแถวนี้', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'EOSORIA', turn: 2 });
+      expect(npcEntries(clients[0]!, 1, 'EOSORIA')).toEqual([]);
+      expect(turnEntries(clients[0]!, 1, 'EOSORIA', 1).filter((e) => e.kind === 'narration')).toHaveLength(1);
+    });
+
+    it('C4: a Secret action: nobody else gets a line about it, the owner gets a private line only they read', async () => {
+      let refA = '';
+      await boot({}, withLines((audience) => ('player' in audience ? (audience.player === refA ? [{ npcId: 'amnesiac', kind: 'dialogue', text: 'ข้าเห็นสิ่งที่เจ้าซ่อนอยู่นะ' }] : []) : [{ npcId: 'beggar', kind: 'reaction', text: 'เด็กขอทานไอเบา ๆ' }])));
+      const { t, clients } = await atFountain();
+      refA = refOf(t.a);
+      await playTurn(clients, ['แอบเปิดกระเป๋าลูเซีย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 }, ['secret', 'public', 'public']);
+
+      const mine = npcEntries(clients[0]!).filter((e) => e.npc?.private);
+      expect(mine.map((e) => e.text)).toEqual(['ข้าเห็นสิ่งที่เจ้าซ่อนอยู่นะ']);
+      expect(mine[0]!.place).toBeNull();
+      for (const other of clients.slice(1)) {
+        expect(JSON.stringify(other.entries())).not.toContain('ข้าเห็นสิ่งที่เจ้าซ่อนอยู่นะ');
+        expect(JSON.stringify(other.entries())).not.toContain('แอบเปิดกระเป๋า');
+      }
+      // The place audience was told about the public action only.
+      const place = provider.requests.filter(isNarration).map((r) => contextOf<NarrationContext>(r)).find((c) => 'place' in c.audience)!;
+      expect(JSON.stringify(place.beats)).not.toContain('แอบเปิดกระเป๋า');
+    });
+
+    it('C5: an NPC whose name the viewer has not learned shows as its alias, and as its name once the bond reveals it', async () => {
+      await boot({}, noRoll);
+      const { t, clients } = await atFountain();
+      await playTurn(clients, ['ทักทาย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+      const names = (c: RoomClient) => npcEntries(c).map((e) => e.npc!.name);
+      expect(names(clients[0]!).length).toBeGreaterThan(0);
+      // Grade F shows its name from the start (npcNameShown); grades B and S keep it hidden.
+      for (const name of names(clients[0]!)) expect(['ลูเซีย', 'โนอา']).toContain(name);
+
+      // A grade S NPC: alias until revealed (Q-219), never the real name in the entry the viewer gets.
+      const row = server!.db.prepare("select id from room_entry where kind = 'npc' and location_id = 'fountain' order by id limit 1").get() as { id: number };
+      server!.db.prepare("update room_entry set meta = ? where id = ?").run(JSON.stringify({ npc: { id: 'light-spirit', kind: 'dialogue' } }), row.id);
+      await clients[0]!.close();
+      const again = await enter(t.a);
+      const shown = again.entries().find((e) => e.seq === row.id)!;
+      expect(shown.npc!.name).toBe('ภูตแห่งแสงในแท่นบูชา');
+      expect(JSON.stringify(shown)).not.toContain('ออเรเลีย');
+      expect(shown.npc!.grade).toBeUndefined();
+    });
+
+    it('C6: the narration prompt carries each player with their karma band and alias, and each NPC with the bond of each of them (never a real name)', async () => {
+      await boot({}, noRoll);
+      const t = await startedTable(server!, false);
+      move(t.a, 'fountain');
+      move(t.b, 'fountain');
+      jumpTo(t, { day: 1, phase: 'SOLARION', turn: 1 });
+      server!.db.prepare('update character set karma = 60 where member_id = ?').run(t.a.memberId);
+      server!.db.prepare('update character set karma = -60 where member_id = ?').run(t.b.memberId);
+      server!.db.prepare('insert into npc_bond (member_id, npc_id, affinity, name_revealed, updated_at) values (?, ?, 8, 0, 0)').run(t.a.memberId, 'amnesiac');
+      const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+      await playTurn(clients, ['ทักลูเซีย', 'ขู่ลูเซีย', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+
+      const [refA, refB] = [refOf(t.a), refOf(t.b)];
+      const place = provider.requests.filter(isNarration).map((r) => contextOf<NarrationContext>(r)).find((c) => 'place' in c.audience && c.audience.place === 'fountain')!;
+      const castOf = (ref: string) => place.cast.find((c) => c.ref === ref)!;
+      expect(castOf(refA)).toMatchObject({ karmaBand: 2, looks: expect.stringContaining('ผ้าคลุมเทา') });
+      expect(castOf(refB)).toMatchObject({ karmaBand: -2, looks: expect.stringContaining('เกราะหนัง') });
+      const lucia = place.npcs.find((n) => n.id === 'amnesiac')!;
+      expect(lucia.persona).toEqual(expect.any(String));
+      expect(lucia.bonds).toEqual(expect.arrayContaining([
+        { player: refA, affinity: 8, met: true },
+        { player: refB, affinity: 0, met: false },
+      ]));
+      expect(lucia.alias).toContain('นาฬิกาพกตาย');
+      expect(JSON.stringify(place.npcs)).not.toContain('Chronos');
+      expectNoNamesInPrompts();
+    });
+
+    it('C8: a narration without npcLines is shown as before and nothing else is added', async () => {
+      await boot({}, (req) => {
+        if (!isNarration(req)) return noRoll(req, 0);
+        return undefined;
+      });
+      const { clients } = await atFountain();
+      await playTurn(clients, ['ขอน้ำ', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+      for (const c of clients) expect(turnEntries(c, 1, 'SOLARION', 1).filter((e) => e.kind === 'narration')).toHaveLength(1);
+      const asked = provider.requests.filter(isNarration);
+      expect(asked.length).toBeGreaterThan(0);
+    });
+
+    it('the Mock GM gives the same NPC lines every time for the same context', async () => {
+      const ctx = {
+        kind: 'gm_narration',
+        audience: { place: 'fountain' },
+        turn: { day: 1, phase: 'SOLARION', turn: 1 },
+        place: { id: 'fountain', name: 'น้ำพุกลางเมือง' },
+        cast: [{ ref: 'r1', looks: 'หญิง', title: '', self: false, karmaBand: 0 }],
+        npcs: ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, alias: id, grade: 'F', here: true, persona: null, bonds: [] })),
+        beats: [{ actionId: 'act-1', kind: 'public_action', actor: 'r1', text: 'ทัก', result: 'success', target: null, targetNpc: null, moved: null, items: [] }],
+        journal: null,
+      };
+      const req = { output: { name: 'gm_narration' }, messages: [{ text: JSON.stringify(ctx) }] } as unknown as AiCallRequest;
+      const first = (await cannedGmAnswer(req)) as { npcLines: { npcId: string; kind: string }[] };
+      expect(first).toEqual(await cannedGmAnswer(req));
+      expect(first.npcLines.filter((l) => l.kind === 'dialogue').length).toBeGreaterThan(0);
+      expect(first.npcLines.filter((l) => l.kind === 'reaction').map((l) => l.npcId)).toEqual(['b', 'c', 'd']);
+    });
+  });
 });

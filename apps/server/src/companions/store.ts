@@ -371,6 +371,22 @@ export function npcViewsAt(db: DbOrTx, assets: GameAssets, memberId: string, gam
   });
 }
 
+/**
+ * An NPC as `memberId` reads it in a line it says (GEN-110): the opaque ref, the name this player may see (alias until the
+ * real name is known, Q-219) and the grade only once that name is shown (a hidden name keeps its grade hidden too).
+ */
+export function npcSpeaker(db: DbOrTx, assets: GameAssets, memberId: string, npcId: string): { ref: string; name: string; grade?: NpcGrade } | undefined {
+  const ctx = contextFor(db, assets, memberId, npcId);
+  if (!ctx) return undefined;
+  const bond = bondOf(db, memberId, npcId);
+  const shown = displayName(ctx, bond);
+  return {
+    ref: npcRefs(db, ctx.gameId, [npcId]).get(npcId)!,
+    name: shown.name,
+    ...(shown.nameRevealed ? { grade: bond?.evolvedGrade ?? ctx.baseGrade } : {}),
+  };
+}
+
 export interface NpcState {
   readonly npcId: string;
   readonly ref: string;

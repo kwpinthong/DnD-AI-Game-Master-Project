@@ -128,9 +128,21 @@ export const GmTurnProposal = z.object({
 });
 export type GmTurnProposal = z.infer<typeof GmTurnProposal>;
 
+/**
+ * GEN-110: one line an NPC says with a narration. `npcId` = an NPC of the narration's `npcs` (the ones at the
+ * place now). `dialogue` = the NPC talks about / to what the players did; `reaction` = a bystander's one line.
+ * Who hears it follows the audience, never the AI: a place narration's lines go to everyone there, a player
+ * narration's lines to that player alone. No limits here on purpose: the server trims (`npc-lines.ts`), so
+ * an over-long answer never costs a repair or the turn.
+ */
+export const GmNpcLine = z.object({ npcId: z.string(), kind: z.enum(['dialogue', 'reaction']), text: z.string() });
+export type GmNpcLine = z.infer<typeof GmNpcLine>;
+
 /** One narration for one audience (a place's feed, or one player's private column). */
 export const GmNarration = z.object({
   segments: z.array(z.object({ actionId: z.string(), text: z.string().min(1).max(800) })).min(1).max(12),
+  /** GEN-110. Absent in an old stored narration and in the server template: none. */
+  npcLines: z.array(GmNpcLine).default([]),
 });
 export type GmNarration = z.infer<typeof GmNarration>;
 

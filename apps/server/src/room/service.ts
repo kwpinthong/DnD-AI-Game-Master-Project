@@ -366,17 +366,19 @@ export function createRoomService(
     const members = activeMembers(tx, gameId);
     const ids = new Set(members.map((m) => m.id));
     const recipients = new Set(members.filter((m) => m.role === 'gm').map((m) => m.id));
-    if (entry.kind === 'narration') {
-      if (ids.has(entry.memberId)) recipients.add(entry.memberId);
+    const only = entry.kind === 'narration' || entry.kind === 'npc' ? entry.memberId : null;
+    if (only !== null) {
+      if (ids.has(only)) recipients.add(only);
       return recipients;
     }
     for (const id of astralMembers(state)) if (ids.has(id)) recipients.add(id);
     const locations = locationSnapshot(tx, gameId);
-    const actor = entry.actorMemberId !== null && ids.has(entry.actorMemberId) ? entry.actorMemberId : null;
+    const actor = entry.kind === 'feed' && entry.actorMemberId !== null && ids.has(entry.actorMemberId) ? entry.actorMemberId : null;
+    const at = entry.kind === 'narration' ? null : entry.locationId;
     const witnesses =
-      entry.locationId === null
+      at === null
         ? [...locations.keys(), ...(actor ? [actor] : [])]
-        : witnessesOf({ locationId: entry.locationId, actorMemberId: actor, visibility: 'public' }, locations);
+        : witnessesOf({ locationId: at, actorMemberId: actor, visibility: 'public' }, locations);
     for (const id of witnesses) if (ids.has(id)) recipients.add(id);
     return recipients;
   }
@@ -418,9 +420,14 @@ export function createRoomService(
           const s0 = snapshotsOf(tx, assets, gameId, current, current.order);
           const rows =(resolution.entries ?? []).map((entry) => {
             const recipients = recipientsOf(tx, gameId, current, entry);
-            const locationId = entry.kind === 'feed' ? entry.locationId : null;
+            const locationId = entry.kind === 'narration' ? null : entry.locationId;
             const fallback = entry.fallback ? { fallback: entry.fallback } : {};
-            const meta = entry.kind === 'narration' && entry.roll ? { meta: { roll: entry.roll } } : {};
+            const meta =
+              entry.kind === 'narration' && entry.roll
+                ? { meta: { roll: entry.roll } }
+                : entry.kind === 'npc'
+                  ? { meta: { npc: { id: entry.npcId, kind: entry.npcKind, ...(entry.memberId !== null ? { private: true as const } : {}) } } }
+                  : {};
             return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text, ...meta, ...fallback }, [...recipients], t), recipients };
           });
           // Q-229: what another player did to someone, for them (and the Human GM) only.

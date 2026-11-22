@@ -56,9 +56,9 @@ describe('Mock GM [mock:badnarration]', () => {
     audience: { player: 'r1' },
     turn: { day: 1, phase: 'EOSORIA', turn: 1 },
     place: { id: 'inn', name: 'โรงเตี๊ยม' },
-    cast: [{ ref: 'r1', looks: 'หญิงผ้าคลุมเทา', title: '', self: true }],
+    cast: [{ ref: 'r1', looks: 'หญิงผ้าคลุมเทา', title: '', self: true, karmaBand: 0 }],
     npcs: [],
-    beats: [{ actionId: 'act-1', kind: 'own_action', actor: 'r1', text, result: 'success', target: null, moved: null, items: [] }],
+    beats: [{ actionId: 'act-1', kind: 'own_action', actor: 'r1', text, result: 'success', target: null, targetNpc: null, moved: null, items: [] }],
     journal: null,
   });
   const request = (c: NarrationContext, repair: boolean): AiCallRequest => ({
