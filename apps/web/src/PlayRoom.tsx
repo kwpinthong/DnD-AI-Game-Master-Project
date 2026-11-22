@@ -3,8 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import { GmConsole } from './GmConsole.tsx';
 import { ActionBox, EMPTY_DRAFT, Feed, OmenBox, PlaceHead, TravelSheet, type ActionDraft } from './play/PlaceColumn.tsx';
 import { usePlayData } from './play/play-api.ts';
+import { PlayTabs } from './play/PlayTabs.tsx';
 import { PrivateColumn } from './play/PrivateColumn.tsx';
 import { SelfColumn } from './play/SelfColumn.tsx';
+import { dotTabs, tabCounts, type PlayTab } from './play/tabs.ts';
 import { RoomMenu, TopBar } from './play/TopBar.tsx';
 import { connectRoom, type RoomConnection, type RoomConnectionStatus } from './room-api.ts';
 import { secretQuota } from './screen-models.ts';
@@ -53,6 +55,8 @@ export function PlayRoom({
   const [moves, setMoves] = useState(0);
   const [acknowledged, setAcknowledged] = useState<ReadonlySet<number>>(new Set());
   const [menuOpen, setMenuOpen] = useState(false);
+  const [tab, setTab] = useState<PlayTab>('place');
+  const [seen, setSeen] = useState<Record<PlayTab, number>>({ place: 0, private: 0, self: 0, action: 0 });
   const conn = useRef<RoomConnection | undefined>(undefined);
 
   useEffect(() => {
@@ -123,6 +127,13 @@ export function PlayRoom({
     setMoving(true);
   }
 
+  const counts = tabCounts(entries);
+  // What the tab you leave and the tab you open have shown so far is "seen"; the dot is for what came after.
+  const pickTab = (next: PlayTab) => {
+    setSeen((s) => ({ ...s, [tab]: counts[tab], [next]: counts[next] }));
+    setTab(next);
+  };
+
   const feed = entries.filter((e) => e.kind === 'feed');
   const online = connection === 'online';
 
@@ -160,7 +171,7 @@ export function PlayRoom({
         )}
 
         {room && you && isPlayer && (
-          <div className="play-body">
+          <div className="play-body" data-tab={tab}>
             <SelfColumn data={data} secret={secretQuota(room).status} drowsy={you.drowsy} onUse={you.lock ? null : (name) => setDraft((d) => ({ ...d, text: `${t.inventory.insert(name)}${d.text}`, editing: d.editing || Boolean(you.action) }))} />
 
             <div className="play-place">
@@ -205,6 +216,7 @@ export function PlayRoom({
             />
           </div>
         )}
+        {room && you && isPlayer && <PlayTabs active={tab} dots={dotTabs(counts, seen, tab)} onPick={pickTab} />}
 
         {/* GEN-058: the Human GM has no character: the console (it reloads whenever the turn or the GM status moves), then the room's entries. */}
         {room && you && !isPlayer && (

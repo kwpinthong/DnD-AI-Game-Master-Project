@@ -302,6 +302,16 @@ export const playText = {
     received: 'ลางสังหรณ์',
   },
 
+  /** GEN-089: the phone tabs (< 768) of the Play screen. */
+  tabs: {
+    nav: 'แท็บหน้าเล่น',
+    place: 'สถานที่',
+    private: 'ส่วนตัว',
+    self: 'ตัวเรา',
+    action: 'action',
+    news: 'มีของใหม่',
+  },
+
   private: {
     column: 'ส่วนตัว เห็นคนเดียว',
     onlyYou: 'เห็นคนเดียว',

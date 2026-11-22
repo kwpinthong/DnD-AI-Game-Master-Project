@@ -796,3 +796,123 @@
     overflow-y: auto;
   }
 }
+
+/* ---------- phone tabs (GEN-089): under 768 one of สถานที่ / ส่วนตัว / ตัวเรา / action at a time ----------
+   Every panel stays mounted (display only), so a typed action, the feed scroll and the travel sheet survive a tab switch
+   or a turn of the screen. From 768 up the bar is hidden and the layout above is exactly as before. */
+.play-mtabs {
+  display: none;
+}
+
+@container play (max-width: 767.98px) {
+  .play-frame {
+    overflow: hidden;
+  }
+
+  .play-top {
+    flex: none;
+    max-height: 30%;
+    overflow-y: auto;
+  }
+
+  .play-body {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .play-self,
+  .play-place,
+  .play-private {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .play-private {
+    order: -1;
+  }
+
+  .play-body[data-tab='place'] .play-self,
+  .play-body[data-tab='action'] .play-self,
+  .play-body[data-tab='self'] .play-place,
+  .play-body[data-tab='private'] .play-place,
+  .play-body[data-tab='private'] .play-self {
+    display: none;
+  }
+
+  /* the hit card is on every tab until [รับทราบ]: off the private tab only the pin of the private column stays */
+  .play-body:not([data-tab='private']) .play-private {
+    flex: none;
+    max-height: 60%;
+    padding-block: var(--space-2);
+  }
+
+  .play-body:not([data-tab='private']) .play-private > :not(.play-pin),
+  .play-body:not([data-tab='private']) .play-private:not(:has(.play-pin)) {
+    display: none;
+  }
+
+  .play-body[data-tab='place'] .play-action,
+  .play-body[data-tab='action'] .play-place__head,
+  .play-body[data-tab='action'] .play-place__main {
+    display: none;
+  }
+
+  .play-self {
+    padding: var(--space-3);
+  }
+
+  .play-mtabs {
+    flex: none;
+    display: flex;
+    background: var(--panel);
+    border-top: var(--line-w) solid var(--ornament);
+  }
+
+  .play .play-mtabs__tab {
+    position: relative;
+    flex: 1;
+    min-width: 44px;
+    min-height: 48px;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    border-radius: 0;
+    background: none;
+    color: var(--muted);
+    font-size: var(--text-sm);
+  }
+
+  .play .play-mtabs__tab[aria-pressed='true'] {
+    color: var(--highlight);
+    border-bottom-color: var(--highlight);
+    font-weight: 600;
+  }
+
+  .play-mtabs__dot {
+    position: absolute;
+    top: 8px;
+    right: calc(50% - 2.6em);
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--danger);
+  }
+
+  /* C6: every button, tab, choice and field is at least 44 x 44 */
+  .play button,
+  .play .btn,
+  .play .play-skill__use,
+  .play .play-action__send,
+  .play .play-vis__opt,
+  .play select,
+  .play input:not([type='radio'], [type='checkbox']) {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .play .play-vis__opt input {
+    min-width: 20px;
+    min-height: 20px;
+  }
+}
