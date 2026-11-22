@@ -30,6 +30,7 @@ import { registerHistoryRoutes } from './history/routes.ts';
 import { registerRatingRoutes } from './rating/routes.ts';
 import type { Rng } from '@isekai/rules';
 import { CryptoRng } from './rng.ts';
+import { registerWebStatic } from './web-static.ts';
 
 export interface RunningServer {
   url: string;
@@ -78,6 +79,8 @@ export interface ServerOptions {
    * starting stats (the test fixtures written before GEN-065 use it).
    */
   rng?: Rng | null;
+  /** The built web app (apps/web/dist) to serve from the same origin (Q-162); left out = API only (tests). */
+  webDistDir?: string;
 }
 
 export async function startServer(config: ServerConfig, options: ServerOptions = {}): Promise<RunningServer> {
@@ -150,6 +153,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerGmConsoleRoutes(app, db, now, room, assets);
   registerHistoryRoutes(app, db, now, assets);
   registerRatingRoutes(app, db, now);
+  if (options.webDistDir) registerWebStatic(app, options.webDistDir);
 
   try {
     await app.listen({ host: config.host, port: config.port });
