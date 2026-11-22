@@ -72,6 +72,7 @@ export {
   REST,
   createPhaseState,
   gainStamina,
+  playerHpMax,
   isDrowsy,
   nextPoint,
   phaseStep,

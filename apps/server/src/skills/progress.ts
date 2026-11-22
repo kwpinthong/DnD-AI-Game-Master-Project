@@ -1,4 +1,4 @@
-import { TURNS_PER_PERIOD, type PhaseActionsLog, type PhaseState, type PlayerResult } from '@isekai/rules';
+import { playerHpMax, TURNS_PER_PERIOD, type PhaseActionsLog, type PhaseState, type PlayerResult } from '@isekai/rules';
 import { and, eq } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
 import type { LocationRecord } from '../assets/model.ts';
@@ -106,7 +106,7 @@ export function withPeriodEndEffects(
     const r = out[memberId] ?? {};
     out[memberId] = {
       ...r,
-      ...(hp > 0 ? { hp: Math.min(state.hpMax, Math.max(r.hp ?? player.hp, 0) + hp) } : {}),
+      ...(hp > 0 ? { hp: Math.min(playerHpMax(state, player), Math.max(r.hp ?? player.hp, 0) + hp) } : {}),
       ...(stamina > 0 ? { stamina: Math.min(state.staminaMax, (r.stamina ?? player.stamina) + stamina) } : {}),
     };
   }

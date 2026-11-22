@@ -178,6 +178,8 @@ export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet
       seat,
       locationId,
       hp: c.hp,
+      // Q-210: the engine caps HP at the character's own Max HP (the start scenario's).
+      hpMax: c.hpMax,
       stamina: c.stamina,
       rep: c.reputation,
       karma: c.karma,

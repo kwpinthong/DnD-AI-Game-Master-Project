@@ -39,6 +39,11 @@ import {
  */
 export const REST = { innMin: 15, innMax: 25, rough: 15, exhaustedDay: 15, day: 8, hpInn: 10, hpRough: 5 } as const;
 
+/** A player's own Max HP (GEN-065 / Q-210), else the state's (100 in older saved states). */
+export function playerHpMax(state: Pick<PhaseState, 'hpMax'>, p: Pick<PlayerPhaseState, 'hpMax'>): number {
+  return p.hpMax ?? state.hpMax;
+}
+
 /** Stamina after a gain, never above the ceiling (C6: 28 + 5 = 30). */
 export function gainStamina(current: number, gain: number, max: number = RULES.staminaMax): number {
   return Math.min(max, current + gain);
@@ -64,7 +69,8 @@ export function createPhaseState(input: { readonly players: readonly NewPlayer[]
 function newPlayer(p: NewPlayer): PlayerPhaseState {
   return {
     id: p.id,
-    hp: p.hp ?? RULES.hpMax,
+    hp: p.hp ?? p.hpMax ?? RULES.hpMax,
+    ...(p.hpMax !== undefined ? { hpMax: p.hpMax } : {}),
     stamina: p.stamina ?? RULES.staminaMax,
     condition: 'awake',
     mustSubmit: true,
@@ -207,7 +213,8 @@ function checkResults(state: PhaseState, results: Readonly<Record<string, Player
   for (const [id, r] of Object.entries(results)) {
     if (!state.players[id]) return { code: 'unknown_player', message: `Result for unknown player "${id}"` };
     const bad = (v: number | undefined, min: number, max: number) => v !== undefined && (!Number.isInteger(v) || v < min || v > max);
-    if (bad(r.hp, 0, state.hpMax)) return { code: 'invalid_result', message: `${id}.hp must be a whole number 0..${state.hpMax}` };
+    const hpMax = playerHpMax(state, state.players[id]!);
+    if (bad(r.hp, 0, hpMax)) return { code: 'invalid_result', message: `${id}.hp must be a whole number 0..${hpMax}` };
     if (bad(r.stamina, 0, state.staminaMax)) return { code: 'invalid_result', message: `${id}.stamina must be a whole number 0..${state.staminaMax}` };
     if (bad(r.karma, RULES.rangeMin, RULES.rangeMax)) {
       return { code: 'invalid_result', message: `${id}.karma must be a whole number ${RULES.rangeMin}..${RULES.rangeMax}` };
@@ -258,7 +265,7 @@ function recover(
       break;
   }
   const staminaAfter = gainStamina(p.stamina, stamina, state.staminaMax);
-  const hpAfter = Math.min(state.hpMax, p.hp + hp);
+  const hpAfter = Math.min(playerHpMax(state, p), p.hp + hp);
   const entry: PhaseLogEntry = {
     type: 'recovered',
     at: here(state),

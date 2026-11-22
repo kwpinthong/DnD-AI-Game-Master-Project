@@ -97,6 +97,8 @@ export interface PlayerPhaseState {
   /** Σ on_sleep item/skill bonus added to sleep recovery (spec §4.1, §4.3). */
   readonly sleepBonus: number;
   readonly knockedOut: KnockedOut | null;
+  /** The character's own Max HP (GEN-065 / Q-210); absent (older saved states) = the state's `hpMax`. */
+  readonly hpMax?: number;
 }
 
 /** One action as the player sends it. The AI GM turns it into a ResolutionProposal later (GEN-051). */
@@ -218,6 +220,8 @@ export type PhaseStepResult =
 export interface NewPlayer {
   readonly id: string;
   readonly hp?: number;
+  /** The character's own Max HP; absent = RULES.hpMax. */
+  readonly hpMax?: number;
   readonly stamina?: number;
   readonly karma?: number;
   readonly sleepBonus?: number;

@@ -188,7 +188,7 @@ export function resolvePhaseActions(input: PhaseActionsInput, rng: Rng): PhaseAc
         damage = Math.max(0, d - target.damageReduction);
       }
       const heal = effects.heal === null ? 0 : SEVERITY_BASE[effects.heal];
-      const hpAfter = clamp(target.hp - damage + heal, 0, RULES.hpMax);
+      const hpAfter = clamp(target.hp - damage + heal, 0, target.hpMax ?? RULES.hpMax);
       let targetItems = [...target.items];
       let actorItems = [...nextActor.items];
       const itemsLost: string[] = [];

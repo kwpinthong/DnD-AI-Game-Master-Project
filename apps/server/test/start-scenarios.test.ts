@@ -123,7 +123,9 @@ describe('GEN-065 start scenarios', { timeout: 60_000 }, () => {
     });
     // The engine state the room plays with starts from the same numbers.
     const state = ensurePhaseState(server!.orm, gameIdOf(t.a), CLOCK);
-    expect(state.players[t.a.memberId]).toMatchObject({ hp: 22, stamina: 26 });
+    expect(state.players[t.a.memberId]).toMatchObject({ hp: 22, stamina: 26, hpMax: 30 });
+    // Q-210: the engine caps at the character's Max HP, not RULES.hpMax.
+    expect(crossPlayerState(server!.orm, gameIdOf(t.a), new Set(), assets).players[t.a.memberId]).toMatchObject({ hp: 22, hpMax: 30 });
     // B is the dishwasher at the inn: 26/30, Stamina 28, Coins 20.
     expect(await myCharacter(t, t.b)).toMatchObject({ hp: { current: 26, max: 30 }, stamina: { current: 28 }, coins: 20 });
     expect(presence(t.b)).toBe('inn');
@@ -139,6 +141,16 @@ describe('GEN-065 start scenarios', { timeout: 60_000 }, () => {
     const state = ensurePhaseState(server!.orm, gameIdOf(t.a), CLOCK);
     syncCharacterStats(server!.orm, { ...state, players: { ...state.players, [t.a.memberId]: { ...state.players[t.a.memberId]!, hp: 90 } } }, CLOCK);
     expect((await myCharacter(t, t.a)).hp).toEqual({ current: 30, max: 30 });
+  });
+
+  it('Q-210: a phase state saved before the per-player Max HP takes it from the character when it is read', async () => {
+    await boot(new ScriptedRng([MUSICIAN, DISHWASHER, DISHWASHER]));
+    const t = await startedTable(server!, false);
+    const gameId = gameIdOf(t.a);
+    const state = ensurePhaseState(server!.orm, gameId, CLOCK);
+    const old = { ...state, players: Object.fromEntries(Object.entries(state.players).map(([id, p]) => [id, { ...p, hpMax: undefined }])) };
+    server!.db.prepare('update game_phase set state = ? where game_id = ?').run(JSON.stringify(old), gameId);
+    expect(ensurePhaseState(server!.orm, gameId, CLOCK).players[t.a.memberId]!.hpMax).toBe(30);
   });
 
   it('C2: 100,000 rolls land on each of the 15 rows within 0.5 points of its Rate', () => {

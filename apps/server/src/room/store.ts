@@ -24,14 +24,14 @@ export function karmaOf(db: DbOrTx, ids: readonly string[]): Map<string, number>
  */
 export function ensurePhaseState(db: DbOrTx, gameId: string, now: number): PhaseState {
   const row = db.select({ state: gamePhase.state }).from(gamePhase).where(eq(gamePhase.gameId, gameId)).get();
-  if (row) return restorePhaseState(JSON.parse(row.state));
+  if (row) return withCharacterHpMax(db, restorePhaseState(JSON.parse(row.state)));
 
   const players = activeMembers(db, gameId).filter((m) => m.role === 'player');
   const stats = new Map(
     players.length === 0
       ? []
       : db
-          .select({ memberId: character.memberId, hp: character.hp, stamina: character.stamina, karma: character.karma })
+          .select({ memberId: character.memberId, hp: character.hp, hpMax: character.hpMax, stamina: character.stamina, karma: character.karma })
           .from(character)
           .where(inArray(character.memberId, players.map((m) => m.id)))
           .all()
@@ -41,11 +41,26 @@ export function ensurePhaseState(db: DbOrTx, gameId: string, now: number): Phase
   const state = createPhaseState({
     players: players.flatMap((m) => {
       const c = stats.get(m.id);
-      return c ? [{ id: m.id, hp: c.hp, stamina: c.stamina, karma: c.karma }] : [];
+      return c ? [{ id: m.id, hp: c.hp, hpMax: c.hpMax, stamina: c.stamina, karma: c.karma }] : [];
     }),
   });
   db.insert(gamePhase).values({ gameId, state: JSON.stringify(state), updatedAt: now }).run();
   return state;
+}
+
+/** A state saved before the per-player Max HP (Q-210) takes each player's from their character. */
+function withCharacterHpMax(db: DbOrTx, state: PhaseState): PhaseState {
+  const missing = state.order.filter((id) => state.players[id]!.hpMax === undefined);
+  if (missing.length === 0) return state;
+  const caps = new Map(
+    db.select({ memberId: character.memberId, hpMax: character.hpMax }).from(character).where(inArray(character.memberId, missing)).all().map((c) => [c.memberId, c.hpMax]),
+  );
+  const players = { ...state.players };
+  for (const id of missing) {
+    const hpMax = caps.get(id);
+    if (hpMax !== undefined) players[id] = { ...players[id]!, hpMax };
+  }
+  return { ...state, players };
 }
 
 export function savePhaseState(db: DbOrTx, gameId: string, state: PhaseState, now: number): void {

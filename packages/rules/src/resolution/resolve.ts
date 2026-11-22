@@ -188,7 +188,7 @@ export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
     selfDamage = Math.max(0, d - actor.damageReduction);
   }
   const heal = effects.heal === null ? 0 : SEVERITY_BASE[effects.heal];
-  const actorHp = hpChange(actor.hp, selfDamage, targetNpc === null ? heal : 0, RULES.hpMax);
+  const actorHp = hpChange(actor.hp, selfDamage, targetNpc === null ? heal : 0, actor.hpMax ?? RULES.hpMax);
   const targetHp =
     targetNpc === null ? null : { npcId: targetNpc.id, ...hpChange(targetNpc.hp, targetDamage, heal, NPC_HP_MAX[targetNpc.grade]) };
 
