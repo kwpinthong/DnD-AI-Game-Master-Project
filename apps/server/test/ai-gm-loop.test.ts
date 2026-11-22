@@ -168,6 +168,21 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expectNoNamesInPrompts();
   });
 
+  it('GEN-115 C1: a resolved turn logs the time of each stage and the tokens, and no player text', async () => {
+    await boot({}, noRoll);
+    const t = await startedTable(server!, false);
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    const texts = ['สำรวจโรงเตี๊ยมหาเบาะแส', 'ถามข่าวเจ้าของโรงเตี๊ยม', 'แอบค้นห้องเก็บของ'];
+    await playTurn(clients, texts, { day: 1, phase: 'EOSORIA', turn: 2 });
+    const timing = logs.filter((l) => l.startsWith('[gm]') && l.includes(' timing '));
+    expect(timing).toHaveLength(1);
+    for (const key of ['build_ms', 'adjudicate_ms', 'rules_ms', 'narrate_ms', 'db_ms', 'total_ms', 'in', 'out']) expect(timing[0]).toMatch(new RegExp(`\\b${key}=\\d+`));
+    const publish = logs.filter((l) => l.startsWith('[room]') && l.includes(' publish '));
+    expect(publish).toHaveLength(1);
+    expect(publish[0]).toMatch(/db_ms=\d+ socket_ms=\d+/);
+    for (const line of [...timing, ...publish]) for (const secret of [...texts, LIN.name, DARIN.name, MEKHA.name]) expect(line).not.toContain(secret);
+  });
+
   it('C2: a proposal missing one action is repaired once, then applies', async () => {
     await boot({}, (req) => {
       if (req.purpose !== 'gm_adjudicate') return undefined;

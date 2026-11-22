@@ -7,6 +7,7 @@ import {
   type AiPhase,
   type AiProvider,
   type AiPurpose,
+  type AiTokenUsage,
   type PromptBlock,
 } from '../provider.ts';
 import { costUsdMicros, monthStartUtc, type UsageStore } from './usage.ts';
@@ -66,7 +67,8 @@ export interface AiTrigger<T> {
   signal?: AbortSignal;
 }
 
-export type AiServiceResult<T> = { ok: true; value: T; attempts: number } | { ok: false; error: AiServiceError };
+/** `usage` (GEN-115): the tokens of the successful attempt; optional so a test double need not give it. */
+export type AiServiceResult<T> = { ok: true; value: T; attempts: number; usage?: AiTokenUsage } |{ ok: false; error: AiServiceError };
 
 export type AiReadyState =
   | { ok: true; provider: string; model: string }
@@ -212,7 +214,7 @@ export function createAiService(deps: AiServiceDeps): AiService {
           ),
         );
 
-        if (failure === null) return { ok: true, value: value as T, attempts: attempt };
+        if (failure === null) return { ok: true, value: value as T, attempts: attempt, usage: tokens };
         lastFailure = failure;
         if (!result.ok && !result.retryable) break;
       }
