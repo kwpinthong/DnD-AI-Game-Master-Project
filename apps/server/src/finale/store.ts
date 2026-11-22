@@ -4,11 +4,11 @@ import { and, eq } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
 import { heldItemsOf, skillsInGame } from '../crossplayer/items.ts';
 import type { DbOrTx } from '../db/client.ts';
-import { gameEnding, gameEventState } from '../db/schema.ts';
+import { character, gameEnding, gameEventState } from '../db/schema.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { isSafeZone } from '../skills/progress.ts';
 import { locationSnapshot } from '../visibility/store.ts';
-import { decideEnding, type EndingPlayerFacts } from './ending.ts';
+import { decideEnding, goodSideMin, type EndingPlayerFacts } from './ending.ts';
 
 /**
  * The game's ending (GEN-059): the path the AI GM declares during the finale event, the facts the ending
@@ -87,12 +87,15 @@ export function endingFacts(db: DbOrTx, assets: GameAssets, gameId: string, stat
   const places = locationSnapshot(db, gameId);
   const skills = skillsInGame(db, gameId);
   const refuges = strategyRefuges(db, gameId);
+  const goodFrom = goodSideMin(assets.karmaTiers);
   return state.order.map((memberId) => {
     const place = places.get(memberId);
+    const karma = db.select({ karma: character.karma }).from(character).where(eq(character.memberId, memberId)).get()?.karma ?? state.players[memberId]?.karma ?? 0;
     return {
       memberId,
       protectedBy: [...protectionsOf(db, assets, gameId, memberId, skills), ...(refuges.buffs.get(memberId) ?? [])],
       inSafeZone: place !== undefined && (isSafeZone(db, assets, gameId, place) || refuges.places.has(place)),
+      goodAligned: karma >= goodFrom,
     };
   });
 }

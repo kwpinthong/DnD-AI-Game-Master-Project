@@ -162,6 +162,21 @@ describe('GEN-059 finale', { timeout: 60_000 }, () => {
     expect(contextOf<FinaleContext>(finaleRequests()[0]!).path).toBe('good');
   });
 
+  it('Q-204: the Evil path took the meteor power: Good-side players (karma tier +14 and up) lose, the others survive', async () => {
+    await boot((req, n) => (isFinale(req) ? markedFinale(req) : turnWith('evil')(req, n)));
+    const t = await startedTable(server!, false);
+    const gameId = gameIdOf(t);
+    // A Good side (+20), B on the edge of neutral (+13), C Evil (-30); everyone at the inn (SAFE_ZONE).
+    const karma = new Map([[t.a.memberId, 20], [t.b.memberId, 13], [t.c.memberId, -30]]);
+    for (const [id, k] of karma) server!.db.prepare('update character set karma = ? where member_id = ?').run(k, id);
+    const state = ensurePhaseState(server!.orm, gameId, CLOCK);
+    savePhaseState(server!.orm, gameId, { ...state, players: Object.fromEntries(Object.entries(state.players).map(([id, p]) => [id, { ...p, karma: karma.get(id)! }])) }, CLOCK);
+    const clients = await playLastTurn(t, ['ดูดซับพลังอุกกาบาต', 'ยืนดู', 'ช่วยพิธี']);
+    for (const c of clients) await privateEnding(c);
+    expect(ending(t)).toMatchObject({ path: 'evil' });
+    expect(JSON.parse(ending(t)!.outcomes)).toEqual({ [t.a.memberId]: 'defeated', [t.b.memberId]: 'survived', [t.c.memberId]: 'survived' });
+  });
+
   it('C2: the ending path is refused while the finale event is not active (any day before 12 HESPERION)', async () => {
     await boot(turnWith('good'));
     const t = await startedTable(server!, false);
