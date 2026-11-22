@@ -1,0 +1,215 @@
+[
+  {
+    "zone": "โซนใจกลางเมือง (Central Zone)",
+    "name": "น้ำพุกลางเมือง",
+    "characteristics": "จัตุรัสเปิดโล่งใจกลางเมือง จุดรวมตัวของชาวเมืองและนักเดินทาง",
+    "timeAndWeather": "เช้า (แดดจ้า): คึกคักที่สุด จุดแจกขนมปังวันที่ 1 / บ่าย (ฝนตก): ร้างผู้คน เหลือคนเร่ร่อนหลบฝนใต้ซุ้มประตู / ค่ำ: จุดนัดพบลับ",
+    "npcsAndBehavior": "อาร์คบิชอป มัลคอล์ม (A) ช่วงเช้าแดดจ้า / โนอา (F) ช่วงบ่าย-ค่ำ / ลูเซีย (F) ช่วงบ่าย",
+    "specialMechanics": "การกระทำที่นี่เป็นแบบเปิดเผย 100% ส่งผลต่อฉายา (ภาพลักษณ์) รุนแรงขึ้น 1.5 เท่า",
+    "tags": [
+      "PUBLIC",
+      "CROWD",
+      "OUTDOOR",
+      "CENTRAL"
+    ],
+    "weatherVerbBoost": "Clear: [PERSUADE, SHARE] / Rain: [OBSERVE]"
+  },
+  {
+    "zone": "โซนใจกลางเมือง (Central Zone)",
+    "name": "โรงเตี๊ยมและกิลด์นักเดินทาง",
+    "characteristics": "อาคารไม้สองชั้นหลอมรวมโรงเตี๊ยมและกิลด์นักผจญภัย ชั้นล่างมีบอร์ดภารกิจและโต๊ะอาหาร ชั้นบนเป็นห้องพักและลานฝึกซ้อม",
+    "timeAndWeather": "เช้า–บ่าย: ศูนย์รวมรับงานและฝึกฝน / ฝนตก: คนแน่นขนัดเหมาะฟังข่าวลือ / ค่ำ: นักผจญภัยสังสรรค์และสร้างพันธมิตร",
+    "npcsAndBehavior": "จ่าสิบเอกการ์เร็ต (B) ช่วงบ่าย / นักผจญภัยรับจ้าง (B)",
+    "specialMechanics": "โหมดกิลด์: รับเควสต์หาเงิน ฝึกฝน (TRAIN) เพิ่มเพดาน Max HP (+3) และปลดล็อกสกิล B / โหมดโรงเตี๊ยม: สั่งพักผ่อน (REST) จ่าย 5 เหรียญ ฟื้น Stamina +10 และเป็นจุดปลอดภัยสร้างความสัมพันธ์กับผู้เล่นอื่น",
+    "tags": [
+      "INDOOR",
+      "SAFE_ZONE",
+      "QUEST_HUB",
+      "TAVERN",
+      "COMBAT_PREP"
+    ],
+    "weatherVerbBoost": "Rain: [INVESTIGATE, NEGOTIATE] / Night: [REST, PERSUADE]"
+  },
+  {
+    "zone": "โซนใจกลางเมือง (Central Zone)",
+    "name": "โบสถ์",
+    "characteristics": "วิหารหินเก่าแก่ใจกลางเมือง เบื้องหน้าสงบเงียบ เบื้องหลังซ่อนห้องใต้ดินของลัทธิ",
+    "timeAndWeather": "เช้า (แดดจ้า): พิธีสวดเปิดสาธารณะ / บ่าย (ฝนตก): เปิดรับผู้บาดเจ็บ / ค่ำ (คืนเดือนมืด): ปิดประตูใหญ่ เปิดทางลับลงแท่นพิธีใต้ดิน",
+    "npcsAndBehavior": "ซิสเตอร์เอเลน่า (B) เช้า–บ่าย / อาร์คบิชอป มัลคอล์ม (A) ค่ำคืนเดือนมืด / น็อกทิส (S) ค่ำ (ค่ากรรม < -50)",
+    "specialMechanics": "สวดภาวนาสะสมเงื่อนไขสาย Good หรือลอบเข้าชั้นใต้ดินทำพิธีสาย Evil",
+    "tags": [
+      "HOLY_GROUND",
+      "INDOOR",
+      "UNDERGROUND_ACCESS"
+    ],
+    "weatherVerbBoost": "Clear: [PRAY] / Dark Night: [RITUAL, INFILTRATE]"
+  },
+  {
+    "zone": "โซนป่าทิศตะวันออก (Eastern Forest Zone)",
+    "name": "ป่า",
+    "characteristics": "ป่าทึบทิศตะวันออก (จุดเกิด 70%) เต็มไปด้วยสมุนไพร สัตว์อสูร และซากปรักหักพัง",
+    "timeAndWeather": "เช้า (หมอกลงจัด): เสี่ยงหลงทาง (Stamina -5) / บ่าย (แดดจ้า): เก็บสมุนไพรและล่าสัตว์ / ค่ำหรือฝนตก: อันตรายสูงสุด สัตว์อสูรออกหากิน",
+    "npcsAndBehavior": "มาร์คัส (B) ช่วงเช้า–บ่ายแดดจ้า / สัตว์อสูรและสไลม์",
+    "specialMechanics": "ตั้งแต่วันที่ 5 (ภัยพิบัติ) ป่าจะถูกหมอกพิษปิดกั้น หากฝืนเข้าจะเสีย Stamina -10 ทันที",
+    "tags": [
+      "OUTDOOR",
+      "WILDERNESS",
+      "HAZARD_DAY5"
+    ],
+    "weatherVerbBoost": "Clear: [GATHER, ATTACK] / Fog: [STEALTH, ESCAPE]"
+  },
+  {
+    "zone": "โซนป่าทิศตะวันออก (Eastern Forest Zone)",
+    "name": "แปลงเกษตรกรรม",
+    "characteristics": "ทุ่งนาและสวนผลไม้นอกกำแพงเมือง แหล่งผลิตเสบียงหลักของเมือง",
+    "timeAndWeather": "เช้า–บ่าย (แดดจ้า): ชาวนาทำงานหนัก / ฝนตก: พื้นดินโคลนแฉะเดินทางลำบาก / ค่ำ: เงียบสงัด ลัทธิลักลอบขนเสบียง",
+    "npcsAndBehavior": "ชาวนาและคนงาน (B) / สายลับลัทธิ (B) ช่วงค่ำ",
+    "specialMechanics": "พื้นที่ฟาร์มค่ากรรมฝ่ายดีและเสบียงราคาถูกก่อนเกิดภัยพิบัติวันที่ 5",
+    "tags": [
+      "OUTDOOR",
+      "RURAL",
+      "SUPPLY"
+    ],
+    "weatherVerbBoost": "Clear: [SUPPORT, SHARE] / Dark Night: [SABOTAGE]"
+  },
+  {
+    "zone": "โซนป่าทิศตะวันออก (Eastern Forest Zone)",
+    "name": "โรงละคร",
+    "characteristics": "โรงละครหรูหราแหล่งรวมชนชั้นสูง ศิลปิน และข่าวซุบซิบทางการเมือง",
+    "timeAndWeather": "เช้า: ปิดทำการ / บ่าย (ฝนตก): ที่หลบฝนของเหล่าผู้ดี / ค่ำ: เปิดการแสดงใหญ่ เต็มไปด้วยขุนนาง",
+    "npcsAndBehavior": "ลอร์ดจูเลียน แวนเดอร์บิลต์ (A) ช่วงค่ำ / เลดี้เซเรน่า (A) ค่ำคืนฟ้าโปร่ง",
+    "specialMechanics": "เหมาะสำหรับใช้สกิลสาย Mind-Control, สืบความลับชนชั้นสูง และปลดล็อกสกิลสาย Neutral",
+    "tags": [
+      "INDOOR",
+      "NOBLE_SOCIAL",
+      "STAGE"
+    ],
+    "weatherVerbBoost": "Rain: [OBSERVE] / Clear Night: [MIND_CONTROL, INVESTIGATE]"
+  },
+  {
+    "zone": "โซนป่าทิศตะวันออก (Eastern Forest Zone)",
+    "name": "เคหาสน์เจ้าเมือง",
+    "characteristics": "คฤหาสน์ใหญ่โตที่มียามเฝ้าแน่นหนา (จุดเกิด 29% เข้าสิงร่างชนชั้นสูงป่วยใกล้ตาย)",
+    "timeAndWeather": "เช้า–บ่าย: เปิดรับเรื่องร้องเรียนเฉพาะผู้มีใบเบิกทาง / ค่ำ (ฝนตก/ลมแรง): ยามเฝ้าหละหลวมลง",
+    "npcsAndBehavior": "ลอร์ดจูเลียน แวนเดอร์บิลต์ (A) เช้า–บ่าย / หัวหน้าองครักษ์ (B/A)",
+    "specialMechanics": "หากเกิดด้วยเงื่อนไขเข้าสิงร่างชนชั้นสูง (29%) จะเริ่มต้นที่นี่พร้อมสถานะป่วย (Stamina สูงสุดลดลงชั่วคราว)",
+    "tags": [
+      "INDOOR",
+      "RESTRICTED_AREA",
+      "NOBLE_SOCIAL"
+    ],
+    "weatherVerbBoost": "Rain/Storm: [INFILTRATE, STEAL]"
+  },
+  {
+    "zone": "โซนการค้าทิศตะวันตก (Western Trade Zone)",
+    "name": "ย่านการค้า-ตลาดมืด",
+    "characteristics": "กลางวันคือตลาดเสรีที่คึกคัก กลางคืนตรอกด้านหลังเปิดเป็นตลาดมืดใต้ดิน (จุดเกิด 70% กองขยะ)",
+    "timeAndWeather": "เช้า–บ่าย (แดดจ้า): ย่านการค้าปกติ / ค่ำ: ตลาดมืดเปิดทำการ ต้องใช้รหัสผ่านหรือค่ากรรมติดลบจึงจะเข้าได้",
+    "npcsAndBehavior": "มาร์คัส (B) เช้า–บ่าย / วิคเตอร์ (B) บ่ายแก่–ค่ำ",
+    "specialMechanics": "แหล่งซื้อขายไอเทมระดับ B–A และจุดใช้ไอเทม Scales of Fair Trade หรือ Shadow-Silk Lockpick",
+    "tags": [
+      "TRADE_HUB",
+      "BACK_ALLEY",
+      "UNDERGROUND"
+    ],
+    "weatherVerbBoost": "Clear: [TRADE] / Dark Night: [STEAL, SABOTAGE]"
+  },
+  {
+    "zone": "โซนการค้าทิศตะวันตก (Western Trade Zone)",
+    "name": "ค่ายทหารป้องกันเมือง",
+    "characteristics": "ป้อมปราการหินและลานฝึกทหารทิศตะวันตก ควบคุมความสงบและประตูท่าเรือ",
+    "timeAndWeather": "เช้า–บ่าย (แดดจ้า): ทหารฝึกซ้อมรบ / ฝนตก: ย้ายเข้าฝึกในโรงเรือน / ค่ำ: เปลี่ยนเวรยาม",
+    "npcsAndBehavior": "จ่าสิบเอกการ์เร็ต (B) เช้า–บ่าย / ผู้บัญชาการกองกำลัง (A) ช่วงวิกฤตวันที่ 5 และ 7",
+    "specialMechanics": "แหล่งฝึกฝนสกิลสาย Offensive/Defensive และขอกำลังเสริมไปปราบปรามลัทธิ",
+    "tags": [
+      "RESTRICTED_AREA",
+      "MILITARY",
+      "TRAINING"
+    ],
+    "weatherVerbBoost": "Clear: [TRAIN, DEFEND] / Rain: [INFILTRATE]"
+  },
+  {
+    "zone": "โซนการค้าทิศตะวันตก (Western Trade Zone)",
+    "name": "ทะเล",
+    "characteristics": "ท่าเรือประมงและชายฝั่งหน้าผาหินทิศตะวันตก จุดเชื่อมต่อโลกภายนอก",
+    "timeAndWeather": "เช้า (แดดจ้า): เรือประมงเทียบท่า / บ่าย (ลมแรง/หมอกลง): คลื่นลมแปรปรวน / ค่ำ (คืนเดือนมืด): ลัทธิแอบใช้เรือเล็กขนเครื่องสังเวย",
+    "npcsAndBehavior": "แอสทรา (S) ค่ำคืนฟ้าโปร่งไร้เมฆบนหน้าผาหิน / ชาวประมง (B)",
+    "specialMechanics": "ตั้งแต่วันที่ 5 คลื่นยักษ์และพายุหมุนจะปิดตายท้องทะเล ทำให้หนีออกจากเมืองทางเรือไม่ได้",
+    "tags": [
+      "OUTDOOR",
+      "COASTAL",
+      "HAZARD_DAY5"
+    ],
+    "weatherVerbBoost": "Clear: [TRAVEL, TRADE] / Clear Night: [OBSERVE, RITUAL]"
+  },
+  {
+    "zone": "โซนที่ราบทิศเหนือ (Northern Plains Zone)",
+    "name": "โบสถ์แห่งรุ่งอรุณ",
+    "characteristics": "วิหารสีขาวบนเนินทุ่งหญ้าทางเหนือ เน้นความศรัทธาบริสุทธิ์และดาราศาสตร์",
+    "timeAndWeather": "เช้าตรู่ (แดดจ้า): แสงแรกส่องแท่นบูชา เพิ่มพลังสาย Good และ Neutral / บ่าย: เงียบสงบ / ค่ำ (คืนฟ้าโปร่ง): หอดูดาวเปิดใช้งาน",
+    "npcsAndBehavior": "ออเรเลีย (S) ช่วงเช้าแดดจ้า / เลดี้เซเรน่า (A) ค่ำคืนฟ้าโปร่ง",
+    "specialMechanics": "สถานที่ศักดิ์สิทธิ์สำหรับปลดล็อกสกิล The First Light (SS) และ I AM UNTOUCHED (SS)",
+    "tags": [
+      "HOLY_GROUND",
+      "OBSERVATORY",
+      "NORTHERN"
+    ],
+    "weatherVerbBoost": "Clear Morning: [PRAY, HEAL] / Clear Night: [OBSERVE]"
+  },
+  {
+    "zone": "โซนที่ราบทิศเหนือ (Northern Plains Zone)",
+    "name": "สถานพยาบาลกลาง",
+    "characteristics": "อาคารรักษาพยาบาลขนาดใหญ่ริมที่ราบเหนือ (จุดเกิด 70% สถานพยาบาล) รองรับผู้ป่วยทั่วเมือง",
+    "timeAndWeather": "เช้า–บ่าย: เปิดรักษาผู้ป่วยทั่วไป / ฝนตกหรือวันที่ 5–7: ผู้บาดเจ็บล้นโรงพยาบาล / ค่ำ: เวรเฝ้าไข้",
+    "npcsAndBehavior": "ซิสเตอร์เอเลน่า (B) ช่วงบ่าย / หัวหน้าแพทย์หลวง (A) เช้า–บ่าย / โนอา (F) ช่วงฝนตก",
+    "specialMechanics": "พักรักษาตัว 1 เทิร์น ฟื้น HP +15 และ Stamina +8 (หากพักครบ 2 เทิร์น / 1 ช่วงเวลา ฟื้น HP เต็ม 100%)",
+    "tags": [
+      "INDOOR",
+      "SAFE_ZONE",
+      "CLINIC"
+    ],
+    "weatherVerbBoost": "Rain/Disaster: [HEAL, SUPPORT, REST]"
+  },
+  {
+    "zone": "โซนที่ราบทิศเหนือ (Northern Plains Zone)",
+    "name": "หอสมุดหลวง",
+    "characteristics": "อาคารหินอ่อนขนาดใหญ่เงียบสงบ เก็บรวบรวมตำราประวัติศาสตร์ บันทึกดาราศาสตร์ และเขตหนังสือต้องห้าม",
+    "timeAndWeather": "เช้า–บ่าย (แดดจ้า): เปิดให้ประชาชนค้นคว้าทั่วไป / ฝนตก: บรรยากาศเงียบสงัดเหมาะอ่านตำราลึก / คืนฟ้าโปร่ง: หอดูดาวชั้นบนเปิดรับแสงดาว",
+    "npcsAndBehavior": "เลดี้เซเรน่า (A) ช่วงเช้า–บ่าย / มาร์คัส (B) ช่วงฝนตก",
+    "specialMechanics": "ใช้คำสั่ง INVESTIGATE ค้นหาเงื่อนไขปลดล็อกไอเทม/สกิลได้เฉพาะรายการที่มี Tag ตรงกับหัวข้อที่ค้นหาเท่านั้น และเป็นทางเข้าลับสู่มิติพิศวงในคืนฟ้าโปร่ง (เมื่อ Karma เป็นกลาง -13 ถึง +13)",
+    "tags": [
+      "INDOOR",
+      "LIBRARY",
+      "ARCHIVE",
+      "ASTRONOMY"
+    ],
+    "weatherVerbBoost": "Rain: [INVESTIGATE] / Clear Night: [OBSERVE, INVESTIGATE]"
+  },
+  {
+    "zone": "รูทลับ 1% (Secret Astral Zone)",
+    "name": "มิติพิศวง (The Astral Rift)",
+    "characteristics": "พื้นที่ลึกลับเหนือกาลเวลาที่เต็มไปด้วยเศษเสี้ยวความทรงจำและเข็มทิศดวงดาว (จุดเกิดพิเศษ 1% เพียงแห่งเดียว)",
+    "timeAndWeather": "ไร้สภาพอากาศปกติ (เวลาหยุดนิ่ง) / ผู้เล่นอีก 99% เข้าถึงได้เฉพาะคืนฟ้าโปร่งผ่านปริศนาหอสมุดหลวง",
+    "npcsAndBehavior": "แอสทรา (S) ประจำการตลอดเวลา",
+    "specialMechanics": "ผู้เกิดที่นี่พบ แอสทรา (S) ทันทีและรู้ความลับวันพิพากษาวันที่ 12 ล่วงหน้า คนนอกเข้าได้เพียง 1 เทิร์นต่อการเปิดประตูมิติ",
+    "tags": [
+      "SECRET_ZONE",
+      "ASTRAL",
+      "ANOMALY",
+      "SAFE_ZONE"
+    ],
+    "weatherVerbBoost": "Clear Night: [OBSERVE, MEDITATE]"
+  },
+  {
+    "zone": "กฎสภาพอากาศกลาง (Weather Rules)",
+    "name": "กฎทั้ง 5 สภาพอากาศ",
+    "characteristics": "ผลกระทบภาพรวมทั้ง 4 โซน",
+    "timeAndWeather": "แดดจ้า: เปิดเผยได้ผลดี (Secret Action -2) / ฝนตก: คนหลบในร่ม กลางแจ้ง Stamina +1 (ลอบเร้น +2) / หมอกจัด: ลดการมองเห็น พบเกรด S ง่าย / คืนเดือนมืด: เปิดทางลับและเสริมสาย Evil / ภัยพิบัติ (วันที่ 5+): ปิดทางออกนอกเมือง กลางแจ้ง Stamina +2",
+    "npcsAndBehavior": "มีผลต่อตำแหน่งปรากฏตัวของ NPC ทุกคนในเมือง",
+    "specialMechanics": "ย้ายสถานที่ในโซนเดียวกันไม่เสียเทิร์น (เสีย Stamina -1) / เดินทางข้ามโซนเสีย 1 เทิร์น + Stamina -3",
+    "tags": [
+      "GLOBAL_WEATHER_RULES"
+    ],
+    "weatherVerbBoost": "Clear: +Public / Rain: +Stealth -Fire / Fog: +Observe / Dark Night: +Evil / Disaster: +Neutral"
+  }
+]

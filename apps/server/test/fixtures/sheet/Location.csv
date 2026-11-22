@@ -1,0 +1,3 @@
+Zone,Location,Characteristics & Spawn,Time & Weather Dynamics,NPCs & Behavior,Special Mechanics,Location_Tags,Weather_Verb_Boost
+โซนทดสอบ (Test Zone),ลานทดสอบ,ลานกว้าง,กลางวันคนเยอะ,โนวา,ไม่มี,"[PUBLIC, OUTDOOR]",Clear: [PERSUADE] / Rain: [OBSERVE]
+โซนทดสอบ (Test Zone),ตลาดทดสอบ,ตลาด,กลางคืนเงียบ,มาร์โก,ประมูล,"[TRADE_HUB, UNDERGROUND]",Clear: [TRADE]

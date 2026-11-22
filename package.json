@@ -14,7 +14,8 @@
     "typecheck": "pnpm -r typecheck && pnpm run typecheck:infra",
     "typecheck:infra": "tsc -p .railway/tsconfig.json",
     "db:generate": "pnpm --filter @isekai/server db:generate",
-    "db:migrate": "pnpm --filter @isekai/server db:migrate"
+    "db:migrate": "pnpm --filter @isekai/server db:migrate",
+    "assets:import": "pnpm --filter @isekai/server assets:import"
   },
   "devDependencies": {
     "railway": "3.17.0",

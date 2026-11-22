@@ -1,0 +1,247 @@
+[
+  {
+    "npc": "อาร์คบิชอป มัลคอล์ม",
+    "location": "น้ำพุกลางเมือง",
+    "periods": [
+      "EOSORIA"
+    ],
+    "weathers": [
+      "Clear"
+    ],
+    "condition": "",
+    "note": "\"ช่วงเช้าแดดจ้า\""
+  },
+  {
+    "npc": "โนอา",
+    "location": "น้ำพุกลางเมือง",
+    "periods": [
+      "SOLARION",
+      "HESPERION"
+    ],
+    "weathers": [],
+    "condition": "",
+    "note": "\"ช่วงบ่าย-ค่ำ\""
+  },
+  {
+    "npc": "ลูเซีย",
+    "location": "น้ำพุกลางเมือง",
+    "periods": [
+      "SOLARION"
+    ],
+    "weathers": [],
+    "condition": "",
+    "note": ""
+  },
+  {
+    "npc": "จ่าสิบเอกการ์เร็ต",
+    "location": "โรงเตี๊ยมและกิลด์นักเดินทาง",
+    "periods": [
+      "SOLARION"
+    ],
+    "weathers": [],
+    "condition": "",
+    "note": "⚠ ชนกับค่ายทหาร SOLARION — เลือกที่เดียว"
+  },
+  {
+    "npc": "ซิสเตอร์เอเลน่า",
+    "location": "โบสถ์",
+    "periods": [
+      "EOSORIA",
+      "SOLARION"
+    ],
+    "weathers": [],
+    "condition": "",
+    "note": "⚠ ชนกับสถานพยาบาล SOLARION"
+  },
+  {
+    "npc": "อาร์คบิชอป มัลคอล์ม",
+    "location": "โบสถ์",
+    "periods": [
+      "HESPERION",
+      "NOCTHERION"
+    ],
+    "weathers": [
+      "Dark Night"
+    ],
+    "condition": "",
+    "note": "\"ค่ำคืนเดือนมืด\" — ตีความ ค่ำ = HESPERION + NOCTHERION"
+  },
+  {
+    "npc": "น็อกทิส",
+    "location": "โบสถ์",
+    "periods": [
+      "HESPERION",
+      "NOCTHERION"
+    ],
+    "weathers": [],
+    "condition": "karma < -50",
+    "note": "ผู้เล่นต้อง karma < -50 จึงพบ"
+  },
+  {
+    "npc": "มาร์คัส",
+    "location": "ป่า",
+    "periods": [
+      "EOSORIA",
+      "SOLARION"
+    ],
+    "weathers": [
+      "Clear"
+    ],
+    "condition": "",
+    "note": "⚠ ชนกับย่านการค้า EOSORIA, SOLARION — อาจให้ป่าเฉพาะตอนแดดจ้า"
+  },
+  {
+    "npc": "ลอร์ดจูเลียน แวนเดอร์บิลต์",
+    "location": "โรงละคร",
+    "periods": [
+      "HESPERION"
+    ],
+    "weathers": [],
+    "condition": "",
+    "note": ""
+  },
+  {
+    "npc": "เลดี้เซเรน่า",
+    "location": "โรงละคร",
+    "periods": [
+      "HESPERION",
+      "NOCTHERION"
+    ],
+    "weathers": [
+      "Clear Night"
+    ],
+    "condition": "",
+    "note": "⚠ ชนกับโบสถ์แห่งรุ่งอรุณคืนฟ้าโปร่ง"
+  },
+  {
+    "npc": "ลอร์ดจูเลียน แวนเดอร์บิลต์",
+    "location": "เคหาสน์เจ้าเมือง",
+    "periods": [
+      "EOSORIA",
+      "SOLARION"
+    ],
+    "weathers": [],
+    "condition": "",
+    "note": ""
+  },
+  {
+    "npc": "มาร์คัส",
+    "location": "ย่านการค้า-ตลาดมืด",
+    "periods": [
+      "EOSORIA",
+      "SOLARION"
+    ],
+    "weathers": [],
+    "condition": "",
+    "note": "⚠ ชนกับป่า (ดูแถวป่า)"
+  },
+  {
+    "npc": "วิคเตอร์",
+    "location": "ย่านการค้า-ตลาดมืด",
+    "periods": [
+      "SOLARION",
+      "HESPERION"
+    ],
+    "weathers": [],
+    "condition": "",
+    "note": "\"บ่ายแก่–ค่ำ\""
+  },
+  {
+    "npc": "จ่าสิบเอกการ์เร็ต",
+    "location": "ค่ายทหารป้องกันเมือง",
+    "periods": [
+      "EOSORIA",
+      "SOLARION"
+    ],
+    "weathers": [],
+    "condition": "",
+    "note": "⚠ ชนกับโรงเตี๊ยม SOLARION"
+  },
+  {
+    "npc": "แอสทรา",
+    "location": "ทะเล",
+    "periods": [
+      "HESPERION",
+      "NOCTHERION"
+    ],
+    "weathers": [
+      "Clear Night"
+    ],
+    "condition": "",
+    "note": "\"ค่ำคืนฟ้าโปร่งไร้เมฆบนหน้าผาหิน\""
+  },
+  {
+    "npc": "ออเรเลีย",
+    "location": "โบสถ์แห่งรุ่งอรุณ",
+    "periods": [
+      "EOSORIA"
+    ],
+    "weathers": [
+      "Clear"
+    ],
+    "condition": "",
+    "note": ""
+  },
+  {
+    "npc": "เลดี้เซเรน่า",
+    "location": "โบสถ์แห่งรุ่งอรุณ",
+    "periods": [
+      "HESPERION",
+      "NOCTHERION"
+    ],
+    "weathers": [
+      "Clear Night"
+    ],
+    "condition": "",
+    "note": "⚠ ชนกับโรงละคร"
+  },
+  {
+    "npc": "ซิสเตอร์เอเลน่า",
+    "location": "สถานพยาบาลกลาง",
+    "periods": [
+      "SOLARION"
+    ],
+    "weathers": [],
+    "condition": "",
+    "note": "⚠ ชนกับโบสถ์ SOLARION"
+  },
+  {
+    "npc": "โนอา",
+    "location": "สถานพยาบาลกลาง",
+    "periods": [],
+    "weathers": [
+      "Rain"
+    ],
+    "condition": "",
+    "note": "\"ช่วงฝนตก\" (ทุกช่วง) — ฝนตกชนะตารางที่น้ำพุ?"
+  },
+  {
+    "npc": "เลดี้เซเรน่า",
+    "location": "หอสมุดหลวง",
+    "periods": [
+      "EOSORIA",
+      "SOLARION"
+    ],
+    "weathers": [],
+    "condition": "",
+    "note": ""
+  },
+  {
+    "npc": "มาร์คัส",
+    "location": "หอสมุดหลวง",
+    "periods": [],
+    "weathers": [
+      "Rain"
+    ],
+    "condition": "",
+    "note": "\"ช่วงฝนตก\""
+  },
+  {
+    "npc": "แอสทรา",
+    "location": "มิติพิศวง (The Astral Rift)",
+    "periods": [],
+    "weathers": [],
+    "condition": "",
+    "note": "ประจำการตลอดเวลา (Period ว่าง = ทุกช่วง)"
+  }
+]

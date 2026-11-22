@@ -1,0 +1,4 @@
+Rank,Type,Ability Name,Category,Ability,Condition,บทพูด/คำบรรยาย,Trigger_Type,Daily_Limit,Match_Verb_Tags,Match_Target_Tags,Effect_Type,Stat,Value,Duration,Effect2_Type,Effect2_Stat,Effect2_Value,Effect2_Duration,หมายเหตุ (ร่าง Claude — ว่าง = ผลเชิงคุณภาพส่งให้ AI)
+SS,Good,Test Dawn,Buff,ฟื้นฟูทุกคนในโซน,ได้รับจาก NPC ทดสอบ,"""แสงจงมา""",Active,0,"[HEAL, CLEANSE]","[SELF, ALLY]",restore,"HP, Stamina",15,instant,dice_bonus,d20,2,1 period,ผลรวม
+B,Evil,Test Shade,Debuff,ลดโบนัสเต๋า,ไม่มี,เงา,Passive,2,[CURSE],[NPC],,,,,,,,,
+A,Neutral,Test Guard,Defensive,ลดความเสียหาย,ไม่มี,กัน,Passive + Active,1,"[DEFEND, OBSERVE]","[SELF]",damage_reduce_pct,HP,50,2 periods,,,,,

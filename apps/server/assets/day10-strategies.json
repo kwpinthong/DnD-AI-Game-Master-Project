@@ -1,0 +1,242 @@
+[
+  {
+    "status": "draft",
+    "id": "D10-S1",
+    "name": "Holy Crusade (สงครามศักดิ์สิทธิ์)",
+    "karmaAlignments": [
+      "Good"
+    ],
+    "karmaCondition": "ผู้นำแผน karma +14 ขึ้นไป (ฝ่ายดี) / ผู้ร่วมแผนห้ามเป็นฝ่ายชั่ว (-14 ลงไป)",
+    "requiredSkills": "อย่างน้อย 1 จาก: Smite of Purgation (A), Luminous Strike (B), Sanctuary Aegis (S), Aegis of Faith (A)",
+    "requiredItems": "ไม่บังคับ / ช่วย: Censer of Purging Flame (A) ทำให้ Smite ลบบัพ Evil ไม่ต้องทอย, Mantle of the Martyr (A) รับแทนเพื่อน",
+    "requiredNpcs": "อย่างน้อย 1 จาก: ลอร์ดจูเลียน (A/S) หรือ จ่าสิบเอกการ์เร็ต (B, affinity ≥ +9)",
+    "day1Modifier": "วันที่ 1 Good (เปิดโปงขนมปังได้): event 'ชาวเมืองตาสว่าง' +1 ตอน T1 / วันที่ 1 ไม่มีใครกัน หรือ Evil: event 'ฝูงชนต้องสาป' -2 ตอน T1",
+    "day5Modifier": "วันที่ 5 Good (อพยพ + ขนสมุนไพรเข้าสถานพยาบาล): ผู้ร่วมแผน restore Stamina +5 ตอนเริ่ม HESPERION วันที่ 10 / อื่น ๆ: ไม่มีผล",
+    "day7Condition": "วันที่ 7 Good (สกัดขบวนลักพาตัว, จูเลียนเป็น S): T2 DC 17 / วันที่ 7 ไม่มีใครกัน หรือ Evil: T2 DC 20 + event 'พิธีเต็มขั้น' -2 (= ยากขึ้น +5 ตาม World_Timeline) และจูเลียนบาดเจ็บ ใช้ได้แค่การ์เร็ต",
+    "location": "น้ำพุกลางเมือง (T1) → โบสถ์ ห้องใต้ดิน (T2)",
+    "night10Actions": "HESPERION: รวมพลที่โรงเตี๊ยมหรือค่ายทหาร (ไม่ทอย) / NOCTHERION T1: ผู้ร่วมแผนแต่ละคนกันฝูงชนและสาวกที่น้ำพุ (DEFEND/PROTECT) สำเร็จ 1 คน = ผู้นำได้ event 'แนวหน้ายืนหยัด' +1 (สูงสุด +3) / T2: ผู้นำบุกห้องใต้ดินทุบแท่นพิธี โจมตีมัลคอล์ม (ATTACK/PURGE) = roll ตัดสินแผน",
+    "dc": "T1: 14 / T2: 17 (วันที่ 7 Good) หรือ 20 (วันที่ 7 drift)",
+    "bonus": "event 'แนวหน้ายืนหยัด' +1 ต่อผู้ช่วยที่ T1 สำเร็จ (สูงสุด +3) / karma light band สูงสุด +2 / affinity จูเลียนหรือการ์เร็ต trunc(aff/20) / skill ≤ เพดานตาม Rank / รวม clamp ±10",
+    "matchVerbTags": [
+      "DEFEND",
+      "PROTECT",
+      "ATTACK",
+      "PURGE"
+    ],
+    "matchTargetTags": [
+      "CROWD",
+      "FOUNTAIN",
+      "CHURCH_BASEMENT",
+      "EVIL_AFFILIATED",
+      "SACRIFICE"
+    ],
+    "effects": [
+      {
+        "type": "dice_bonus",
+        "stats": [
+          "d20"
+        ],
+        "value": 2,
+        "duration": {
+          "unit": "period",
+          "count": 8
+        }
+      }
+    ],
+    "successEffect": "พิธีล้ม มัลคอล์มถูกจับ (ไม่ได้เลื่อนเป็น S) / ผู้ร่วมแผนฝ่าย Good ได้ 'แสงรุ่งอรุณคืนเมือง' d20 +2 กับ PRAY/HEAL/DEFEND ตลอดวันที่ 11-12 / จูเลียน (S) เปิดเขต Sanctuary Aegis ที่โบสถ์ = จุดหลบภัยวันที่ 12",
+    "failureEffect": "T2 ล้ม: ผลเท่ากับ D10-DRIFT (เทพมารลงมา) + ผู้นำโดน severity หนักจากแท่นพิธี / ผู้ร่วมแผนที่ T1 ล้ม: severity ปานกลาง จากฝูงชน",
+    "endingLink": "Good ending: 'แสงรุ่งอรุณคืนเมือง' + จุดหลบภัยโบสถ์ = นับเป็นบัพระดับ S สำหรับการรอดวันที่ 12 / ม่านปาฏิหาริย์ยังต้องทำในวันที่ 12",
+    "note": "โอกาสคร่าว ๆ (script): T2 DC 17 mod +7 = 55% / DC 20 mod +5 = 30% / Stamina T1 -2 (แอคชั่นทั่วไป) T2 -5 (Active Skill)"
+  },
+  {
+    "status": "draft",
+    "id": "D10-S2",
+    "name": "Silent Rescue (ปฏิบัติการช่วยเหลือเงียบ)",
+    "karmaAlignments": [
+      "Good",
+      "Neutral"
+    ],
+    "karmaCondition": "ผู้ร่วมแผน karma -13 ขึ้นไป (ไม่เป็นฝ่ายชั่ว)",
+    "requiredSkills": "ไม่บังคับ / ช่วย: Stasis Anchor (B) กันสาวกตามมา, Glare of Truth (B) ปิด Secret Action ของยาม",
+    "requiredItems": "อย่างน้อย 1 จาก: Shadow-Silk Lockpick (B), Cloak of Grey Dust (B), Mask of the Faceless (B)",
+    "requiredNpcs": "อย่างน้อย 1 จาก: วิคเตอร์ (B, affinity ≥ +9 = รู้ทางลับใต้ดิน) หรือ ซิสเตอร์เอเลน่า (B, affinity ≥ +9 = กุญแจประตูข้างโบสถ์)",
+    "day1Modifier": "วันที่ 1 Good: event 'ชาวเมืองตาสว่าง' +1 ตอน T2 (ชาวบ้านช่วยซ่อนคนที่หนีออกมา) / วันที่ 1 drift หรือ Evil: ไม่มีผล (แผนนี้หลบฝูงชน)",
+    "day5Modifier": "วันที่ 5 Good: สถานพยาบาลมีเสบียง รับคนที่ช่วยออกมาได้ (ใช้เป็นจุดปลอดภัยใน Success) / วันที่ 5 drift หรือ Evil: คนที่ช่วยได้ต้องซ่อนที่โรงเตี๊ยมแทน (ไม่มีจุดหลบภัยวันที่ 12)",
+    "day7Condition": "วันที่ 7 Good (ลัทธิได้เครื่องสังเวยไม่ครบ): T2 DC 14 / วันที่ 7 drift หรือ Evil (ได้ครบ): T2 DC 17 + event 'พิธีเต็มขั้น' -2",
+    "location": "โบสถ์ ห้องใต้ดิน (เข้าทาง UNDERGROUND ของย่านการค้า-ตลาดมืด ถ้ามีวิคเตอร์)",
+    "night10Actions": "HESPERION: นัดวิคเตอร์หรือเอเลน่า (ไม่ทอย) / NOCTHERION T1: ลอบลงห้องใต้ดิน (INFILTRATE/STEALTH) เป็น Secret Action ฟรีของช่วง NOCTHERION / T2: พาเครื่องสังเวยหนีก่อนพิธีเริ่ม (ESCAPE/PROTECT) = roll ตัดสินแผน / ผู้ร่วมแผนคนที่ 2 ล่อยามด้วย DECEIVE ได้ สำเร็จ = 'แนวหน้ายืนหยัด' +1",
+    "dc": "T1: 14 (หรือ 11 ถ้าใช้ทางลับของวิคเตอร์) / T2: 14 (วันที่ 7 Good) หรือ 17 (วันที่ 7 drift)",
+    "bonus": "อากาศ Dark Night ที่โบสถ์ (AI GM เลือก, Q-089) INFILTRATE +2 / affinity เอเลน่าหรือวิคเตอร์ / event 'แนวหน้ายืนหยัด' +1 / รวม clamp ±10",
+    "matchVerbTags": [
+      "INFILTRATE",
+      "STEALTH",
+      "ESCAPE",
+      "PROTECT"
+    ],
+    "matchTargetTags": [
+      "CHURCH_BASEMENT",
+      "UNDERGROUND",
+      "SACRIFICE",
+      "LOCKED_DOOR",
+      "MISSING_PERSONS"
+    ],
+    "effects": [
+      {
+        "type": "dice_bonus",
+        "stats": [
+          "d20"
+        ],
+        "value": -2,
+        "duration": {
+          "unit": "period",
+          "count": 4
+        }
+      }
+    ],
+    "successEffect": "พิธีขาดเครื่องสังเวย: เทพมารลงมาไม่สมบูรณ์ 'จันทราครึ่งดวง' = ความมืดแค่วันที่ 11 (ไม่ถึงวันที่ 12) ฝ่าย Good ติด d20 -2 แค่ 4 periods (แทน -3 ตลอด 2 วัน) / affinity +5 กับเอเลน่าและจูเลียน / ถ้าวันที่ 5 Good: สถานพยาบาลกลาง = จุดหลบภัยวันที่ 12",
+    "failureEffect": "T1 ล้ม: Secret ถูกจับ ทิ้ง Hidden Evidence + ติด Constraint 'ถูกขังในห้องใต้ดิน' escapeDc 17 / T2 ล้ม: ผลเท่ากับ D10-DRIFT และเครื่องสังเวยถูกพากลับ",
+    "endingLink": "Good หรือ Neutral ending: ความมืดสั้นลง ทำให้วันที่ 12 ไม่ติดดีบัพ / จุดหลบภัยสถานพยาบาลใช้รอดวันที่ 12 ได้",
+    "note": "Value -2 คือดีบัพที่เหลือ (แทน -3 ของ DRIFT) / โอกาส T2: DC 14 mod +3 = 50% / DC 17 mod +1 = 25% / แผนเดียวที่ใช้ Secret Action ได้ ต้องเช็ค quota ข้อ 10.4"
+  },
+  {
+    "status": "draft",
+    "id": "D10-S3",
+    "name": "Crimson Offering (เครื่องบูชาโลหิต)",
+    "karmaAlignments": [
+      "Evil"
+    ],
+    "karmaCondition": "ผู้นำแผน karma -14 ลงไป (ฝ่ายชั่ว) / ถ้าต่ำกว่า -50 เรียกน็อกทิสได้",
+    "requiredSkills": "อย่างน้อย 1 จาก: Abyssal Miasma (S), Puppeteer’s Crown (S), Venom of Despair (A), Whisper of Temptation (A)",
+    "requiredItems": "ไม่บังคับ / ช่วยมาก: Grimoire of the Blood Moon (S) +4 กับ Mind-Control, Vial of Black Ash (B), Kris of Soul Thirst (A)",
+    "requiredNpcs": "อย่างน้อย 1 จาก: อาร์คบิชอปมัลคอล์ม (A/S, ร่วมมือวันที่ 7 แล้ว) หรือ น็อกทิส (S, karma < -50)",
+    "day1Modifier": "วันที่ 1 Evil หรือ drift (ขนมปังต้องสาปแพร่): event 'ฝูงชนต้องสาป' +2 ตอน T1 / วันที่ 1 Good: event 'ชาวเมืองตาสว่าง' -1 ตอน T1",
+    "day5Modifier": "วันที่ 5 Evil (กักตุนเสบียง): ผู้ร่วมแผน restore Stamina +5 ตอนเริ่ม HESPERION วันที่ 10 / อื่น ๆ: ไม่มีผล",
+    "day7Condition": "วันที่ 7 Evil หรือ drift (เครื่องสังเวยครบ): T1 = ถวาย DC 11 / วันที่ 7 Good (ไม่ครบ): T1 = ลักพาตัวคนที่ขาด DC 17, ล้ม = T2 DC +3 (เป็น 20)",
+    "location": "โบสถ์ ห้องใต้ดิน (แท่นพิธี) / น้ำพุกลางเมือง (ฝูงชน)",
+    "night10Actions": "HESPERION: รับพรจากมัลคอล์ม (ไม่ทอย) / NOCTHERION T1: ถวายเครื่องสังเวย หรือลักพาคนที่ขาด (RITUAL / INFILTRATE) / T2: ผู้นำทำพันธสัญญากับเทพมาร ผูกพลังไว้กับตัวเอง (RITUAL/DOMINATE) = roll ตัดสินแผน",
+    "dc": "T1: 11 (วันที่ 7 ครบ) หรือ 17 (ไม่ครบ) / T2: 17 (มี Grimoire หรือมัลคอล์ม S) หรือ 20 (ไม่มีทั้งคู่)",
+    "bonus": "karma dark band สูงสุด +2 / Grimoire +4 (S ≤ 5) เฉพาะ action ที่เป็น Mind-Control / affinity มัลคอล์ม / event 'ฝูงชนต้องสาป' +2 / รวม clamp ±10",
+    "matchVerbTags": [
+      "RITUAL",
+      "DOMINATE",
+      "MIND_CONTROL",
+      "CURSE",
+      "SABOTAGE"
+    ],
+    "matchTargetTags": [
+      "SACRIFICE",
+      "CHURCH_BASEMENT",
+      "DARK_NIGHT",
+      "CROWD",
+      "GOOD_AFFILIATED"
+    ],
+    "effects": [
+      {
+        "type": "dice_bonus",
+        "stats": [
+          "d20"
+        ],
+        "value": 3,
+        "duration": {
+          "unit": "period",
+          "count": 8
+        }
+      }
+    ],
+    "successEffect": "เทพมารลงมาภายใต้พันธสัญญาของผู้นำ: เมืองเป็นแบบ D10-DRIFT (ฝ่าย Good d20 -3 ตลอดวันที่ 11-12) แต่ผู้ร่วมแผนฝ่าย Evil ได้ 'พันธสัญญาจันทราโลหิต' d20 +3 กับ RITUAL/CURSE/MIND_CONTROL / มัลคอล์มเป็น S (ปลด Puppeteer’s Crown)",
+    "failureEffect": "T2 ล้ม: เทพมารกลืนพลังผู้นำ severity หนัก ไม่ได้บัพ / เมืองยังเป็น D10-DRIFT (ลัทธิสำเร็จแต่ไม่มีผู้เล่นได้ประโยชน์)",
+    "endingLink": "Evil ending: 'พันธสัญญาจันทราโลหิต' = บัพระดับ S สำหรับการรอดวันที่ 12 และเป็นเงื่อนไขดูดซับพลังอุกกาบาต",
+    "note": "โอกาส T2: DC 17 mod +8 = 60% / DC 20 mod +4 = 25% / ระวัง: แผนนี้ง่ายสุดเมื่อวันที่ 7 Evil (T1 70%) / ผลเมือง = DRIFT จึงไม่ต้องมีกฎเมืองแยก"
+  },
+  {
+    "status": "draft",
+    "id": "D10-S4",
+    "name": "Absolute Zero Law (กฎศูนย์สัมบูรณ์)",
+    "karmaAlignments": [
+      "Neutral"
+    ],
+    "karmaCondition": "ผู้ร่ายมี karma -5..+5 (เงื่อนไขของ skill) / ผู้ร่วมแผน -13..+13",
+    "requiredSkills": "Absolute Zero Law (S) บังคับ 1 คน (Daily_Limit 1) / ช่วย: Mirror of Equilibrium (A), Detached Mind (A) กัน Mind-Control ระหว่างร่าย",
+    "requiredItems": "ไม่บังคับ / ช่วยมาก: Pendulum of Zero (S) ขยายผลเป็นทั้งเมือง 1 ช่วงเวลา",
+    "requiredNpcs": "อย่างน้อย 1 จาก: แอสทรา (S) หรือ เลดี้เซเรน่า (A/S) หรือ ลูเซีย (F/SS)",
+    "day1Modifier": "ไม่มีผล (กฎศูนย์ลบบัพ/ดีบัพทุกอย่างในพื้นที่ รวมถึงผลวันที่ 1)",
+    "day5Modifier": "ไม่มีผล",
+    "day7Condition": "วันที่ 7 ไม่เปลี่ยน DC (ลบบัพ 'พิธีเต็มขั้น' ของลัทธิไปด้วย) / แต่ถ้าวันที่ 7 Good จูเลียน (S) จะบุกซ้อน: แผนนี้ลบ Sanctuary Aegis ของฝ่าย Good ในพื้นที่ด้วย (เลือกเองว่าจะร่ายหรือไม่)",
+    "location": "น้ำพุกลางเมือง (จุดศูนย์กลาง ถ้ามี Pendulum) หรือ โบสถ์ (ถ้าไม่มี)",
+    "night10Actions": "HESPERION: ไปหอสมุดหลวงหรือหน้าผาทะเลรับข้อมูลจากเซเรน่าหรือแอสทรา (ไม่ทอย) / NOCTHERION T1: เปิดลูกตุ้มและทำสมาธิ (MEDITATE/OBSERVE) / T2: ร่าย Absolute Zero Law ตอนเทพมารกำลังลงมา (NULLIFY/INTERVENE) = roll ตัดสินแผน",
+    "dc": "T1: 11 / T2: 17 (มี Pendulum ทั้งเมือง) หรือ 20 (ไม่มี เฉพาะโบสถ์)",
+    "bonus": "affinity แอสทราหรือเซเรน่า / event 'ข้อมูลอุกกาบาต' +2 ถ้าได้ข้อมูลจากเซเรน่าใน HESPERION / karma band = 0 เสมอ / รวม clamp ±10",
+    "matchVerbTags": [
+      "NULLIFY",
+      "INTERVENE",
+      "MEDITATE",
+      "OBSERVE"
+    ],
+    "matchTargetTags": [
+      "AREA",
+      "MAGIC_EFFECT",
+      "CHAOS",
+      "KARMA_LOCK",
+      "METEOR_DATA"
+    ],
+    "effects": [
+      {
+        "type": "dice_bonus",
+        "stats": [
+          "d20"
+        ],
+        "value": 0,
+        "duration": {
+          "unit": "period",
+          "count": 2
+        }
+      }
+    ],
+    "successEffect": "พิธีถูกลบเป็นศูนย์: ไม่มีเทพมาร ไม่มีความมืด / ราคา: บัพ/ดีบัพทุกอย่างในพื้นที่หาย และวันที่ 11 ช่วง EOSORIA-SOLARION ไม่มีใครใช้ Active Skill สาย Buff/Debuff/Mind-Control ได้ ('นครไร้มนตรา') / มัลคอล์มเหลือเกรด A",
+    "failureEffect": "T2 ล้ม: แรงสะท้อน ผู้ร่ายติด 'อ่อนล้า' (Stamina เหลือ 4) + ผลเท่ากับ D10-DRIFT / T1 ล้ม: ร่าย T2 ได้แต่ DC +3",
+    "endingLink": "Neutral ending: เซเรน่าและแอสทราเชื่อใจผู้ร่าย = เงื่อนไขลบล้างผลอุกกาบาตวันที่ 12 / ผู้ร่ายไม่ได้บัพ S จากแผนนี้",
+    "note": "Value 0 = ลบ modifier ทุกอย่างของ status (ไม่ใช่โบนัส) อาจต้องมี Effect_Type ใหม่ 'nullify' / โอกาส T2: DC 17 mod +5 = 45% / DC 20 mod +5 = 30%"
+  },
+  {
+    "status": "draft",
+    "id": "D10-DRIFT",
+    "name": "ไม่มีใครทำแผน / แผนล้มทั้งหมด (World_Drift_If_Ignored)",
+    "karmaAlignments": [],
+    "karmaCondition": "ใช้เมื่อไม่มีผู้เล่นทำแผนไหนในคืนวันที่ 10 หรือ roll T2 ของทุกแผนล้ม",
+    "requiredSkills": "-",
+    "requiredItems": "-",
+    "requiredNpcs": "-",
+    "day1Modifier": "วันที่ 1 drift ทำให้ D10-S1 ยากขึ้นและ D10-S3 ง่ายขึ้น (ฐานมวลชนลัทธิ +30%)",
+    "day5Modifier": "-",
+    "day7Condition": "วันที่ 7 drift = ลัทธิได้บัพเต็มขั้น (ใช้ในแผนอื่น)",
+    "location": "ทั้งเมือง",
+    "night10Actions": "ไม่มี action / server ใช้ผลนี้ตอนจบ NOCTHERION วันที่ 10",
+    "dc": "-",
+    "bonus": "-",
+    "matchVerbTags": [
+      "ANY"
+    ],
+    "matchTargetTags": [
+      "AREA",
+      "GOOD_AFFILIATED",
+      "DARK_NIGHT"
+    ],
+    "effects": [
+      {
+        "type": "dice_bonus",
+        "stats": [
+          "d20"
+        ],
+        "value": -3,
+        "duration": {
+          "unit": "period",
+          "count": 8
+        }
+      }
+    ],
+    "successEffect": "ลัทธิอัญเชิญเทพมารจันทราโลหิตสำเร็จ เมืองตกอยู่ใต้ความมืดมิดตลอด 2 วันสุดท้าย: ผู้เล่นฝ่าย Good (karma +14 ขึ้นไป) ติด 'ใต้เงาจันทราโลหิต' d20 -3 ทุก roll ตลอดวันที่ 11-12 (8 periods) / มัลคอล์มเป็น S",
+    "failureEffect": "-",
+    "endingLink": "Bad ending เสี่ยงสูง: ไม่มีจุดหลบภัยจากแผน ต้องมีบัพ S/SS ของตัวเองเพื่อรอดวันที่ 12",
+    "note": "-3 = เพดาน event status (±3, Q-052) และ 8 periods ≤ 9 / ตรงกับ World_Drift_If_Ignored วันที่ 10"
+  }
+]

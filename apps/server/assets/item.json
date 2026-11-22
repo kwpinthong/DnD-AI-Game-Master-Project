@@ -1,0 +1,612 @@
+[
+  {
+    "rank": "S",
+    "alignment": "Good",
+    "category": "Relic",
+    "name": "Chalice of the First Dawn (จอกศักดิ์สิทธิ์รุ่งอรุณแรก)",
+    "nameEn": "Chalice of the First Dawn",
+    "buffType": "เชิงคุณภาพ + ปริมาณ",
+    "effect": "ชำระล้างสถานะ Debuff และคำสาประดับ S ลงมาได้ทั้งหมด 1 ครั้งต่อวัน และฟื้นฟู HP +15 / Stamina +10 เมื่อดื่มน้ำจากจอก",
+    "synergy": "เสริมสกิล: เพิ่มผลฟื้นฟูของ Grace of Dawn เป็น 2 เท่า / แหล่งที่มา: ได้รับจากโนอา (F->SS) หรือชนะประมูลตลาดมืด / โบนัสเมื่อถือครอง: ใช้จอกนี้ช่วยเหลือผู้อื่นครบ 3 ครั้ง + สวดภาวนา 3 ช่วงเวลา จะลดเงื่อนไขปลดล็อก The First Light (SS) จาก 3 วัน เหลือเพียง 2 วัน (6 ช่วงเวลา)",
+    "description": "\"หยาดน้ำค้างแรกของโลกที่ยังคงความบริสุทธิ์ชั่วนิรันดร์\"",
+    "triggerType": "Active",
+    "dailyLimit": 1,
+    "matchVerbTags": [
+      "HEAL",
+      "CLEANSE",
+      "PRAY"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "ALLY",
+      "NPC",
+      "CURSE"
+    ],
+    "effects": [
+      {
+        "type": "restore",
+        "stats": [
+          "HP"
+        ],
+        "value": 15,
+        "duration": {
+          "unit": "instant"
+        }
+      },
+      {
+        "type": "restore",
+        "stats": [
+          "Stamina"
+        ],
+        "value": 10,
+        "duration": {
+          "unit": "instant"
+        }
+      }
+    ],
+    "note": "ชำระล้าง Debuff เชิงคุณภาพ"
+  },
+  {
+    "rank": "A",
+    "alignment": "Good",
+    "category": "Weapon / Focus",
+    "name": "Censer of Purging Flame (กระถางธูปเพลิงชำระ)",
+    "nameEn": "Censer of Purging Flame",
+    "buffType": "เชิงคุณภาพ",
+    "effect": "ควันธูปจะเปลี่ยนเป็นสีดำทันทีเมื่อเข้าใกล้ผู้ที่มีค่ากรรมต่ำกว่า -30 หรือผู้ที่กำลังใช้ Secret Action ที่เป็นอันตราย",
+    "synergy": "เสริมสกิล: ทำให้ Smite of Purgation ลบล้างบัพฝ่าย Evil ได้โดยไม่ต้องทอยเต๋า d20 / เงื่อนไขปลดล็อก: ปลดล็อกสกิล Voice of Conscience (A) เมื่อใช้เปิดโปงคนร้ายต่อหน้าสาธารณะ",
+    "description": "\"กลิ่นหอมอันสงบนิ่งสำหรับผู้บริสุทธิ์ แต่แผดเผาวิญญาณผู้มีมลทิน\"",
+    "triggerType": "Passive + Active",
+    "dailyLimit": 1,
+    "matchVerbTags": [
+      "INVESTIGATE",
+      "CLEANSE",
+      "DEFEND",
+      "EXPOSE"
+    ],
+    "matchTargetTags": [
+      "EVIL_AURA",
+      "NPC",
+      "PLAYER",
+      "AREA"
+    ],
+    "effects": [],
+    "note": ""
+  },
+  {
+    "rank": "A",
+    "alignment": "Good",
+    "category": "Armor / Accessory",
+    "name": "Mantle of the Martyr (ผ้าคลุมผู้เสียสละ)",
+    "nameEn": "Mantle of the Martyr",
+    "buffType": "เชิงปริมาณ",
+    "effect": "ลดความเสียหายที่ได้รับแทนพันธมิตรลง 50% และเปลี่ยนความเสียหายที่รับแทนเป็นโบนัสค่ากรรมฝ่ายดีอัตโนมัติ",
+    "synergy": "เสริมสกิล: เพิ่มโอกาสสะท้อน Debuff ของ Aegis of Faith (ทอย d20 แค่ 8 ขึ้นไป) / เงื่อนไขปลดล็อก: สวมใส่และรับความเสียหายแทนผู้อื่น 2 ครั้ง จะปลดล็อก Sanctuary Aegis (S) ทันที",
+    "description": "\"รอยขาดบนผืนผ้าคือเกียรติยศของผู้ที่ยืนหยัดอยู่แถวหน้า\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "PROTECT",
+      "DEFEND"
+    ],
+    "matchTargetTags": [
+      "ALLY",
+      "NPC",
+      "CROWD"
+    ],
+    "effects": [
+      {
+        "type": "damage_reduce_pct",
+        "stats": [],
+        "value": 50,
+        "duration": {
+          "unit": "instant"
+        }
+      }
+    ],
+    "note": "เฉพาะตอนรับแทนพันธมิตร"
+  },
+  {
+    "rank": "B",
+    "alignment": "Good",
+    "category": "Accessory",
+    "name": "Silver Rosary of Hearth (ลูกประคำเงินแห่งเตาผิง)",
+    "nameEn": "Silver Rosary of Hearth",
+    "buffType": "เชิงปริมาณ",
+    "effect": "ฟื้นฟู HP +4 และ Stamina +3 ทุกครั้งที่จบช่วงเวลาในสถานที่ปลอดภัย (เช่น โรงเตี๊ยม โบสถ์)",
+    "synergy": "เสริมสกิล: ลดการใช้ Stamina ของ Blessing of Hearth เหลือ 0 หน่วย / เงื่อนไขปลดล็อก: มอบให้ NPC เกรด F เพื่อเพิ่มค่าความสัมพันธ์ทันที +5 หน่วย",
+    "description": "\"ลูกประคำอุ่น ๆ ที่ช่วยปลอบประโลมจิตใจในคืนอันหนาวเหน็บ\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "REST",
+      "PRAY",
+      "HEAL"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "SAFE_ZONE",
+      "NPC_GRADE_F"
+    ],
+    "effects": [
+      {
+        "type": "restore",
+        "stats": [
+          "HP"
+        ],
+        "value": 4,
+        "duration": {
+          "unit": "end_of_period"
+        }
+      },
+      {
+        "type": "restore",
+        "stats": [
+          "Stamina"
+        ],
+        "value": 3,
+        "duration": {
+          "unit": "end_of_period"
+        }
+      }
+    ],
+    "note": "เมื่อจบช่วงใน SAFE_ZONE"
+  },
+  {
+    "rank": "B",
+    "alignment": "Good",
+    "category": "Tool",
+    "name": "Prism of Truth (ปริซึมส่องสัจจะ)",
+    "nameEn": "Prism of Truth",
+    "buffType": "เชิงคุณภาพ",
+    "effect": "สามารถมองเห็นออร่าความรู้สึกจริงของ NPC เกรด B–A ได้ 1 ครั้งต่อช่วงเวลา (รู้ว่ากำลังโกหกหรือหวาดกลัว)",
+    "synergy": "เสริมสกิล: เพิ่มโบนัสเต๋า +3 ให้กับสกิล Glare of Truth / เงื่อนไขปลดล็อก: ใช้จับโกหก NPC ได้ 1 ครั้ง จะปลดล็อก Glare of Truth (B)",
+    "description": "\"แก้วเจียระไนที่สะท้อนเงาในใจคนได้ชัดเจนยิ่งกว่ากระจก\"",
+    "triggerType": "Active",
+    "dailyLimit": 3,
+    "matchVerbTags": [
+      "INVESTIGATE",
+      "INTERROGATE",
+      "OBSERVE"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "DECEPTION"
+    ],
+    "effects": [],
+    "note": ""
+  },
+  {
+    "rank": "B",
+    "alignment": "Good",
+    "category": "Consumable",
+    "name": "Blessed Loaf of Dawn (ขนมปังอวยพรยามเช้า)",
+    "nameEn": "Blessed Loaf of Dawn",
+    "buffType": "เชิงปริมาณ",
+    "effect": "เมื่อกินหรือแบ่งให้ผู้อื่นกิน จะฟื้นฟู HP +10 และลบล้างสถานะอ่อนเพลีย (มี 3 ชิ้น)",
+    "synergy": "เสริมสกิล: เพิ่มผลของการเจรจา Plea of Mercy (+2 ค่าความสัมพันธ์) / เงื่อนไขปลดล็อก: แบ่งให้ขอทานหรือ NPC เกรด F กินครบ 2 ชิ้น จะปลดล็อก Blessing of Hearth (B)",
+    "description": "\"ขนมปังอบใหม่ที่หอมกรุ่นต่างจากขนมปังต้องสาปของลัทธิอย่างสิ้นเชิง\"",
+    "triggerType": "Active",
+    "dailyLimit": 3,
+    "matchVerbTags": [
+      "HEAL",
+      "SHARE",
+      "PERSUADE"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "ALLY",
+      "NPC",
+      "POOR_OR_INJURED"
+    ],
+    "effects": [
+      {
+        "type": "restore",
+        "stats": [
+          "HP"
+        ],
+        "value": 10,
+        "duration": {
+          "unit": "instant"
+        }
+      }
+    ],
+    "note": "มี 3 ชิ้น (ใช้แล้วหมด) — อาจเพิ่มคอลัมน์ Uses"
+  },
+  {
+    "rank": "S",
+    "alignment": "Evil",
+    "category": "Relic",
+    "name": "Grimoire of the Blood Moon (คัมภีร์จันทราโลหิต)",
+    "nameEn": "Grimoire of the Blood Moon",
+    "buffType": "เชิงคุณภาพ + ปริมาณ",
+    "effect": "ใช้ Secret Action เพิ่มได้อีก 1 ครั้งต่อวัน (รวมเป็น 2 ครั้ง/วัน) และเพิ่มโบนัสเต๋า +4 ให้สกิลสาย Mind-Control ทั้งหมด",
+    "synergy": "เสริมสกิล: ทำให้ Puppeteer’s Crown สั่งการเป้าหมายได้พร้อมกันสูงสุด 2 คน / เงื่อนไขปลดล็อก: ถือครองคัมภีร์นี้ขณะมีค่ากรรมต่ำกว่า -75 จะข้ามเงื่อนไขความต่อเนื่อง 3 วัน และปลดล็อก ORDO TENEBRIS (SS) ได้ทันที",
+    "description": "\"หน้ากระดาษที่เขียนด้วยเลือด และกระซิบถ้อยคำต้องห้ามแก่ผู้เปิดอ่าน\"",
+    "triggerType": "Passive + Active",
+    "dailyLimit": 1,
+    "matchVerbTags": [
+      "MIND_CONTROL",
+      "CURSE",
+      "RITUAL"
+    ],
+    "matchTargetTags": [
+      "SECRET_ACTION",
+      "NPC",
+      "PLAYER"
+    ],
+    "effects": [
+      {
+        "type": "secret_quota",
+        "stats": [],
+        "value": 1,
+        "duration": {
+          "unit": "day",
+          "count": 1
+        }
+      },
+      {
+        "type": "dice_bonus",
+        "stats": [
+          "d20"
+        ],
+        "value": 4,
+        "duration": {
+          "unit": "passive"
+        }
+      }
+    ],
+    "note": "dice_bonus เฉพาะสกิล Mind-Control"
+  },
+  {
+    "rank": "A",
+    "alignment": "Evil",
+    "category": "Accessory",
+    "name": "Ring of Whispering Hollow (แหวนโพรงเสียงกระซิบ)",
+    "nameEn": "Ring of Whispering Hollow",
+    "buffType": "เชิงคุณภาพ",
+    "effect": "สามารถส่งเสียงกระซิบเข้าไปในหัวของเป้าหมาย 1 คนในระยะสายตาโดยไม่มีใครได้ยิน เพื่อปั่นหัวหรือข่มขู่",
+    "synergy": "เสริมสกิล: ทำให้ Whisper of Temptation ทำงานสำเร็จอัตโนมัติกับ NPC เกรด B / เงื่อนไขปลดล็อก: ใช้ปั่นหัว NPC จนทะเลาะกัน 2 ครั้ง จะปลดล็อก Puppeteer’s Crown (S)",
+    "description": "\"แหวนเหล็กดำที่เย็นเฉียบ ดึงดูดด้านมืดในใจของผู้ฟังออกมา\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "MIND_CONTROL",
+      "DECEIVE",
+      "INTIMIDATE"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "PLAYER",
+      "CROWD"
+    ],
+    "effects": [],
+    "note": ""
+  },
+  {
+    "rank": "A",
+    "alignment": "Evil",
+    "category": "Weapon",
+    "name": "Kris of Soul Thirst (กริชคดกระหายวิญญาณ)",
+    "nameEn": "Kris of Soul Thirst",
+    "buffType": "เชิงปริมาณ",
+    "effect": "ทุกครั้งที่สร้างความเสียหายสำเร็จ จะดูด HP +6 และ Stamina +4 จากเป้าหมายมาเป็นของตนเอง",
+    "synergy": "เสริมสกิล: เพิ่มพลังดูดกลืนของ Soul Siphon เป็น 2 เท่า / เงื่อนไขปลดล็อก: ใช้กริชนี้ลอบสังหารหรือทำร้ายเป้าหมายจนสลบ จะปลดล็อก Soul Siphon (A) ทันที",
+    "description": "\"คมกริชที่สั่นระริกด้วยความหิวกระหายทุกครั้งที่ได้กลิ่นเลือด\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "ATTACK",
+      "DRAIN"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "PLAYER"
+    ],
+    "effects": [
+      {
+        "type": "drain",
+        "stats": [
+          "HP"
+        ],
+        "value": 6,
+        "duration": {
+          "unit": "instant"
+        }
+      },
+      {
+        "type": "drain",
+        "stats": [
+          "Stamina"
+        ],
+        "value": 4,
+        "duration": {
+          "unit": "instant"
+        }
+      }
+    ],
+    "note": "ทุกครั้งที่ทำความเสียหายสำเร็จ"
+  },
+  {
+    "rank": "B",
+    "alignment": "Evil",
+    "category": "Accessory",
+    "name": "Mask of the Faceless (หน้ากากไร้ตัวตน)",
+    "nameEn": "Mask of the Faceless",
+    "buffType": "เชิงคุณภาพ",
+    "effect": "เมื่อสวมใส่ระหว่างใช้ Secret Action การกระทำชั่วร้ายที่พลาดพลั้งจะ ไม่ถูกหักค่าภาพลักษณ์ในสังคม (แต่ค่ากรรมยังลดปกติ)",
+    "synergy": "เสริมสกิล: เพิ่มโบนัสเต๋า +3 ให้กับ Scapegoat Veil / เงื่อนไขปลดล็อก: รอดพ้นจากการถูกจับได้ 1 ครั้งขณะสวมหน้ากาก จะปลดล็อก Scapegoat Veil (B)",
+    "description": "\"หากไม่มีใครจำใบหน้าเจ้าได้ ความผิดนั้นย่อมไม่ใช่ของเจ้า\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "STEALTH",
+      "STEAL",
+      "SABOTAGE",
+      "DECEIVE"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "SECRET_ACTION"
+    ],
+    "effects": [],
+    "note": ""
+  },
+  {
+    "rank": "B",
+    "alignment": "Evil",
+    "category": "Consumable",
+    "name": "Vial of Black Ash (ขวดผงเถ้าดำ)",
+    "nameEn": "Vial of Black Ash",
+    "buffType": "เชิงคุณภาพ",
+    "effect": "โรยใส่อาหารหรือเครื่องดื่มเพื่อสร้างสถานะ หวาดระแวง ให้เป้าหมาย 1 ช่วงเวลาโดยไร้ร่องรอย (มี 2 โดส)",
+    "synergy": "เสริมสกิล: เพิ่มผลลดความสัมพันธ์ของ Mark of Paranoia เป็น -8 หน่วย / เงื่อนไขปลดล็อก: ใช้ใส่ร้าย NPC สำเร็จ 1 ครั้ง จะปลดล็อก Mark of Paranoia (B)",
+    "description": "\"เถ้าถ่านจากกองไฟบูชายัญ ที่เปลี่ยนมิตรแท้ให้กลายเป็นศัตรู\"",
+    "triggerType": "Active",
+    "dailyLimit": 2,
+    "matchVerbTags": [
+      "SABOTAGE",
+      "POISON",
+      "SLANDER"
+    ],
+    "matchTargetTags": [
+      "FOOD_WATER",
+      "NPC"
+    ],
+    "effects": [],
+    "note": "มี 2 โดส"
+  },
+  {
+    "rank": "B",
+    "alignment": "Evil",
+    "category": "Tool",
+    "name": "Shadow-Silk Lockpick (ชุดสะเดาะกลอนไหมเงา)",
+    "nameEn": "Shadow-Silk Lockpick",
+    "buffType": "เชิงคุณภาพ + ปริมาณ",
+    "effect": "เปิดประตูและหีบสมบัติได้ทุกชนิดโดยไม่เกิดเสียง และลดการใช้ Stamina ในการลอบเร้นลง 2 หน่วย",
+    "synergy": "เสริมสกิล: เพิ่มความเสียหายและโบนัสเต๋าให้ Backstab of Greed / เงื่อนไขปลดล็อก: ลอบเข้าพื้นที่หวงห้ามสำเร็จ 1 ครั้ง จะปลดล็อก Backstab of Greed (B)",
+    "description": "\"เครื่องมือของหัวขโมยในตำนานที่กลืนหายไปกับเงามืด\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "STEALTH",
+      "INFILTRATE",
+      "STEAL"
+    ],
+    "matchTargetTags": [
+      "LOCKED_DOOR",
+      "CHEST",
+      "RESTRICTED_AREA"
+    ],
+    "effects": [
+      {
+        "type": "stamina_cost",
+        "stats": [],
+        "value": -2,
+        "duration": {
+          "unit": "passive"
+        }
+      }
+    ],
+    "note": "เฉพาะการลอบเร้น"
+  },
+  {
+    "rank": "S",
+    "alignment": "Neutral",
+    "category": "Relic",
+    "name": "Pendulum of Zero (ลูกตุ้มนาฬิกาศูนย์สัมบูรณ์)",
+    "nameEn": "Pendulum of Zero",
+    "buffType": "เชิงคุณภาพ + ปริมาณ",
+    "effect": "สามารถ ล็อกค่ากรรมของตนเองให้อยู่ที่ 0 คงที่ ได้นาน 1 วันเต็ม (ไม่เพิ่มไม่ลดไม่ว่าจะทำอะไร) และป้องกันสกิล Mind-Control ทุกระดับ",
+    "synergy": "เสริมสกิล: ขยายผลของ Absolute Zero Law ให้ครอบคลุมทั้งเมือง 1 ช่วงเวลา / เงื่อนไขปลดล็อก: เปิดใช้งานลูกตุ้มนี้ตั้งแต่วันที่ 4 เป็นต้นไป จะช่วยให้บรรลุเงื่อนไขปลดล็อก I AM UNTOUCHED (SS) ได้อย่างสมบูรณ์แบบ",
+    "description": "\"เข็มนาฬิกาที่หยุดเดิน ณ จุดกึ่งกลางระหว่างความดีและความชั่ว\"",
+    "triggerType": "Active",
+    "dailyLimit": 1,
+    "matchVerbTags": [
+      "NULLIFY",
+      "DEFEND",
+      "MEDITATE"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "AREA",
+      "KARMA_LOCK",
+      "MIND_CONTROL"
+    ],
+    "effects": [
+      {
+        "type": "karma_lock",
+        "stats": [
+          "Karma"
+        ],
+        "value": 0,
+        "duration": {
+          "unit": "day",
+          "count": 1
+        }
+      }
+    ],
+    "note": "กัน Mind-Control เชิงคุณภาพ"
+  },
+  {
+    "rank": "A",
+    "alignment": "Neutral",
+    "category": "Accessory",
+    "name": "Monocle of the Bystander (แว่นตาข้างเดียวของผู้ชม)",
+    "nameEn": "Monocle of the Bystander",
+    "buffType": "เชิงคุณภาพ",
+    "effect": "มองเห็น เกรดที่แท้จริง (F, B, A, S, SS) และ ค่าความสัมพันธ์ที่แน่นอน ของ NPC ทุกคนในพื้นที่ได้ทันที",
+    "synergy": "เสริมสกิล: ทำให้ Observer’s Transcendence เปิดเผยเงื่อนไขลับของ NPC เกรด F ได้ด้วย / เงื่อนไขปลดล็อก: สังเกตการณ์เหตุการณ์ปะทะโดยไม่ยื่นมือช่วยฝ่ายใด 2 ครั้ง จะปลดล็อก Observer’s Transcendence (S)",
+    "description": "\"เลนส์ใสที่ปราศจากอคติ มองเห็นทุกสรรพสิ่งตามความเป็นจริง\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "OBSERVE",
+      "INVESTIGATE"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "PLAYER",
+      "HIDDEN_STATS"
+    ],
+    "effects": [],
+    "note": ""
+  },
+  {
+    "rank": "A",
+    "alignment": "Neutral",
+    "category": "Weapon",
+    "name": "Unbound Iron Blade (ดาบเหล็กไร้พันธนาการ)",
+    "nameEn": "Unbound Iron Blade",
+    "buffType": "เชิงปริมาณ",
+    "effect": "อาวุธกายภาพบริสุทธิ์ที่ไม่มีธาตุหรือเวทมนตร์ แต่ ไม่สนใจเกราะป้องกันเวทมนตร์และบัพทุกชนิด (สร้างความเสียหายคงที่ 9 หน่วยเสมอ)",
+    "synergy": "เสริมสกิล: เพิ่มพลังทำลายเกราะของ Severance Strike และไม่เสีย Stamina เพิ่มเมื่อใช้โจมตี / เงื่อนไขปลดล็อก: ใช้ดาบนี้เอาชนะศัตรูที่ใช้เวทมนตร์ได้ 1 ครั้ง จะปลดล็อก Severance Strike (A)",
+    "description": "\"เหล็กกล้าธรรมดาที่ถูกตีขึ้นด้วยเหตุผล ลบหลู่ทุกปาฏิหาริย์\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "ATTACK"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "PLAYER",
+      "SHIELDED_OR_MAGIC"
+    ],
+    "effects": [
+      {
+        "type": "flat_damage",
+        "stats": [
+          "HP"
+        ],
+        "value": 9,
+        "duration": {
+          "unit": "instant"
+        }
+      }
+    ],
+    "note": "ไม่สนเกราะเวท / บัพ"
+  },
+  {
+    "rank": "B",
+    "alignment": "Neutral",
+    "category": "Tool",
+    "name": "Scales of Fair Trade (ตราชั่งการค้ายุติธรรม)",
+    "nameEn": "Scales of Fair Trade",
+    "buffType": "เชิงคุณภาพ",
+    "effect": "เมื่อแลกเปลี่ยนไอเทมหรือข้อมูลกับ NPC จะไม่มีวันถูกโกง และเพิ่มค่าความสัมพันธ์ +2 ทันทีหากการแลกเปลี่ยนนั้นเท่าเทียม",
+    "synergy": "เสริมสกิล: เพิ่มโอกาสสำเร็จของ Rational Paradox (+3 โบนัสเต๋า) / เงื่อนไขปลดล็อก: ทำการแลกเปลี่ยนกับ NPC เกรด B สำเร็จ 2 ครั้ง จะปลดล็อก Rational Paradox (B)",
+    "description": "\"น้ำหนักของทองคำและน้ำหนักของความจริง ย่อมเท่ากันเสมอ\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "TRADE",
+      "NEGOTIATE",
+      "PERSUADE"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "MERCHANT",
+      "ITEM"
+    ],
+    "effects": [
+      {
+        "type": "affinity",
+        "stats": [],
+        "value": 2,
+        "duration": {
+          "unit": "instant"
+        }
+      }
+    ],
+    "note": "เมื่อแลกเปลี่ยนเท่าเทียม"
+  },
+  {
+    "rank": "B",
+    "alignment": "Neutral",
+    "category": "Accessory",
+    "name": "Lead-Core Pocket Watch (นาฬิกาพกแกนตะกั่ว)",
+    "nameEn": "Lead-Core Pocket Watch",
+    "buffType": "เชิงปริมาณ",
+    "effect": "ลดการสูญเสีย Stamina จากการเดินทางหรือสภาพอากาศเลวร้ายลง 2 หน่วย และฟื้นฟู Stamina +3 เมื่อจบช่วงเวลาที่ค่ากรรมไม่เปลี่ยน",
+    "synergy": "เสริมสกิล: ซ้อนทับกับ Clear Horizon (ฟื้นฟูรวม +7 Stamina/ช่วงเวลา) / เงื่อนไขปลดล็อก: พกติดตัวและรักษาค่ากรรมให้อยู่ในช่วง -2 ถึง +2 ครบ 1 วัน จะปลดล็อก Clear Horizon (B)",
+    "description": "\"เสียงเดินของเข็มวินาทีที่สม่ำเสมอ ช่วยดึงสติให้มั่นคงในโลกที่บ้าคลั่ง\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "TRAVEL",
+      "OBSERVE",
+      "REST"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "HARSH_WEATHER",
+      "NO_KARMA_CHANGE"
+    ],
+    "effects": [
+      {
+        "type": "stamina_cost",
+        "stats": [],
+        "value": -2,
+        "duration": {
+          "unit": "passive"
+        }
+      },
+      {
+        "type": "restore",
+        "stats": [
+          "Stamina"
+        ],
+        "value": 3,
+        "duration": {
+          "unit": "end_of_period"
+        }
+      }
+    ],
+    "note": "stamina_cost เฉพาะเดินทาง / อากาศ / restore เมื่อ karma ไม่เปลี่ยน"
+  },
+  {
+    "rank": "B",
+    "alignment": "Neutral",
+    "category": "Armor / Tool",
+    "name": "Cloak of Grey Dust (ผ้าคลุมฝุ่นสีเทา)",
+    "nameEn": "Cloak of Grey Dust",
+    "buffType": "เชิงคุณภาพ",
+    "effect": "ทำให้ผู้สวมใส่ดู \"จืดจางและไม่น่าสนใจ\" ศัตรูและ NPC จะไม่เลือกโจมตีผู้สวมใส่เป็นเป้าหมายแรกหากมีคนอื่นอยู่ด้วย",
+    "synergy": "เสริมสกิล: เพิ่มผลลดความเสียหายของ Neutral Guard เป็น 45% / เงื่อนไขปลดล็อก: เอาตัวรอดจากเหตุการณ์จลาจลในเมืองโดยไม่บาดเจ็บ จะปลดล็อก Neutral Guard (B)",
+    "description": "\"สีที่กลมกลืนไปกับฝุ่นดินและหมอกควัน ไม่มีใครจดจำและไม่มีใครเกลียดชัง\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "STEALTH",
+      "OBSERVE",
+      "ESCAPE"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "CHAOS",
+      "CROWD"
+    ],
+    "effects": [],
+    "note": ""
+  }
+]

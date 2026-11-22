@@ -18,6 +18,7 @@ import { registerVisibilityRoutes } from './visibility/routes.ts';
 import websocket from '@fastify/websocket';
 import { placeholderResolver, type PhaseResolver } from './room/resolver.ts';
 import { registerRoomRoutes } from './room/routes.ts';
+import { DEFAULT_ASSETS_DIR, loadGameAssets, type GameAssets } from './assets/load.ts';
 
 export interface RunningServer {
   url: string;
@@ -30,6 +31,8 @@ export interface RunningServer {
   ai: AiService;
   /** `METHOD /url` of every HTTP route (HEAD left out). */
   routes: readonly string[];
+  /** Game data from the JSON in apps/server/assets (GEN-062), checked at start; never fetched while running. */
+  assets: GameAssets;
   close(): Promise<void>;
 }
 
@@ -50,9 +53,13 @@ export interface ServerOptions {
   aiProvider?: AiProvider;
   /** Resolves a closed phase (GEN-057 plugs in here); default `placeholderResolver`. */
   phaseResolver?: PhaseResolver;
+  /** Folder of the asset JSON files; default apps/server/assets (tests point it at a broken copy). */
+  assetsDir?: string;
 }
 
 export async function startServer(config: ServerConfig, options: ServerOptions = {}): Promise<RunningServer> {
+  // Before the database: bad asset JSON stops start-up with nothing opened (AssetLoadError names the file and field).
+  const assets = loadGameAssets(options.assetsDir ?? DEFAULT_ASSETS_DIR);
   const { sqlite, db, dbPath, migrationsApplied } = openDatabase(config.dbPath);
 
   const aiConfig = options.ai ?? loadAiConfig({});
@@ -112,6 +119,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     orm: db,
     ai,
     routes,
+    assets,
     async close() {
       await app.close();
       if (sqlite.open) sqlite.close();

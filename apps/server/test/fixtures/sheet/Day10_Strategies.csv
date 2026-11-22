@@ -1,0 +1,3 @@
+Status,Strategy_ID,Name,Karma_Alignment,Karma_Condition,Required_Skills,Required_Items,Required_NPCs,Day1_Modifier,Day5_Modifier,Day7_Condition,Location,Night10_Actions,DC,Bonus,Match_Verb_Tags,Match_Target_Tags,Effect_Type,Stat,Value,Duration,Success_Effect_Day11_12,Failure_Effect,Ending_Link,หมายเหตุ (ร่าง Claude — Nok ตรวจ)
+approved,D10-T1,แผนทดสอบหยุดเวลา,Neutral,karma -13 ถึง +13,Test Guard (A) บังคับ,ไม่บังคับ / ช่วย: Test Lantern (B),โนวา,ไม่มี,ไม่มี,ไม่มี,ลานทดสอบ,ร่ายหยุดเวลา,T1: 11,+0,[NULLIFY],[AREA],nullify,d20,0,2 periods,เมืองรอด,เมืองพัง,ฉากจบกลาง,
+draft,D10-DRIFT,ไม่มีใครทำอะไร,-,-,-,-,-,-,-,-,ทั้งเมือง,-,-,-,[ANY],[CITY],dice_bonus,d20,-3,8 periods,-,เมืองพัง,ฉากจบร้าย,
