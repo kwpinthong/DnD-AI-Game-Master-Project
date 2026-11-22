@@ -1,7 +1,8 @@
+import { turnNumber, type Turn } from '@isekai/rules';
 import {
   EventOutcomeText,
-  PHASES,
   SCENARIO_DAYS,
+  TURNS_PER_PERIOD,
   type EventOutcomeSource,
   type EventStatus,
   type Phase,
@@ -19,15 +20,15 @@ import { witnessesOf } from '../visibility/views.ts';
  * Timeline event state machine (GEN-053, GDD §6.2). Every scenario event happens at its day + period
  * (`phase`, GEN-063):
  * - `pending` until the game reaches that point,
- * - `active` for both turns of each of its periods, `phase` through `endPhase` (GEN-071; the AI GM may
- *   set its outcome then: `setEventOutcome`),
- * - `resolved` once the game moves past its last period, keeping the AI's outcome or else the scenario's
+ * - `active` from `startTurn` of `phase` through `endTurn` of `endPhase` (GEN-071; GEN-096: default turn 1
+ *   to turn 2 = every turn of its periods; the AI GM may set its outcome then: `setEventOutcome`),
+ * - `resolved` once the game moves past its last turn, keeping the AI's outcome or else the scenario's
  *   ผลตั้งต้น (World_Drift_If_Ignored: outcomeSource `default` = nobody stepped in).
- * The game's point moves forward only through `advanceTimeline` (start of game = day 1 EOSORIA).
+ * The game's point moves forward only through `advanceTimeline` (start of game = day 1 EOSORIA turn 1).
  *
  * How later work uses this:
- * - GEN-057 (turn loop): call `advanceTimeline(tx, gameId, { day, phase })` when a turn starts (turn 2 of
- *   the same period is no change), and `'end'` after day 12 NOCTHERION turn 2; put `eventContextBlock(buildEventContext(...))` into `gm_adjudicate`;
+ * - GEN-057 (turn loop): call `advanceTimeline(tx, gameId, { day, phase, turn })` when a turn starts
+ *   (GEN-096: every turn), and `'end'` after day 12 NOCTHERION turn 2; put `eventContextBlock(buildEventContext(...))` into `gm_adjudicate`;
  *   map the AI's `eventOutcomes` onto `applyEventOutcomes` inside the same all-or-nothing transaction
  *   as the rest of the PhaseProposal (Q-049).
  * - Later events / GEN-059 (finale): read `getEventOutcomes(gameId)`; `intervened` says whether the
@@ -35,21 +36,30 @@ import { witnessesOf } from '../visibility/views.ts';
  *   events are narrated in their light. No branching rules live here: the AI GM / finale decide.
  */
 
-const rank = (p: PhasePoint) => (p.day - 1) * PHASES.length + PHASES.indexOf(p.phase);
-/** After day 12 NOCTHERION. */
-const END_RANK = SCENARIO_DAYS * PHASES.length;
+/** A point on the timeline down to the turn (GEN-096); a point without `turn` is turn 1 of its period. */
+export type TimelinePoint = PhasePoint & { turn?: Turn };
 
-/** First and last period of an event (`phase` through `endPhase`, GEN-071), as ranks. */
-export function spanOf(event: Pick<Scenario['timeline'][number], 'day' | 'phase' | 'endPhase'>): { first: number; last: number } {
-  const first = rank(event);
-  return { first, last: event.endPhase === null ? first : rank({ day: event.day, phase: event.endPhase }) };
+/** Turn rank (`turnNumber` of the phase engine). */
+const rank = (p: TimelinePoint) => turnNumber({ day: p.day, phase: p.phase, turn: p.turn ?? 1 });
+/** After day 12 NOCTHERION turn 2. */
+const END_RANK = turnNumber({ day: SCENARIO_DAYS, phase: 'NOCTHERION', turn: 2 }) + 1;
+
+type EventSpan = Pick<Scenario['timeline'][number], 'day' | 'phase' | 'endPhase' | 'startTurn' | 'endTurn'>;
+
+/** First and last turn of an event: `startTurn` of `phase` through `endTurn` of `endPhase` (GEN-071, GEN-096), as ranks. */
+export function spanOf(event: EventSpan): { first: number; last: number } {
+  return {
+    first: rank({ day: event.day, phase: event.phase, turn: event.startTurn }),
+    last: rank({ day: event.day, phase: event.endPhase ?? event.phase, turn: event.endTurn }),
+  };
 }
 
-/** Is `event` running at day + period? */
-export const isDuring = (event: Pick<Scenario['timeline'][number], 'day' | 'phase' | 'endPhase'>, at: PhasePoint) => {
+/** Is `event` running at `at`? Without a turn: during any turn of that period. */
+export const isDuring = (event: EventSpan, at: TimelinePoint) => {
   const { first, last } = spanOf(event);
-  const r = rank(at);
-  return first <= r && r <= last;
+  const from = rank(at.turn ? at : { ...at, turn: 1 });
+  const to = rank(at.turn ? at : { ...at, turn: TURNS_PER_PERIOD });
+  return first <= to && from <= last;
 };
 
 /** Events by day, then EOSORIA → SOLARION → HESPERION → NOCTHERION; ties keep scenario order. */
@@ -140,7 +150,7 @@ export type AdvanceResult =
  * it become active. Same point again = no change; an earlier point is refused. Use inside the
  * caller's transaction when it must commit together with other phase changes.
  */
-export function advanceTimeline(db: DbOrTx, gameId: string, to: PhasePoint | 'end', now: number = Date.now()): AdvanceResult {
+export function advanceTimeline(db: DbOrTx, gameId: string, to: TimelinePoint | 'end', now: number = Date.now()): AdvanceResult {
   const scenario = getGameScenario(db, gameId);
   if (!scenario) return { ok: false, code: 'not_found' };
   const cursor = readCursor(db, gameId);
@@ -185,7 +195,10 @@ export function advanceTimeline(db: DbOrTx, gameId: string, to: PhasePoint | 'en
     }
   }
 
-  const point = to === 'end' ? { day: SCENARIO_DAYS, phase: 'NOCTHERION' as const, ended: true } : { day: to.day, phase: to.phase, ended: false };
+  const point =
+    to === 'end'
+      ? { day: SCENARIO_DAYS, phase: 'NOCTHERION' as const, turn: TURNS_PER_PERIOD as Turn, ended: true }
+      : { day: to.day, phase: to.phase, turn: to.turn ?? 1, ended: false };
   db.insert(gameTimeline)
     .values({ gameId, ...point, updatedAt: now })
     .onConflictDoUpdate({ target: gameTimeline.gameId, set: { ...point, updatedAt: now } })
@@ -196,12 +209,12 @@ export function advanceTimeline(db: DbOrTx, gameId: string, to: PhasePoint | 'en
 /**
  * GEN-058: an event the Human GM added for the period the game is in now. `advanceTimeline` only activates
  * events when the game moves, so this one becomes active here (witnesses as of now), for the turns left in
- * the period. Does nothing unless the event is in the scenario, still pending, and at the current point.
+ * the period. Does nothing unless the event is in the scenario, still pending, and running at the current turn.
  */
 export function activateCurrentEvent(db: DbOrTx, gameId: string, eventId: string, now: number = Date.now()): boolean {
   const event = getGameScenario(db, gameId)?.timeline.find((e) => e.id === eventId);
   const cursor = readCursor(db, gameId);
-  if (!event || !cursor || cursor.ended || rank(cursor) !== rank(event)) return false;
+  if (!event || !cursor || cursor.ended || !isDuring(event, cursor)) return false;
   if ((readRows(db, gameId).get(eventId)?.status ?? 'pending') !== 'pending') return false;
   const values = { status: 'active' as const, activatedAt: now, witnesses: witnessesAtStart(event, () => locationSnapshot(db, gameId)), updatedAt: now };
   db.insert(gameEventState)
@@ -212,14 +225,14 @@ export function activateCurrentEvent(db: DbOrTx, gameId: string, eventId: string
 }
 
 /** Where the game is on the timeline; null before day 1 EOSORIA. `ended` after day 12 NOCTHERION. */
-export function timelinePoint(db: DbOrTx, gameId: string): (PhasePoint & { ended: boolean }) | null {
+export function timelinePoint(db: DbOrTx, gameId: string): (PhasePoint & { turn: Turn; ended: boolean }) | null {
   const cursor = readCursor(db, gameId);
-  return cursor ? { day: cursor.day, phase: cursor.phase, ended: cursor.ended } : null;
+  return cursor ? { day: cursor.day, phase: cursor.phase, turn: cursor.turn, ended: cursor.ended } : null;
 }
 
-/** Whether `a` is earlier on the timeline than `b`. */
+/** Whether the period of `a` is earlier on the timeline than the period of `b` (turns ignored). */
 export function isBefore(a: PhasePoint, b: PhasePoint): boolean {
-  return rank(a) < rank(b);
+  return rank({ day: a.day, phase: a.phase }) < rank({ day: b.day, phase: b.phase });
 }
 
 export type SetOutcomeCode ='not_found' | 'not_active' | 'already_resolved' | 'invalid_outcome';

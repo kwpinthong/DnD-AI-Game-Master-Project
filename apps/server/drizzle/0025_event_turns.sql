@@ -1,0 +1,1 @@
+ALTER TABLE `game_timeline` ADD `turn` integer DEFAULT 1 NOT NULL;

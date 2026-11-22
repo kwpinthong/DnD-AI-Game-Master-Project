@@ -255,6 +255,41 @@ describe('Scenario editor (GEN-046)', () => {
     expect(await within(events()[2]!).findByText('ช่วงสิ้นสุดต้องไม่อยู่ก่อนช่วงเริ่ม')).toBeTruthy();
   });
 
+  it('GEN-096: the GM sets start / end turns, the legend counts them and they are sent', async () => {
+    const fetchMock = loggedIn(view(), {
+      'PUT /api/game/scenario': (_url, init) => Response.json({ scenario: JSON.parse(String(init!.body)), locked: false }),
+    });
+    render(<App apiBaseUrl="" />);
+    await openEditor();
+    const day7 = events()[2]!;
+    expect((within(day7).getByLabelText('เริ่มเทิร์น') as HTMLInputElement).value).toBe('1');
+    expect((within(day7).getByLabelText('จบเทิร์น') as HTMLInputElement).value).toBe('2');
+    fireEvent.change(within(day7).getByLabelText('เริ่มเทิร์น'), { target: { value: '2' } });
+    expect(day7.querySelector('legend')!.textContent).toMatch(/วัน 7 HESPERION.* เทิร์น 2 · 1 เทิร์น$/);
+    const day12 = events()[4]!;
+    fireEvent.change(within(day12).getByLabelText('จบเทิร์น'), { target: { value: '1' } });
+    expect(day12.querySelector('legend')!.textContent).toMatch(/ถึง NOCTHERION.* เทิร์น 1 · 3 เทิร์น \(ฉากจบ\)$/);
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
+
+    await screen.findByText('บันทึกแล้ว');
+    const sent = bodyOf(callsTo(fetchMock, 'PUT', '/api/game/scenario')[0]);
+    expect(sent.timeline[2]).toMatchObject({ startTurn: 2, endTurn: 2 });
+    expect(sent.timeline[4]).toMatchObject({ startTurn: 1, endTurn: 1 });
+  });
+
+  it('GEN-096 C4: turn 3 is sent as typed and the server refusal shows at that field', async () => {
+    const fetchMock = loggedIn(view(), {
+      'PUT /api/game/scenario': () =>
+        Response.json({ code: 'invalid_input', message: 'scenario ไม่ถูกต้อง', fields: { 'timeline.2.startTurn': 'เทิร์นต้องเป็น 1 หรือ 2' } }, { status: 400 }),
+    });
+    render(<App apiBaseUrl="" />);
+    await openEditor();
+    fireEvent.change(within(events()[2]!).getByLabelText('เริ่มเทิร์น'), { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
+    expect(await within(events()[2]!).findByText('เทิร์นต้องเป็น 1 หรือ 2')).toBeTruthy();
+    expect(bodyOf(callsTo(fetchMock, 'PUT', '/api/game/scenario')[0]).timeline[2]!.startTurn).toBe(3);
+  });
+
   it('back to the lobby', async () => {
     loggedIn(view());
     render(<App apiBaseUrl="" />);

@@ -176,6 +176,13 @@
       "when": 1795325291913,
       "tag": "0024_start_scenarios",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1795327769112,
+      "tag": "0025_event_turns",
+      "breakpoints": true
     }
   ]
 }

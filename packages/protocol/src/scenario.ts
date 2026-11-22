@@ -120,13 +120,20 @@ const StrategyId = z
   .string({ error: 'ต้องเป็นรหัสแผน' })
   .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/, 'รหัสแผนใช้ได้เฉพาะ A-Z, a-z, 0-9, _ และ -');
 
+/** A turn of a period (1 or 2, GEN-063); GEN-096 events start / end on one. */
+const EventTurn = z.union([z.literal(1), z.literal(2)], { error: 'เทิร์นต้องเป็น 1 หรือ 2' });
+
 export const ScenarioEvent = z.object({
   id: Id,
   day: Day,
-  /** The period the event starts in; it is active for both turns of each of its periods. */
+  /** The period the event starts in. */
   phase: EventPhase,
   /** Last period of the event on the same day (World_Timeline "HESPERION ถึง NOCTHERION"); null = only `phase`. */
   endPhase: EventPhase.nullable().default(null),
+  /** GEN-096 (Q-159): the turn of `phase` the event starts on; 1 = the whole period, as before. */
+  startTurn: EventTurn.default(1),
+  /** GEN-096: the turn of the last period (`endPhase`, else `phase`) the event ends after; 2 = the whole period. */
+  endTurn: EventTurn.default(2),
   kind: z.enum(['event', 'climax', 'finale']).default('event'),
   title: text(120),
   description: optionalText(1000),
@@ -261,6 +268,8 @@ function crossCheck(s: Shape, ctx: Ctx) {
     place(e.locationId, ['timeline', i, 'locationId']);
     if (e.endPhase !== null && order(e.endPhase) < order(e.phase)) {
       ctx.addIssue({ code: 'custom', path: ['timeline', i, 'endPhase'], message: 'ช่วงสิ้นสุดต้องไม่อยู่ก่อนช่วงเริ่ม' });
+    } else if ((e.endPhase ?? e.phase) === e.phase && e.endTurn < e.startTurn) {
+      ctx.addIssue({ code: 'custom', path: ['timeline', i, 'endTurn'], message: 'เทิร์นสิ้นสุดต้องไม่อยู่ก่อนเทิร์นเริ่มในช่วงเดียวกัน' });
     }
     if (e.foreshadowAt !== null && pointRank(e.foreshadowAt) >= pointRank(e)) {
       ctx.addIssue({ code: 'custom', path: ['timeline', i, 'foreshadowAt'], message: 'เวลาปูเรื่องต้องอยู่ก่อนเหตุการณ์เริ่ม' });
@@ -342,6 +351,11 @@ export const TURNS_PER_PERIOD = 2;
 export function eventPeriods(event: { phase: Phase; endPhase: Phase | null }): Phase[] {
   const end = event.endPhase ?? event.phase;
   return PHASES.filter((p) => order(p) >= order(event.phase) && order(p) <= order(end));
+}
+
+/** How many turns an event runs: its periods' turns minus those before `startTurn` / after `endTurn` (GEN-096). */
+export function eventTurnCount(event: { phase: Phase; endPhase: Phase | null; startTurn: number; endTurn: number }): number {
+  return eventPeriods(event).length * TURNS_PER_PERIOD - (event.startTurn - 1) - (TURNS_PER_PERIOD - event.endTurn);
 }
 
 /** The timeline in play order: by day, then EOSORIA → SOLARION → HESPERION → NOCTHERION; ties keep their order. */

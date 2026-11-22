@@ -7,7 +7,7 @@ const PHASES = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
 /**
  * Where a game is on its 12-day timeline (GEN-053). Moves forward only, through `advanceTimeline`.
  * No row = the game has not reached day 1 EOSORIA yet. `ended` = past day 12 NOCTHERION (finale).
- * Period granularity: an event is active for both turns of its period, so the cursor has no turn.
+ * Turn granularity since GEN-096 (events start / end on a turn); a cursor saved before it reads as turn 1.
  */
 export const gameTimeline = sqliteTable('game_timeline', {
   gameId: text('game_id')
@@ -15,6 +15,7 @@ export const gameTimeline = sqliteTable('game_timeline', {
     .references(() => game.id, { onDelete: 'cascade' }),
   day: integer('day').notNull(),
   phase: text('phase', { enum: PHASES }).notNull(),
+  turn: integer('turn').$type<1 | 2>().notNull().default(1),
   ended: integer('ended', { mode: 'boolean' }).notNull().default(false),
   updatedAt: integer('updated_at').notNull(),
 });

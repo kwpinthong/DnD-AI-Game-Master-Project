@@ -400,7 +400,7 @@ export function createRoomService(
           settleTurnProgress(tx, assets, gameId, current, t);
           // GEN-066: trips to another zone arrive, rift visitors go back (after the feed's witnesses were taken).
           completeTravel(tx, gameId, t);
-          // The timeline follows the period (GEN-053): events of the new period become active for the next turn.
+          // The timeline follows each turn (GEN-053, GEN-096): events starting on the next turn become active for it.
           const next = step.state;
           if (isEnded(next)) {
             advanceTimeline(tx, gameId, 'end', t);
@@ -408,7 +408,7 @@ export function createRoomService(
             outcome.ended = next.status === 'finale' ? 'finale' : 'game_over';
             // GEN-059: the ending is decided with the end itself (positions and items as this turn left them).
             settleEnding(tx, assets, gameId, next, t);
-          } else if (next.day !== current.day || next.phase !== current.phase) advanceTimeline(tx, gameId, { day: next.day, phase: next.phase }, t);
+          } else advanceTimeline(tx, gameId, { day: next.day, phase: next.phase, turn: next.turn }, t);
           return { rows, ended: isEnded(next) };
         });
     let published: ReturnType<typeof publish>;

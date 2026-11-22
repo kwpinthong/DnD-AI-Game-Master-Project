@@ -202,6 +202,49 @@ describe('older template versions', () => {
     expect(result.scenario.timeline.map((e) => e.day)).toEqual([1, 5, 7, 10, 12]);
   });
 
+  it('GEN-096 C3: an event without startTurn / endTurn runs turn 1 to turn 2, as before', () => {
+    const old = draft();
+    for (const event of old.timeline) {
+      delete event.startTurn;
+      delete event.endTurn;
+    }
+    const result = parseScenario(old);
+    if (!result.ok) throw new Error(JSON.stringify(result.errors));
+    expect(result.scenario.timeline.every((e) => e.startTurn === 1 && e.endTurn === 2)).toBe(true);
+  });
+
+  it('GEN-096: startTurn 2 / endTurn 1 are kept', () => {
+    const s = draft();
+    s.timeline[2].startTurn = 2;
+    s.timeline[4].endTurn = 1;
+    const result = parseScenario(s);
+    if (!result.ok) throw new Error(JSON.stringify(result.errors));
+    expect(result.scenario.timeline[2]).toMatchObject({ startTurn: 2, endTurn: 2 });
+    expect(result.scenario.timeline[4]).toMatchObject({ startTurn: 1, endTurn: 1 });
+  });
+
+  it('GEN-096 C4: turn 0 or 3 is refused and the error names the field', () => {
+    const s = draft();
+    s.timeline[2].startTurn = 0;
+    s.timeline[3].endTurn = 3;
+    s.timeline[1].startTurn = 1.5;
+    const errors = expectInvalid(s);
+    expect(paths(errors).sort()).toEqual(['timeline.1.startTurn', 'timeline.2.startTurn', 'timeline.3.endTurn']);
+    expect(errors.find((e) => e.path === 'timeline.2.startTurn')!.message).toContain('1 หรือ 2');
+  });
+
+  it('GEN-096 C4: a one-period event cannot end on turn 1 when it starts on turn 2', () => {
+    const s = draft();
+    s.timeline[2].startTurn = 2;
+    s.timeline[2].endTurn = 1;
+    expect(paths(expectInvalid(s))).toEqual(['timeline.2.endTurn']);
+    // Over two periods it is fine: HESPERION turn 2 to NOCTHERION turn 1.
+    const twoPeriods = draft();
+    twoPeriods.timeline[4].startTurn = 2;
+    twoPeriods.timeline[4].endTurn = 1;
+    expect(parseScenario(twoPeriods).ok).toBe(true);
+  });
+
   it('rejects a template from a newer schema version than this server knows', () => {
     const future = draft();
     future.schemaVersion = SCENARIO_SCHEMA_VERSION + 1;
