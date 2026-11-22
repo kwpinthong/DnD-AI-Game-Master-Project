@@ -16,6 +16,7 @@ import type { Db } from '../db/client.ts';
 import { character, game, member, session } from '../db/schema.ts';
 import { canEditScenario } from '../scenario/editor.ts';
 import { copyTemplateForGame } from '../scenario/store.ts';
+import { advanceTimeline } from '../timeline/store.ts';
 
 export type GameRow = typeof game.$inferSelect;
 export type MemberRow = typeof member.$inferSelect;
@@ -230,7 +231,10 @@ export function startGame(db: Db, actor: MemberRow, now: Clock): OwnerActionOutc
     const members = activeMembers(tx, row.id);
     const reasons = startBlockers(row, members, characterOwners(tx, members));
     if (reasons.length > 0) return { kind: 'cannot_start', reasons };
-    tx.update(game).set({ startedAt: now() }).where(eq(game.id, row.id)).run();
+    const t = now();
+    tx.update(game).set({ startedAt: t }).where(eq(game.id, row.id)).run();
+    // The game starts at day 1 Morning: its events become active (GEN-053).
+    advanceTimeline(tx, row.id, { day: 1, phase: 'MORNING' }, t);
     return undefined;
   });
 }

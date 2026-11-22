@@ -43,6 +43,13 @@
       "when": 1795287036070,
       "tag": "0005_character",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795306826017,
+      "tag": "0006_event_state",
+      "breakpoints": true
     }
   ]
 }
