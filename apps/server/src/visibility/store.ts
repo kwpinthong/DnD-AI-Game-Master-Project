@@ -190,6 +190,7 @@ export function hiddenEvidenceInGame(db: DbOrTx, gameId: string): HiddenEvidence
 }
 
 export type NpcBondRow = typeof npcBond.$inferSelect;
+type NpcAffinityRow = Pick<NpcBondRow, 'memberId' | 'npcId' | 'affinity' | 'nameRevealed' | 'updatedAt'>;
 
 /**
  * Stores a player's affinity with an NPC. `nameRevealed` turns on when the rule says so and never turns
@@ -201,13 +202,13 @@ export function setNpcAffinity(
   npc: { readonly id: string; readonly rank: NpcGrade },
   affinity: number,
   now: number,
-): NpcBondRow {
+): NpcAffinityRow {
   const existing = db
     .select()
     .from(npcBond)
     .where(and(eq(npcBond.memberId, memberId), eq(npcBond.npcId, npc.id)))
     .get();
-  const row: NpcBondRow = {
+  const row: NpcAffinityRow = {
     memberId,
     npcId: npc.id,
     affinity,

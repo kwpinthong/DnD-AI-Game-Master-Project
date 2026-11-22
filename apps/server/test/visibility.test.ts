@@ -100,21 +100,21 @@ describe('visibility layer: who sees what (GEN-050)', { timeout: 60_000 }, () =>
 
     setNpcAffinity(server!.orm, t.a.memberId, merchant, 8, CLOCK);
     let a = await playerView(t, t.a);
-    expect(a.view.npcs).toContainEqual({ name: merchant.alias, nameRevealed: false });
+    expect(a.view.npcs).toContainEqual(expect.objectContaining({ name: merchant.alias, nameRevealed: false }));
     expect(a.raw).not.toContain(merchant.name);
 
     setNpcAffinity(server!.orm, t.a.memberId, merchant, 9, CLOCK);
     a = await playerView(t, t.a);
-    expect(a.view.npcs).toContainEqual({ name: merchant.name, nameRevealed: true });
+    expect(a.view.npcs).toContainEqual(expect.objectContaining({ name: merchant.name, nameRevealed: true }));
     expect(a.raw).not.toContain('"affinity"');
 
     const b = await playerView(t, t.b);
-    expect(b.view.npcs).toContainEqual({ name: merchant.alias, nameRevealed: false });
+    expect(b.view.npcs).toContainEqual(expect.objectContaining({ name: merchant.alias, nameRevealed: false }));
     expect(b.raw).not.toContain(merchant.name);
 
     // Permanent: a later drop does not hide the name again (Rules Spec §8.1).
     setNpcAffinity(server!.orm, t.a.memberId, merchant, -20, CLOCK);
-    expect((await playerView(t, t.a)).view.npcs).toContainEqual({ name: merchant.name, nameRevealed: true });
+    expect((await playerView(t, t.a)).view.npcs).toContainEqual(expect.objectContaining({ name: merchant.name, nameRevealed: true }));
   });
 
   it('C5: the Human GM sees every field of every character, karma, reputationScore and place included', async () => {

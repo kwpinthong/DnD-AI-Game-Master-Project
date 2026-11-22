@@ -19,6 +19,7 @@ import websocket from '@fastify/websocket';
 import { placeholderResolver, type PhaseResolver } from './room/resolver.ts';
 import { registerRoomRoutes } from './room/routes.ts';
 import { DEFAULT_ASSETS_DIR, loadGameAssets, type GameAssets } from './assets/load.ts';
+import { registerCompanionRoutes } from './companions/routes.ts';
 
 export interface RunningServer {
   url: string;
@@ -98,8 +99,9 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerAuthRoutes(app, db, now);
   registerGameRoutes(app, db, now, { ai, karmaTiers: assets.karmaTiers, ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}) });
   registerTimelineRoutes(app, db, now);
-  registerVisibilityRoutes(app, db, now, assets.karmaTiers);
+  registerVisibilityRoutes(app, db, now, assets);
   registerRoomRoutes(app, db, now, { resolver: options.phaseResolver ?? placeholderResolver, webOrigins: config.webOrigins ?? [] });
+  registerCompanionRoutes(app, db, now, assets);
 
   try {
     await app.listen({ host: config.host, port: config.port });
