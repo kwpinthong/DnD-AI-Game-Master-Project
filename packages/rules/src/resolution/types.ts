@@ -35,7 +35,11 @@ export interface StatusEffect {
   readonly id: string;
   readonly label: string;
   readonly polarity: 'buff' | 'debuff';
-  readonly origin: 'trait' | 'event' | 'gear';
+  /**
+   * `curse`: put on the holder by another's skill for a time (GEN-095, Venom of Despair): its mods apply to every
+   * d20 the holder rolls (their own action without a `stat` claim too) and to their defence; the AI cannot remove it.
+   */
+  readonly origin: 'trait' | 'event' | 'gear' | 'curse';
   readonly visible: boolean;
   readonly mods: readonly StatusMod[];
   /** Phases left; null = permanent (trait, gear). Ticking down is phase logic (GEN-052). */
@@ -78,6 +82,8 @@ export interface NpcState {
   /** -2..+2 from the NPC's personality in the scenario (spec §10.4). */
   readonly obsTrait: number;
   readonly damageReduction: number;
+  /** Curses on the NPC (GEN-095): its observe roll, and the DC of an action against it, move by their mods. */
+  readonly statuses?: readonly StatusEffect[];
 }
 
 /** State snapshot an action resolves against. */
@@ -136,6 +142,8 @@ export interface PvpContext {
   readonly dc: number;
   /** clamp(stat(B, 'observe') + awareness + perception(B), -10, +10) when B rolls to notice a Secret; null = B does not roll. */
   readonly observeModifier: number | null;
+  /** The target's curses already inside `dc` (GEN-095, negative); a target penalty of the same curse (Q-131) does not add to them. */
+  readonly targetCurse?: number;
 }
 
 /** What the AI GM proposes for one action, before any die is rolled (spec §13, single-action subset). */
@@ -214,7 +222,7 @@ export interface ProposalError {
 
 export interface LoggedModifier {
   /** A proposal modifier's source, or where a tag-matched bonus came from (GEN-064). */
-  readonly source: Modifier['source'] | TagSourceKind;
+  readonly source: Modifier['source'] | TagSourceKind | 'status';
   readonly ref?: string;
   readonly mode?: 'favor' | 'fear';
   readonly align?: 'light' | 'dark';
@@ -226,6 +234,8 @@ export interface LoggedModifier {
 export interface CheckLog {
   /** A ladder DC, or DC_pvp for a player target. */
   readonly dc: number;
+  /** Curses of the NPC target already inside `dc` (GEN-095, negative); absent = none. */
+  readonly targetCurse?: number;
   readonly d20: number;
   readonly modifiers: readonly LoggedModifier[];
   readonly modifierSum: number;

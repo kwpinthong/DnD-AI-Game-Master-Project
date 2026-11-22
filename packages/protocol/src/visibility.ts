@@ -41,6 +41,15 @@ export type NpcView = z.infer<typeof NpcView>;
 export const PlaceView = z.strictObject({ id: z.string(), name: z.string(), zone: PlaceZone.optional() });
 export type PlaceView = z.infer<typeof PlaceView>;
 
+/** A timed curse as the Human GM sees it (GEN-095): its source, d20 change and turns left (this turn included). */
+export const GmCurseView = z.strictObject({
+  label: z.string(),
+  source: z.string(),
+  value: z.number().int(),
+  turnsLeft: z.number().int().min(1),
+});
+export type GmCurseView = z.infer<typeof GmCurseView>;
+
 /** A character as the Human GM sees it: every field, Karma, the Reputation number and the place included. */
 export const GmCharacterView = z.strictObject({
   memberId: z.string(),
@@ -63,6 +72,8 @@ export const GmCharacterView = z.strictObject({
   npcBonds: z.array(z.strictObject({ npcId: z.string(), affinity: z.number().int(), nameRevealed: z.boolean() })),
   /** Alliance and relationship with each other player that has a bond row (GEN-067). */
   playerBonds: z.array(z.strictObject({ memberId: z.string(), alliance: z.boolean(), relationship: z.number().int() })),
+  /** Timed curses on the character now (GEN-095), with their numbers. */
+  curses: z.array(GmCurseView),
 });
 export type GmCharacterView = z.infer<typeof GmCharacterView>;
 

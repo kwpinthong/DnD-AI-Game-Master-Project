@@ -31,6 +31,7 @@ import { outdoorLocationIds, recordTagUses, tagContexts, type TaggingOptions } f
 import { originEffects, treatChronicIllness } from '../game/origin.ts';
 import { TREATMENT_VERBS } from '../game/start-rules.ts';
 import { publicRepScaleOf, startStaminaCut } from '../game/location-actions.ts';
+import { activeCurses, recordCurses } from '../statuses/curses.ts';
 
 /** Who a successful HEAL / CLEANSE action treated: its player target, else the actor (self-treatment). */
 export function patientsTreated(outcomes: readonly ActionOutcome[]): string[] {
@@ -147,6 +148,7 @@ export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet
     return rank === undefined || rank === 'F' ? 'Common' : RANK_TIER[rank];
   };
   const players: Record<string, PlayerState> = {};
+  const curses = activeCurses(db, gameId);
 
   seatedCharacters(db, gameId).forEach(({ character: c, locationId }, seat) => {
     const chosen = loot.get(c.memberId) ?? null;
@@ -176,6 +178,8 @@ export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet
     statuses.push(...origin.statuses);
     afterActionStamina += origin.afterActionStamina;
     if (assets) afterActionStamina += startStaminaCut(db, assets, c.memberId, locationId, gameId);
+    // Timed curses on the player this turn (GEN-095, Venom of Despair).
+    statuses.push(...(curses.players.get(c.memberId) ?? []));
 
     players[c.memberId] = {
       id: c.memberId,
@@ -199,7 +203,8 @@ export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet
 
   const npcs: Record<string, NpcState> = {};
   for (const n of getGameScenario(db, gameId)?.npcs ?? []) {
-    npcs[n.id] = { id: n.id, grade: n.rank, hp: NPC_HP_MAX[n.rank], locationId: n.locationId, obsTrait: 0, damageReduction: 0 };
+    const statuses = curses.npcs.get(n.id);
+    npcs[n.id] = { id: n.id, grade: n.rank, hp: NPC_HP_MAX[n.rank], locationId: n.locationId, obsTrait: 0, damageReduction: 0, ...(statuses ? { statuses } : {}) };
   }
   // GEN-069: a Public action at the fountain moves Reputation ×1.5.
   const publicRepScale = assets ? publicRepScaleOf(db, gameId, assets) : {};
@@ -254,6 +259,8 @@ export function applyPhaseActions(
     if (tagging !== undefined) recordTagUses(tx, gameId, result.log, tagging.day, now);
     // A successful HEAL / CLEANSE on a chronically ill player counts as one treatment (GEN-065).
     for (const memberId of patientsTreated(result.log.outcomes)) treatChronicIllness(tx, memberId);
+    // A successful curse (Venom of Despair) puts its timed status on the target from the next turn (GEN-095).
+    if (tagging !== undefined) recordCurses(tx, gameId, result.log, tagging.assets, now);
 
     for (const after of Object.values(result.state.players)) {
       const before = state.players[after.id]!;

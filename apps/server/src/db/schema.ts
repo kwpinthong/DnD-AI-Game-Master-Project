@@ -161,3 +161,5 @@ export * from './schema-finale.ts';
 // GEN-065: each character's start scenario (origin), own file for the same reason.
 export * from './schema-origin.ts';
 export * from './schema-strategy.ts';
+// GEN-095: timed curses on players and NPCs, own file for the same reason.
+export * from './schema-statuses.ts';

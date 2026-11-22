@@ -1,8 +1,14 @@
 import { rollDice } from '../dice.ts';
 import type { Rng } from '../rng.ts';
 import { ReplayRng, resolveAction } from '../resolution/resolve.ts';
-import { RULES, SEVERITY_BASE, TIER_CAP, clamp, computeStat } from '../resolution/tables.ts';
-import { SEVERITIES, type NpcState, type OwnedRef, type ProposalErrorCode } from '../resolution/types.ts';
+import { RULES, SEVERITY_BASE, TIER_CAP, clamp, computeStat, curseMods } from '../resolution/tables.ts';
+import { SEVERITIES, type ActorState, type NpcState, type OwnedRef, type ProposalErrorCode } from '../resolution/types.ts';
+
+/** `targetCurse` of a PvP check (GEN-095): the target's curses on their defence; nothing when none. */
+function targetCurseOf(target: ActorState): { targetCurse?: number } {
+  const curse = curseMods(target.statuses, 'defense').reduce((sum, c) => sum + c.value, 0);
+  return curse === 0 ? {} : { targetCurse: curse };
+}
 import { validateProposal } from '../resolution/validate.ts';
 import {
   PLAYER_INTENTS,
@@ -156,6 +162,8 @@ export function resolvePhaseActions(input: PhaseActionsInput, rng: Rng): PhaseAc
         ? undefined
         : {
             dc: PVP_DC_BASE + clamp(computeStat(target, { use: 'defense' }) + (targetPlayer.defenseRef?.value ?? 0), -RULES.modCapTotal, RULES.modCapTotal),
+            // GEN-095: the target's curses are inside the defence stat; say so, so Q-131 does not add the same curse again.
+            ...targetCurseOf(target),
             observeModifier:
               proposal.visibility === 'secret' && target.hp > 0
                 ? clamp(

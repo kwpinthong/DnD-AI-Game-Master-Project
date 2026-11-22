@@ -136,6 +136,8 @@ export interface PlayerContext {
   skills: { id: string; name: string; tier: string; effect: string }[];
   tagSources: { id: string; kind: string; verbTags: string[]; targetTags: string[]; trigger: string; dailyLimit: number; usesToday: number }[];
   constraints: { id: number; text: string; reason: string; sinceDay: number }[];
+  /** Timed curses on the player now (GEN-095): the server applies the d20 part; `effect` is the sheet text to judge the rest by. */
+  curses: { label: string; source: string; effect: string }[];
 }
 
 export interface TurnContext {
@@ -150,7 +152,7 @@ export interface TurnContext {
   resting: string[];
   players: PlayerContext[];
   places: { id: string; name: string; safety: string; tags: string[] }[];
-  npcs: { id: string; alias: string; rank: string; place: string }[];
+  npcs: { id: string; alias: string; rank: string; place: string; curses: string[] }[];
   /** Every verb / target tag the game data has (GEN-064). */
   tagVocabulary: string[];
   events: Pick<EventContext, 'active' | 'past'>;
@@ -207,6 +209,9 @@ export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnConte
           usesToday: ctx?.usesToday[src.id] ?? 0,
         })),
         constraints: constraints.filter((c) => c.memberId === s.id).map((c) => ({ id: c.id, text: c.text, reason: c.reason, sinceDay: c.day })),
+        curses: s.statuses
+          .filter((st) => st.origin === 'curse')
+          .map((st) => ({ label: st.label, source: st.ref ?? '', effect: curseText(st.ref, input.assets) })),
       },
     ];
   });
@@ -228,7 +233,7 @@ export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnConte
     resting: input.resting.map(ref),
     players,
     places: world.places,
-    npcs: world.npcs.map((n) => ({ id: n.id, alias: n.alias, rank: n.rank, place: n.locationId })),
+    npcs: world.npcs.map((n) => ({ id: n.id, alias: n.alias, rank: n.rank, place: n.locationId, curses: (state.npcs[n.id]?.statuses ?? []).filter((st) => st.origin === 'curse').map((st) => st.label) })),
     tagVocabulary: [...input.vocabulary],
     events: { active: events.active, past: events.past },
     memory: memoryContext(db, world.gameId, at),
@@ -394,6 +399,14 @@ function qualitativeText(o: StoredOption, assets: GameAssets | undefined): strin
   const boost = 'synergy' in row ? (/เสริมสกิล:\s*([^/]*)/.exec(row.synergy)?.[1]?.trim() ?? '') : '';
   const text = 'effect' in row ? row.effect : row.description;
   return [text, boost && `เสริมสกิล: ${boost}`, row.note].filter((s) => s.length > 0).join(' / ');
+}
+
+/** GEN-095: the sheet text of the row a curse came from (an Ability Description / Item Effect). */
+function curseText(source: string | undefined, assets: GameAssets | undefined): string {
+  if (source === undefined || assets === undefined) return '';
+  const ability = assets.ability(source);
+  if (ability) return ability.description;
+  return assets.items.find((i) => i.nameEn === source)?.effect ?? '';
 }
 
 /** The weather as the AI GM reads it (GEN-068): the period's weather plus the day-5 Disaster state. */

@@ -8,6 +8,7 @@ import {
   affinityMod,
   clamp,
   computeStat,
+  curseMods,
   karmaBand,
   repTier,
 } from './tables.ts';
@@ -102,16 +103,22 @@ export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
       }),
       ...(tagging?.bonuses ?? []).map((b) => ({ source: b.kind, ref: b.ref, value: b.value })),
       ...(weather?.modifiers ?? []).map((m) => ({ source: 'weather' as const, ref: m.ref, value: m.value })),
+      // GEN-095: the actor's curses move every roll, whether or not the proposal claims `stat`.
+      ...curseMods(actor.statuses, proposal.kind, proposal.tags).map((c) => ({ source: 'status' as const, ref: c.ref, value: c.value })),
     ];
     const modifierSum = modifiers.reduce((sum, m) => sum + m.value, 0);
     const modifierTotal = clamp(modifierSum, -RULES.modCapTotal, RULES.modCapTotal);
     const roll = rollDice('1d20', dice);
     const d20 = roll.faces[0]!;
     const total = d20 + modifierTotal;
-    // Q-131: penalties put on a player target lower their defence, so DC_pvp.
+    // Q-131: penalties put on a player target lower their defence, so DC_pvp. A curse already in DC_pvp
+    // (GEN-095) is the same penalty: together never more than the larger of the two (Q-212).
     const targetPenalty = (tagging?.targetBonuses ?? []).reduce((sum, b) => sum + b.value, 0);
-    const dc = proposal.check.type === 'pvp' ? pvp!.dc + targetPenalty : proposal.check.dc;
-    check = { dc, d20, modifiers, modifierSum, modifierTotal, total, margin: total - dc };
+    const pvpPenalty = Math.min(0, targetPenalty - (pvp?.targetCurse ?? 0));
+    // GEN-095: an NPC target's curses lower its resistance, so the DC of the action against it.
+    const npcCurse = proposal.check.type === 'dc' && proposal.target !== null ? curseMods(npcs[proposal.target.npc]?.statuses, 'defense').reduce((sum, c) => sum + c.value, 0) : 0;
+    const dc = proposal.check.type === 'pvp' ? pvp!.dc + pvpPenalty : proposal.check.dc + npcCurse;
+    check = { dc, ...(npcCurse !== 0 ? { targetCurse: npcCurse } : {}), d20, modifiers, modifierSum, modifierTotal, total, margin: total - dc };
     degree = roll.crit ? 'crit' : roll.fumble ? 'fumble' : total >= dc ? 'success' : 'fail';
   }
 
@@ -139,7 +146,8 @@ export function resolveAction(input: ResolutionInput, rng: Rng): ResolveResult {
       const witness = highestGrade(proposal.witnessNpcIds.map((id) => npcs[id]!));
       if (witness !== undefined) {
         const d20 = rollDice('1d20', dice).faces[0]!;
-        observation = { npcId: witness.id, d20, total: d20 + GRADE_OBS_MOD[witness.grade] + witness.obsTrait };
+        const curse = curseMods(witness.statuses, 'observe').reduce((sum, c) => sum + c.value, 0);
+        observation = { npcId: witness.id, d20, total: d20 + GRADE_OBS_MOD[witness.grade] + witness.obsTrait + curse };
         caught = observation.total > check.total;
       }
     }

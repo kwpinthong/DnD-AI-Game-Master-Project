@@ -29,9 +29,39 @@ const INVESTIGATE_MARKER = /\[mock:investigate=([A-Z0-9_]+)\]/;
 /** GEN-093 dev marker: `[mock:strategy=D10-S1:leader]` names the action's Day-10 plan and role (the server checks it). */
 const STRATEGY_MARKER = /\[mock:strategy=([A-Z0-9-]+):(leader|support)\]/;
 
+/**
+ * GEN-095 dev marker: `[mock:curse]` casts the actor's Active CURSE source (Venom of Despair) on another player at
+ * the same place (pvp), `[mock:curse=npc]` on an NPC there (DC 11). Without such a source or target: a plain action.
+ */
+const CURSE_MARKER = /\[mock:curse(=npc)?\]/;
+
+function mockCurse(ctx: TurnContext, action: TurnContext['actions'][number]): Partial<GmAction> | null {
+  const marker = CURSE_MARKER.exec(action.text);
+  if (marker === null) return null;
+  const me = ctx.players.find((p) => p.ref === action.actor);
+  const source = me?.tagSources.find((s) => s.trigger !== 'passive' && s.verbTags.includes('CURSE'));
+  if (!me || !source) return null;
+  const base = { kind: 'complex' as const, staminaCost: 5, modifiers: [{ source: 'stat' as const }] };
+  const activate = [{ ref: source.id, stamina: source.kind === 'skill' ? 4 : null }];
+  if (marker[1] === '=npc') {
+    const npc = ctx.npcs.find((n) => n.place === me.place);
+    return npc ? { ...base, check: { type: 'dc', dc: 11 }, targetNpc: npc.id, tagging: { verbTags: ['CURSE'], targetTags: ['NPC'], activate } } : null;
+  }
+  const other = ctx.players.find((p) => p.ref !== me.ref && p.place === me.place);
+  if (!other) return null;
+  const none = { damage: null, heal: null, takeItem: null, giveItem: null };
+  return {
+    ...base,
+    check: { type: 'pvp' },
+    targetPlayer: { player: other.ref, intent: 'harm', defenseRef: null, perceptionRef: null, onSuccess: none, onFail: none },
+    tagging: { verbTags: ['CURSE'], targetTags: ['PLAYER'], activate },
+  };
+}
+
 /** A plain general action at DC 11 for one action of the context. */
 export function mockAction(ctx: TurnContext, actionId: string): GmAction {
   const action = ctx.actions.find((a) => a.actionId === actionId)!;
+  const curse = mockCurse(ctx, action);
   const known = (tag: string | undefined) => (tag !== undefined && ctx.tagVocabulary.includes(tag) ? tag : undefined);
   const topic = known(INVESTIGATE_MARKER.exec(action.text)?.[1]);
   const verb = topic !== undefined ? known('INVESTIGATE') : (known(VERB_MARKER.exec(action.text)?.[1]) ?? ctx.tagVocabulary[0]);
@@ -63,6 +93,7 @@ export function mockAction(ctx: TurnContext, actionId: string): GmAction {
     strategy: strategy === undefined ? null : { id: strategy[1]!, role: strategy[2] as 'leader' | 'support' },
     intentSummary: `{{p:${action.actor}}} ${action.text}`.slice(0, 200),
     reason: 'Mock GM',
+    ...curse,
   };
 }
 

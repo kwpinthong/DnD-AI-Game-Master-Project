@@ -22,6 +22,7 @@ export {
   affinityMod,
   computeStat,
   conditionsOf,
+  curseMods,
   karmaBand,
   repTier,
   staminaCostRange,

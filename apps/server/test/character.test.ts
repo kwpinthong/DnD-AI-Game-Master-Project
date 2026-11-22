@@ -100,6 +100,8 @@ describe('character: name, appearance, personality + starting values (GEN-047)',
       socialTitle: 'คนแปลกหน้า',
       // GEN-067: the owner's own Karma word (Karma 0).
       conduct: 'เป็นกลางสุดๆ',
+      // GEN-095: no timed status before the game.
+      statuses: [],
       editable: true,
     });
     expect(storedRow(created.member.id)).toMatchObject({ hp: 100, hp_max: 100, stamina: 30, stamina_max: 30, reputation: 0, karma: 0 });

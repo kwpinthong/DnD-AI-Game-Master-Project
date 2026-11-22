@@ -43,6 +43,7 @@ const character = (memberId: string, name: string, karma: number) => ({
   knowsNamesOf: [],
   npcBonds: [],
   playerBonds: [],
+  curses: memberId === 'm-b' ? [{ label: 'หวาดกลัว', source: 'Venom of Despair', value: -3, turnsLeft: 3 }] : [],
 });
 
 function consoleView(pending: boolean): GmConsoleResponse {
@@ -86,6 +87,14 @@ describe('GEN-058 GM console (web)', () => {
     expect(within(screen.getByRole('region', { name: 'action ทั้งหมด' })).getByText(/Secret.*แอบล้วงกระเป๋าพ่อค้า/)).toBeTruthy();
     expect(within(screen.getByRole('region', { name: 'เงื่อนไข Legendary' })).getByText(/ทำความดีต่อเนื่อง 10 วัน/)).toBeTruthy();
     expect(screen.getByText('ยังไม่มีผลของเทิร์นที่รออนุมัติ')).toBeTruthy();
+  });
+
+  it('GEN-095 C6: the GM sees a curse with its number and the turns left', async () => {
+    stubApi({ 'GET /api/game/gm/console': () => Response.json(consoleView(false)), 'GET /api/game/gm/log': () => Response.json(emptyLog) });
+    render(<GmConsole apiBaseUrl="http://api" token="tok" refreshKey="1" />);
+    const people = await screen.findByRole('region', { name: 'ตัวละครทั้งหมด' });
+    expect(within(people).getByText(/ดาริน.*หวาดกลัว \(Venom of Despair\) d20 -3 อีก 3 เทิร์น/)).toBeTruthy();
+    expect(within(people).getByText(/ลิน/).textContent).not.toContain('หวาดกลัว');
   });
 
   it('C2: edits the held narration and HP with a reason, then approves', async () => {

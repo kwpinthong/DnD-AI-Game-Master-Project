@@ -91,6 +91,11 @@ export const CharacterView = z.strictObject({
    * owner gets it (Q-091); never the number, and never another player's.
    */
   conduct: z.string(),
+  /**
+   * Timed statuses on the character now (GEN-095), as words only, e.g. "หวาดกลัว" from Venom of Despair. Never
+   * the d20 number or the time left: those are the Human GM's (`GmCharacterView.curses`).
+   */
+  statuses: z.array(z.string()),
   /** Name, appearance and personality can change until the game starts. */
   editable: z.boolean(),
 });

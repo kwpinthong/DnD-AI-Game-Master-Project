@@ -49,6 +49,7 @@ const characterView = {
   coins: 18,
   socialTitle: 'คนคุ้นหน้า',
   conduct: 'เป็นกลาง',
+  statuses: [] as string[],
   editable: false,
 } as const;
 
@@ -176,6 +177,7 @@ const gmCharacter: In<typeof p.GmCharacterView> = {
   knowsNamesOf: [],
   npcBonds: [{ npcId: 'merchant', affinity: 52, nameRevealed: true }],
   playerBonds: [],
+  curses: [],
 };
 const gmTimelineEvent: In<typeof p.GmTimelineEvent> = { id: 'ev-5', day: 5, phase: 'EOSORIA', title: 'ภัยพิบัติเริ่ม', status: 'pending', outcome: null, outcomeSource: null };
 const gmPendingTurn: In<typeof p.GmPendingTurn> = {
