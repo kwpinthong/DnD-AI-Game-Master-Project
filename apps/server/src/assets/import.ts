@@ -7,6 +7,8 @@ import { parseCsv } from './csv.ts';
 import {
   ALIGNMENTS,
   ALL_TABS,
+  DICE_BONUS_CAP,
+  DICE_BONUS_EXCEPTIONS,
   EFFECT_TYPES,
   OPTIONAL_TABS,
   PERIODS,
@@ -18,6 +20,7 @@ import {
   aliasMatches,
   type Duration,
   type Effect,
+  type Rank,
   type TabName,
   type TabRecords,
 } from './model.ts';
@@ -374,7 +377,8 @@ function setPath(target: Record<string, unknown>, key: string, value: unknown): 
 // ---------------------------------------------------------------------------------------------
 
 interface TabOutcome {
-  records: Array<{ row: number; record: Record<string, unknown> }>;
+  /** `valueColumns[i]` is the Value header that `record.effects[i]` came from. */
+  records: Array<{ row: number; record: Record<string, unknown>; valueColumns: string[] }>;
   hasEffectColumns: boolean;
 }
 
@@ -414,6 +418,7 @@ function convertTab(tab: TabName, csv: string, errors: AssetIssue[], warnings: A
     const cell = (h: string) => cells[index.get(h)!] ?? '';
     const record: Record<string, unknown> = {};
     let rowOk = true;
+    let valueColumns: string[] = [];
     const fail = (column: string, message: string) => {
       errors.push({ tab, row, column, message });
       rowOk = false;
@@ -431,6 +436,7 @@ function convertTab(tab: TabName, csv: string, errors: AssetIssue[], warnings: A
 
     if (layout.effects) {
       const effects: Effect[] = [];
+      valueColumns = [];
       for (const [typeH, statH, valueH, durationH] of groups) {
         const read = <T>(h: string, kind: Kind<T>): T | null | undefined => {
           if (!index.has(h)) return null;
@@ -448,7 +454,10 @@ function convertTab(tab: TabName, csv: string, errors: AssetIssue[], warnings: A
         if (type === null) fail(typeH, 'มีค่าผลเชิงตัวเลขในกลุ่มนี้แต่ไม่มี Effect_Type');
         else if (value === null) fail(valueH, `Effect_Type "${type}" ต้องมี Value`);
         else if (duration === null) fail(durationH, `Effect_Type "${type}" ต้องมี Duration`);
-        else effects.push({ type, stats, value, duration });
+        else {
+          effects.push({ type, stats, value, duration });
+          valueColumns.push(valueH);
+        }
       }
       record.effects = effects;
     }
@@ -477,7 +486,7 @@ function convertTab(tab: TabName, csv: string, errors: AssetIssue[], warnings: A
       }
       return;
     }
-    records.push({ row, record: checked.data as Record<string, unknown> });
+    records.push({ row, record: checked.data as Record<string, unknown>, valueColumns });
   });
 
   return { records, hasEffectColumns: groups.length > 0 };
@@ -510,6 +519,7 @@ export function convertSheet(csvByTab: Partial<Record<TabName, string>>): Conver
 
   checkRates(outcomes.get('Start_Scenarios'), errors);
   checkReferences(outcomes, warnings);
+  checkDiceBonusCaps(outcomes, warnings);
 
   const files: Partial<Record<TabName, unknown[]>> = {};
   for (const [tab, outcome] of outcomes) files[tab] = outcome.records.map((r) => r.record);
@@ -523,6 +533,23 @@ export function convertSheet(csvByTab: Partial<Record<TabName, string>>): Conver
     missingTabs,
     tabsWithoutEffectColumns: ALL_TABS.filter((t) => LAYOUTS[t].effects && outcomes.has(t) && !outcomes.get(t)!.hasEffectColumns),
   };
+}
+
+/** Q-114: a d20 dice_bonus above its Rank's cap is a warning (Q-119 exceptions allowed). */
+function checkDiceBonusCaps(outcomes: Map<TabName, TabOutcome>, warnings: AssetIssue[]): void {
+  for (const tab of ['Ability', 'Item'] as const) {
+    for (const { row, record, valueColumns } of outcomes.get(tab)?.records ?? []) {
+      const rank = record.rank as Rank;
+      const label = (tab === 'Item' ? record.nameEn : record.name) as string;
+      const cap = DICE_BONUS_EXCEPTIONS[label] ?? DICE_BONUS_CAP[rank];
+      if (cap === undefined) continue;
+      (record.effects as Effect[]).forEach((effect, i) => {
+        if (effect.type === 'dice_bonus' && effect.stats.includes('d20') && effect.value > cap) {
+          warnings.push({ tab, row, column: valueColumns[i]!, message: `dice_bonus +${effect.value} เกินเพดานของ Rank ${rank} (สูงสุด +${cap}, Q-114)` });
+        }
+      });
+    }
+  }
 }
 
 function checkRates(outcome: TabOutcome | undefined, errors: AssetIssue[]): void {

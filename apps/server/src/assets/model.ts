@@ -48,7 +48,14 @@ export const EFFECT_TYPES = [
   'env_stamina_reduce_pct',
   'secret_quota',
   'karma_lock',
+  /** Cancels effects for the duration (Q-116: Day10_Strategies S4, Absolute Zero Law). */
+  'nullify',
 ] as const;
+
+/** Highest d20 `dice_bonus` per Rank (Q-114); above it the import warns. F has no cap set. */
+export const DICE_BONUS_CAP: Readonly<Partial<Record<Rank, number>>> = { B: 2, A: 3, S: 5, SS: 5 };
+/** Allowed exceptions to DICE_BONUS_CAP (Q-119), by Ability name / Item English name. */
+export const DICE_BONUS_EXCEPTIONS: Readonly<Record<string, number>> = { 'Prism of Truth': 3 };
 
 export type Rank = (typeof RANKS)[number];
 export type TriggerType = (typeof TRIGGER_TYPES)[number];

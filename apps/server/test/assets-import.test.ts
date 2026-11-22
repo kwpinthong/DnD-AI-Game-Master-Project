@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { convertSheet, formatIssue } from '../src/assets/import.ts';
-import { REQUIRED_TABS, type TabName, type AbilityRecord, type ItemRecord, type StartScenarioRecord } from '../src/assets/model.ts';
+import { REQUIRED_TABS, type TabName, type AbilityRecord, type Day10StrategyRecord, type ItemRecord, type StartScenarioRecord } from '../src/assets/model.ts';
 import { duplicateRow, fixtureCsv, keepColumnsBefore, setCell } from './assets-fixture.ts';
 
 /** Data rows of a fixture CSV (lines after the header, blank lines left out). */
@@ -86,6 +86,63 @@ describe('convertSheet (GEN-062)', () => {
     expect(result.errors.map(formatIssue)).toEqual([]);
     expect(result.tabsWithoutEffectColumns).toEqual(['Item']);
     expect((result.files.Item as ItemRecord[])[0]!.effects).toEqual([]);
+  });
+
+  it('Q-116 / Q-113: Day10_Strategies imports approved and draft rows, D10-DRIFT included, with Effect_Type nullify', () => {
+    const result = convertSheet({ ...requiredOnly(), Day10_Strategies: fixtureCsv().Day10_Strategies! });
+
+    expect(result.errors.map(formatIssue)).toEqual([]);
+    const strategies = result.files.Day10_Strategies as Day10StrategyRecord[];
+    expect(strategies.map((s) => [s.id, s.status])).toEqual([
+      ['D10-T1', 'approved'],
+      ['D10-DRIFT', 'draft'],
+    ]);
+    expect(strategies[0]!.effects).toEqual([{ type: 'nullify', stats: ['d20'], value: 0, duration: { unit: 'period', count: 2 } }]);
+    expect(result.warnings.filter((w) => w.tab === 'Day10_Strategies').map(formatIssue)).toEqual([]);
+  });
+
+  it('Q-116: nullify is an allowed Effect_Type on Ability too', () => {
+    const csv = requiredOnly();
+    const result = convertSheet({ ...csv, Ability: setCell(csv.Ability!, 4, 'Effect_Type', 'nullify') });
+
+    expect(result.errors.map(formatIssue)).toEqual([]);
+  });
+
+  // Q-114: dice bonus cap per Rank (B 2, A 3, S / SS 5); over the cap = a warning, Q-119 exceptions none.
+  it('Q-114: a d20 dice_bonus above the Rank cap is a warning with the row, not a failure', () => {
+    const csv = requiredOnly();
+    // Row 2 is SS (cap 5); row 3 is B (cap 2).
+    const result = convertSheet({ ...csv, Ability: setCell(csv.Ability!, 2, 'Effect2_Value', '6') });
+    const withShade = convertSheet({
+      ...csv,
+      Ability: setCell(setCell(setCell(setCell(csv.Ability!, 3, 'Effect_Type', 'dice_bonus'), 3, 'Stat', 'd20'), 3, 'Value', '3'), 3, 'Duration', '1 period'),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.warnings).toContainEqual(expect.objectContaining({ tab: 'Ability', row: 2, column: 'Effect2_Value' }));
+    expect(withShade.ok).toBe(true);
+    expect(withShade.warnings).toContainEqual(expect.objectContaining({ tab: 'Ability', row: 3, column: 'Value' }));
+    expect(withShade.warnings.map(formatIssue).join('\n')).toMatch(/B.*2/);
+  });
+
+  it('Q-114: a dice_bonus at the cap gives no warning', () => {
+    const csv = requiredOnly();
+    const result = convertSheet({ ...csv, Ability: setCell(csv.Ability!, 2, 'Effect2_Value', '5') });
+
+    expect(result.warnings.filter((w) => w.tab === 'Ability').map(formatIssue)).toEqual([]);
+  });
+
+  it('Q-119: Prism of Truth (B) +3 is an allowed exception to the cap', () => {
+    const csv = requiredOnly();
+    let item = setCell(csv.Item!, 3, 'Item Name', 'Prism of Truth (ปริซึมทดสอบ)');
+    item = setCell(item, 3, 'Skill Synergy & Unlock Condition', '');
+    for (const [header, value] of [['Effect_Type', 'dice_bonus'], ['Stat', 'd20'], ['Value', '3'], ['Duration', 'passive']] as const) {
+      item = setCell(item, 3, header, value);
+    }
+    const result = convertSheet({ ...csv, Item: item });
+
+    expect(result.ok).toBe(true);
+    expect(result.warnings.filter((w) => w.tab === 'Item').map(formatIssue)).toEqual([]);
   });
 
   // C3: Given Start_Scenarios rates that do not add up to 100 / Then fail and give the sum.
