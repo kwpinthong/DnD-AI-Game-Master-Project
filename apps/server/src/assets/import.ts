@@ -10,6 +10,7 @@ import {
   DICE_BONUS_CAP,
   DICE_BONUS_EXCEPTIONS,
   EFFECT_TYPES,
+  ILLNESS_STATS,
   LOCATION_SAFETIES,
   OPTIONAL_TABS,
   REST_QUALITIES,
@@ -129,6 +130,14 @@ function int(min?: number): Kind<number> {
 const numberOrNull: Kind<number | null> = (cell) => {
   if (cell === '') return ok(null);
   return NUMBER.test(cell) ? ok(Number(cell)) : bad(`ต้องเป็นตัวเลข แต่ได้ "${cell}"`);
+};
+
+/** A whole number not above 0 (a penalty such as "-2"), or null for an empty cell. */
+const penaltyOrNull: Kind<number | null> = (cell) => {
+  if (cell === '') return ok(null);
+  const parsed = int()(cell);
+  if (!parsed.ok) return parsed;
+  return parsed.value <= 0 ? parsed : bad(`ต้องเป็นค่าลบหรือ 0 (ไม่มากกว่า 0) แต่ได้ ${parsed.value}`);
 };
 
 /** "7.25%" → 7.25 */
@@ -280,7 +289,16 @@ const LAYOUTS: Record<TabName, TabLayout> = {
       optionalCol('Passive_Stat', 'passive.stat', passiveStat, null),
       optionalCol('Passive_Value', 'passive.value', numberOrNull, null),
       optionalCol('Passive_Condition', 'passive.condition', text, ''),
+      optionalCol('Illness_Stat', 'illness.stat', oneOfOrNull(ILLNESS_STATS), null),
+      optionalCol('Illness_Value', 'illness.value', penaltyOrNull, null),
     ],
+    // Q-208: the penalty is a pair; half of it is a mistake in the sheet.
+    derive: (r) => {
+      const { stat, value } = r.illness as { stat: string | null; value: number | null };
+      if (stat !== null && value === null) return { column: 'Illness_Value', message: `Illness_Stat "${stat}" ต้องมี Illness_Value` };
+      if (stat === null && value !== null) return { column: 'Illness_Stat', message: 'มี Illness_Value แต่ไม่มี Illness_Stat (ต้องมี d20 / Stamina)' };
+      return undefined;
+    },
   },
   System_Rules: {
     unique: 'Sub_Rule_Name',

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ReplayRng,
+  SAFETY_MOD,
   SeededRng,
   computeStat,
   rescueScore,
@@ -137,11 +138,19 @@ describe('Rules Spec §15 worked examples', () => {
     expect(rollRescue({ safety: 'normal', primaryAffinity: 0 }, new ReplayRng([8])).outcome).toBe('alone');
     expect(rollRescue({ safety: 'normal', primaryAffinity: 0 }, new ReplayRng([7])).outcome).toBe('exploited');
     expect(rescueScore(10, 'normal', -45)).toBe(10 - 4);
-    // Q-161: a RESTRICTED place counts as normal until it has a number.
-    expect(rescueScore(10, 'restricted', 0)).toBe(rescueScore(10, 'normal', 0));
     expect(wakeAfter('alone', 22)).toEqual({ hp: 10, stamina: 22 });
     const seeded = rollRescue({ safety: 'safe', primaryAffinity: 20 }, new SeededRng(42));
     expect(seeded).toEqual({ d20: 13, score: 19, outcome: 'rescued' });
+  });
+
+  it('Q-217: the rescue safety is safe +4 / normal 0 / danger -4 (spec §12.2), and RESTRICTED counts as 0', () => {
+    expect(SAFETY_MOD).toEqual({ safe: 4, normal: 0, danger: -4, restricted: 0 });
+    // At the band edges a RESTRICTED place rolls exactly like a normal one.
+    expect(rollRescue({ safety: 'restricted', primaryAffinity: 0 }, new ReplayRng([15]))).toEqual({ d20: 15, score: 15, outcome: 'rescued' });
+    expect(rollRescue({ safety: 'restricted', primaryAffinity: 0 }, new ReplayRng([14]))).toEqual({ d20: 14, score: 14, outcome: 'alone' });
+    expect(rollRescue({ safety: 'restricted', primaryAffinity: 0 }, new ReplayRng([8])).outcome).toBe('alone');
+    expect(rollRescue({ safety: 'restricted', primaryAffinity: 0 }, new ReplayRng([7])).outcome).toBe('exploited');
+    expect(rescueScore(10, 'restricted', 52)).toBe(rescueScore(10, 'normal', 52));
   });
 
   it('E9 actor side: hangover (all -1) gives stat -1 and no widened fumble (Q-053)', () => {

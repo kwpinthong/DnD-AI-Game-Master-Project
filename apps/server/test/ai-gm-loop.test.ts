@@ -333,6 +333,31 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(turnEntries(clients[0]!, 1, 'EOSORIA', 1).filter((e) => e.kind === 'narration')).toHaveLength(1);
   });
 
+  it('Q-219: a narration with a grade S NPC\'s real name is refused; its {{n:id}} token shows the sheet Public_Alias to a player who has not met it', async () => {
+    let refA = '';
+    await boot({}, async (req) => {
+      if (!isNarration(req)) return undefined;
+      const audience = narrationFor(req);
+      if (!('player' in audience) || audience.player !== refA) return undefined;
+      const answer = (await cannedGmAnswer(req)) as { segments: { actionId: string; text: string }[] };
+      answer.segments[0]!.text += lastUserText(req).includes('name_leak') ? ' แล้วพบ{{n:horizon-watcher}}ที่หน้าผา' : ' แล้วพบแอสทราที่หน้าผา';
+      return mockReply.ok(answer);
+    });
+    const t = await startedTable(server!, false);
+    for (const who of [t.a, t.b, t.c]) move(who, 'sea');
+    refA = refOf(t.a);
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    await playTurn(clients, ['มองทะเล', 'เก็บเปลือกหอย', 'นั่งริมผา'], { day: 1, phase: 'EOSORIA', turn: 2 });
+
+    const forA = provider.requests.filter((r) => isNarration(r) && 'player' in narrationFor(r) && (narrationFor(r) as { player: string }).player === refA);
+    expect(forA).toHaveLength(2);
+    expect(lastUserText(forA[1]!)).toContain('name_leak');
+    const mine = turnEntries(clients[0]!, 1, 'EOSORIA', 1).filter((e) => e.kind === 'narration');
+    expect(mine).toHaveLength(1);
+    expect(mine[0]!.text).toContain('ผู้เฝ้ามองเส้นขอบฟ้า');
+    for (const c of clients) expect(JSON.stringify(c.entries())).not.toContain('แอสทรา');
+  });
+
   it('Q-151: a narration still wrong after its repair gets the server template per beat and the game goes on', async () => {
     let refA = '';
     const BAD = 'ข้อความเสียของเอไอ';
@@ -421,32 +446,76 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     for (const c of clients) for (const frame of c.raw) expect(frame).not.toContain('timeout');
   });
 
-  it('Q-177: the budget runs out after the adjudication: every narration is the template at once, and the owner is told', async () => {
+  it('Q-177 / Q-221: the budget runs out after the adjudication: every narration is the template at once, and the owner sees a lasting gmStatus', async () => {
     const free = { inputTokens: 0, cachedInputTokens: 0, cacheWriteTokens: 0, outputTokens: 0 };
     // Only the adjudication costs (4000 micro-USD) and the ceiling is 1000: it passes, the narrations do not.
-    await boot({ AI_GAME_MONTHLY_USD: '0.001' }, async (req, n) => {
+    const env = { AI_GAME_MONTHLY_USD: '0.001' };
+    const handler: Handler = async (req, n) => {
       if (isTurn(req)) return noRoll(req, n);
       return mockReply.ok(await cannedGmAnswer(req), free);
-    });
+    };
+    await boot(env, handler);
     const t = await startedTable(server!, false);
-    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    let clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    // Before the ceiling: nobody has a gmStatus.
+    for (const c of clients) expect(c.lastRoom()!.gmStatus).toBeNull();
     await playTurn(clients, ['ซื้อดาบ', 'ขายผ้า', 'ซ่อมรองเท้า'], { day: 1, phase: 'EOSORIA', turn: 2 });
 
     expect(provider.requests.filter(isNarration)).toEqual([]);
     for (const c of clients) {
-      const entries = turnEntries(c, 1, 'EOSORIA', 1).filter((e) => !e.text.startsWith('ระบบ:'));
+      const entries = turnEntries(c, 1, 'EOSORIA', 1);
       expect(entries.length).toBeGreaterThan(0);
       for (const e of entries) expect(e.fallback).toBe(true);
+      // Q-221: no one-off "ระบบ: ..." narration any more.
+      expect(c.entries().filter((e) => e.text.startsWith('ระบบ:'))).toEqual([]);
     }
-    // The owner (A) gets one notice with the reason; the other players do not.
-    const notices = (c: RoomClient) => c.entries().filter((e) => e.text.startsWith('ระบบ:'));
-    expect(notices(clients[0]!)).toHaveLength(1);
-    expect(notices(clients[0]!)[0]!.text).toContain('เพดาน');
-    expect(notices(clients[1]!)).toEqual([]);
-    expect(notices(clients[2]!)).toEqual([]);
+    // The owner (A) sees why in the room's gmStatus while the game goes on; the other players do not.
+    const ownerStatus = (c: RoomClient) => c.lastRoom()!.gmStatus;
+    expect(ownerStatus(clients[0]!)).toMatchObject({ code: 'budget_reached', canRetry: false });
+    expect(ownerStatus(clients[0]!)!.message).toContain('เพดาน');
+    expect(clients[0]!.lastRoom()).toMatchObject({ status: 'collecting', turn: 2 });
+    expect(ownerStatus(clients[1]!)).toBeNull();
+    expect(ownerStatus(clients[2]!)).toBeNull();
     const lines = logs.filter((l) => l.startsWith('[gm]') && l.includes('fallback'));
     expect(lines.length).toBeGreaterThan(0);
     for (const line of lines) expect(line).toContain('cause=budget');
+
+    // It stays on every later room update, and after a restart (read from the stored AI usage, not memory).
+    const from = clients[0]!.messages.length;
+    await send(clients[1]!, 'ขายผัก');
+    await clients[0]!.waitFor((m) => m.type === 'room' && m.submittedCount === 1, from);
+    expect(ownerStatus(clients[0]!)).toMatchObject({ code: 'budget_reached' });
+    expect(ownerStatus(clients[1]!)).toBeNull();
+    await Promise.all(sockets.splice(0).map((s) => s.close()));
+    await server!.close();
+    await boot(env, handler);
+    clients = [await enter(t.a), await enter(t.b)];
+    expect(ownerStatus(clients[0]!)).toMatchObject({ code: 'budget_reached', canRetry: false });
+    expect(ownerStatus(clients[1]!)).toBeNull();
+
+    // The budget changes (raised ceiling): the status is gone.
+    await Promise.all(sockets.splice(0).map((s) => s.close()));
+    await server!.close();
+    await boot({}, handler);
+    clients = [await enter(t.a)];
+    expect(ownerStatus(clients[0]!)).toBeNull();
+  });
+
+  it('Q-221: with a Human GM the GM sees the budget gmStatus, players do not; it ends with the game', async () => {
+    await boot({ AI_GAME_MONTHLY_USD: '0' });
+    const t = await startedTable(server!, true);
+    const gm = await enter(t.gm!);
+    const players = [await enter(t.a), await enter(t.b)];
+    expect(gm.lastRoom()!.gmStatus).toMatchObject({ code: 'budget_reached', canRetry: false });
+    expect(gm.lastRoom()!.gmStatus!.message).toContain('เพดาน');
+    for (const p of players) expect(p.lastRoom()!.gmStatus).toBeNull();
+
+    // The game ends: no budget notice on an ended game.
+    await Promise.all(sockets.splice(0).map((s) => s.close()));
+    const gameId = gameIdOf(t);
+    savePhaseState(server!.orm, gameId, { ...ensurePhaseState(server!.orm, gameId, CLOCK), status: 'game_over' }, CLOCK);
+    const after = await enter(t.gm!);
+    expect(after.lastRoom()!.gmStatus).toBeNull();
   });
 
   it('C4: a constraint the AI sets stays in activeConstraints every turn until the AI releases it with a reason', async () => {

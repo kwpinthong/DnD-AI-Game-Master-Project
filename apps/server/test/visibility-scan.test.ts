@@ -212,6 +212,28 @@ describe('C6: no player-facing payload carries karma (GEN-050)', { timeout: 120_
     expect(await scanAsPlayers(t)).toEqual([]);
   });
 
+  it('Q-219: a player standing with a grade S NPC they have not met gets its Public_Alias, never its real name, on any route', async () => {
+    server = await startTestServer(dataDir, { rng: null });
+    const t = await startedTable(server, false);
+    seedSecrets(t);
+    const sNpcs = defaultScenario().npcs.filter((n) => n.rank === 'S');
+    expect(sNpcs.map((n) => n.name).sort()).toEqual(['น็อกทิส', 'ออเรเลีย', 'แอสทรา'].sort());
+    for (const [i, npc] of sNpcs.entries()) moveCharacter(server.orm, [t.a, t.b, t.c][i]!.memberId, npc.locationId, CLOCK);
+
+    const leaks: string[] = [];
+    for (const [i, seat] of [t.a, t.b, t.c].entries()) {
+      const around = await t.call('GET', '/api/game/surroundings', { token: seat.token });
+      expect(JSON.stringify(around.body), seat.name).toContain(sNpcs[i]!.alias);
+      for (const [route, request] of Object.entries(playerRequests(t, seat))) {
+        if (route === 'POST /api/logout') continue;
+        const res = await t.call(request.method, request.path, { token: seat.token, ...(request.body !== undefined ? { body: request.body } : {}) });
+        const text = JSON.stringify(res.body ?? null);
+        for (const npc of sNpcs) if (text.includes(npc.name)) leaks.push(`${route} as ${seat.name}: ${npc.name}`);
+      }
+    }
+    expect(leaks).toEqual([]);
+  });
+
   it('GEN-059 spoiler rule: before the end no secret reaches a player; after it only the summary reveals them', async () => {
     server = await startTestServer(dataDir);
     const t = await startedTable(server, false);

@@ -150,6 +150,8 @@ export function createRoomService(
   weather?: WeatherService,
   /** Q-185: called once, after the publish that ends the game (finale / game_over) committed. */
   onGameEnded?: (gameId: string, status: 'finale' | 'game_over') => void,
+  /** Q-221: the AI budget notice of a game for its owner / Human GM (null = under the ceiling). Default none. */
+  budgetNotice?: (gameId: string) => string | null,
 ): RoomService {
   /** gameId → socket → member. */
   const rooms = new Map<string, Map<RoomSocket, MemberRow>>();
@@ -248,11 +250,15 @@ export function createRoomService(
     if (held.has(me.gameId) && (state.status === 'resolving' || isEnded(state))) {
       return { code: 'awaiting_gm', message: me.role === 'gm' ? AWAITING_GM_MESSAGE : AWAITING_GM_PLAYER_MESSAGE, canRetry: false };
     }
+    const toOwner = me.role === 'gm' || me.id === ownerMemberId;
     const s = stuck.get(me.gameId);
     // GEN-059: an untold ending of an ended game is stuck the same way (retry tells it).
-    if (!s || (state.status !== 'resolving' && !isEnded(state))) return null;
-    const toOwner = me.role === 'gm' || me.id === ownerMemberId;
-    return { code: s.code, message: toOwner ? s.ownerMessage : s.message, canRetry: s.code === 'stuck' };
+    if (s && (state.status === 'resolving' || isEnded(state))) {
+      return { code: s.code, message: toOwner ? s.ownerMessage : s.message, canRetry: s.code === 'stuck' };
+    }
+    // Q-221: while the game runs over its AI budget the owner / Human GM keep seeing why (from the stored usage).
+    const notice = toOwner && !isEnded(state) ? (budgetNotice?.(me.gameId) ?? null) : null;
+    return notice === null ? null : { code: 'budget_reached', message: notice, canRetry: false };
   }
 
   function roomStateFor(

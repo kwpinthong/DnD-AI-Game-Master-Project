@@ -51,9 +51,12 @@ export function rankCompanions<T extends CompanionSlot>(slots: readonly T[]): { 
   return { main, secondary };
 }
 
-/** Q-103: only grade B hides its real name until revealed; F / A / S (and an evolved SS) show it from the start. */
+/** Grades whose real name stays hidden behind the alias until revealed: B (Q-103, affinity +9) and S (Q-219, met / awakened). */
+export const HIDDEN_NAME_GRADES: readonly NpcGrade[] = ['B', 'S'];
+
+/** Q-103 / Q-219: grades B and S hide their real name until revealed; F / A (and an evolved SS) show it from the start. */
 export function npcNameShown(grade: NpcGrade, nameRevealed: boolean): boolean {
-  return grade !== 'B' || nameRevealed;
+  return !HIDDEN_NAME_GRADES.includes(grade) || nameRevealed;
 }
 
 const SPAWNABLE: readonly string[] = ['F', 'B', 'A', 'S'];

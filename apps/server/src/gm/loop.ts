@@ -20,7 +20,7 @@ import { applyPhaseActions, crossPlayerState } from '../crossplayer/phase.ts';
 import { outdoorLocationIds, tagContexts, weatherTagging, type TaggingOptions } from '../crossplayer/tags.ts';
 import { eq } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db/client.ts';
-import { game, gamePhase } from '../db/schema.ts';
+import { gamePhase } from '../db/schema.ts';
 import type { GmFallbackCause } from '@isekai/protocol';
 import type { ClosedPhase, PhaseResolution, PhaseResolver, ResolutionEntry, ResolverStuck } from '../room/resolver.ts';
 import { CryptoRng } from '../rng.ts';
@@ -112,10 +112,6 @@ function fallbackCause(error: AiServiceError): GmFallbackCause {
   return error.detail?.startsWith('timeout') ? 'timeout' : 'error';
 }
 
-function gameOwnerOf(db: DbOrTx, gameId: string): string | null {
-  return db.select({ owner: game.ownerMemberId }).from(game).where(eq(game.id, gameId)).get()?.owner ?? null;
-}
-
 /** What of a player's day goes into `summarize_journal` (cap 6k with the rules and the saga, ADR §6.2). */
 const JOURNAL_SEEN_TOKENS = 4_000;
 
@@ -204,9 +200,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         // A shutdown is not a failure of the AI: the turn resumes after the restart (C6).
         // GEN-059 C7: the ending (onCallFailure: false) stays untold and retryable when the call fails; nothing waits on it.
         if (!opts.fallback || opts.fallback.onCallFailure === false || opts.signal?.aborted) throw new StuckError(stuckFrom(result.error));
-        const cause = fallbackCause(result.error);
-        if (cause === 'budget') noticeBudget(opts.gameId, result.error.message);
-        return useFallback(cause);
+        // Q-221: a budget fallback is shown to the owner / Human GM as the room's gmStatus (ai.budgetNotice).
+        return useFallback(fallbackCause(result.error));
       }
       const errors = opts.check(result.value);
       if (errors.length === 0) return { value: result.value, fallback: null };
@@ -219,18 +214,6 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     }
     if (opts.fallback) return useFallback('invalid');
     return stuck(`still invalid after repair (${opts.purpose})`, opts.gameId);
-  }
-
-  /**
-   * Q-177: the game's AI budget ran out mid-turn. The owner (and the Human GM, who gets every narration) is
-   * told once per game while this server runs, in the turn's entries; `pendingNotices` holds it until then.
-   */
-  const budgetNoticed = new Set<string>();
-  const pendingNotices = new Map<string, string>();
-  function noticeBudget(gameId: string, reason: string): void {
-    if (budgetNoticed.has(gameId)) return;
-    budgetNoticed.add(gameId);
-    pendingNotices.set(gameId, `ระบบ: ${reason} ระหว่างนี้บรรยายของ AI GM จะเป็นบรรยายสำรองจากระบบ`);
   }
 
   async function resolveTurn(input: ClosedPhase): Promise<PhaseResolution> {
@@ -393,13 +376,6 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         ? { kind: 'feed', locationId: ctx.place.id, actorMemberId: null, text, ...fallback }
         : { kind: 'narration', memberId: reader, text, ...fallback };
     });
-    // Q-177: the budget notice goes to the owner with this turn (the Human GM gets every narration too).
-    const notice = pendingNotices.get(gameId);
-    const owner = notice === undefined ? null : gameOwnerOf(db, gameId);
-    if (notice !== undefined && owner !== null) {
-      pendingNotices.delete(gameId);
-      entries.push({ kind: 'narration', memberId: owner, text: notice });
-    }
     const rolls = stored.rolls;
     return {
       results: resultsOf(state, resolved.state, resolved.log, world),

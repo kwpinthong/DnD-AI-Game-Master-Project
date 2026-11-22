@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AiCallRequest, AiCallResult, AiProvider } from '../src/ai/provider.ts';
 import { mockReply } from '../src/ai/providers/mock.ts';
 import { loadGameAssets } from '../src/assets/load.ts';
+import { npcStateFor } from '../src/companions/store.ts';
 import { applyPhaseActions, crossPlayerState } from '../src/crossplayer/phase.ts';
 import { tagContexts } from '../src/crossplayer/tags.ts';
 import { rollSpawn, spawnTable, treatChronicIllness } from '../src/game/origin.ts';
@@ -187,6 +188,9 @@ describe('GEN-065 start scenarios', { timeout: 60_000 }, () => {
     // Met แอสทรา (scenario NPC horizon-watcher): the GEN-054 bond row exists for C only.
     expect(dbRow('select npc_id from npc_bond where member_id = ? and npc_id = ?', t.c.memberId, 'horizon-watcher')).toBeDefined();
     expect(dbRow('select npc_id from npc_bond where member_id = ? and npc_id = ?', t.a.memberId, 'horizon-watcher')).toBeUndefined();
+    // Q-219: grade S hides its real name until met; C has met her, so C knows "แอสทรา" and A does not.
+    expect(npcStateFor(server!.orm, assets, t.c.memberId, 'horizon-watcher')).toMatchObject({ name: 'แอสทรา', nameRevealed: true });
+    expect(npcStateFor(server!.orm, assets, t.a.memberId, 'horizon-watcher')).toMatchObject({ name: 'ผู้เฝ้ามองเส้นขอบฟ้า', nameRevealed: false });
 
     for (const other of [t.a, t.b]) {
       for (const path of ['/api/game/origin', '/api/game/surroundings', '/api/game/character']) {
@@ -224,6 +228,41 @@ describe('GEN-065 start scenarios', { timeout: 60_000 }, () => {
     const toBarracks = (seat: Seat) => travel(server!.orm, assets, gameId, seat.memberId, { to: 'ค่ายทหารป้องกันเมือง' }, CLOCK);
     expect(toBarracks(t.b)).toMatchObject({ ok: false, code: 'restricted' });
     expect(toBarracks(t.a)).toMatchObject({ ok: true, place: { id: 'barracks' } });
+  });
+
+  it('Q-208: the illness penalty comes from the sheet (Illness_Stat / Illness_Value) and lasts while ill; none when the sheet has none', async () => {
+    await boot(new ScriptedRng([SICKLY, MUSICIAN, MUSICIAN]));
+    const t = await startedTable(server!, false);
+    const gameId = gameIdOf(t.a);
+    const withIllness = (illness: { stat: 'd20' | 'Stamina' | null; value: number | null }): typeof assets => ({
+      ...assets,
+      startScenarios: assets.startScenarios.map((s) => (s.name === 'คุณชาย/คุณหนูขี้โรค' ? { ...s, illness } : s)),
+    });
+    const playerA = (a: typeof assets) => crossPlayerState(server!.orm, gameId, new Set(), a).players[t.a.memberId]!;
+    const illness = (a: typeof assets) => playerA(a).statuses.find((s) => s.label === 'โรคเรื้อรัง');
+
+    // The sheet today has no number for it: the status carries none.
+    expect(assets.startScenarios.find((s) => s.name === 'คุณชาย/คุณหนูขี้โรค')!.illness).toEqual({ stat: null, value: null });
+    expect(illness(assets)!.mods).toEqual([]);
+    expect(playerA(assets).afterActionStamina).toBe(0);
+
+    // d20 -2: every roll while ill.
+    const d20 = withIllness({ stat: 'd20', value: -2 });
+    expect(illness(d20)!.mods).toEqual([{ scope: 'all', value: -2 }]);
+    expect(playerA(d20).afterActionStamina).toBe(0);
+    // Stamina -1: every action that costs Stamina costs 1 more while ill.
+    const stamina = withIllness({ stat: 'Stamina', value: -1 });
+    expect(illness(stamina)!.mods).toEqual([]);
+    expect(playerA(stamina).afterActionStamina).toBe(-1);
+    // Another player (not ill) gets nothing.
+    expect(crossPlayerState(server!.orm, gameId, new Set(), stamina).players[t.b.memberId]!.afterActionStamina).toBe(0);
+
+    // Cured (2 treatments): the penalty is gone with the status.
+    treatChronicIllness(server!.orm, t.a.memberId);
+    treatChronicIllness(server!.orm, t.a.memberId);
+    expect(illness(d20)).toBeUndefined();
+    expect(playerA(d20).statuses).toEqual(playerA(assets).statuses);
+    expect(playerA(stamina).afterActionStamina).toBe(0);
   });
 
   it('C4: in a phase, a successful HEAL counts as a treatment; a failed one does not', async () => {

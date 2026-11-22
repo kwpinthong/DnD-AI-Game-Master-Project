@@ -106,7 +106,7 @@ function upsertBond(db: DbOrTx, memberId: string, npcId: string, set: Partial<Om
     .run();
 }
 
-/** The name `ctx`'s player sees, and whether it is the real one (Q-103: only grade B hides it). */
+/** The name `ctx`'s player sees, and whether it is the real one (Q-103 / Q-219: grades B and S hide it). */
 function displayName(ctx: NpcContext, bond: BondRow | undefined): { name: string; nameRevealed: boolean } {
   if (bond?.evolvedGrade) return { name: ctx.sheet ? ctx.sheet.evolvedName(bond.evolvedAlignment) : ctx.npc.name, nameRevealed: true };
   const shown = npcNameShown(ctx.baseGrade, bond?.nameRevealed ?? false);
@@ -213,7 +213,9 @@ function tryEvolve(db: DbOrTx, ctx: NpcContext, at: GameTime): Evolution | null 
   if (!rule || bondOf(db, ctx.memberId, ctx.npc.id)?.evolvedGrade) return null;
   const path = evolutionPath(rule, progressOf(db, ctx.memberId, ctx.npc.id, at.day));
   if (!path) return null;
-  upsertBond(db, ctx.memberId, ctx.npc.id, { evolvedGrade: rule.to, evolvedAlignment: path.alignment }, at.now);
+  // Q-219: awakening a grade S NPC reveals its real name to this player (narration tokens read `nameRevealed`).
+  const reveals = !npcNameShown(ctx.baseGrade, false) ? { nameRevealed: true } : {};
+  upsertBond(db, ctx.memberId, ctx.npc.id, { evolvedGrade: rule.to, evolvedAlignment: path.alignment, ...reveals }, at.now);
   give(db, ctx.memberId, ctx.npc.id, segmentsAt(ctx, 'evolved', path.alignment).flatMap((s) => s.rewards), at.now);
   return { npcId: ctx.npc.id, grade: rule.to, alignment: path.alignment };
 }

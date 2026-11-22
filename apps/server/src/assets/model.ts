@@ -33,6 +33,8 @@ export const PERIODS = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as con
 export const WEATHERS = ['Clear', 'Clear Morning', 'Clear Night', 'Rain', 'Storm', 'Fog', 'Dark Night', 'Disaster'] as const;
 /** What a numeric effect changes (Q-090 `Stat`). */
 export const STATS = ['HP', 'Stamina', 'd20', 'Karma', 'Coins'] as const;
+/** What the chronic illness of a start scenario may lower (Q-208). */
+export const ILLNESS_STATS = ['d20', 'Stamina'] as const;
 /** Numeric effects the server computes itself (Q-090 `Effect_Type`); anything qualitative goes to the AI as text. */
 export const EFFECT_TYPES = [
   'restore',
@@ -210,6 +212,14 @@ export const StartScenarioRecord = z
         condition: Text,
       })
       .strict(),
+    /**
+     * Q-208: the chronic illness penalty (Illness_Stat / Illness_Value) while the start's illness lasts:
+     * `d20` = on every roll, `Stamina` = on every action that costs Stamina. Both null = none (the default).
+     */
+    illness: z
+      .object({ stat: z.enum(ILLNESS_STATS).nullable(), value: z.number().int().max(0).nullable() })
+      .strict()
+      .default({ stat: null, value: null }),
     note: Text,
     extra: Extra,
   })

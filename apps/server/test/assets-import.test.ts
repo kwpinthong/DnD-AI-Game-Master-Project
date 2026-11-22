@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { convertSheet, formatIssue } from '../src/assets/import.ts';
 import { REQUIRED_TABS, type TabName, type AbilityRecord, type Day10StrategyRecord, type ItemRecord, type LocationRecord, type NpcRecord, type StartScenarioRecord } from '../src/assets/model.ts';
-import { duplicateRow, fixtureCsv, keepColumnsBefore, setCell } from './assets-fixture.ts';
+import { addColumnBefore, duplicateRow, fixtureCsv, keepColumnsBefore, setCell } from './assets-fixture.ts';
 
 /** Data rows of a fixture CSV (lines after the header, blank lines left out). */
 function dataRowCount(csv: string): number {
@@ -303,5 +303,54 @@ describe('Q-161 Location Connects_To / Safety / Rest_Quality and NPC Public_Alia
     expect(result.errors.map(formatIssue)).toEqual([]);
     expect((result.files.Location as LocationRecord[])[0]).toMatchObject({ connectsTo: [], safety: null, restQuality: null, note: '' });
     expect((result.files.NPC as NpcRecord[])[0]).toMatchObject({ publicAlias: '', note: '' });
+  });
+});
+
+describe('Q-208 Start_Scenarios Illness_Stat / Illness_Value (the chronic illness penalty)', () => {
+  const NOTE = 'หมายเหตุ (ร่าง Claude — Nok ตรวจ)';
+  /** The fixture tab with the two new columns (empty), then `cells` set on sheet row 3 (the 7.25% row). */
+  function withIllness(cells: { stat: string; value: string }) {
+    const csv = requiredOnly();
+    let tab = addColumnBefore(addColumnBefore(csv.Start_Scenarios!, NOTE, 'Illness_Stat'), NOTE, 'Illness_Value');
+    tab = setCell(setCell(tab, 3, 'Illness_Stat', cells.stat), 3, 'Illness_Value', cells.value);
+    return convertSheet({ ...csv, Start_Scenarios: tab });
+  }
+  const rows = (result: ReturnType<typeof convertSheet>) => result.files.Start_Scenarios as StartScenarioRecord[];
+
+  it('reads a d20 or Stamina penalty into numbers; the other rows have none', () => {
+    const d20 = withIllness({ stat: 'd20', value: '-2' });
+    expect(d20.errors.map(formatIssue)).toEqual([]);
+    expect(rows(d20).find((s) => s.rate === 7.25)!.illness).toEqual({ stat: 'd20', value: -2 });
+    expect(rows(d20).find((s) => s.rate !== 7.25)!.illness).toEqual({ stat: null, value: null });
+    // The note column stays the note.
+    expect(rows(d20).find((s) => s.rate === 7.25)!.extra).toBeUndefined();
+
+    const stamina = withIllness({ stat: 'Stamina', value: '-1' });
+    expect(stamina.errors.map(formatIssue)).toEqual([]);
+    expect(rows(stamina).find((s) => s.rate === 7.25)!.illness).toEqual({ stat: 'Stamina', value: -1 });
+  });
+
+  it('a sheet without the columns imports with no penalty (default none)', () => {
+    const result = convertSheet(requiredOnly());
+    expect(result.errors.map(formatIssue)).toEqual([]);
+    for (const s of rows(result)) expect(s.illness).toEqual({ stat: null, value: null });
+  });
+
+  it('refuses a stat other than d20 / Stamina, a value that is not a penalty, and half a pair, naming the cell', () => {
+    const karma = withIllness({ stat: 'Karma', value: '-2' });
+    expect(karma.ok).toBe(false);
+    expect(karma.errors).toContainEqual(expect.objectContaining({ tab: 'Start_Scenarios', row: 3, column: 'Illness_Stat', message: expect.stringContaining('d20 / Stamina') }));
+
+    const bonus = withIllness({ stat: 'd20', value: '2' });
+    expect(bonus.ok).toBe(false);
+    expect(bonus.errors).toContainEqual(expect.objectContaining({ tab: 'Start_Scenarios', row: 3, column: 'Illness_Value', message: expect.stringContaining('ไม่มากกว่า 0') }));
+
+    const noValue = withIllness({ stat: 'd20', value: '' });
+    expect(noValue.ok).toBe(false);
+    expect(noValue.errors).toContainEqual(expect.objectContaining({ tab: 'Start_Scenarios', row: 3, column: 'Illness_Value', message: expect.stringContaining('ต้องมี') }));
+
+    const noStat = withIllness({ stat: '', value: '-1' });
+    expect(noStat.ok).toBe(false);
+    expect(noStat.errors).toContainEqual(expect.objectContaining({ tab: 'Start_Scenarios', row: 3, column: 'Illness_Stat', message: expect.stringContaining('ต้องมี') }));
   });
 });
