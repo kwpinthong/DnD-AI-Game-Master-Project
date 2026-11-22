@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { RoomPhaseStatus, Turn } from './room.ts';
 import { Phase, ScenarioLegendary } from './scenario.ts';
 import { GmTimelineEvent } from './timeline.ts';
-import { GmCharacterView, GmEvidenceView } from './visibility.ts';
+import { RollOutcome } from './view-models.ts';
+import { GmCharacterView, GmCurseView, GmEvidenceView } from './visibility.ts';
 
 /**
  * The Human GM console (GEN-058): every route under `/api/game/gm/` answers the Human GM only (a player
@@ -49,12 +50,33 @@ export type GmPendingEntry = z.infer<typeof GmPendingEntry>;
 export const GmPendingResult = z.strictObject({ memberId: z.string(), before: GmStats, after: GmStats, edited: z.boolean() });
 export type GmPendingResult = z.infer<typeof GmPendingResult>;
 
+/**
+ * One resolved action of the held turn with every number of its roll (Screens and Flows v2 §5; pending, see
+ * docs/contract.md). The GM is the only viewer who gets the DC, the modifiers and the total.
+ */
+export const GmCheckView = z.strictObject({
+  memberId: z.string(),
+  text: z.string(),
+  visibility: z.enum(['public', 'secret']),
+  /** Verb / target tags the AI GM matched (GEN-064). */
+  tags: z.array(z.string()),
+  dc: z.number().int(),
+  /** Each source of the modifier with its number, e.g. Glare of Truth +2, ฝน +1. */
+  modifiers: z.array(z.strictObject({ label: z.string(), value: z.number().int() })),
+  d20: z.number().int().min(1).max(20),
+  total: z.number().int(),
+  outcome: RollOutcome,
+});
+export type GmCheckView = z.infer<typeof GmCheckView>;
+
 export const GmPendingTurn = z.strictObject({
   at: GmTurnPoint,
   entries: z.array(GmPendingEntry),
   results: z.array(GmPendingResult),
   /** GEN-059 (Q-205): this is the game's ending (narration only; results cannot be edited). */
   finale: z.boolean().optional(),
+  /** The rolls behind the held turn, in resolve order (pending, see docs/contract.md). */
+  checks: z.array(GmCheckView).optional(),
 });
 export type GmPendingTurn = z.infer<typeof GmPendingTurn>;
 
@@ -77,6 +99,10 @@ export const GmFallbackView = z.strictObject({
 });
 export type GmFallbackView = z.infer<typeof GmFallbackView>;
 
+/** Q-252: an NPC as the Human GM sees it, with the timed curses on it (pending, see docs/contract.md). */
+export const GmNpcView = z.strictObject({ npcId: z.string(), name: z.string(), curses: z.array(GmCurseView) });
+export type GmNpcView = z.infer<typeof GmNpcView>;
+
 /** 200 from GET /api/game/gm/console. */
 export const GmConsoleResponse = z.strictObject({
   view: z.literal('gm'),
@@ -93,6 +119,8 @@ export const GmConsoleResponse = z.strictObject({
   pending: GmPendingTurn.nullable(),
   /** Q-177: every published template narration, oldest first, with its cause. */
   fallbacks: z.array(GmFallbackView),
+  /** Q-252: NPCs that carry a curse now; absent until the backend sends it (pending, see docs/contract.md). */
+  npcs: z.array(GmNpcView).optional(),
 });
 export type GmConsoleResponse = z.infer<typeof GmConsoleResponse>;
 

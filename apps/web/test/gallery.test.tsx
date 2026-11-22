@@ -44,10 +44,11 @@ describe('C1 every screen of the contract opens without a server', () => {
     for (const s of CONTRACT_SCREENS) expect(screen.getByRole('region', { name: s.title }).dataset.screen).toBe(s.id);
   });
 
+  // GEN-088/091: the gallery holds more real screens now; the first render of all of them needs more than the default 1 s.
   it('every screen with a page renders it from the mock, and nothing reaches the network', { timeout: 20_000 }, async () => {
     render(<Gallery search="" />);
-    // the play room frames connect through the mock socket (GEN-088: every play screen is the full Play screen now, so allow for a loaded machine)
-    await waitFor(() => expect(screen.getAllByText('เชื่อมต่อแล้ว').length).toBeGreaterThan(5), { timeout: 8000 });
+    // the play room frames connect through the mock socket (every play screen is the full Play screen, so allow for a loaded machine)
+    await waitFor(() => expect(screen.getAllByText('เชื่อมต่อแล้ว').length).toBeGreaterThan(5), { timeout: 10_000 });
     await screen.findAllByText('Server: ต่อได้ (database connected)');
     for (const [id, view] of Object.entries(SCREEN_VIEWS)) {
       const section = screen.getAllByRole('region').find((r) => r.dataset.screen === id)!;

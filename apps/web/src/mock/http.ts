@@ -25,10 +25,17 @@ export const findRoute = (method: string, path: string): HttpItem | undefined =>
 
 const ok = (body: unknown): MockReply => ({ status: 200, body });
 
+const LIBRARY = CONTRACT_FIXTURES.LearningLibraryResponse[0]!;
+
 /** Defaults for every scenario: the game has started (so the app goes on to the play room). */
 const DEFAULTS: Readonly<Record<string, MockReply>> = {
   'GET /api/game': ok(CONTRACT_FIXTURES.GameView[1]),
   'POST /api/game/start': ok(CONTRACT_FIXTURES.GameView[1]),
+  // GEN-091: a delete answers with what is left, so the library visibly loses the entry / the game.
+  'DELETE /api/admin/learning/:id': ok({ entries: LIBRARY.entries.slice(1), counts: { ...LIBRARY.counts, [LIBRARY.entries[0]!.type]: 0 } }),
+  'DELETE /api/admin/learning/games/:gameId': ok(CONTRACT_FIXTURES.LearningLibraryResponse[1]),
+  // taking a 👍 back answers with none left
+  'DELETE /api/game/rating/likes/:sourceRef': ok({ rating: { ...CONTRACT_FIXTURES.GameRatingResponse[0]!.rating, liked: [] } }),
 };
 
 function invalidInput(issues: readonly { path: readonly PropertyKey[]; message: string }[]): MockReply {

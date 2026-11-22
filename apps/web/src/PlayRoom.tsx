@@ -215,7 +215,7 @@ export function PlayRoom({
                 {room.gmStatus.canRetry && <Button onClick={() => conn.current?.sendRetry()}>{t.retry}</Button>}
               </div>
             )}
-            <GmConsole apiBaseUrl={apiBaseUrl} token={token} refreshKey={`${room.day}-${room.phase}-${room.turn}-${room.status}-${room.gmStatus?.code ?? ''}`} />
+            <GmConsole apiBaseUrl={apiBaseUrl} token={token} refreshKey={`${room.day}-${room.phase}-${room.turn}-${room.status}-${room.gmStatus?.code ?? ''}`} gmStatus={room.gmStatus} />
             <Feed entries={feed} placeId={null} astral={false} />
             <PrivateColumn
               entries={entries}

@@ -1,0 +1,342 @@
+/* GM console (GEN-091, Screens and Flows v2 §5): a dense three-column board for a desktop. Tokens only; every
+   text / background pair used here is one of test/contrast.ts. Numbers are tabular (body rule in theme.css). */
+
+.gm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+/* shown on phones only: the console is made for a desktop */
+.gm__phone-note {
+  display: none;
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--panel);
+  color: var(--highlight);
+  border: var(--line-w) solid var(--line);
+  border-left: var(--hit-border-w) solid var(--highlight);
+  border-radius: var(--radius-md);
+}
+
+.gm__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: var(--line-w) solid var(--ornament);
+}
+
+.gm__title {
+  margin: 0;
+}
+
+.gm__when,
+.gm__room {
+  margin: 0;
+}
+
+.gm__when {
+  color: var(--highlight);
+  font-weight: 600;
+}
+
+.gm__room {
+  color: var(--muted);
+}
+
+.gm-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--panel);
+  border: var(--line-w) solid var(--line);
+  border-left: var(--hit-border-w) solid var(--highlight);
+  border-radius: var(--radius-md);
+}
+
+.gm-status strong {
+  color: var(--highlight);
+}
+
+.gm-status--budget_reached,
+.gm-status--stuck,
+.gm-status--ai_not_ready {
+  border-left-color: var(--danger);
+}
+
+.gm-status--budget_reached strong,
+.gm-status--stuck strong,
+.gm-status--ai_not_ready strong {
+  color: var(--danger);
+}
+
+.gm__cols,
+.gm__col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  align-content: start;
+}
+
+.gm-panel {
+  position: relative;
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--panel);
+  border: var(--line-w) solid var(--line);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.gm-panel__title {
+  margin: 0 0 var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: var(--line-w) solid var(--line);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.gm-empty,
+.gm-pending {
+  margin: 0;
+  color: var(--muted);
+}
+
+.gm-pending {
+  margin-top: var(--space-2);
+  padding-left: var(--space-2);
+  border-left: var(--line-w) dashed var(--muted);
+  font-size: var(--text-xs);
+}
+
+.gm-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.gm-list > li + li {
+  padding-top: var(--space-2);
+  border-top: var(--line-w) solid var(--line);
+}
+
+.gm-num {
+  white-space: nowrap;
+}
+
+.gm-num small,
+.gm-npc small {
+  font-size: var(--text-xs);
+}
+
+/* A character: the name, Karma and the curses are bare text of the row (bold); each other part is a span. */
+.gm-char,
+.gm-npc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-3);
+}
+
+.gm-char {
+  font-weight: 600;
+}
+
+.gm-char > span {
+  font-weight: 400;
+}
+
+.gm-char__meta {
+  color: var(--muted);
+}
+
+.gm-break {
+  flex-basis: 100%;
+  height: 0;
+}
+
+.gm-curse {
+  flex-basis: 100%;
+  color: var(--secret);
+}
+
+/* ---------- the held turn ---------- */
+.gm-held {
+  border-color: var(--accent);
+}
+
+.gm-held__title {
+  color: var(--accent);
+  font-size: var(--text-sm);
+}
+
+/* Q-215: the finale is told apart by its label; the gold edge only repeats it */
+.gm-held--finale {
+  border-color: var(--highlight);
+}
+
+.gm-held--finale .gm-held__title {
+  color: var(--highlight);
+}
+
+.gm-held__note {
+  margin: 0 0 var(--space-2);
+  color: var(--muted);
+}
+
+.gm-checks {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+  counter-reset: check;
+}
+
+.gm-check {
+  counter-increment: check;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  border: var(--line-w) solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.gm-check p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.gm-check__what::before {
+  content: counter(check);
+  color: var(--muted);
+}
+
+.gm-check__roll {
+  margin-top: var(--space-1);
+}
+
+.gm-check__tags {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.gm-check__roll small {
+  font-size: var(--text-xs);
+}
+
+.gm-check__outcome {
+  font-weight: 600;
+}
+
+.gm-check__outcome--ok {
+  color: var(--success);
+}
+
+.gm-check__outcome--bad {
+  color: var(--danger);
+}
+
+/* ---------- forms ---------- */
+.gm-form label {
+  margin-block: var(--space-2) 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.gm-form input:not([type='checkbox']):not([type='radio']),
+.gm-form textarea,
+.gm-form select {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-1);
+}
+
+.gm-form textarea {
+  resize: vertical;
+}
+
+.gm-form__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0 var(--space-3);
+}
+
+.gm-result {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 var(--space-3);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.gm-result legend {
+  font-size: var(--text-xs);
+}
+
+.gm-form__note {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-2);
+  border-left: var(--line-w) solid var(--highlight);
+  color: var(--highlight);
+  font-size: var(--text-xs);
+}
+
+.gm-form [role='alert'] {
+  margin: var(--space-2) 0 0;
+}
+
+.gm-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* "save" is a submit but not the main action here: approve is */
+.gm .btn--secondary[type='submit'] {
+  background: var(--panel);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.gm-action--secret {
+  padding-left: var(--space-2);
+  border-left: var(--line-w) solid var(--secret);
+}
+
+.gm-list > .gm-action--secret + li,
+.gm-list > li + .gm-action--secret {
+  border-top: var(--line-w) solid var(--line);
+}
+
+@media (min-width: 1100px) {
+  .gm__cols {
+    grid-template-columns: minmax(280px, 340px) minmax(0, 1fr) minmax(280px, 340px);
+    align-items: start;
+  }
+}
+
+@media (max-width: 767px) {
+  .gm__phone-note {
+    display: block;
+  }
+
+  .gm-result {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

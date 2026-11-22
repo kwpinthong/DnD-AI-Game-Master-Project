@@ -246,19 +246,20 @@ describe('C3: game list and the summary + log of a finished game', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'รายการเกม' }));
     fireEvent.click(await screen.findByRole('button', { name: 'ดูสรุป เมืองก่อนอุกกาบาต' }));
     const form = within(await screen.findByRole('region', { name: 'ให้คะแนนเกม' }));
-    await form.findByLabelText('คะแนน 1–10');
+    await form.findByRole('group', { name: /คะแนน 1/ });
     return { server, form };
   }
 
+  // Q-273: the end page's form is GEN-091's (radio scores 1-10); the behaviour is GEN-078's.
   it('GEN-078 C1: on an ended game a member sends 9 + a comment and the page says the score is sent', async () => {
     const { server, form } = await openEnded();
-    expect(form.queryByText(/ส่งคะแนนแล้ว/)).toBeNull();
-    fireEvent.change(form.getByLabelText('คะแนน 1–10'), { target: { value: '9' } });
+    expect(form.queryByText(/ส่งแล้ว/)).toBeNull();
+    fireEvent.click(form.getByRole('radio', { name: '9' }));
     fireEvent.change(form.getByLabelText('ความเห็น (ไม่บังคับ)'), { target: { value: 'สนุกมาก ทำอีกนะ' } });
     fireEvent.click(form.getByRole('button', { name: 'ส่งคะแนน' }));
-    expect(await form.findByText(/ส่งคะแนนแล้ว/)).toBeTruthy();
+    expect(await form.findByText(/ส่งแล้ว/)).toBeTruthy();
     expect(server.ratingCalls).toEqual([{ method: 'PUT', path: '/api/game/rating', body: { score: 9, comment: 'สนุกมาก ทำอีกนะ' } }]);
-    // C6: the form stays, so the score can be changed.
+    // C6: the score can be changed.
     expect(form.getByRole('button', { name: 'แก้คะแนน' })).toBeTruthy();
   });
 
@@ -268,21 +269,18 @@ describe('C3: game list and the summary + log of a finished game', () => {
     expect((await form.findByRole('alert')).textContent).toBe('เลือกคะแนน 1–10');
     expect(server.ratingCalls).toEqual([]);
     // Only whole numbers 1–10 can be chosen.
-    expect(within(form.getByLabelText('คะแนน 1–10')).getAllByRole('option').map((o) => (o as HTMLOptionElement).value)).toEqual(['', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']);
+    expect(form.getAllByRole('radio').map((o) => (o as HTMLInputElement).value)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']);
   });
 
-  it('GEN-078 C7: 👍 on a revealed action adds to its count; pressing again takes it back', async () => {
+  it('GEN-078 C7: 👍 on a revealed action marks it liked; pressing again takes it back', async () => {
     const { server } = await openEnded();
     const lin = within(screen.getByRole('article', { name: 'นก' }));
-    const like = await lin.findByRole('button', { name: /👍 แอบขโมยแผนที่ดาว/ });
+    const like = await lin.findByRole('button', { name: /ชอบการตัดสินนี้: แอบขโมยแผนที่ดาว/ });
     expect(like.getAttribute('aria-pressed')).toBe('false');
-    expect(like.textContent).toBe('👍 0');
     fireEvent.click(like);
-    await lin.findByRole('button', { name: /👍 แอบขโมยแผนที่ดาว/, pressed: true });
-    expect(like.textContent).toBe('👍 3');
-    fireEvent.click(like);
-    await lin.findByRole('button', { name: /👍 แอบขโมยแผนที่ดาว/, pressed: false });
-    expect(like.textContent).toBe('👍 2');
+    await lin.findByRole('button', { name: /ชอบการตัดสินนี้: แอบขโมยแผนที่ดาว/, pressed: true });
+    fireEvent.click(lin.getByRole('button', { name: /ชอบการตัดสินนี้: แอบขโมยแผนที่ดาว/ }));
+    await lin.findByRole('button', { name: /ชอบการตัดสินนี้: แอบขโมยแผนที่ดาว/, pressed: false });
     expect(server.ratingCalls).toEqual([
       { method: 'PUT', path: '/api/game/rating/likes/3-NOCTHERION-1-1', body: undefined },
       { method: 'DELETE', path: '/api/game/rating/likes/3-NOCTHERION-1-1', body: undefined },
