@@ -7,3 +7,8 @@ packages:
 allowBuilds:
   esbuild: true
   better-sqlite3: false
+
+# ws 8.23.0 (pulled in by @fastify/websocket) was only 10 days old at GEN-056; pinned to the
+# previous patch line until it has aged (Q-107).
+overrides:
+  ws: 8.22.2
