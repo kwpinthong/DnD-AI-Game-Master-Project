@@ -1,0 +1,1 @@
+ALTER TABLE `game_event_state` ADD `witnesses` text;

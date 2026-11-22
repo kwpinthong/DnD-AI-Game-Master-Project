@@ -234,11 +234,12 @@ export function startGame(db: Db, actor: MemberRow, now: Clock): OwnerActionOutc
     if (reasons.length > 0) return { kind: 'cannot_start', reasons };
     const t = now();
     tx.update(game).set({ startedAt: t }).where(eq(game.id, row.id)).run();
-    // The game starts at day 1 Morning: its events become active (GEN-053).
-    advanceTimeline(tx, row.id, { day: 1, phase: 'MORNING' }, t);
     // Everyone starts at the scenario's first place until origins / spawn points place them (GEN-050).
     const start = getGameScenario(tx, row.id)?.locations[0];
     if (start) placeUnplacedCharacters(tx, row.id, start.id, t);
+    // The game starts at day 1 Morning: its events become active (GEN-053), after placing, so each
+    // event's witness snapshot sees where everyone starts (Q-104).
+    advanceTimeline(tx, row.id, { day: 1, phase: 'MORNING' }, t);
     return undefined;
   });
 }

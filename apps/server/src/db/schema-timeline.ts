@@ -33,6 +33,13 @@ export const gameEventState = sqliteTable(
     outcomeSource: text('outcome_source', { enum: ['default', 'ai'] }),
     activatedAt: integer('activated_at'),
     resolvedAt: integer('resolved_at'),
+    /**
+     * Members at the event's place when it left `pending` (Q-104): the snapshot `witnessesOf` takes, so
+     * they keep seeing it after moving away and someone who arrives later never does. Null = no
+     * snapshot: a town-wide event, or one that began before migration 0011 (players then see it by
+     * where they are now, the Q-080 rule).
+     */
+    witnesses: text('witnesses', { mode: 'json' }).$type<string[]>(),
     updatedAt: integer('updated_at').notNull(),
   },
   (t) => [primaryKey({ columns: [t.gameId, t.eventId] })],

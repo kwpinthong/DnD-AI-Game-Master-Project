@@ -10,6 +10,8 @@ import { and, eq } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { gameEventState, gameTimeline } from '../db/schema.ts';
 import { getGameScenario } from '../scenario/store.ts';
+import { locationSnapshot } from '../visibility/store.ts';
+import { witnessesOf } from '../visibility/views.ts';
 
 /**
  * Timeline event state machine (GEN-053, GDD §6.2). Every scenario event happens at its day + phase:
@@ -98,6 +100,20 @@ export function getTimeline(db: DbOrTx, gameId: string): GameTimelineState | nul
   };
 }
 
+/**
+ * eventId → the members who were at its place when it began (Q-104), for events past `pending`.
+ * null = no snapshot (town-wide event, or one that began before migration 0011).
+ */
+export function eventWitnesses(db: DbOrTx, gameId: string): Map<string, readonly string[] | null> {
+  return new Map([...readRows(db, gameId)].map(([id, row]) => [id, row.witnesses ?? null]));
+}
+
+/** Who is at `event`'s place right now: the snapshot an event keeps from the moment it begins (Q-104). */
+function witnessesAtStart(event: Scenario['timeline'][number], locations: () => ReadonlyMap<string, string>): string[] | null {
+  if (event.locationId === null) return null;
+  return witnessesOf({ locationId: event.locationId, actorMemberId: null, visibility: 'public' }, locations());
+}
+
 export type AdvanceResult =
   | { ok: true; activated: string[]; resolved: string[] }
   | { ok: false; code: 'not_found' | 'backwards' };
@@ -117,6 +133,8 @@ export function advanceTimeline(db: DbOrTx, gameId: string, to: PhasePoint | 'en
   if (target === current) return { ok: true, activated: [], resolved: [] };
 
   const rows = readRows(db, gameId);
+  let snapshot: ReadonlyMap<string, string> | undefined;
+  const locations = () => (snapshot ??= locationSnapshot(db, gameId));
   const activated: string[] = [];
   const resolved: string[] = [];
   for (const event of scenario.timeline) {
@@ -131,6 +149,8 @@ export function advanceTimeline(db: DbOrTx, gameId: string, to: PhasePoint | 'en
         outcomeSource: chosen ? ('ai' as const) : ('default' as const),
         activatedAt: row?.activatedAt ?? null,
         resolvedAt: now,
+        // Skipped straight past (never active): it happens now, so the snapshot is taken now.
+        witnesses: status === 'pending' ? witnessesAtStart(event, locations) : (row?.witnesses ?? null),
         updatedAt: now,
       };
       db.insert(gameEventState)
@@ -139,7 +159,7 @@ export function advanceTimeline(db: DbOrTx, gameId: string, to: PhasePoint | 'en
         .run();
       resolved.push(event.id);
     } else if (at === target && status === 'pending') {
-      const values = { status: 'active' as const, activatedAt: now, updatedAt: now };
+      const values = { status: 'active' as const, activatedAt: now, witnesses: witnessesAtStart(event, locations), updatedAt: now };
       db.insert(gameEventState)
         .values({ gameId, eventId: event.id, ...values })
         .onConflictDoUpdate({ target: [gameEventState.gameId, gameEventState.eventId], set: values })
