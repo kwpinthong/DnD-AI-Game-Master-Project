@@ -1,4 +1,4 @@
-import type { Phase, Scenario } from '@isekai/protocol';
+import { PHASE_LABEL, PHASES as PERIODS, type Phase, type Scenario } from '@isekai/protocol';
 import { useEffect, useState, type ReactNode } from 'react';
 import { scenarioCall, type ScenarioAction } from './scenario-api.ts';
 
@@ -7,12 +7,9 @@ type Npc = Scenario['npcs'][number];
 type Legendary = Scenario['legendaries'][number];
 type Tab = 'events' | 'npcs' | 'legendaries';
 
-const PHASES: { value: Phase; label: string }[] = [
-  { value: 'MORNING', label: 'เช้า' },
-  { value: 'AFTERNOON', label: 'บ่าย' },
-  { value: 'NIGHT', label: 'ค่ำ' },
-];
-const phaseLabel = (p: Phase) => PHASES.find((x) => x.value === p)!.label;
+/** GEN-063: an event belongs to one of the 4 periods and lasts both of its turns. */
+const PHASES: { value: Phase; label: string }[] = PERIODS.map((value) => ({ value, label: PHASE_LABEL[value] }));
+const phaseLabel = (p: Phase) => PHASE_LABEL[p];
 const RANKS = ['F', 'B', 'A', 'S'] as const;
 
 /** Ids the scenario schema accepts (a-z, 0-9, -). */
@@ -222,7 +219,7 @@ export function ScenarioEditor({
         ...s,
         timeline: [
           ...s.timeline,
-          { id: newId('ev'), day: 1, phase: 'MORNING', kind: 'event', title: '', description: '', outcome: '', crisis: false, locationId: null, npcIds: [], gmNote: '' },
+          { id: newId('ev'), day: 1, phase: 'EOSORIA', kind: 'event', title: '', description: '', outcome: '', crisis: false, locationId: null, npcIds: [], gmNote: '' },
         ],
       }),
       true,

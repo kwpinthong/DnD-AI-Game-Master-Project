@@ -44,7 +44,7 @@ describe('C1 AI_PROVIDER=mock', () => {
 
     const rows = usageRows(server.db);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ game_id: 'game-c1', purpose: 'gm_adjudicate', provider: 'mock', ok: 1, day: 1, phase: 'MORNING' });
+    expect(rows[0]).toMatchObject({ game_id: 'game-c1', purpose: 'gm_adjudicate', provider: 'mock', ok: 1, day: 1, phase: 'EOSORIA', turn: 2 });
   });
 
   // Spawning a real Node process under full-suite load can take well over vitest's 5 s default;

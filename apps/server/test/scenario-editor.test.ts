@@ -16,7 +16,7 @@ import { makeTempDir } from './helpers.ts';
 
 const CREATE_CODE = 'ลับเฉพาะ-2026';
 const MOCK_AI = loadAiConfig({ AI_PROVIDER: 'mock' });
-const PHASE_ORDER = { MORNING: 0, AFTERNOON: 1, NIGHT: 2 } as const;
+const PHASE_ORDER = { EOSORIA: 0, SOLARION: 1, HESPERION: 2, NOCTHERION: 3 } as const;
 
 /** Strings planted by the GM; none may reach a player's response. */
 const CANARY_CONDITION = 'CANARY-เงื่อนไขลับ-ห้ามผู้เล่นเห็น';
@@ -101,7 +101,7 @@ describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () =
   const newEvent = (patch: Record<string, unknown> = {}) => ({
     id: 'gm-day4-afternoon',
     day: 4,
-    phase: 'AFTERNOON',
+    phase: 'SOLARION',
     title: 'ขบวนคาราวานมาถึงประตูเมือง',
     description: 'พ่อค้าต่างเมืองนำข่าวลือมาด้วย',
     outcome: 'ถ้าไม่มีใครช่วย คาราวานถูกปล้นตอนค่ำ',
@@ -123,7 +123,7 @@ describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () =
     // Added at the end on purpose (after the day 12 finale), plus a morning event of the same day after it.
     const edited = {
       ...before.scenario,
-      timeline: [...before.scenario.timeline, newEvent(), newEvent({ id: 'gm-day4-morning', phase: 'MORNING', title: 'เช้าวันที่ 4' })],
+      timeline: [...before.scenario.timeline, newEvent(), newEvent({ id: 'gm-day4-morning', phase: 'EOSORIA', title: 'เช้าวันที่ 4' })],
     };
     const res = await putScenario(gm.token, edited);
     expect(res.status, res.text).toBe(200);
@@ -133,7 +133,7 @@ describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () =
     const ids = saved.timeline.map((e) => e.id);
     expect(ids.indexOf('gm-day4-morning')).toBe(ids.indexOf('gm-day4-afternoon') - 1);
     const day4 = saved.timeline.find((e) => e.id === 'gm-day4-afternoon');
-    expect(day4).toMatchObject({ day: 4, phase: 'AFTERNOON', outcome: 'ถ้าไม่มีใครช่วย คาราวานถูกปล้นตอนค่ำ' });
+    expect(day4).toMatchObject({ day: 4, phase: 'SOLARION', outcome: 'ถ้าไม่มีใครช่วย คาราวานถูกปล้นตอนค่ำ' });
     // Day 3 events come right before day 4, day 5 right after.
     expect(saved.timeline[ids.indexOf('gm-day4-morning') - 1]!.day).toBe(3);
     expect(saved.timeline[ids.indexOf('gm-day4-afternoon') + 1]!.day).toBe(5);

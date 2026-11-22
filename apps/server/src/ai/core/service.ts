@@ -51,6 +51,8 @@ export interface AiTrigger<T> {
   purpose: AiPurpose;
   day?: number;
   phase?: AiPhase;
+  /** 1 | 2 within the period, when the call belongs to a turn. */
+  turn?: number;
   /** Prompt text uses {{p:id}} / {{n:id}} tokens, never real names (Q-045). It is never logged. */
   system: PromptBlock[];
   messages: AiCallRequest['messages'];
@@ -172,6 +174,7 @@ export function createAiService(deps: AiServiceDeps): AiService {
           gameId: trigger.gameId,
           day: trigger.day ?? null,
           phase: trigger.phase ?? null,
+          turn: trigger.turn ?? null,
           purpose: trigger.purpose,
           provider: provider.id,
           model: answeredBy,
@@ -185,7 +188,7 @@ export function createAiService(deps: AiServiceDeps): AiService {
         });
         log(
           scrubKeys(
-            `[ai] game=${trigger.gameId} purpose=${trigger.purpose} day=${trigger.day ?? '-'} phase=${trigger.phase ?? '-'} ` +
+            `[ai] game=${trigger.gameId} purpose=${trigger.purpose} day=${trigger.day ?? '-'} phase=${trigger.phase ?? '-'} turn=${trigger.turn ?? '-'} ` +
               `provider=${provider.id} model=${answeredBy} attempt=${attempt}/${attempts} ok=${failure === null ? 1 : 0}` +
               (failure ? ` reason="${failure}"` : '') +
               ` in=${tokens.inputTokens} cached=${tokens.cachedInputTokens} cache_write=${tokens.cacheWriteTokens}` +

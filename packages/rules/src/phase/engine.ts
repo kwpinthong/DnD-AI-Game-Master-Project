@@ -3,10 +3,17 @@ import type { Rng } from '../rng.ts';
 import { rollRescue, wakeAfter, type RescueOutcome } from '../resolution/rescue.ts';
 import { RULES } from '../resolution/tables.ts';
 import {
+  DROWSY,
+  EVIL_KARMA_MAX,
   GAME_DAYS,
-  PHASES,
+  LEGACY_PHASES,
+  NIGHT_PERIOD,
+  PERIODS,
+  TURNS_PER_PERIOD,
+  type Drowsy,
   type KnockedOut,
   type NewPlayer,
+  type Period,
   type PlayerCondition,
   type RecoveryKind,
   type SleepReason,
@@ -14,42 +21,37 @@ import {
   type PhaseErrorCode,
   type PhaseEvent,
   type PhaseLogEntry,
-  type PhasePoint,
   type PhaseState,
   type PhaseStepResult,
   type PlayerAction,
   type PlayerPhaseState,
   type PlayerResult,
+  type TurnPoint,
 } from './types.ts';
 
 /**
- * Sleep recovery (spec §4, §14 `rest.*`).
- * - Night rest at the inn: Stamina +rollRange(15, 25) + on_sleep bonus (GDD "พักค่ำ +15..25", GEN-052 C5;
+ * Sleep recovery per turn (spec §4, §14 `rest.*`).
+ * - NOCTHERION rest at the inn: Stamina +rollRange(15, 25) + on_sleep bonus (GDD "พักค่ำ +15..25", GEN-052 C5;
  *   spec §4.1 still lists a fixed inn +25 and needs updating), HP +10.
- * - Night rest anywhere else: the spec's `rough` row, +15 + bonus, HP +5, until location rules (GEN-060) say more.
- * - Forced sleep in the day: +15 + bonus (spec §4.3). A day `rest` action: +8, no HP (spec §4.2).
- * Everything is capped at max.
+ * - NOCTHERION rest anywhere else: the spec's `rough` row, +15 + bonus, HP +5, until location rules (GEN-060) say more.
+ * - Forced sleep outside NOCTHERION: +15 + bonus (spec §4.3). A `rest` action outside NOCTHERION: +8, no HP (spec §4.2).
+ * Everything is capped at max (System_Rules: Stamina ceiling 30 for the whole game).
  */
 export const REST = { innMin: 15, innMax: 25, rough: 15, exhaustedDay: 15, day: 8, hpInn: 10, hpRough: 5 } as const;
 
-/** Day 1 Morning, everyone awake with full HP and Stamina unless given. */
+/** Stamina after a gain, never above the ceiling (C6: 28 + 5 = 30). */
+export function gainStamina(current: number, gain: number, max: number = RULES.staminaMax): number {
+  return Math.min(max, current + gain);
+}
+
+/** Day 1 EOSORIA turn 1, everyone awake with full HP and Stamina unless given. */
 export function createPhaseState(input: { readonly players: readonly NewPlayer[] }): PhaseState {
   const players: Record<string, PlayerPhaseState> = {};
-  for (const p of input.players) {
-    players[p.id] = {
-      id: p.id,
-      hp: p.hp ?? RULES.hpMax,
-      stamina: p.stamina ?? RULES.staminaMax,
-      condition: 'awake',
-      mustSubmit: true,
-      secretDay: null,
-      sleepBonus: p.sleepBonus ?? 0,
-      knockedOut: null,
-    };
-  }
+  for (const p of input.players) players[p.id] = newPlayer(p);
   return {
     day: 1,
-    phase: 'MORNING',
+    phase: PERIODS[0],
+    turn: 1,
     status: 'collecting',
     order: input.players.map((p) => p.id),
     players,
@@ -57,6 +59,74 @@ export function createPhaseState(input: { readonly players: readonly NewPlayer[]
     staminaMax: RULES.staminaMax,
     hpMax: RULES.hpMax,
   };
+}
+
+function newPlayer(p: NewPlayer): PlayerPhaseState {
+  return {
+    id: p.id,
+    hp: p.hp ?? RULES.hpMax,
+    stamina: p.stamina ?? RULES.staminaMax,
+    condition: 'awake',
+    mustSubmit: true,
+    secretDay: null,
+    nightSecretDay: null,
+    sleptDay: null,
+    drowsy: null,
+    karma: p.karma ?? 0,
+    sleepBonus: p.sleepBonus ?? 0,
+    knockedOut: null,
+  };
+}
+
+/** 1..96: where `at` is in the game. */
+export function turnNumber(at: TurnPoint): number {
+  return ((at.day - 1) * PERIODS.length + PERIODS.indexOf(at.phase)) * TURNS_PER_PERIOD + at.turn;
+}
+
+/** The turn after `at`; null after day 12 NOCTHERION turn 2 (the finale). */
+export function nextPoint(at: TurnPoint): TurnPoint | null {
+  if (at.turn < TURNS_PER_PERIOD) return { day: at.day, phase: at.phase, turn: 2 };
+  const phase = PERIODS[PERIODS.indexOf(at.phase) + 1];
+  if (phase) return { day: at.day, phase, turn: 1 };
+  return at.day >= GAME_DAYS ? null : { day: at.day + 1, phase: PERIODS[0], turn: 1 };
+}
+
+export function isDrowsy(player: PlayerPhaseState, day: number): boolean {
+  return player.drowsy !== null && player.drowsy.day === day;
+}
+
+/** Whether the Secret quota that applies at `at` is used: tonight's free one in NOCTHERION, else today's. */
+export function secretQuotaUsed(player: PlayerPhaseState, at: Pick<TurnPoint, 'day' | 'phase'>): boolean {
+  return (at.phase === NIGHT_PERIOD ? player.nightSecretDay : player.secretDay) === at.day;
+}
+
+/**
+ * Reads a stored state, including one saved by the 3-phase engine of GEN-052 (C8): MORNING / AFTERNOON /
+ * NIGHT become EOSORIA / SOLARION / HESPERION turn 1 (`LEGACY_PHASES`), and fields added since get their
+ * starting value. A state already in the current shape comes back equal.
+ */
+export function restorePhaseState(raw: unknown): PhaseState {
+  const s = raw as PhaseState & { phase: string; turn?: number };
+  const point = (p: { day: number; phase: string; turn?: number }): TurnPoint => ({
+    day: p.day,
+    phase: (LEGACY_PHASES as Record<string, Period>)[p.phase] ?? (p.phase as Period),
+    turn: p.turn === 2 ? 2 : 1,
+  });
+  const players: Record<string, PlayerPhaseState> = {};
+  for (const id of s.order) {
+    const p = s.players[id]! as Partial<PlayerPhaseState> & Pick<PlayerPhaseState, 'id' | 'hp' | 'stamina'>;
+    const ko = p.knockedOut ?? null;
+    players[id] = {
+      ...newPlayer({ id: p.id }),
+      ...p,
+      nightSecretDay: p.nightSecretDay ?? null,
+      sleptDay: p.sleptDay ?? null,
+      drowsy: p.drowsy ?? null,
+      karma: p.karma ?? 0,
+      knockedOut: ko ? { ...ko, wakeAt: point(ko.wakeAt) } : null,
+    } as PlayerPhaseState;
+  }
+  return { ...s, ...point(s), players };
 }
 
 /** Applies one event. Rejected events return an error and no new state, so the caller keeps the old one. */
@@ -73,22 +143,29 @@ function fail(code: PhaseErrorCode, message: string): { readonly ok: false; read
   return { ok: false, error: { code, message } };
 }
 
-function here(state: PhaseState): PhasePoint {
-  return { day: state.day, phase: state.phase };
+function here(state: PhaseState): TurnPoint {
+  return { day: state.day, phase: state.phase, turn: state.turn };
 }
+
+const isNight = (state: PhaseState) => state.phase === NIGHT_PERIOD;
 
 function submit(state: PhaseState, playerId: string, action: PlayerAction): PhaseStepResult {
   if (ended(state)) return fail('game_ended', `The game is over (${state.status})`);
-  if (state.status !== 'collecting') return fail('not_collecting', `Phase is ${state.status}; actions are accepted only while collecting`);
+  if (state.status !== 'collecting') return fail('not_collecting', `Turn is ${state.status}; actions are accepted only while collecting`);
   const player = state.players[playerId];
   if (!player) return fail('unknown_player', `No player "${playerId}"`);
 
-  if (!player.mustSubmit) return fail('cannot_act', `${playerId} is ${player.condition} this phase; the input is locked`);
-  if (action.restAtInn && (!action.rest || state.phase !== 'NIGHT')) {
-    return fail('invalid_action', 'restAtInn needs rest: true and is only valid at Night');
+  if (!player.mustSubmit) return fail('cannot_act', `${playerId} is ${player.condition} this turn; the input is locked`);
+  if (action.restAtInn && (!action.rest || !isNight(state))) {
+    return fail('invalid_action', `restAtInn needs rest: true and is only valid in ${NIGHT_PERIOD}`);
   }
-  if (action.visibility === 'secret' && player.secretDay === state.day) {
-    return fail('secret_quota_used', `${playerId} already used today's Secret phase (one per day)`);
+  if (action.visibility === 'secret' && secretQuotaUsed(player, state)) {
+    return fail(
+      'secret_quota_used',
+      isNight(state)
+        ? `${playerId} already used tonight's free ${NIGHT_PERIOD} Secret turn`
+        : `${playerId} already used today's Secret turn (one per day, plus one in ${NIGHT_PERIOD})`,
+    );
   }
 
   const replaced = playerId in state.submissions;
@@ -97,19 +174,22 @@ function submit(state: PhaseState, playerId: string, action: PlayerAction): Phas
   return { ok: true, ...closeIfComplete(next, log) };
 }
 
-/** Closes the phase once every player who must submit has; nobody else is waited for. */
+/** Closes the turn once every player who must submit has; nobody else is waited for. */
 function closeIfComplete(state: PhaseState, log: PhaseLogEntry[]): { state: PhaseState; log: PhaseLogEntry[] } {
   const waiting = state.order.filter((id) => state.players[id]!.mustSubmit && !(id in state.submissions));
   if (waiting.length > 0) return { state, log };
   const asleep: { playerId: string; reason: SleepReason }[] = [];
   for (const id of state.order) {
     if (state.players[id]!.condition === 'exhausted') asleep.push({ playerId: id, reason: 'exhausted' });
-    else if (state.phase === 'NIGHT' && state.submissions[id]?.rest) asleep.push({ playerId: id, reason: 'night_rest' });
+    else if (isNight(state) && state.submissions[id]?.rest) asleep.push({ playerId: id, reason: 'night_rest' });
   }
   const unconscious = state.order.filter((id) => state.players[id]!.condition === 'unconscious');
   log.push({ type: 'phase_closed', at: here(state), actions: state.submissions, asleep, unconscious });
-  // The Secret quota is used by the action that stands when the phase closes, not by a replaced draft.
-  const players = mapPlayers(state, (p) => (state.submissions[p.id]?.visibility === 'secret' ? { ...p, secretDay: state.day } : p));
+  // The Secret quota is used by the action that stands when the turn closes, not by a replaced draft.
+  const players = mapPlayers(state, (p) => {
+    if (state.submissions[p.id]?.visibility !== 'secret') return p;
+    return isNight(state) ? { ...p, nightSecretDay: state.day } : { ...p, secretDay: state.day };
+  });
   return { state: { ...state, players, status: 'resolving' }, log };
 }
 
@@ -123,27 +203,22 @@ function ended(state: PhaseState): boolean {
   return state.status === 'finale' || state.status === 'game_over';
 }
 
-/** The phase after `at`; null after day 12 Night. */
-export function nextPoint(at: PhasePoint): PhasePoint | null {
-  const index = PHASES.indexOf(at.phase);
-  const phase = PHASES[index + 1];
-  if (phase) return { day: at.day, phase };
-  return at.day >= GAME_DAYS ? null : { day: at.day + 1, phase: PHASES[0] };
-}
-
 function checkResults(state: PhaseState, results: Readonly<Record<string, PlayerResult>>): PhaseError | null {
   for (const [id, r] of Object.entries(results)) {
     if (!state.players[id]) return { code: 'unknown_player', message: `Result for unknown player "${id}"` };
-    const bad = (v: number | undefined, max: number) => v !== undefined && (!Number.isInteger(v) || v < 0 || v > max);
-    if (bad(r.hp, state.hpMax)) return { code: 'invalid_result', message: `${id}.hp must be a whole number 0..${state.hpMax}` };
-    if (bad(r.stamina, state.staminaMax)) return { code: 'invalid_result', message: `${id}.stamina must be a whole number 0..${state.staminaMax}` };
+    const bad = (v: number | undefined, min: number, max: number) => v !== undefined && (!Number.isInteger(v) || v < min || v > max);
+    if (bad(r.hp, 0, state.hpMax)) return { code: 'invalid_result', message: `${id}.hp must be a whole number 0..${state.hpMax}` };
+    if (bad(r.stamina, 0, state.staminaMax)) return { code: 'invalid_result', message: `${id}.stamina must be a whole number 0..${state.staminaMax}` };
+    if (bad(r.karma, RULES.rangeMin, RULES.rangeMax)) {
+      return { code: 'invalid_result', message: `${id}.karma must be a whole number ${RULES.rangeMin}..${RULES.rangeMax}` };
+    }
   }
   return null;
 }
 
-/** Which recovery a player gets at the end of this phase, if any (spec §4.1-4.3). */
+/** Which recovery a player gets at the end of this turn, if any (spec §4.1-4.3). */
 function recoveryKind(state: PhaseState, p: PlayerPhaseState, r: PlayerResult): RecoveryKind | null {
-  const night = state.phase === 'NIGHT';
+  const night = isNight(state);
   if (p.condition === 'exhausted') {
     if (!night) return 'exhausted_day';
     return r.atInn ? 'exhausted_night_inn' : 'exhausted_night_rough';
@@ -182,7 +257,7 @@ function recover(
       stamina = REST.day;
       break;
   }
-  const staminaAfter = Math.min(state.staminaMax, p.stamina + stamina);
+  const staminaAfter = gainStamina(p.stamina, stamina, state.staminaMax);
   const hpAfter = Math.min(state.hpMax, p.hp + hp);
   const entry: PhaseLogEntry = {
     type: 'recovered',
@@ -196,18 +271,18 @@ function recover(
   return { player: { ...p, stamina: staminaAfter, hp: hpAfter }, entry };
 }
 
-function samePoint(a: PhasePoint, b: PhasePoint): boolean {
-  return a.day === b.day && a.phase === b.phase;
+function samePoint(a: TurnPoint, b: TurnPoint): boolean {
+  return a.day === b.day && a.phase === b.phase && a.turn === b.turn;
 }
 
-/** Spec §12.2: wake at the start of the next day's Morning, or the next day's Afternoon after a Night knock-out. */
-function knockOutWake(at: PhasePoint): PhasePoint {
-  return { day: at.day + 1, phase: at.phase === 'NIGHT' ? 'AFTERNOON' : 'MORNING' };
+/** Spec §12.2: wake at the start of the next day's EOSORIA, or the next day's SOLARION after a NOCTHERION knock-out. */
+function knockOutWake(at: TurnPoint): TurnPoint {
+  return { day: at.day + 1, phase: at.phase === NIGHT_PERIOD ? 'SOLARION' : 'EOSORIA', turn: 1 };
 }
 
 /**
  * Game over (C6 read with Q-057, no death): every player is unconscious and none wakes before the game ends,
- * i.e. every wake point is after day 12 Night. Exhausted players always wake next phase, so they never count.
+ * i.e. every wake point is after day 12. Exhausted players always wake next turn, so they never count.
  */
 function isGameOver(order: readonly string[], players: Readonly<Record<string, PlayerPhaseState>>): boolean {
   return order.every((id) => {
@@ -231,9 +306,42 @@ function wake(p: PlayerPhaseState, ko: KnockedOut, rng: Rng): { player: PlayerPh
   };
 }
 
+/**
+ * The time rules that run at the end of every turn (System_Rules "ช่วง NOCTHERION & ภาวะอดนอน", Q-087), on
+ * the player as they were when the turn closed (`before`) and as the turn left them (`p`):
+ * - an action (not a rest) while Drowsy costs DROWSY.stamina more;
+ * - sleeping (REST, forced sleep, out cold) in NOCTHERION marks the night slept;
+ * - a make-up rest in EOSORIA clears Drowsy for a player who may make up (Evil, or a NOCTHERION Secret).
+ */
+function timeRules(state: PhaseState, before: PlayerPhaseState, p: PlayerPhaseState, at: TurnPoint, log: PhaseLogEntry[]): PlayerPhaseState {
+  const action = state.submissions[before.id];
+  const slept = before.condition !== 'awake' || action?.rest === true;
+  let next = p;
+  if (before.condition === 'awake' && action && !action.rest && isDrowsy(before, state.day)) {
+    const after = Math.max(0, next.stamina - DROWSY.stamina);
+    log.push({ type: 'drowsy_cost', at, playerId: before.id, stamina: { before: next.stamina, after } });
+    next = { ...next, stamina: after };
+  }
+  if (isNight(state) && (slept || next.condition === 'unconscious')) next = { ...next, sleptDay: state.day };
+  if (state.phase === PERIODS[0] && slept && isDrowsy(before, state.day) && before.drowsy!.canCompensate) {
+    log.push({ type: 'drowsy_cleared', at, playerId: before.id });
+    next = { ...next, drowsy: null };
+  }
+  return next;
+}
+
+/** At the change of day: who stayed awake through last night's NOCTHERION is Drowsy for the new day. */
+function startDay(day: number, p: PlayerPhaseState, at: TurnPoint, log: PhaseLogEntry[]): PlayerPhaseState {
+  const night = day - 1;
+  if (p.sleptDay === night) return { ...p, drowsy: null };
+  const drowsy: Drowsy = { day, canCompensate: p.karma <= EVIL_KARMA_MAX || p.nightSecretDay === night };
+  log.push({ type: 'drowsy', at, playerId: p.id, drowsy });
+  return { ...p, drowsy };
+}
+
 function resolved(state: PhaseState, results: Readonly<Record<string, PlayerResult>>, rng: Rng): PhaseStepResult {
   if (ended(state)) return fail('game_ended', `The game is over (${state.status})`);
-  if (state.status !== 'resolving') return fail('not_resolving', `Phase is ${state.status}; results are accepted only while resolving`);
+  if (state.status !== 'resolving') return fail('not_resolving', `Turn is ${state.status}; results are accepted only while resolving`);
   const error = checkResults(state, results);
   if (error) return { ok: false, error };
 
@@ -245,25 +353,25 @@ function resolved(state: PhaseState, results: Readonly<Record<string, PlayerResu
   for (const id of state.order) {
     const before = state.players[id]!;
     const r = results[id] ?? {};
-    let p: PlayerPhaseState = { ...before, hp: r.hp ?? before.hp, stamina: r.stamina ?? before.stamina };
+    let p: PlayerPhaseState = { ...before, hp: r.hp ?? before.hp, stamina: r.stamina ?? before.stamina, karma: r.karma ?? before.karma };
 
     if (before.condition === 'unconscious') {
       // Damage to an unconscious character is 0 (spec §12.2), so only a rescue changes anything.
-      p = { ...before };
+      p = { ...before, karma: p.karma };
       if (r.rescued && before.knockedOut && !before.knockedOut.rescued) {
         p = { ...p, knockedOut: { ...before.knockedOut, rescued: true } };
         log.push({ type: 'rescued_by_player', at, playerId: id });
       }
-      players[id] = p;
+      players[id] = timeRules(state, before, p, at, log);
       continue;
     }
 
     if (p.hp === 0) {
-      // Q-054: lost for the rest of the day; a Night knock-out still loses the next Morning. No rest recovery.
+      // Q-054: lost for the rest of the day; a NOCTHERION knock-out still loses the next EOSORIA. No rest recovery.
       const wakeAt = knockOutWake(at);
       const knockedOut: KnockedOut = { wakeAt, safety: r.safety ?? 'normal', primaryAffinity: r.primaryAffinity ?? 0, rescued: false };
       log.push({ type: 'knocked_out', at, playerId: id, wakeAt });
-      players[id] = { ...p, condition: 'unconscious', mustSubmit: false, knockedOut };
+      players[id] = timeRules(state, before, { ...p, condition: 'unconscious', mustSubmit: false, knockedOut }, at, log);
       continue;
     }
 
@@ -273,8 +381,9 @@ function resolved(state: PhaseState, results: Readonly<Record<string, PlayerResu
       p = rec.player;
       log.push(rec.entry);
     }
+    p = timeRules(state, before, p, at, log);
 
-    // Spec §4.3: Stamina 0 at the end of a phase = the next phase is locked and slept through.
+    // Spec §4.3: Stamina 0 at the end of a turn = the next turn is locked and slept through.
     const exhausted = p.stamina === 0;
     if (exhausted && point) log.push({ type: 'exhausted', at, playerId: id, sleepsAt: point });
     const condition: PlayerCondition = exhausted ? 'exhausted' : 'awake';
@@ -286,20 +395,22 @@ function resolved(state: PhaseState, results: Readonly<Record<string, PlayerResu
     return { ok: true, state: { ...state, players, status: 'game_over' }, log };
   }
 
-  if (point) {
-    for (const id of state.order) {
-      const p = players[id]!;
-      if (p.condition !== 'unconscious' || !p.knockedOut || !samePoint(p.knockedOut.wakeAt, point)) continue;
-      const woke = wake(p, p.knockedOut, rng);
-      players[id] = woke.player;
-      log.push({ ...woke.entry, at: point });
-    }
-  }
-
   if (!point) {
     log.push({ type: 'finale', at });
     return { ok: true, state: { ...state, players, status: 'finale' }, log };
   }
+
+  if (point.day !== at.day) {
+    for (const id of state.order) players[id] = startDay(point.day, players[id]!, point, log);
+  }
+  for (const id of state.order) {
+    const p = players[id]!;
+    if (p.condition !== 'unconscious' || !p.knockedOut || !samePoint(p.knockedOut.wakeAt, point)) continue;
+    const woke = wake(p, p.knockedOut, rng);
+    players[id] = woke.player;
+    log.push({ ...woke.entry, at: point });
+  }
+
   const next: PhaseState = { ...state, ...point, players, status: 'collecting', submissions: {} };
   log.push({ type: 'phase_started', at: point });
   return { ok: true, ...closeIfComplete(next, log) };

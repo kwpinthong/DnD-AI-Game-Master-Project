@@ -1,5 +1,7 @@
 import {
   EventOutcomeText,
+  PHASES,
+  SCENARIO_DAYS,
   type EventOutcomeSource,
   type EventStatus,
   type Phase,
@@ -14,15 +16,16 @@ import { locationSnapshot } from '../visibility/store.ts';
 import { witnessesOf } from '../visibility/views.ts';
 
 /**
- * Timeline event state machine (GEN-053, GDD §6.2). Every scenario event happens at its day + phase:
+ * Timeline event state machine (GEN-053, GDD §6.2). Every scenario event happens at its day + period
+ * (`phase`, GEN-063):
  * - `pending` until the game reaches that point,
- * - `active` for that one phase (the AI GM may set its outcome then: `setEventOutcome`),
+ * - `active` for both turns of that period (the AI GM may set its outcome then: `setEventOutcome`),
  * - `resolved` once the game moves past it, keeping the AI's outcome or else the scenario's ผลตั้งต้น.
- * The game's point moves forward only through `advanceTimeline` (start of game = day 1 Morning).
+ * The game's point moves forward only through `advanceTimeline` (start of game = day 1 EOSORIA).
  *
  * How later work uses this:
- * - GEN-057 (phase loop): call `advanceTimeline(tx, gameId, nextPoint)` when a phase starts (and
- *   `'end'` after day 12 Night); put `eventContextBlock(buildEventContext(...))` into `gm_adjudicate`;
+ * - GEN-057 (turn loop): call `advanceTimeline(tx, gameId, { day, phase })` when a turn starts (turn 2 of
+ *   the same period is no change), and `'end'` after day 12 NOCTHERION turn 2; put `eventContextBlock(buildEventContext(...))` into `gm_adjudicate`;
  *   map the AI's `eventOutcomes` onto `applyEventOutcomes` inside the same all-or-nothing transaction
  *   as the rest of the PhaseProposal (Q-049).
  * - Later events / GEN-059 (finale): read `getEventOutcomes(gameId)`; `intervened` says whether the
@@ -30,12 +33,11 @@ import { witnessesOf } from '../visibility/views.ts';
  *   events are narrated in their light. No branching rules live here: the AI GM / finale decide.
  */
 
-const PHASE_INDEX: Record<Phase, number> = { MORNING: 0, AFTERNOON: 1, NIGHT: 2 };
-const rank = (p: PhasePoint) => (p.day - 1) * 3 + PHASE_INDEX[p.phase];
-/** After day 12 Night. */
-const END_RANK = 12 * 3;
+const rank = (p: PhasePoint) => (p.day - 1) * PHASES.length + PHASES.indexOf(p.phase);
+/** After day 12 NOCTHERION. */
+const END_RANK = SCENARIO_DAYS * PHASES.length;
 
-/** Events by day, then Morning → Afternoon → Night; ties keep scenario order. */
+/** Events by day, then EOSORIA → SOLARION → HESPERION → NOCTHERION; ties keep scenario order. */
 export function inPlayOrder<T extends PhasePoint>(events: readonly T[]): T[] {
   return events
     .map((event, index) => ({ event, index }))
@@ -168,7 +170,7 @@ export function advanceTimeline(db: DbOrTx, gameId: string, to: PhasePoint | 'en
     }
   }
 
-  const point = to === 'end' ? { day: 12, phase: 'NIGHT' as const, ended: true } : { ...to, ended: false };
+  const point = to === 'end' ? { day: SCENARIO_DAYS, phase: 'NOCTHERION' as const, ended: true } : { day: to.day, phase: to.phase, ended: false };
   db.insert(gameTimeline)
     .values({ gameId, ...point, updatedAt: now })
     .onConflictDoUpdate({ target: gameTimeline.gameId, set: { ...point, updatedAt: now } })

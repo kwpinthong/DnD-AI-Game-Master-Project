@@ -33,10 +33,32 @@ const optionalText = (max: number) => z.string().max(max, `ยาวได้ไ
 /** GM-only note; never sent to players. */
 const GmNote = optionalText(2000);
 
-export const Phase = z.enum(['MORNING', 'AFTERNOON', 'NIGHT'], {
-  error: 'ช่วงต้องเป็น เช้า (MORNING), บ่าย (AFTERNOON) หรือ ค่ำ (NIGHT)',
+/**
+ * The period of the day (ช่วงเวลา, System_Rules "Time System", GEN-063); each has 2 turns. Same values as
+ * `PERIODS` in `@isekai/rules`. The key stays `phase` wherever a point in time is stored or sent.
+ */
+export const PHASES = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
+export const Phase = z.enum(PHASES, {
+  error: 'ช่วงต้องเป็น EOSORIA (เช้า), SOLARION (บ่าย), HESPERION (ค่ำ) หรือ NOCTHERION (ดึก)',
 });
 export type Phase = z.infer<typeof Phase>;
+
+/** Thai label of each period, with its hours. */
+export const PHASE_LABEL: Readonly<Record<Phase, string>> = {
+  EOSORIA: 'EOSORIA (เช้า 06:00-11:59)',
+  SOLARION: 'SOLARION (บ่าย 12:00-17:59)',
+  HESPERION: 'HESPERION (ค่ำ 18:00-23:59)',
+  NOCTHERION: 'NOCTHERION (ดึก 24:00-05:59)',
+};
+
+/** The 3 phases of GEN-045..GEN-062 and the period each became (GEN-063). Same as `LEGACY_PHASES` in `@isekai/rules`. */
+export const LEGACY_PHASES = { MORNING: 'EOSORIA', AFTERNOON: 'SOLARION', NIGHT: 'HESPERION' } as const satisfies Record<string, Phase>;
+
+/** A scenario event's period; a saved scenario from before GEN-063 (MORNING / AFTERNOON / NIGHT) is upgraded. */
+const EventPhase = z.preprocess(
+  (value) => (typeof value === 'string' && value in LEGACY_PHASES ? LEGACY_PHASES[value as keyof typeof LEGACY_PHASES] : value),
+  Phase,
+);
 
 /** Rest recovery at night (Rules Spec §4.1): rough +15, basic +20, inn +25 Stamina. */
 export const RestQuality = z.enum(['rough', 'basic', 'inn']);
@@ -81,7 +103,8 @@ export const ScenarioEvent = z.object({
     .int('วันต้องเป็นจำนวนเต็ม')
     .min(1, `วันต้องอยู่ระหว่าง 1 ถึง ${SCENARIO_DAYS}`)
     .max(SCENARIO_DAYS, `วันต้องอยู่ระหว่าง 1 ถึง ${SCENARIO_DAYS}`),
-  phase: Phase,
+  /** The event is active for both turns of this period. */
+  phase: EventPhase,
   kind: z.enum(['event', 'climax', 'finale']).default('event'),
   title: text(120),
   description: optionalText(1000),
@@ -267,13 +290,13 @@ export function parseScenario(input: unknown): ScenarioParseResult {
   };
 }
 
-const PHASE_ORDER: Record<Phase, number> = { MORNING: 0, AFTERNOON: 1, NIGHT: 2 };
+const order = (p: Phase) => PHASES.indexOf(p);
 
-/** The timeline in play order: by day, then MORNING → AFTERNOON → NIGHT; ties keep their order. */
+/** The timeline in play order: by day, then EOSORIA → SOLARION → HESPERION → NOCTHERION; ties keep their order. */
 export function sortTimeline<T extends Pick<Scenario, 'timeline'>>(scenario: T): T {
   const timeline = scenario.timeline
     .map((event, index) => ({ event, index }))
-    .sort((a, b) => a.event.day - b.event.day || PHASE_ORDER[a.event.phase] - PHASE_ORDER[b.event.phase] || a.index - b.index)
+    .sort((a, b) => a.event.day - b.event.day || order(a.event.phase) - order(b.event.phase) || a.index - b.index)
     .map(({ event }) => event);
   return { ...scenario, timeline };
 }

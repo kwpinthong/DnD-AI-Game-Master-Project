@@ -12,7 +12,8 @@ export type AiPurpose =
   | 'finale'
   | 'character_analyze';
 
-export type AiPhase = 'MORNING' | 'AFTERNOON' | 'NIGHT';
+/** The period of the day (GEN-063), as `Phase` in `@isekai/protocol`. */
+export type AiPhase = 'EOSORIA' | 'SOLARION' | 'HESPERION' | 'NOCTHERION';
 
 /** One system prompt block, ordered most stable → most volatile (ADR §6.2). */
 export interface PromptBlock {

@@ -8,6 +8,7 @@ export interface UsageRecord {
   gameId: string;
   day: number | null;
   phase: AiPhase | null;
+  turn: number | null;
   purpose: AiPurpose;
   provider: string;
   model: string;
@@ -34,6 +35,7 @@ export function createUsageStore(db: Db): UsageStore {
           gameId: row.gameId,
           day: row.day,
           phase: row.phase,
+          turn: row.turn,
           purpose: row.purpose,
           provider: row.provider,
           model: row.model,

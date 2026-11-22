@@ -239,7 +239,7 @@ export function startGame(db: Db, actor: MemberRow, now: Clock): OwnerActionOutc
     if (start) placeUnplacedCharacters(tx, row.id, start.id, t);
     // The game starts at day 1 Morning: its events become active (GEN-053), after placing, so each
     // event's witness snapshot sees where everyone starts (Q-104).
-    advanceTimeline(tx, row.id, { day: 1, phase: 'MORNING' }, t);
+    advanceTimeline(tx, row.id, { day: 1, phase: 'EOSORIA' }, t);
     return undefined;
   });
 }

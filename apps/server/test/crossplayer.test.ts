@@ -297,7 +297,7 @@ describe('cross-player actions on the server (GEN-060)', { timeout: 60_000 }, ()
     move(t.a, 'market');
     move(t.b, 'forest');
     move(t.c, 'gate');
-    advanceTimeline(server!.orm, t.gameId, { day: 5, phase: 'MORNING' }, CLOCK);
+    advanceTimeline(server!.orm, t.gameId, { day: 5, phase: 'EOSORIA' }, CLOCK);
     const timeline = async (who: { token: string }) => GameTimelineResponse.parse((await t.call('GET', '/api/game/timeline', { token: who.token })).body);
 
     // d1-bread (market) began at the start, before A got there; d5-disaster (gate) began with C there;

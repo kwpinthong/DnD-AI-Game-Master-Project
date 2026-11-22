@@ -24,7 +24,7 @@ export interface RoomListener {
 }
 
 export interface RoomConnection {
-  sendAction(text: string, visibility: ActionVisibility): boolean;
+  sendAction(text: string, visibility: ActionVisibility, rest?: boolean): boolean;
   close(): void;
 }
 
@@ -84,9 +84,9 @@ export function connectRoom(baseUrl: string, token: string, listener: RoomListen
 
   open();
   return {
-    sendAction(text, visibility) {
+    sendAction(text, visibility, rest = false) {
       if (!socket || socket.readyState !== WebSocket.OPEN) return false;
-      socket.send(JSON.stringify({ type: 'action', text, visibility }));
+      socket.send(JSON.stringify({ type: 'action', text, visibility, rest }));
       return true;
     },
     close() {

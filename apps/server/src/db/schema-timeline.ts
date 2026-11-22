@@ -1,16 +1,20 @@
 import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { game } from './schema.ts';
 
+/** `Phase` of `@isekai/protocol` (periods, GEN-063); written out because drizzle-kit loads this file alone. */
+const PHASES = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
+
 /**
  * Where a game is on its 12-day timeline (GEN-053). Moves forward only, through `advanceTimeline`.
- * No row = the game has not reached day 1 Morning yet. `ended` = past day 12 Night (finale).
+ * No row = the game has not reached day 1 EOSORIA yet. `ended` = past day 12 NOCTHERION (finale).
+ * Period granularity: an event is active for both turns of its period, so the cursor has no turn.
  */
 export const gameTimeline = sqliteTable('game_timeline', {
   gameId: text('game_id')
     .primaryKey()
     .references(() => game.id, { onDelete: 'cascade' }),
   day: integer('day').notNull(),
-  phase: text('phase', { enum: ['MORNING', 'AFTERNOON', 'NIGHT'] }).notNull(),
+  phase: text('phase', { enum: PHASES }).notNull(),
   ended: integer('ended', { mode: 'boolean' }).notNull().default(false),
   updatedAt: integer('updated_at').notNull(),
 });

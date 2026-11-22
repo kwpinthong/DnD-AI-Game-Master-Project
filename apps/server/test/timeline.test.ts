@@ -55,7 +55,7 @@ describe('timeline events: pending → active → resolved + outcome (GEN-053)',
 
   it('C1: entering day 1 Morning makes the day 1 event active and puts it in the context sent to the AI', async () => {
     const mock = createMockProvider(MOCK_AI);
-    const result = await startPhaseEvents({ db: opened.db, ai: aiWith(mock) }, GAME, { day: 1, phase: 'MORNING' });
+    const result = await startPhaseEvents({ db: opened.db, ai: aiWith(mock) }, GAME, { day: 1, phase: 'EOSORIA' });
 
     expect(result.timeline).toMatchObject({ ok: true, activated: ['d1-bread'] });
     expect(activeIds()).toEqual(['d1-bread']);
@@ -84,15 +84,15 @@ describe('timeline events: pending → active → resolved + outcome (GEN-053)',
     const npc = scenario.npcs.find((n) => n.id === 'cult-acolyte')!;
     scenario.timeline[0]!.description = `${npc.name} ยิ้มขณะยื่นขนมปัง`;
     expect(updateGameScenario(opened.db, GAME, scenario).ok).toBe(true);
-    advanceTimeline(opened.db, GAME, { day: 1, phase: 'MORNING' });
+    advanceTimeline(opened.db, GAME, { day: 1, phase: 'EOSORIA' });
 
-    const text = JSON.stringify(buildEventContext(opened.db, GAME, 1, 'MORNING'));
+    const text = JSON.stringify(buildEventContext(opened.db, GAME, 1, 'EOSORIA'));
     expect(text).not.toContain(npc.name);
     expect(text).toContain('{{n:cult-acolyte}} ยิ้มขณะยื่นขนมปัง');
   });
 
   it('C2: day 4 has no event, so nothing is active in any of its phases', () => {
-    for (const phase of ['MORNING', 'AFTERNOON', 'NIGHT'] as const) {
+    for (const phase of ['EOSORIA', 'SOLARION', 'HESPERION'] as const) {
       expect(advanceTimeline(opened.db, GAME, { day: 4, phase })).toMatchObject({ ok: true, activated: [] });
       expect(activeIds()).toEqual([]);
       expect(buildEventContext(opened.db, GAME, 4, phase).active).toEqual([]);
@@ -103,16 +103,16 @@ describe('timeline events: pending → active → resolved + outcome (GEN-053)',
   });
 
   it('C3: the AI may set the outcome of the day 7 event while it is active', () => {
-    advanceTimeline(opened.db, GAME, { day: 7, phase: 'NIGHT' });
+    advanceTimeline(opened.db, GAME, { day: 7, phase: 'HESPERION' });
     expect(setEventOutcome(opened.db, GAME, 'd7-kidnapping', 'prevented')).toEqual({ ok: true });
     expect(statusOf('d7-kidnapping')).toMatchObject({ status: 'active', outcome: 'prevented', outcomeSource: 'ai' });
 
-    advanceTimeline(opened.db, GAME, { day: 8, phase: 'MORNING' });
+    advanceTimeline(opened.db, GAME, { day: 8, phase: 'EOSORIA' });
     expect(statusOf('d7-kidnapping')).toMatchObject({ status: 'resolved', outcome: 'prevented', outcomeSource: 'ai' });
   });
 
   it('C3: an event that is not active yet (or already over) refuses an outcome and stores nothing', () => {
-    advanceTimeline(opened.db, GAME, { day: 5, phase: 'MORNING' });
+    advanceTimeline(opened.db, GAME, { day: 5, phase: 'EOSORIA' });
     expect(setEventOutcome(opened.db, GAME, 'd7-kidnapping', 'prevented')).toMatchObject({ ok: false, code: 'not_active' });
     expect(statusOf('d7-kidnapping')).toMatchObject({ status: 'pending', outcome: null, outcomeSource: null });
 
@@ -123,7 +123,7 @@ describe('timeline events: pending → active → resolved + outcome (GEN-053)',
   });
 
   it('C3 / Q-049: a batch of outcome requests is all-or-nothing', () => {
-    advanceTimeline(opened.db, GAME, { day: 7, phase: 'NIGHT' });
+    advanceTimeline(opened.db, GAME, { day: 7, phase: 'HESPERION' });
     const result = applyEventOutcomes(opened.db, GAME, [
       { eventId: 'd7-kidnapping', outcome: 'prevented' },
       { eventId: 'd10-summoning', outcome: 'prevented' },
@@ -136,11 +136,11 @@ describe('timeline events: pending → active → resolved + outcome (GEN-053)',
   });
 
   it('C3: the AI answer of a phase trigger maps onto the outcome operation', async () => {
-    advanceTimeline(opened.db, GAME, { day: 7, phase: 'AFTERNOON' });
+    advanceTimeline(opened.db, GAME, { day: 7, phase: 'SOLARION' });
     const mock = createMockProvider(MOCK_AI, {
       steps: [mockReply.ok({ eventOutcomes: [{ eventId: 'd7-kidnapping', outcome: 'prevented' }] })],
     });
-    const result = await startPhaseEvents({ db: opened.db, ai: aiWith(mock) }, GAME, { day: 7, phase: 'NIGHT' });
+    const result = await startPhaseEvents({ db: opened.db, ai: aiWith(mock) }, GAME, { day: 7, phase: 'HESPERION' });
     expect(result.ai.ok).toBe(true);
     if (!result.ai.ok) return;
     expect(applyEventOutcomes(opened.db, GAME, result.ai.value.eventOutcomes)).toEqual({ ok: true });
@@ -152,9 +152,9 @@ describe('timeline events: pending → active → resolved + outcome (GEN-053)',
     scenario.timeline[0]!.outcome = 'ชาวเมืองครึ่งหนึ่งกินขนมปังและเริ่มเชื่อลัทธิ';
     expect(updateGameScenario(opened.db, GAME, scenario).ok).toBe(true);
 
-    advanceTimeline(opened.db, GAME, { day: 1, phase: 'MORNING' });
+    advanceTimeline(opened.db, GAME, { day: 1, phase: 'EOSORIA' });
     expect(statusOf('d1-bread')).toMatchObject({ status: 'active', outcome: null });
-    advanceTimeline(opened.db, GAME, { day: 1, phase: 'AFTERNOON' });
+    advanceTimeline(opened.db, GAME, { day: 1, phase: 'SOLARION' });
     expect(statusOf('d1-bread')).toMatchObject({
       status: 'resolved',
       outcome: 'ชาวเมืองครึ่งหนึ่งกินขนมปังและเริ่มเชื่อลัทธิ',
@@ -163,7 +163,7 @@ describe('timeline events: pending → active → resolved + outcome (GEN-053)',
   });
 
   it('C4: jumping past events resolves them with defaults; the end resolves the finale; outcomes are readable in order', () => {
-    advanceTimeline(opened.db, GAME, { day: 7, phase: 'NIGHT' });
+    advanceTimeline(opened.db, GAME, { day: 7, phase: 'HESPERION' });
     setEventOutcome(opened.db, GAME, 'd7-kidnapping', 'prevented');
     expect(advanceTimeline(opened.db, GAME, 'end')).toMatchObject({ ok: true, activated: [] });
 
@@ -177,16 +177,16 @@ describe('timeline events: pending → active → resolved + outcome (GEN-053)',
   });
 
   it('the timeline never moves backwards and repeating the same point changes nothing', () => {
-    advanceTimeline(opened.db, GAME, { day: 2, phase: 'AFTERNOON' });
-    expect(advanceTimeline(opened.db, GAME, { day: 2, phase: 'AFTERNOON' })).toMatchObject({ ok: true, activated: [], resolved: [] });
-    expect(advanceTimeline(opened.db, GAME, { day: 1, phase: 'NIGHT' })).toMatchObject({ ok: false, code: 'backwards' });
+    advanceTimeline(opened.db, GAME, { day: 2, phase: 'SOLARION' });
+    expect(advanceTimeline(opened.db, GAME, { day: 2, phase: 'SOLARION' })).toMatchObject({ ok: true, activated: [], resolved: [] });
+    expect(advanceTimeline(opened.db, GAME, { day: 1, phase: 'HESPERION' })).toMatchObject({ ok: false, code: 'backwards' });
     expect(activeIds()).toEqual(['d2-first-companion']);
-    expect(advanceTimeline(opened.db, 'no-game', { day: 1, phase: 'MORNING' })).toMatchObject({ ok: false, code: 'not_found' });
+    expect(advanceTimeline(opened.db, 'no-game', { day: 1, phase: 'EOSORIA' })).toMatchObject({ ok: false, code: 'not_found' });
   });
 
   it('the context holds the active event and past outcomes, never a pending event', () => {
-    advanceTimeline(opened.db, GAME, { day: 3, phase: 'NIGHT' });
-    const context = buildEventContext(opened.db, GAME, 3, 'NIGHT');
+    advanceTimeline(opened.db, GAME, { day: 3, phase: 'HESPERION' });
+    const context = buildEventContext(opened.db, GAME, 3, 'HESPERION');
     expect(context.active.map((e) => e.id)).toEqual(['d3-cult-clue']);
     expect(context.past.map((e) => e.id)).toEqual(['d1-bread', 'd2-first-companion']);
     const text = JSON.stringify(context);

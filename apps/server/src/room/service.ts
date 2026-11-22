@@ -9,7 +9,15 @@ import {
   type RoomServerMessage,
   type RoomState,
 } from '@isekai/protocol';
-import { phaseStep, type PhaseErrorCode, type PhaseState, type PlayerResult } from '@isekai/rules';
+import {
+  NIGHT_PERIOD,
+  isDrowsy,
+  phaseStep,
+  secretQuotaUsed,
+  type PhaseErrorCode,
+  type PhaseState,
+  type PlayerResult,
+} from '@isekai/rules';
 import { eq } from 'drizzle-orm';
 import type { Clock } from '../auth/join.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
@@ -25,6 +33,7 @@ import {
   ensurePhaseState,
   entriesFor,
   insertEntry,
+  karmaOf,
   recordAction,
   savePhaseState,
   syncCharacterStats,
@@ -38,13 +47,14 @@ export interface RoomSocket {
 
 const LOCK_MESSAGE: Record<RoomLockCode, string> = {
   not_a_player: 'GM ไม่มีตัวละคร จึงส่ง action ไม่ได้',
-  exhausted: 'ตัวละครหมดแรง (Stamina 0) phase นี้ต้องนอนพัก ส่ง action ไม่ได้',
+  exhausted: 'ตัวละครหมดแรง (Stamina 0) เทิร์นนี้ต้องนอนพัก ส่ง action ไม่ได้',
   unconscious: 'ตัวละครหมดสติ (HP 0) ส่ง action ไม่ได้จนกว่าจะฟื้น',
-  resolving: 'phase นี้ปิดรับ action แล้ว กำลังสรุปผล รอ phase ถัดไป',
+  resolving: 'เทิร์นนี้ปิดรับ action แล้ว กำลังสรุปผล รอเทิร์นถัดไป',
   game_ended: 'เกมจบแล้ว ส่ง action ไม่ได้',
 };
 
-const SECRET_QUOTA_MESSAGE = 'วันนี้ใช้ Secret ไปแล้ว (ได้วันละ 1 phase) ส่งเป็น Public แทนได้';
+const SECRET_QUOTA_MESSAGE = 'วันนี้ใช้ Secret ไปแล้ว (ได้วันละ 1 เทิร์น และฟรีอีก 1 เทิร์นในช่วง NOCTHERION) ส่งเป็น Public แทนได้';
+const NIGHT_SECRET_QUOTA_MESSAGE = 'คืนนี้ใช้ Secret ฟรีของช่วง NOCTHERION ไปแล้ว (ได้คืนละ 1 เทิร์น) ส่งเป็น Public แทนได้';
 
 export type SubmitReply = { type: 'action_accepted' } | { type: 'action_rejected'; code: RoomActionCode; message: string };
 
@@ -52,7 +62,7 @@ export interface RoomService {
   /** Registers an authenticated socket: replays entries after `afterSeq`, then sends the room and `ready`. */
   join(socket: RoomSocket, me: MemberRow, afterSeq: number): void;
   leave(socket: RoomSocket): void;
-  submit(socket: RoomSocket, input: { text: string; visibility: string }): SubmitReply;
+  submit(socket: RoomSocket, input: { text: string; visibility: string; rest?: boolean }): SubmitReply;
   /** Shutdown: forgets every socket (their close events no longer touch the database), then waits for running resolves. */
   stop(): Promise<void>;
 }
@@ -100,6 +110,7 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
       kind: row.kind,
       day: row.day,
       phase: row.phase,
+      turn: row.turn === 2 ? 2 : 1,
       place: placeView(db, row.gameId, row.locationId),
       text: row.text,
     };
@@ -116,12 +127,14 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
   function roomStateFor(me: MemberRow, state: PhaseState, members: MemberRow[], online: Set<string>, mode: 'online' | 'single'): RoomState {
     const lock = lockOf(me, state);
     const mine = state.submissions[me.id];
+    const player = state.players[me.id];
     return {
       type: 'room',
       gameId: me.gameId,
       mode,
       day: state.day,
       phase: state.phase,
+      turn: state.turn,
       status: state.status,
       members: members.map((m) => ({
         memberId: m.id,
@@ -135,8 +148,9 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
         role: me.role,
         place: me.role === 'gm' ? null : placeView(db, me.gameId, presenceOf(db, me.id)?.locationId ?? null),
         lock: lock ? { code: lock, message: LOCK_MESSAGE[lock] } : null,
-        secretUsedToday: state.players[me.id]?.secretDay === state.day,
-        action: mine ? { text: mine.text, visibility: mine.visibility } : null,
+        secretUsed: player ? secretQuotaUsed(player, state) : false,
+        drowsy: player ? isDrowsy(player, state.day) : false,
+        action: mine ? { text: mine.text, visibility: mine.visibility, rest: mine.rest === true } : null,
       },
     };
   }
@@ -179,7 +193,21 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
     return recipients;
   }
 
-  /** Hands the closed phase to the resolver once, publishes what comes back and opens the next phase. */
+  /**
+   * The resolver's results with every player's karma filled in from the character where the resolver did
+   * not give one, so the engine's Q-087 Evil check reads the karma the cross-player rules wrote (GEN-060).
+   */
+  function withKarma(tx: DbOrTx, state: PhaseState, results: Readonly<Record<string, PlayerResult>>): Record<string, PlayerResult> {
+    const karma = karmaOf(tx, state.order);
+    const out: Record<string, PlayerResult> = { ...results };
+    for (const id of state.order) {
+      const k = karma.get(id);
+      if (k !== undefined && out[id]?.karma === undefined) out[id] = { ...out[id], karma: k };
+    }
+    return out;
+  }
+
+  /** Hands the closed turn to the resolver once, publishes what comes back and opens the next turn. */
   function startResolving(gameId: string): void {
     if (resolving.has(gameId)) return;
     const run = (async () => {
@@ -189,12 +217,12 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
         const locations = locationSnapshot(db, gameId);
         const actions: ClosedAction[] = state.order.flatMap((id) => {
           const a = state.submissions[id];
-          return a ? [{ memberId: id, text: a.text, visibility: a.visibility, locationId: locations.get(id) ?? null }] : [];
+          return a ? [{ memberId: id, text: a.text, visibility: a.visibility, rest: a.rest === true, locationId: locations.get(id) ?? null }] : [];
         });
 
         let resolution: PhaseResolution;
         try {
-          resolution = await resolver.resolve({ gameId, at: { day: state.day, phase: state.phase }, actions, state });
+          resolution = await resolver.resolve({ gameId, at: { day: state.day, phase: state.phase, turn: state.turn }, actions, state });
         } catch (error) {
           // Stays `resolving`; the next player to enter the room starts it again.
           log(`[room] resolver failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
@@ -204,17 +232,19 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
         const published = db.transaction((tx) => {
           const t = now();
           const current = ensurePhaseState(tx, gameId, t);
-          if (current.status !== 'resolving' || current.day !== state.day || current.phase !== state.phase) return null;
-          const at = { day: current.day, phase: current.phase };
+          if (current.status !== 'resolving' || current.day !== state.day || current.phase !== state.phase || current.turn !== state.turn) {
+            return null;
+          }
+          const at = { day: current.day, phase: current.phase, turn: current.turn };
           const rows = (resolution.entries ?? []).map((entry) => {
             const recipients = recipientsOf(tx, gameId, entry);
             const locationId = entry.kind === 'feed' ? entry.locationId : null;
             return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text }, [...recipients], t), recipients };
           });
-          let step = phaseStep(current, { type: 'resolved', results: resolution.results ?? {} }, rng);
+          let step = phaseStep(current, { type: 'resolved', results: withKarma(tx, current, resolution.results ?? {}) }, rng);
           if (!step.ok) {
-            log(`[room] resolver results refused (game ${gameId}): ${step.error.code}; the phase advances without them`);
-            step = phaseStep(current, { type: 'resolved', results: {} as Record<string, PlayerResult> }, rng);
+            log(`[room] resolver results refused (game ${gameId}): ${step.error.code}; the turn advances without them`);
+            step = phaseStep(current, { type: 'resolved', results: withKarma(tx, current, {}) }, rng);
           }
           if (!step.ok) throw new Error(`phase engine refused an empty result: ${step.error.code}`);
           savePhaseState(tx, gameId, step.state, t);
@@ -242,8 +272,7 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
   };
 
   function reject(code: RoomActionCode, message?: string): SubmitReply {
-    const text =
-      message ?? (code === 'secret_quota_used' ? SECRET_QUOTA_MESSAGE : code in LOCK_MESSAGE ? LOCK_MESSAGE[code as RoomLockCode] : 'ส่ง action นี้ไม่ได้');
+    const text = message ?? (code in LOCK_MESSAGE ? LOCK_MESSAGE[code as RoomLockCode] : 'ส่ง action นี้ไม่ได้');
     return { type: 'action_rejected', code, message: text };
   }
 
@@ -280,18 +309,21 @@ export function createRoomService(db: Db, now: Clock, resolver: PhaseResolver, l
       const problem = actionTextProblem(input.text);
       if (problem) return reject(problem.code, problem.message);
       const text = normalizeActionText(input.text);
+      const rest = input.rest === true;
 
       const outcome = db.transaction((tx): SubmitReply | PhaseState => {
         const t = now();
         const state = ensurePhaseState(tx, me.gameId, t);
-        const step = phaseStep(state, { type: 'submit', playerId: me.id, action: { text, visibility: visibility.data } }, rng);
+        const action = { text, visibility: visibility.data, rest };
+        const step = phaseStep(state, { type: 'submit', playerId: me.id, action }, rng);
         if (!step.ok) {
           const mapped = rejectedBy[step.error.code];
+          if (mapped === 'secret_quota_used') return reject(mapped, state.phase === NIGHT_PERIOD ? NIGHT_SECRET_QUOTA_MESSAGE : SECRET_QUOTA_MESSAGE);
           if (mapped) return reject(mapped);
           const lock = lockOf(me, state);
           return reject(lock ?? 'invalid_action');
         }
-        recordAction(tx, me.gameId, { day: state.day, phase: state.phase }, me.id, { text, visibility: visibility.data }, t);
+        recordAction(tx, me.gameId, { day: state.day, phase: state.phase, turn: state.turn }, me.id, action, t);
         savePhaseState(tx, me.gameId, step.state, t);
         return step.state;
       });

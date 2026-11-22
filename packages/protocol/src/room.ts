@@ -50,11 +50,18 @@ export const RoomHello = z.object({
 });
 export type RoomHello = z.infer<typeof RoomHello>;
 
-/** This phase's action. A resubmit before the phase closes replaces the earlier one. */
+/** A turn number within the period (GEN-063: 2 turns per period). */
+export const Turn = z.number().int().min(1).max(2);
+
+/**
+ * This turn's action. A resubmit before the turn closes replaces the earlier one. `rest`: REST / SLEEP
+ * this turn (in NOCTHERION it counts as the night's sleep against Drowsy).
+ */
 export const RoomAction = z.object({
   type: z.literal('action'),
   text: z.string(),
   visibility: z.string(),
+  rest: z.boolean().default(false),
 });
 export type RoomAction = z.infer<typeof RoomAction>;
 
@@ -90,20 +97,27 @@ export const RoomYou = z.strictObject({
   /** Where your character is; null for the Human GM and before the game places you. */
   place: PlaceView.nullable(),
   lock: z.strictObject({ code: RoomLockCode, message: z.string() }).nullable(),
-  /** Today's one Secret phase is used (Rules Spec §10.4). */
-  secretUsedToday: z.boolean(),
-  /** Your own action this phase (only you get this). */
-  action: z.strictObject({ text: z.string(), visibility: ActionVisibility }).nullable(),
+  /**
+   * The Secret quota that applies now is used: today's one Secret turn (Rules Spec §10.4), or in
+   * NOCTHERION tonight's free Secret turn (GEN-063).
+   */
+  secretUsed: z.boolean(),
+  /** Your character is Drowsy today (stayed awake through last NOCTHERION): d20 -2, +1 Stamina per action. */
+  drowsy: z.boolean(),
+  /** Your own action this turn (only you get this). */
+  action: z.strictObject({ text: z.string(), visibility: ActionVisibility, rest: z.boolean() }).nullable(),
 });
 export type RoomYou = z.infer<typeof RoomYou>;
 
-/** The room as one viewer sees it; sent after `hello` and whenever presence, submissions or the phase change. */
+/** The room as one viewer sees it; sent after `hello` and whenever presence, submissions or the turn change. */
 export const RoomState = z.strictObject({
   type: z.literal('room'),
   gameId: z.string(),
   mode: z.enum(['online', 'single']),
   day: z.number().int(),
+  /** The period. */
   phase: Phase,
+  turn: Turn,
   status: RoomPhaseStatus,
   members: z.array(RoomMember),
   you: RoomYou,
@@ -123,6 +137,7 @@ export const RoomEntry = z.strictObject({
   kind: RoomEntryKind,
   day: z.number().int(),
   phase: Phase,
+  turn: Turn,
   place: PlaceView.nullable(),
   text: z.string(),
 });

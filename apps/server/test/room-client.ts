@@ -12,7 +12,7 @@ export interface RoomClient {
   entries(): RoomEntry[];
   lastRoom(): RoomState | undefined;
   send(message: unknown): void;
-  action(text: string, visibility: 'public' | 'secret'): void;
+  action(text: string, visibility: 'public' | 'secret', rest?: boolean): void;
   /** Resolves with the first message (counting from `from`) that matches; rejects after 5 s. */
   waitFor<T extends RoomServerMessage>(match: (m: RoomServerMessage) => m is T, from?: number): Promise<T>;
   waitFor(match: (m: RoomServerMessage) => boolean, from?: number): Promise<RoomServerMessage>;
@@ -81,7 +81,7 @@ export async function openRoom(
     entries: () => messages.flatMap((m) => (m.type === 'entry' ? [m.entry] : [])),
     lastRoom: () => messages.filter((m): m is RoomState => m.type === 'room').at(-1),
     send,
-    action: (text, visibility) => send({ type: 'action', text, visibility }),
+    action: (text, visibility, rest) => send({ type: 'action', text, visibility, ...(rest === undefined ? {} : { rest }) }),
     waitFor: waitFor as RoomClient['waitFor'],
     closed,
     async close() {

@@ -70,13 +70,14 @@ function roomState(patch: Partial<RoomState> = {}, you: Partial<RoomState['you']
     gameId: 'g-1',
     mode: 'online',
     day: 1,
-    phase: 'MORNING',
+    phase: 'EOSORIA',
+    turn: 1,
     status: 'collecting',
     members: [
       { memberId: me.id, name: 'นก', role: 'player', online: true, submitted: false },
       { memberId: 'm-bee', name: 'บี', role: 'player', online: false, submitted: false },
     ],
-    you: { memberId: me.id, role: 'player', place: { id: 'market', name: 'ลานตลาด' }, lock: null, secretUsedToday: false, action: null, ...you },
+    you: { memberId: me.id, role: 'player', place: { id: 'market', name: 'ลานตลาด' }, lock: null, secretUsed: false, drowsy: false, action: null, ...you },
     ...patch,
   };
 }
@@ -85,7 +86,8 @@ const entry = (seq: number, kind: RoomEntry['kind'], text: string): RoomEntry =>
   seq,
   kind,
   day: 1,
-  phase: 'MORNING',
+  phase: 'EOSORIA',
+  turn: 1,
   place: kind === 'feed' ? { id: 'market', name: 'ลานตลาด' } : null,
   text,
 });
@@ -181,9 +183,9 @@ describe('GEN-056 play room (web)', () => {
     fireEvent.change(screen.getByLabelText('action ของคุณ'), { target: { value: 'แอบตามชายเสื้อคลุมดำ' } });
     fireEvent.click(screen.getByLabelText(/^Secret/));
     fireEvent.click(screen.getByRole('button', { name: 'ส่ง action' }));
-    expect(socket.sent.at(-1)).toEqual({ type: 'action', text: 'แอบตามชายเสื้อคลุมดำ', visibility: 'secret' });
+    expect(socket.sent.at(-1)).toEqual({ type: 'action', text: 'แอบตามชายเสื้อคลุมดำ', visibility: 'secret', rest: false });
     socket.receive({ type: 'action_accepted' });
-    socket.receive(roomState({}, { action: { text: 'แอบตามชายเสื้อคลุมดำ', visibility: 'secret' } }));
+    socket.receive(roomState({}, { action: { text: 'แอบตามชายเสื้อคลุมดำ', visibility: 'secret', rest: false } }));
     expect(screen.getByText(/ส่งแล้ว \(Secret\): แอบตามชายเสื้อคลุมดำ/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'ส่งแทนของเดิม' })).toBeTruthy();
   });
@@ -196,7 +198,7 @@ describe('GEN-056 play room (web)', () => {
     const feed = screen.getByRole('region', { name: 'เหตุการณ์ที่นี่' });
     const mine = screen.getByRole('region', { name: 'สิ่งที่คุณรู้คนเดียว' });
     expect(within(feed).getByText('ชายร่างสูงล้มแผงผลไม้')).toBeTruthy();
-    expect(within(feed).getByText('วันที่ 1 เช้า · ลานตลาด')).toBeTruthy();
+    expect(within(feed).getByText('วันที่ 1 · EOSORIA (เช้า 06:00-11:59) · เทิร์น 1/2 · ลานตลาด')).toBeTruthy();
     expect(within(feed).queryByText('คุณเห็นรอยเท้าใต้โต๊ะ')).toBeNull();
     expect(within(mine).getByText('คุณเห็นรอยเท้าใต้โต๊ะ')).toBeTruthy();
   });
@@ -258,7 +260,37 @@ describe('GEN-056 play room (web)', () => {
       gameView({ mode: 'single', members: [{ id: me.id, name: 'นก', role: 'player', isOwner: true, hasCharacter: true }], players: { count: 1, min: 1, max: 1 } }),
     );
     socket.receive(roomState({ mode: 'single', members: [roomState().members[0]!] }));
-    expect(screen.getByRole('heading', { name: /ห้องเล่น · วันที่ 1 · เช้า · เล่นคนเดียว/ })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /ห้องเล่น · วันที่ 1 · EOSORIA \(เช้า 06:00-11:59\) · เทิร์น 1\/2 · เล่นคนเดียว/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'ส่ง action' })).toBeTruthy();
+  });
+});
+
+describe('GEN-063 time system (web)', () => {
+  it('C1: the heading shows the period and the turn', async () => {
+    const socket = await enterRoom();
+    socket.receive(roomState({ day: 5, phase: 'SOLARION', turn: 2 }));
+    expect(screen.getByRole('heading', { name: /วันที่ 5 · SOLARION \(บ่าย 12:00-17:59\) · เทิร์น 2\/2/ })).toBeTruthy();
+  });
+
+  it('C3: in NOCTHERION the free Secret is explained, and once used tonight it is disabled', async () => {
+    const socket = await enterRoom();
+    socket.receive(roomState({ phase: 'NOCTHERION', turn: 2 }, { secretUsed: true }));
+    expect(screen.getByText(/ส่ง Secret ได้ฟรี 1 เทิร์น/)).toBeTruthy();
+    const secret = screen.getByLabelText(/^Secret/) as HTMLInputElement;
+    expect(secret.disabled).toBe(true);
+    expect(screen.getByText(/คืนนี้ใช้แล้ว/)).toBeTruthy();
+  });
+
+  it('C4: REST / SLEEP is sent with the action, and a Drowsy player is told the penalty', async () => {
+    const socket = await enterRoom();
+    socket.receive(roomState({ phase: 'NOCTHERION' }, { drowsy: true }));
+    expect(screen.getByRole('note').textContent).toMatch(/ง่วงซึม.*d20 -2.*Stamina เพิ่ม 1/);
+    fireEvent.change(screen.getByLabelText('action ของคุณ'), { target: { value: 'นอนที่โรงเตี๊ยม' } });
+    fireEvent.click(screen.getByLabelText(/^REST \/ SLEEP/));
+    fireEvent.click(screen.getByRole('button', { name: 'ส่ง action' }));
+    expect(socket.sent.at(-1)).toEqual({ type: 'action', text: 'นอนที่โรงเตี๊ยม', visibility: 'public', rest: true });
+    socket.receive({ type: 'action_accepted' });
+    socket.receive(roomState({ phase: 'NOCTHERION' }, { action: { text: 'นอนที่โรงเตี๊ยม', visibility: 'public', rest: true } }));
+    expect(screen.getByText(/ส่งแล้ว \(Public · REST \/ SLEEP\): นอนที่โรงเตี๊ยม/)).toBeTruthy();
   });
 });
