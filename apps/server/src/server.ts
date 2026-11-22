@@ -98,7 +98,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
 
   const now = options.now ?? Date.now;
   registerAuthRoutes(app, db, now);
-  registerGameRoutes(app, db, now, { ai, karmaTiers: assets.karmaTiers, ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}) });
+  registerGameRoutes(app, db, now, { ai, karmaTiers: assets.karmaTiers, assets, ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}) });
   registerTimelineRoutes(app, db, now);
   registerVisibilityRoutes(app, db, now, assets);
   const resolver = options.phaseResolver ?? createAiGmResolver({ db, ai, assets, now, log: options.aiLog ?? ((line) => console.log(line)) });

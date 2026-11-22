@@ -1,8 +1,7 @@
-import type { LootOption } from '@isekai/protocol';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
 import { character, characterLoot, itemHolder, member } from '../db/schema.ts';
-import type { StoredChosen } from '../game/loot.ts';
+import type { StoredChosen, StoredOption } from '../game/loot.ts';
 
 /**
  * Who holds which item (GEN-060), kept small on purpose until the inventory (GEN-055): every item is
@@ -10,10 +9,10 @@ import type { StoredChosen } from '../game/loot.ts';
  * steal or a gift. Skills and traits never change hands.
  */
 
-export interface HeldItem extends LootOption {
+export type HeldItem = StoredOption & {
   /** The member holding it now. */
   holderMemberId: string;
-}
+};
 
 export interface LootOfMember {
   memberId: string;

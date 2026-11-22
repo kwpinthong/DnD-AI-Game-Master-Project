@@ -1,4 +1,4 @@
-import type { LootOption, OtherCharacterView } from '@isekai/protocol';
+import type { OtherCharacterView } from '@isekai/protocol';
 import {
   DROWSY_STATUS,
   NPC_HP_MAX,
@@ -23,6 +23,7 @@ import { character, characterPresence, member } from '../db/schema.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { moveCharacter, namesVisibleTo, npcBondsOf, presencesInGame } from '../visibility/store.ts';
 import { otherCharacterView, witnessesOf } from '../visibility/views.ts';
+import { isLegacyOption, type StoredOption } from '../game/loot.ts';
 import { chosenLootInGame, itemsInGame, transferItem } from './items.ts';
 import { recordTagUses, tagContexts, type TaggingOptions } from './tags.ts';
 
@@ -126,8 +127,9 @@ export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet
     const statuses: StatusEffect[] = [];
     let damageReduction = 0;
     let afterActionStamina = 0;
-    const apply = (option: LootOption) => {
-      const e = option.effect;
+    // Only an old GEN-048 Common option has its own effect; sheet rows give their numbers through tag matching.
+    const apply = (option: StoredOption) => {
+      const e = isLegacyOption(option) ? option.effect : null;
       if (e?.type === 'check_bonus') {
         statuses.push({ id: `gear:${option.id}`, label: option.name, polarity: 'buff', origin: 'gear', visible: false, mods: [{ scope: e.scope, value: e.value }], phasesLeft: null, ref: option.id });
       } else if (e?.type === 'damage_reduction') damageReduction += e.value;
@@ -141,7 +143,8 @@ export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet
     }
     const held = items.filter((i) => i.holderMemberId === c.memberId);
     held.forEach(apply);
-    const owned = (o: LootOption): OwnedRef => ({ id: o.id, tier: o.tier });
+    // Rank B (the only loot rank, GEN-073) is judged with the Common cap (+2), like the old Common loot.
+    const owned = (o: StoredOption): OwnedRef => ({ id: o.id, tier: 'Common' });
 
     players[c.memberId] = {
       id: c.memberId,

@@ -1,13 +1,15 @@
 import { z } from 'zod';
 
 /**
- * Personality-driven loot (GDD §4.1, GEN-048): the AI reads the personality, names one strength
- * and one weakness (permanent traits, Rules Spec §2.4 source 2, Q-051) and offers up to 3 Common
- * skills and up to 3 Common items. The player keeps exactly one of each.
+ * Personality-driven loot (GDD §4.1, GEN-048 → GEN-073): the AI reads the personality, names one
+ * strength and one weakness (permanent traits, Rules Spec §2.4 source 2, Q-051) and picks up to 3
+ * skills and up to 3 items from the Rank B rows of the Asset sheet whose tags fit (Q-100, Q-128).
+ * The player keeps exactly one of each.
  */
 export const LOOT_OPTION_MAX = 3;
-export const LOOT_TIER = 'Common' as const;
-/** The largest value a Common Quantitative effect may carry (Rules Spec TIER_CAP.Common). */
+/** The sheet has no Common tier: the loot step offers Rank B rows only (Q-100). */
+export const LOOT_RANK = 'B' as const;
+/** The largest value an old GEN-048 Common Quantitative effect may carry (Rules Spec TIER_CAP.Common). */
 export const LOOT_COMMON_CAP = 2;
 /** Trait size (Q-051): strength +2 at one scope, weakness -2 at one scope. */
 export const TRAIT_VALUE = 2;
@@ -39,8 +41,8 @@ export type LootScope = (typeof LOOT_SCOPES)[number];
 const commonValue = z.number().int().min(1).max(LOOT_COMMON_CAP);
 
 /**
- * The Quantitative effects the resolution engine (GEN-042 / GEN-051) can apply. Anything else is
- * dropped from the offer (C3):
+ * The Quantitative effects of an old GEN-048 Common option, kept so a game that started with one
+ * still applies it (GEN-073 C5). New options carry the sheet's `effects` instead:
  * - `check_bonus`: a gear status mod at one scope (Rules Spec §2.4 source 4).
  * - `damage_reduction`: ActorState.damageReduction (§12.1).
  * - `stamina_refund`: ActorState.afterActionStamina, net cost still at least 1 (§3, Q-037).
@@ -53,16 +55,32 @@ export const LootEffect = z.discriminatedUnion('type', [
 export type LootEffect = z.infer<typeof LootEffect>;
 export const LOOT_EFFECT_TYPES = ['check_bonus', 'damage_reduction', 'stamina_refund'] as const;
 
+/** One numeric effect of a sheet row as the asset JSON has it (GEN-062, Q-090). */
+export const LootSheetEffect = z.strictObject({
+  type: z.string(),
+  stats: z.array(z.string()),
+  value: z.number(),
+  duration: z.strictObject({ unit: z.string(), count: z.number().int().positive().optional() }),
+});
+export type LootSheetEffect = z.infer<typeof LootSheetEffect>;
+
 export const LootOption = z.strictObject({
   /** Server-made; a new set gets new ids, so a pick from an old set never lands on the new one. */
   id: z.string(),
   kind: z.enum(['skill', 'item']),
+  /** The sheet row's name exactly (Ability `Name` / Item English name): tag matching binds by it. */
   name: z.string(),
+  /** Ability `Description` / Item `Effect`. */
   description: z.string(),
-  tier: z.literal(LOOT_TIER),
-  buffType: z.enum(BUFF_TYPES),
-  /** Set only for Quantitative. */
-  effect: LootEffect.nullable(),
+  /** 'B' = a row of the sheet. null = an old GEN-048 Common option, not in the sheet (C5). */
+  rank: z.literal(LOOT_RANK).nullable(),
+  /** The sheet's Trigger_Type ("Active", "Passive", "Passive + Active"); null for an old option. */
+  triggerType: z.string().nullable(),
+  /** Uses per game day; 0 = no limit. */
+  dailyLimit: z.number().int().min(0),
+  verbTags: z.array(z.string()),
+  targetTags: z.array(z.string()),
+  effects: z.array(LootSheetEffect),
 });
 export type LootOption = z.infer<typeof LootOption>;
 
@@ -94,8 +112,13 @@ export const LootView = z.strictObject({
   rerollsUsed: z.number().int().min(0),
   /** null = unlimited (Q-029). */
   rerollLimit: z.number().int().min(0).nullable(),
-  /** False once chosen, after the game starts, or when the quota is used up. */
+  /** False after the game starts, or when the quota is used up. */
   canReroll: z.boolean(),
+  /**
+   * True before the start when the kept set is an old GEN-048 Common one the sheet has no row for:
+   * `chosen` is then null and the player must choose again (GEN-073 C5).
+   */
+  needsNewChoice: z.boolean(),
 });
 export type LootView = z.infer<typeof LootView>;
 

@@ -4,6 +4,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
 import type { PromptBlock } from '../ai/provider.ts';
 import { chosenLootInGame, itemsInGame } from '../crossplayer/items.ts';
+import { isLegacyOption, type StoredOption } from '../game/loot.ts';
 import type { DbOrTx } from '../db/client.ts';
 import { character, member } from '../db/schema.ts';
 import { getGameScenario } from '../scenario/store.ts';
@@ -177,8 +178,8 @@ export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnConte
         stamina: s.stamina,
         karmaBand: karmaBand(s.karma),
         drowsy: input.drowsy.has(s.id),
-        items: items.filter((i) => i.holderMemberId === s.id).map((i) => ({ id: i.id, name: world.tokenise(i.name), tier: i.tier })),
-        skills: skill ? [{ id: skill.id, name: world.tokenise(skill.name), tier: skill.tier }] : [],
+        items: items.filter((i) => i.holderMemberId === s.id).map((i) => ({ id: i.id, name: world.tokenise(i.name), tier: optionTier(i) })),
+        skills: skill ? [{ id: skill.id, name: world.tokenise(skill.name), tier: optionTier(skill) }] : [],
         tagSources: (ctx?.sources ?? []).map((src) => ({
           id: src.id,
           kind: src.kind,
@@ -296,4 +297,9 @@ export const SUMMARY_BLOCK: PromptBlock = { id: 'summary-rules', text: SUMMARY_T
 /** Tokens of a whole request (system + messages). */
 export function requestTokens(system: readonly PromptBlock[], messages: readonly { text: string }[]): number {
   return estimateTokens([...system.map((b) => b.text), ...messages.map((m) => m.text)].join('\n'));
+}
+
+/** The tier the AI GM sees: an old GEN-048 option keeps "Common", a sheet option (GEN-073) its Rank (e.g. "B"). */
+function optionTier(o: StoredOption): string {
+  return isLegacyOption(o) ? o.tier : `Rank ${o.rank ?? '?'}`;
 }
