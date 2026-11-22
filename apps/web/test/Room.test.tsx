@@ -1,6 +1,7 @@
 import { FALLBACK_NARRATION_LABEL, type GameView, type RoomEntry, type RoomServerMessage, type RoomState } from '@isekai/protocol';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CONTRACT_FIXTURES } from '@isekai/protocol/contract';
 import { App } from '../src/App.tsx';
 import { roomSocketUrl } from '../src/room-api.ts';
 import { TOKEN_KEY } from '../src/session.ts';
@@ -107,7 +108,7 @@ const actionText = () => screen.getByLabelText(/^คุณจะทำอะไ�
 const FEED = 'เหตุการณ์ที่นี่';
 const STORY = 'เรื่องของคุณ';
 
-function loggedIn(game: GameView, more: Record<string, () => Response> = {}) {
+function loggedIn(game: GameView, more: Record<string, (init?: RequestInit) => Response> = {}) {
   localStorage.setItem(TOKEN_KEY, 'tok-abc');
   vi.stubGlobal(
     'fetch',
@@ -119,7 +120,7 @@ function loggedIn(game: GameView, more: Record<string, () => Response> = {}) {
       if (key === 'GET /api/game') return Response.json(game);
       const handler = more[key] ?? PLAY_DATA[key];
       if (!handler) throw new Error(`unexpected request ${key}`);
-      return handler();
+      return handler(init);
     }),
   );
 }
@@ -535,5 +536,155 @@ describe('GEN-068 weather (web)', () => {
     expect(within(topBar()).queryByText('อากาศ: รอ GM')).toBeNull();
     socket.receive(roomState({ day: 5, weather: { weather: 'Clear', disaster: true } }));
     expect(within(topBar()).getByText('แดดจ้า · ภัยพิบัติ')).toBeTruthy();
+  });
+});
+
+describe('GEN-101 Play as its own page (Q-265)', () => {
+  it('while playing, the app header is not on the page (nor tabbable); the menu leads back to the lobby, where it returns', async () => {
+    const socket = await enterRoom();
+    socket.receive(roomState());
+    expect(screen.queryByRole('button', { name: 'ออกจากเกม' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'รายการเกม' })).toBeNull();
+    fireEvent.click(within(topBar()).getByRole('button', { name: 'เมนู' }));
+    fireEvent.click(screen.getByRole('button', { name: 'กลับห้องรอ' }));
+    expect(await screen.findByRole('button', { name: 'ออกจากเกม' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'รายการเกม' })).toBeTruthy();
+  });
+
+  it('the menu also opens the game list from Play', async () => {
+    const socket = await enterRoom();
+    socket.receive(roomState());
+    fireEvent.click(within(topBar()).getByRole('button', { name: 'เมนู' }));
+    fireEvent.click(screen.getByRole('button', { name: 'รายการเกม' }));
+    expect(await screen.findByRole('button', { name: 'ออกจากเกม' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'รายการเกม', pressed: true })).toBeTruthy();
+  });
+});
+
+describe('GEN-101 [รับทราบ] persists (Q-267)', () => {
+  const hit: RoomEntry = { ...entry(7, 'hit', 'มีคนผลักคุณล้ม'), place: null, hit: { actor: null, changes: [] } };
+  const pinned = () => screen.queryByRole('button', { name: 'รับทราบ' });
+
+  it('an acknowledged hit stays acknowledged after a reload; storage keyed by game + member + seq', async () => {
+    let socket = await enterRoom();
+    socket.receive(roomState());
+    socket.receive({ type: 'entry', entry: hit });
+    fireEvent.click(await screen.findByRole('button', { name: 'รับทราบ' }));
+    expect(pinned()).toBeNull();
+    expect(localStorage.getItem('isekai.hitAck.g-1.m-lin.7')).toBe('1');
+    cleanup();
+    FakeSocket.all = [];
+
+    socket = await enterRoom();
+    socket.receive(roomState());
+    socket.receive({ type: 'entry', entry: hit });
+    expect(await screen.findByText('มีคนผลักคุณล้ม')).toBeTruthy();
+    expect(pinned()).toBeNull();
+  });
+
+  it('without localStorage the page still works (the card just pins again)', async () => {
+    const real = Storage.prototype.getItem;
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (this: Storage, key: string) {
+      if (key.startsWith('isekai.hitAck')) throw new Error('blocked');
+      return real.call(this, key);
+    });
+    const realSet = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key: string, value: string) {
+      if (key.startsWith('isekai.hitAck')) throw new Error('blocked');
+      realSet.call(this, key, value);
+    });
+    try {
+      const socket = await enterRoom();
+      socket.receive(roomState());
+      socket.receive({ type: 'entry', entry: hit });
+      fireEvent.click(await screen.findByRole('button', { name: 'รับทราบ' }));
+      expect(pinned()).toBeNull();
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+});
+
+describe('GEN-101 history, companions, arrival line (Q-268)', () => {
+  async function openRoom() {
+    fireEvent.click(await screen.findByRole('button', { name: 'เข้าห้องเล่น' }));
+    const socket = await waitFor(() => FakeSocket.all.at(-1)!);
+    socket.open();
+    socket.receive(roomState());
+    return socket;
+  }
+
+  it('a: [ประวัติ] opens the game log of this game from GET /api/game/log and goes back to Play', async () => {
+    const asked: string[] = [];
+    loggedIn(gameView(), {
+      'GET /api/game/log': () => {
+        asked.push('log');
+        return Response.json(CONTRACT_FIXTURES.GameLogResponse[1]);
+      },
+      'GET /api/game/rating': () => Response.json(CONTRACT_FIXTURES.GameRatingResponse[1]),
+    });
+    render(<App apiBaseUrl="" />);
+    await openRoom();
+    fireEvent.click(within(topBar()).getByRole('button', { name: 'ประวัติ' }));
+    const back = await screen.findByRole('button', { name: /กลับ/ });
+    expect(asked).toEqual(['log']);
+    fireEvent.click(back);
+    expect(await screen.findByRole('region', { name: FEED })).toBeTruthy();
+  });
+
+  const around = (npcs: { ref: string; name: string; nameRevealed: boolean }[]) => () => Response.json({ ...CONTRACT_FIXTURES.SurroundingsResponse[0], npcs });
+  const mine = [{ ref: 'n-1', name: 'เด็กชายตัวผอม', nameRevealed: false, role: 'main' as const }];
+  const doc = { ref: 'n-9', name: 'หมอยาจร', nameRevealed: false, role: 'secondary' as const };
+
+  it('b: an NPC here that is not yet a companion has [บันทึกเป็นคู่หู]; it posts the ref and the list reloads', async () => {
+    const calls: string[] = [];
+    let saved = false;
+    loggedIn(gameView(), {
+      'GET /api/game/surroundings': around([{ ref: 'n-9', name: 'หมอยาจร', nameRevealed: false }]),
+      'GET /api/game/companions': () => Response.json({ companions: saved ? [...mine, doc] : mine }),
+      'POST /api/game/companions': (init) => {
+        calls.push(String(init?.body));
+        saved = true;
+        return Response.json({ companions: [...mine, doc] }, { status: 201 });
+      },
+    });
+    render(<App apiBaseUrl="" />);
+    await openRoom();
+    fireEvent.click(await screen.findByRole('button', { name: 'บันทึกหมอยาจรเป็นคู่หู' }));
+    await waitFor(() => expect(calls).toEqual([JSON.stringify({ ref: 'n-9' })]));
+    expect(await screen.findByRole('button', { name: 'ปล่อยหมอยาจร' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'บันทึกหมอยาจรเป็นคู่หู' })).toBeNull();
+  });
+
+  it('b: [ปล่อย] on a companion sends DELETE with the ref; the server refusal is shown, not thrown', async () => {
+    const calls: string[] = [];
+    loggedIn(gameView(), {
+      'GET /api/game/surroundings': around([]),
+      'GET /api/game/companions': () => Response.json({ companions: mine }),
+      'DELETE /api/game/companions/n-1': () => {
+        calls.push('n-1');
+        return Response.json({ code: 'not_allowed', message: 'ปล่อยไม่ได้ตอนนี้' }, { status: 409 });
+      },
+    });
+    render(<App apiBaseUrl="" />);
+    await openRoom();
+    fireEvent.click(await screen.findByRole('button', { name: 'ปล่อยเด็กชายตัวผอม' }));
+    expect(await screen.findByText('ปล่อยไม่ได้ตอนนี้')).toBeTruthy();
+    expect(calls).toEqual(['n-1']);
+  });
+
+  it('c: a thin "คุณมาถึง..." line sits after the last thing at the old place, and not before any move', async () => {
+    const socket = await enterRoom();
+    socket.receive(roomState());
+    const at = (seq: number, id: string, name: string, text: string): RoomEntry => ({ ...entry(seq, 'feed', text), place: { id, name } });
+    socket.receive({ type: 'entry', entry: at(1, 'market', 'ลานตลาด', 'เสียงตลาด') });
+    expect(screen.queryByText(/คุณมาถึง/)).toBeNull();
+    socket.receive(roomState({}, { place: { id: 'church', name: 'โบสถ์' } }));
+    socket.receive({ type: 'entry', entry: at(2, 'church', 'โบสถ์', 'เสียงระฆัง') });
+    const line = await screen.findByText('คุณมาถึงโบสถ์');
+    const items = [...line.closest('ol')!.querySelectorAll('li')].map((li) => li.textContent ?? '');
+    const arrived = items.findIndex((s) => s.includes('คุณมาถึงโบสถ์'));
+    expect(arrived).toBe(items.findIndex((s) => s.includes('เสียงตลาด')) + 1);
+    expect(items.findIndex((s) => s.includes('เสียงระฆัง'))).toBeGreaterThan(arrived);
   });
 });

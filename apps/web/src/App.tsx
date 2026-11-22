@@ -36,6 +36,8 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
   const [auth, setAuth] = useState<Auth>(() => (loadToken() ? { state: 'restoring' } : { state: 'guest' }));
   const [guestView, setGuestView] = useState<'join' | 'create'>('join');
   const [showHistory, setShowHistory] = useState(false);
+  /** The play room is open (reported by the lobby). */
+  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -83,17 +85,22 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
   }
 
   return (
-    <main>
-      <h1>Isekai Chronicles</h1>
-      <p role="status" data-status={status}>
-        {label[status]}
-      </p>
-      {auth.state !== 'restoring' && (
-        <button type="button" aria-pressed={showHistory} onClick={() => setShowHistory((v) => !v)}>
-          รายการเกม
-        </button>
+    // Q-265: the play room is its own page: the app header is not rendered at all while it is open (nothing left behind to tab to).
+    <main className={playing ? 'app--play' : undefined}>
+      {!playing && (
+        <>
+          <h1>Isekai Chronicles</h1>
+          <p role="status" data-status={status}>
+            {label[status]}
+          </p>
+          {auth.state !== 'restoring' && (
+            <button type="button" aria-pressed={showHistory} onClick={() => setShowHistory((v) => !v)}>
+              รายการเกม
+            </button>
+          )}
+          {showHistory && <GameHistory apiBaseUrl={apiBaseUrl} onClose={() => setShowHistory(false)} />}
+        </>
       )}
-      {showHistory && <GameHistory apiBaseUrl={apiBaseUrl} onClose={() => setShowHistory(false)} />}
       {auth.state === 'guest' && guestView === 'join' && (
         <>
           <JoinForm apiBaseUrl={apiBaseUrl} onJoined={joined} />
@@ -111,18 +118,24 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
       {auth.state === 'restoring' && <p>กำลังเข้าเกม…</p>}
       {auth.state === 'member' && (
         <section aria-label="ผู้เล่น">
-          <p>
-            เข้าเกมแล้ว: <strong>{auth.member.name}</strong>
-          </p>
-          <button type="button" onClick={leave}>
-            ออกจากเกม
-          </button>
+          {!playing && (
+            <>
+              <p>
+                เข้าเกมแล้ว: <strong>{auth.member.name}</strong>
+              </p>
+              <button type="button" onClick={leave}>
+                ออกจากเกม
+              </button>
+            </>
+          )}
           <Lobby
             key={auth.token}
             apiBaseUrl={apiBaseUrl}
             token={auth.token}
             {...(auth.game ? { initial: auth.game } : {})}
             onSessionLost={sessionLost}
+            onPlayingChange={setPlaying}
+            onGameList={() => setShowHistory(true)}
           />
         </section>
       )}

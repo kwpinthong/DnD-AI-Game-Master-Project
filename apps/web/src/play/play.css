@@ -3,10 +3,11 @@
    The page itself never scrolls; each list scrolls inside its own area.
    Who sees it is told three ways: where it sits, an icon + words, and the surface colour. */
 
+/* Q-265: Play is its own page (App hides the app header while it is open), so it simply fills the viewport. */
 .play {
-  position: fixed;
-  inset: 0;
-  z-index: 5;
+  position: relative;
+  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
@@ -321,6 +322,30 @@
 
 .play-entry--town {
   border-left-color: var(--highlight);
+}
+
+/* Q-268c: the thin line "คุณมาถึง…" where you last moved. */
+.play-arrival {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.play-arrival::before,
+.play-arrival::after {
+  content: '';
+  flex: 1;
+  border-top: var(--line-w) solid var(--line);
+}
+
+/* Q-268a: the game log fills the play page in place of the columns. */
+.play-history {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-3) var(--space-4);
 }
 
 .play-entry--hit {

@@ -230,12 +230,10 @@
   padding-left: var(--space-6);
 }
 
-/* The Play screen fills the viewport in the app (position: fixed). In a plate it fills the plate instead:
+/* The Play screen fills the viewport in the app. In a plate it fills the plate instead:
    a small plate gets the stacked layout, the single view (1366 wide) the three desktop columns at 620 high. */
 .gallery-frame__screen > .play {
-  position: relative;
   height: 560px;
-  z-index: 0;
 }
 
 .gallery--single .gallery-frame__screen > .play {

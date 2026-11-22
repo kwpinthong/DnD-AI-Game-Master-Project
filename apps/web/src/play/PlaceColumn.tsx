@@ -1,5 +1,5 @@
 import { ACTION_MAX_LENGTH, FALLBACK_NARRATION_LABEL, OMEN_MAX_LENGTH, type ActionVisibility, type DestinationTag, type PlaceActionId, type RoomEntry, type RoomState, type TravelResponse } from '@isekai/protocol';
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import publicIcon from '../assets/icons/visibility-public.svg';
 import secretIcon from '../assets/icons/visibility-secret.svg';
 import { lockDetail, lockTitle, omenBlocked, secretQuota, sentHow, turnGroups, turnName } from '../screen-models.ts';
@@ -23,20 +23,30 @@ export const EMPTY_DRAFT: ActionDraft = { text: '', visibility: 'public', rest: 
 // ---------- 4.2 the place: name, zone, who is here, travel ----------
 
 const MAX_CHIPS = 5;
+const MAX_COMPANIONS = 3;
 
-function hereChips(data: PlayData, allies: RoomState['you']['allies']): string[] {
-  const allyRefs = new Set(allies.map((a) => a.ref));
-  const people = data.people.map((p) =>
-    [p.name ?? p.appearance, p.injury === 'ปกติ' ? null : p.injury === 'หมดสติ' ? t.self.injury.down : p.injury, p.socialTitle, allyRefs.has(p.ref) ? t.place.ally : null]
-      .filter((s): s is string => Boolean(s))
-      .join(' · '),
-  );
-  return [...people, ...data.npcs.map((n) => n.name)];
+/** `npc` = the ref of an NPC chip (it can carry [บันทึก]). */
+interface HereChip {
+  text: string;
+  npc?: string;
 }
 
-export function PlaceHead({ room, data, onTravel }: { room: RoomState; data: PlayData; onTravel: (() => void) | null }) {
+function hereChips(data: PlayData, allies: RoomState['you']['allies']): HereChip[] {
+  const allyRefs = new Set(allies.map((a) => a.ref));
+  const people = data.people.map((p) => ({
+    text: [p.name ?? p.appearance, p.injury === 'ปกติ' ? null : p.injury === 'หมดสติ' ? t.self.injury.down : p.injury, p.socialTitle, allyRefs.has(p.ref) ? t.place.ally : null]
+      .filter((s): s is string => Boolean(s))
+      .join(' · '),
+  }));
+  return [...people, ...data.npcs.map((n) => ({ text: n.name, npc: n.ref }))];
+}
+
+export function PlaceHead({ room, data, onTravel, onSave }: { room: RoomState; data: PlayData; onTravel: (() => void) | null; onSave: ((ref: string) => void) | null }) {
   const { you } = room;
   const chips = hereChips(data, you.allies);
+  // Q-268b: an NPC here that is not yet yours can be saved while a slot is free (max 3).
+  const mine = new Set((data.companions ?? []).map((c) => c.ref));
+  const canSave = onSave !== null && data.companions != null && data.companions.length < MAX_COMPANIONS;
   const astral = Boolean(you.astral);
   return (
     <header className="play-place__head" aria-label={t.place.label}>
@@ -63,11 +73,16 @@ export function PlaceHead({ room, data, onTravel }: { room: RoomState; data: Pla
           <ul className="play-here" aria-label={t.place.here}>
             {chips.slice(0, MAX_CHIPS).map((chip, i) => (
               <li key={i} className="chip">
-                {chip}
+                {chip.text}
+                {canSave && chip.npc && !mine.has(chip.npc) && (
+                  <Button aria-label={t.companions.saveName(chip.text)} onClick={() => onSave(chip.npc!)}>
+                    {t.companions.save}
+                  </Button>
+                )}
               </li>
             ))}
             {chips.length > MAX_CHIPS && (
-              <li className="chip" title={chips.slice(MAX_CHIPS).join(', ')}>
+              <li className="chip" title={chips.slice(MAX_CHIPS).map((c) => c.text).join(', ')}>
                 {t.place.more(chips.length - MAX_CHIPS)}
               </li>
             )}
@@ -178,9 +193,11 @@ export function EntryGroups({ entries, empty, children }: { entries: readonly Ro
  * The centre feed: what happened where you are (the server sends only what you witnessed). An Astral Spirit
  * gets every place, read-only, and picks which one to look at (Q-192).
  */
-export function Feed({ entries, placeId, astral }: { entries: readonly RoomEntry[]; placeId: string | null; astral: boolean }) {
+export function Feed({ entries, placeId, placeName, astral }: { entries: readonly RoomEntry[]; placeId: string | null; placeName?: string | undefined; astral: boolean }) {
   const [only, setOnly] = useState('');
   const selectId = useId();
+  // Q-268c: the arrival line goes after the last thing seen at another place (where you last moved from).
+  const arrivedAfter = astral || !placeId || !placeName ? undefined : [...entries].reverse().find((e) => e.place && e.place.id !== placeId)?.seq;
   const places = [...new Map(entries.flatMap((e) => (e.place ? [[e.place.id, e.place.name] as const] : []))).entries()];
   const shown = astral && only ? entries.filter((e) => e.place === null || e.place.id === only) : entries;
   return (
@@ -201,12 +218,19 @@ export function Feed({ entries, placeId, astral }: { entries: readonly RoomEntry
       )}
       <EntryGroups entries={shown} empty={t.feed.empty}>
         {(e) => (
-          <li key={e.seq} className={e.place ? 'play-entry' : 'play-entry play-entry--town'}>
-            {!e.place && <span className="play-entry__tag">{t.feed.town}</span>}
-            {e.place && e.place.id !== placeId && <span className="play-entry__tag">{t.feed.at(e.place.name)}</span>}
-            {e.fallback && <small className="fallback-label">{FALLBACK_NARRATION_LABEL}</small>}
-            <p>{e.text}</p>
-          </li>
+          <Fragment key={e.seq}>
+            <li className={e.place ? 'play-entry' : 'play-entry play-entry--town'}>
+              {!e.place && <span className="play-entry__tag">{t.feed.town}</span>}
+              {e.place && e.place.id !== placeId && <span className="play-entry__tag">{t.feed.at(e.place.name)}</span>}
+              {e.fallback && <small className="fallback-label">{FALLBACK_NARRATION_LABEL}</small>}
+              <p>{e.text}</p>
+            </li>
+            {e.seq === arrivedAfter && placeName && (
+              <li className="play-arrival">
+                <span>{t.feed.arrived(placeName)}</span>
+              </li>
+            )}
+          </Fragment>
         )}
       </EntryGroups>
     </section>

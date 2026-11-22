@@ -82,12 +82,18 @@ export function Lobby({
   token,
   initial,
   onSessionLost,
+  onPlayingChange,
+  onGameList,
   pollMs = 3000,
 }: {
   apiBaseUrl: string;
   token: string;
   initial?: GameView;
   onSessionLost: () => void;
+  /** Q-265: tells the app when the play room opens / closes, so the app header can step aside. */
+  onPlayingChange?: (playing: boolean) => void;
+  /** Q-265: Play's own way to the game list. */
+  onGameList?: () => void;
   pollMs?: number;
 }) {
   const [game, setGame] = useState<GameView | undefined>(initial);
@@ -102,6 +108,11 @@ export function Lobby({
   const [originOpen, setOriginOpen] = useState(false);
   /** Counts the owner / reload calls, so a poll answer that left before one of them is dropped. */
   const actions = useRef(0);
+
+  useEffect(() => {
+    onPlayingChange?.(roomOpen);
+    return () => onPlayingChange?.(false);
+  }, [roomOpen]);
 
   async function run(action: GameAction) {
     actions.current++;
@@ -204,6 +215,10 @@ export function Lobby({
           token={token}
           onSessionLost={onSessionLost}
           onBack={() => setRoomOpen(false)}
+          onGameList={() => {
+            setRoomOpen(false);
+            onGameList?.();
+          }}
           onNeedCharacter={() => {
             setRoomOpen(false);
             setCharacterOpen(true);
