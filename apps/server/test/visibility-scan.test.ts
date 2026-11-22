@@ -29,6 +29,7 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/game/character': { method: 'GET', path: '/api/game/character' },
     'GET /api/game/timeline': { method: 'GET', path: '/api/game/timeline' },
     'GET /api/game/surroundings': { method: 'GET', path: '/api/game/surroundings' },
+    'GET /api/game/travel': { method: 'GET', path: '/api/game/travel' },
     // GEN-037: the read-only summary + log (timeline + every entry this player got).
     'GET /api/game/log': { method: 'GET', path: '/api/game/log' },
     // GEN-065: the player's own start scenario and crossing narration.

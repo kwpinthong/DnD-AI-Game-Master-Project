@@ -126,17 +126,15 @@ export type RoomMember = z.infer<typeof RoomMember>;
  * `exhausted` (Stamina 0: this turn is a forced REST), `unconscious` (HP 0: out cold this turn), `recovering`
  * (resting at the central clinic after HP 0), `astral_spirit` (dead for good; `you.astral` has the omen box).
  */
-export const RoomLockCode = z.enum(['not_a_player', 'exhausted', 'unconscious', 'recovering', 'astral_spirit', 'resolving', 'game_ended']);
+export const RoomLockCode = z.enum(['not_a_player', 'exhausted', 'unconscious', 'recovering', 'astral_spirit', 'resolving', 'game_ended', 'traveling']);
 export type RoomLockCode = z.infer<typeof RoomLockCode>;
 
 /**
- * Lock codes the screens need that the server does not send yet (docs/contract.md): `traveling` (this turn
- * is the trip to another zone, GEN-066 gap). The owner moves a code into `RoomLockCode` when the server sends it.
+ * `traveling` (Q-229, GEN-066): this turn is the trip to another zone; the action is the trip and you arrive
+ * when the turn closes. The web's name for every lock it handles (`RoomYou.lock.code`).
  */
-export const RoomLockCodePending = z.enum(['traveling']);
-/** Every lock the web must handle: `RoomYou.lock.code`. */
-export const RoomViewLockCode = z.enum([...RoomLockCode.options, ...RoomLockCodePending.options]);
-export type RoomViewLockCode = z.infer<typeof RoomViewLockCode>;
+export const RoomViewLockCode = RoomLockCode;
+export type RoomViewLockCode = RoomLockCode;
 
 export const RoomYou = z.strictObject({
   memberId: z.string(),
@@ -204,18 +202,11 @@ export type RoomState = z.infer<typeof RoomState>;
  * `whisper`: one ally to another (GEN-067); `place` null, `whisper` says who to whom.
  * `omen`: an Astral Spirit's one-sentence omen to you (GEN-070, Q-193); `place` null, the sender is not named.
  */
-export const RoomEntryKind = z.enum(['feed', 'narration', 'whisper', 'omen']);
+export const RoomEntryKind = z.enum(['feed', 'narration', 'whisper', 'omen', 'hit']);
 export type RoomEntryKind = z.infer<typeof RoomEntryKind>;
-
-/**
- * Entry kinds the screens need that the server does not send yet (docs/contract.md): `hit` = another
- * player's act landed on you (GEN-060 gap; the pinned card, `RoomEntry.hit` has the details). The owner moves
- * a kind into `RoomEntryKind` when the server sends it.
- */
-export const RoomEntryKindPending = z.enum(['hit']);
-/** Every kind the web must handle: `RoomEntry.kind`. */
-export const RoomViewEntryKind = z.enum([...RoomEntryKind.options, ...RoomEntryKindPending.options]);
-export type RoomViewEntryKind = z.infer<typeof RoomViewEntryKind>;
+/** `hit` (Q-229, GEN-060): another player's act landed on you (the pinned card; `RoomEntry.hit` has the details). */
+export const RoomViewEntryKind = RoomEntryKind;
+export type RoomViewEntryKind = RoomEntryKind;
 
 export const RoomEntry = z.strictObject({
   /** Increases within a game; a viewer's entries are a subsequence, so "the last one I have" is enough. */
@@ -236,9 +227,9 @@ export const RoomEntry = z.strictObject({
    * text was still wrong after a repair). Present only when true; show `FALLBACK_NARRATION_LABEL` with it.
    */
   fallback: z.literal(true).optional(),
-  /** F5: the roll of the reader's own action, on that narration only (pending, see docs/contract.md). */
+  /** F5: the roll of the reader's own action, on that narration only (Q-229). */
   roll: RollView.optional(),
-  /** `hit` entries: who (if known) and what changed for you (pending, see docs/contract.md). */
+  /** `hit` entries: who (if known) and what changed for you (Q-229). */
   hit: HitView.optional(),
 });
 export type RoomEntry = z.infer<typeof RoomEntry>;

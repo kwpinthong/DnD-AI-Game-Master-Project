@@ -37,7 +37,7 @@ export const NpcView = z.strictObject({
 });
 export type NpcView = z.infer<typeof NpcView>;
 
-/** `zone`: the place's zone (Screens and Flows v2 4.2; pending GEN-099 gap, see docs/contract.md). */
+/** `zone`: the place's zone (Screens and Flows v2 4.2, Q-229); absent for a place that is not a Location row. */
 export const PlaceView = z.strictObject({ id: z.string(), name: z.string(), zone: PlaceZone.optional() });
 export type PlaceView = z.infer<typeof PlaceView>;
 

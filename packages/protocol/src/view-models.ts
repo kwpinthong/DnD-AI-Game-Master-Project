@@ -129,7 +129,7 @@ export const TravelZoneGroup = z.strictObject({
 });
 export type TravelZoneGroup = z.infer<typeof TravelZoneGroup>;
 
-/** 200 from GET /api/game/travel (pending, see docs/contract.md): the travel sheet from where you are. */
+/** 200 from GET /api/game/travel (Q-229): the travel sheet from where you are (`from` null = nowhere to go from). */
 export const TravelResponse = z.strictObject({
   from: z.strictObject({ id: z.string(), name: z.string(), zone: PlaceZone }).nullable(),
   zones: z.array(TravelZoneGroup),

@@ -85,6 +85,7 @@ const LOCK_MESSAGE: Record<RoomLockCode, string> = {
   astral_spirit: 'ตัวละครตายถาวร กลายเป็น Astral Spirit ส่ง action ไม่ได้อีก เห็นเหตุการณ์สาธารณะได้ทุกที่ และส่งลางสังหรณ์ได้คืนละครั้งในช่วง NOCTHERION',
   resolving: 'เทิร์นนี้ปิดรับ action แล้ว กำลังสรุปผล รอเทิร์นถัดไป',
   game_ended: 'เกมจบแล้ว ส่ง action ไม่ได้',
+  traveling: 'เทิร์นนี้ใช้ไปกับการเดินทางข้ามโซนแล้ว ส่ง action ได้อีกเมื่อถึงที่หมายเทิร์นถัดไป',
 };
 
 const WHISPER_MESSAGE: Record<RoomWhisperCode, string> = {
@@ -120,7 +121,6 @@ export type MoveReply =
   | { type: 'move_accepted'; kind: 'same_zone' | 'cross_zone' | 'rift'; place: PlaceView; arrives: 'now' | 'next_turn' }
   | { type: 'move_rejected'; code: RoomMoveCode; message: string };
 
-const TRAVELING_ACTION_MESSAGE = 'เทิร์นนี้ใช้ไปกับการเดินทางข้ามโซนแล้ว ส่ง action ได้อีกเมื่อถึงที่หมายเทิร์นถัดไป';
 
 export interface RoomService {
   /** Registers an authenticated socket: replays entries after `afterSeq`, then sends the room and `ready`. */
@@ -213,9 +213,9 @@ export function createRoomService(
     socket.send(JSON.stringify(message));
   }
 
-  const placeView = placeViewOf;
+  const placeView = (gameId: string, locationId: string | null) => placeViewOf(db, gameId, locationId, assets);
   const characterName = (memberId: string | null) => characterNameOf(db, memberId);
-  const entryView = (row: RoomEntryRow, viewer: MemberRow): RoomEntry => entryViewOf(db, row, viewer);
+  const entryView = (row: RoomEntryRow, viewer: MemberRow): RoomEntry => entryViewOf(db, row, viewer, assets);
 
   /** Allies `me` may Whisper to and whose real name they see (GEN-067), by their presence ref. A discovered name alone (Q-134) opens no Whisper. */
   function alliesOf(me: MemberRow): { ref: string; name: string }[] {
@@ -297,7 +297,8 @@ export function createRoomService(
     gameRow: { mode: 'online' | 'single'; ownerMemberId: string | null },
   ): RoomState {
     const { mode } = gameRow;
-    const lock = lockOf(me, state);
+    // Q-229: the trip to another zone is this turn's action; shown as a lock, while `move` keeps its own refusal code.
+    const lock = lockOf(me, state) ?? (me.role !== 'gm' && travellingTo(db, me.id) !== null ? ('traveling' as const) : null);
     const mine = state.submissions[me.id];
     const player = state.players[me.id];
     return {
@@ -321,7 +322,7 @@ export function createRoomService(
       you: {
         memberId: me.id,
         role: me.role,
-        place: me.role === 'gm' ? null : placeView(db, me.gameId, presenceOf(db, me.id)?.locationId ?? null),
+        place: me.role === 'gm' ? null : placeView(me.gameId, presenceOf(db, me.id)?.locationId ?? null),
         lock: lock ? { code: lock, message: LOCK_MESSAGE[lock] } : null,
         secretUsed: player ? secretQuotaUsed(player, state) : false,
         drowsy: player ? isDrowsy(player, state.day) : false,
@@ -721,7 +722,7 @@ export function createRoomService(
       const text = normalizeActionText(input.text);
       const rest = input.rest === true;
       const train = input.train === true;
-      if (travellingTo(db, me.id) !== null) return reject('traveling', TRAVELING_ACTION_MESSAGE);
+      if (travellingTo(db, me.id) !== null) return reject('traveling');
 
       const outcome = db.transaction((tx): SubmitReply | PhaseState => {
         const t = now();
@@ -816,7 +817,7 @@ export function createRoomService(
       }
       broadcastRoom(me.gameId);
       if (outcome.state.status === 'resolving') startResolving(me.gameId);
-      return { type: 'move_accepted', kind: outcome.kind, place: outcome.place, arrives: outcome.arrives };
+      return { type: 'move_accepted', kind: outcome.kind, place: placeView(me.gameId, outcome.place.id) ?? outcome.place, arrives: outcome.arrives };
     },
 
     async stop() {

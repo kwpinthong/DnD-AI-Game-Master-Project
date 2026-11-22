@@ -123,6 +123,8 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     moveCharacter(server!.orm, t.a.memberId, merchant.locationId, CLOCK);
     const seen = SurroundingsResponse.parse((await hit(call, 'GET /api/game/surroundings', { token: t.a.token })).body);
     await hit(call, 'GET /api/game/surroundings', { token: tgm });
+    await hit(call, 'GET /api/game/travel', { token: t.a.token });
+    await hit(call, 'GET /api/game/travel', { token: tgm });
     const npcRef = seen.view === 'player' ? seen.npcs[0]?.ref : undefined;
     expect(npcRef, 'an NPC at the merchant place').toBeTypeOf('string');
     await hit(call, 'POST /api/game/companions', { token: t.a.token, body: { ref: npcRef } });
