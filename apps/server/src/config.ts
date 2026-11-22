@@ -1,6 +1,7 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isSecretHash } from './auth/pin.ts';
+import type { BackupConfig } from './backup/schedule.ts';
 
 export interface ServerConfig {
   host: string;
@@ -14,6 +15,8 @@ export interface ServerConfig {
    * the server's config. Without it, POST /api/games answers 503 and nobody can create a game.
    */
   createCodeHash?: string;
+  /** Scheduled backups of the DB (GEN-037); none when left out (tests) or BACKUP_INTERVAL_HOURS=0. */
+  backup?: BackupConfig;
 }
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -60,13 +63,37 @@ export function loadConfig(env: Record<string, string | undefined>): ServerConfi
       'CREATE_CODE_HASH must be a hash from "pnpm --filter @isekai/server run create-code:hash" (scrypt$...), not the create code itself',
     );
   }
+  const resolvedDbPath = dbPath ? resolve(dbPath) : resolve(repoRoot, 'data', 'isekai.sqlite');
+  const backup = backupConfig(value, resolvedDbPath);
   return {
     host: value('HOST') ?? (production ? '0.0.0.0' : '127.0.0.1'),
     port,
-    dbPath: dbPath ? resolve(dbPath) : resolve(repoRoot, 'data', 'isekai.sqlite'),
+    dbPath: resolvedDbPath,
     webOrigins,
     ...(createCodeHash ? { createCodeHash } : {}),
+    ...(backup ? { backup } : {}),
   };
+}
+
+/** Default every 6 hours (ADR Hosting) and keep 28 = 7 days of them. */
+export const BACKUP_DEFAULTS = { intervalHours: 6, keep: 28 } as const;
+
+/**
+ * BACKUP_DIR (default `backups/` next to the DB, so on the Railway volume), BACKUP_INTERVAL_HOURS
+ * (0 = no backup job) and BACKUP_KEEP (how many to keep).
+ */
+function backupConfig(value: (name: string) => string | undefined, dbPath: string): BackupConfig | undefined {
+  const hoursText = value('BACKUP_INTERVAL_HOURS') ?? String(BACKUP_DEFAULTS.intervalHours);
+  const hours = Number(hoursText);
+  if (!Number.isFinite(hours) || hours < 0) {
+    throw new Error(`BACKUP_INTERVAL_HOURS must be a number of hours, 0 or more (0 = no backups), got "${hoursText}"`);
+  }
+  const keepText = value('BACKUP_KEEP') ?? String(BACKUP_DEFAULTS.keep);
+  const keep = Number(keepText);
+  if (!Number.isInteger(keep) || keep < 1) throw new Error(`BACKUP_KEEP must be a whole number, 1 or more, got "${keepText}"`);
+  if (hours === 0) return undefined;
+  const dir = value('BACKUP_DIR');
+  return { dir: dir ? resolve(dir) : resolve(dirname(dbPath), 'backups'), intervalMs: Math.round(hours * 3_600_000), keep };
 }
 
 function isOrigin(candidate: string): boolean {
