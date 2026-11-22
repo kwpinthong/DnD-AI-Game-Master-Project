@@ -8,7 +8,8 @@ if (!dbPath) throw new Error('usage: kill-writer.ts <db path>');
 
 const { sqlite } = openDatabase(dbPath);
 const ROWS = 40;
-const filler = 'ข้อมูลเกม'.repeat(2_000);
+// ~2 KB a row, ~80 KB a transaction: enough pages per commit for a kill to land mid-write, light on the disk.
+const filler = 'ข้อมูลเกม'.repeat(200);
 const insert = sqlite.prepare('insert into app_meta (key, value) values (?, ?)');
 const write = sqlite.transaction((n: number) => {
   for (let i = 0; i < ROWS; i++) insert.run(`kill-${n}-${i}`, filler);
