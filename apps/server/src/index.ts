@@ -1,10 +1,13 @@
+import { fileURLToPath } from 'node:url';
 import { loadAiConfig } from './ai/config.ts';
 import { loadConfig } from './config.ts';
 import { startServer } from './server.ts';
 
 try {
   const config = loadConfig(process.env);
-  const server = await startServer(config, { ai: loadAiConfig(process.env) });
+  // The built web app, served from the same origin (Q-162); WEB_DIST_DIR overrides the default apps/web/dist.
+  const webDistDir = process.env.WEB_DIST_DIR?.trim() || fileURLToPath(new URL('../../web/dist', import.meta.url));
+  const server = await startServer(config, { ai: loadAiConfig(process.env), webDistDir });
   console.log(`[isekai-server] database ${server.dbPath} (migrations applied: ${server.migrationsApplied})`);
   console.log(
     config.backup

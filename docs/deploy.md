@@ -10,6 +10,30 @@ browser ──https──> https://<site>.netlify.app        (Netlify: apps/web/
                                                    └── Volume /data/isekai.sqlite (ไฟล์ DB เดียว, replica เดียว)
 ```
 
+## ทางเลือก: service เดียว (Q-162) ให้ server เสิร์ฟ web เอง
+server เสิร์ฟ `apps/web/dist` เองแล้ว (`apps/server/src/web-static.ts`) ถ้า dist ไม่มี server ก็ยัง start ได้ (เป็น API อย่างเดียว) web เรียก API origin เดียวกันเมื่อไม่ตั้ง `VITE_API_URL` จึงไม่ต้องใช้ Netlify และไม่มี CORS
+
+```
+browser ──https──> https://<service>.up.railway.app   (หน้าเว็บ + /api + WebSocket + /health ใน process เดียว)
+                      └── Volume /data/isekai.sqlite
+```
+
+สิ่งที่ต้องเปลี่ยนจากข้อ 1.1 (ไม่ต้องทำข้อ 1.2 / 1.3):
+| เรื่อง | ค่าเดิม (2 service) | service เดียว |
+|---|---|---|
+| Build Command | `pnpm --filter "@isekai/server..." run typecheck` | `pnpm --filter "@isekai/web..." run build && pnpm --filter "@isekai/server..." run typecheck` (ต้อง build web ก่อน ไม่งั้นไม่มี `apps/web/dist`) |
+| Start Command | `node apps/server/src/index.ts` | เหมือนเดิม |
+| Watch Paths | `apps/server/**`, `packages/**`, ... | เพิ่ม `apps/web/**` |
+| `WEB_ORIGIN` | `https://<site>.netlify.app` | `https://<service>.up.railway.app` (URL ของ service เอง ไม่มี path) ต้องตรง เพราะ WebSocket ของห้องเล่นเช็ก Origin กับค่านี้ |
+| `VITE_API_URL` | ตั้งบน Netlify | **ไม่ตั้ง** (ถ้าตั้งไว้ตอน build web จะเรียก origin อื่น) |
+| ตัวแปรอื่น | ตามตาราง env ข้างล่าง | เหมือนเดิม (`NODE_ENV`, `DB_PATH`, `CREATE_CODE_HASH`, `ANTHROPIC_API_KEY`, ...) ถ้าต้องการให้ dist อยู่ที่อื่นตั้ง `WEB_DIST_DIR` (ปกติไม่ต้อง) |
+
+ลำดับ: Generate Domain ก่อน แล้วตั้ง `WEB_ORIGIN` เป็น URL นั้น (deploy แรกจะไม่ผ่าน healthcheck จนกว่าจะตั้ง `WEB_ORIGIN` เหมือนข้อ 1.1.7) หน้าแอดมิน AI usage อยู่ที่ `https://<service>.up.railway.app/admin`
+checklist ข้อ 4: ใช้ `<api>` = `<web>` = URL ของ service, C2 / C3 / C5 / C6 ใช้ได้เหมือนเดิม, C3 (CORS) และ C7 (web) ไม่เกี่ยว
+
+ตรวจในเครื่อง (production-like): `pnpm --filter @isekai/web build` แล้ว `NODE_ENV=production DB_PATH=<ไฟล์> WEB_ORIGIN=http://127.0.0.1:3000 CREATE_CODE_HASH=<hash> node apps/server/src/index.ts` เปิด `http://127.0.0.1:3000/`
+ยังไม่ได้แก้ `.railway/railway.ts` (build command / watchPatterns ยังเป็นแบบ 2 service) เมื่อ Nok ตัดสินใจใช้ service เดียวต้องแก้ไฟล์นั้นและ test ใน `deploy-config.test.ts` ให้ตรงตารางข้างบน
+
 ## ไฟล์ใน repo
 | ไฟล์ | ใช้ทำอะไร |
 |---|---|
