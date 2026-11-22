@@ -36,6 +36,11 @@ export const gameEventState = sqliteTable(
     status: text('status', { enum: ['pending', 'active', 'resolved'] }).notNull(),
     outcome: text('outcome'),
     outcomeSource: text('outcome_source', { enum: ['default', 'ai'] }),
+    /**
+     * Q-243: the side of the AI's outcome (good / evil / neutral of the event's intervention effects); null =
+     * none, and always null for the scenario default. Before migration 0029 it was a prefix of `outcome`.
+     */
+    outcomeSide: text('outcome_side', { enum: ['good', 'evil', 'neutral'] }),
     activatedAt: integer('activated_at'),
     resolvedAt: integer('resolved_at'),
     /**

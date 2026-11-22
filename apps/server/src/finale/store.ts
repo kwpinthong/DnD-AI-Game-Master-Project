@@ -85,12 +85,13 @@ const PLAN_REWARDS: Readonly<Record<string, { buff?: string; side?: 'evil'; refu
 };
 
 /**
- * Whether day 5 went Good: the AI GM set the day 5 event's outcome (players stepped in) and the outcome names
- * the Good (or Good/Neutral) side of its interventionEffects first. The default (drift) and Evil are not Good.
+ * Whether day 5 went Good: the AI GM set the day 5 event's outcome (players stepped in) with side `good`
+ * (Q-243: the outcome's own field). Q-244: only good counts; neutral, evil, an outcome without a side and the
+ * default (drift) do not.
  */
 export function day5WentGood(db: DbOrTx, gameId: string): boolean {
   const day5 = getEventOutcomes(db, gameId).find((e) => e.day === 5);
-  return day5 !== undefined && day5.intervened && /^\s*(good|neutral)\b/i.test(day5.outcome);
+  return day5 !== undefined && day5.intervened && day5.side === 'good';
 }
 
 /**

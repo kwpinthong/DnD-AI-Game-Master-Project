@@ -223,7 +223,7 @@ function actionsOf(db: DbOrTx, gameId: string): GmActionView[] {
 }
 
 function timelineEvents(db: DbOrTx, gameId: string): GmTimelineEvent[] {
-  return (getTimeline(db, gameId)?.events ?? []).map(({ id, day, phase, title, status, outcome, outcomeSource }) => ({ id, day, phase, title, status, outcome, outcomeSource }));
+  return (getTimeline(db, gameId)?.events ?? []).map(({ id, day, phase, title, status, outcome, outcomeSource, outcomeSide }) => ({ id, day, phase, title, status, outcome, outcomeSource, outcomeSide }));
 }
 
 export function consoleView(db: Db, room: RoomService, assets: GameAssets, gm: MemberRow, now: number): GmConsoleResponse {

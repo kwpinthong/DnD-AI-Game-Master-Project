@@ -218,6 +218,13 @@
       "when": 1795340969908,
       "tag": "0030_phase_action_seq",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1795344647153,
+      "tag": "0031_event_outcome_side",
+      "breakpoints": true
     }
   ]
 }

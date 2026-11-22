@@ -15,6 +15,13 @@ export type EventOutcomeSource = z.infer<typeof EventOutcomeSource>;
 /** Outcome text the AI GM may set on an active event (e.g. `prevented`). */
 export const EventOutcomeText = z.string().trim().min(1, 'ห้ามว่าง').max(1000, 'ยาวได้ไม่เกิน 1000 ตัวอักษร');
 
+/**
+ * Which side of the event's intervention effects an outcome is (Q-243): its own field, never a prefix of the
+ * outcome text. null = no side (nobody stepped in, or what the players did fits none).
+ */
+export const EventOutcomeSide = z.enum(['good', 'evil', 'neutral']);
+export type EventOutcomeSide = z.infer<typeof EventOutcomeSide>;
+
 /** A day + period on the timeline (events last both turns of their period, GEN-063). */
 export const PhasePoint = z.object({ day: z.number().int().min(1).max(12), phase: Phase });
 export type PhasePoint = z.infer<typeof PhasePoint>;
@@ -39,6 +46,8 @@ export const GmTimelineEvent = z
     /** The AI's choice while active, or the final outcome once resolved; null = nothing chosen yet. */
     outcome: z.string().nullable(),
     outcomeSource: EventOutcomeSource.nullable(),
+    /** The side of the outcome the AI GM chose (Q-243, Human GM only); null = none. */
+    outcomeSide: EventOutcomeSide.nullable(),
   })
   .strict();
 export type GmTimelineEvent = z.infer<typeof GmTimelineEvent>;

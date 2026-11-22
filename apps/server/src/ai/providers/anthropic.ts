@@ -4,7 +4,10 @@ import type { AiCallRequest, AiCallResult, AiErrorKind, AiProvider, AiTokenUsage
 
 /**
  * Claude through the official SDK (default provider, Q-018 claude-sonnet-5-5).
- * - Structured outputs (`output_config.format`), never forced `tool_choice` (400 on Sonnet 5.5).
+ * - The answer's JSON schema goes into the prompt and the answer comes back as JSON text (Q-285). The real API
+ *   refused the GM schemas as structured output (`output_config.format`: no `maxItems`, at most 16 union-typed
+ *   parameters, "the compiled grammar is too large") and refuses a forced `tool_choice` on Sonnet 5.5. The
+ *   AI service checks every answer with the zod schema, so a wrong answer is a `schema_mismatch` it retries.
  * - Thinking left at the model default (Sonnet 5.5 rejects `disabled`); depth via `output_config.effort`.
  * - `stop_reason` checked before content: `refusal` / `max_tokens` are failures the service retries.
  * - Server-side refusal fallback (`fallbacks: "default"`) on models that support it.
@@ -58,7 +61,7 @@ export function createAnthropicProvider(config: AiConfig): AiProvider {
 
       const text = response.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('');
       try {
-        return { ok: true, json: JSON.parse(text), usage, model: response.model, latencyMs: latency() };
+        return { ok: true, json: parseAnswer(text), usage, model: response.model, latencyMs: latency() };
       } catch {
         return failure('invalid_json', `not JSON (${text.length} chars, stop ${response.stop_reason})`, usage, true, latency());
       }
@@ -66,19 +69,40 @@ export function createAnthropicProvider(config: AiConfig): AiProvider {
   };
 }
 
+/** The JSON of an answer: the text itself, or the object inside a code fence or a sentence around it. Throws when there is none. */
+function parseAnswer(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+  }
+}
+
+/** The last system block (after the caller's, so their cache breakpoints stand): what the answer must be. */
+function answerFormat(output: AiCallRequest['output']): string {
+  const { $schema: _drop, ...schema } = output.jsonSchema;
+  return [
+    `Answer with one JSON object only (${output.name}): no text before or after it, no code fence.`,
+    'It must follow this JSON Schema exactly: every required property, no property the schema does not name, null where the schema allows null.',
+    JSON.stringify(schema),
+  ].join('\n');
+}
+
 function toParams(req: AiCallRequest): Anthropic.Beta.MessageCreateParamsNonStreaming {
   const cachedIndexes = req.system.flatMap((block, i) => (block.cache ? [i] : [])).slice(-MAX_CACHE_BREAKPOINTS);
-  const { $schema: _drop, ...schema } = req.output.jsonSchema;
   return {
     model: req.model,
     max_tokens: req.maxOutputTokens,
-    system: req.system.map((block, i) => ({
-      type: 'text' as const,
-      text: block.text,
-      ...(cachedIndexes.includes(i) ? { cache_control: { type: 'ephemeral' as const } } : {}),
-    })),
+    system: [
+      ...req.system.map((block, i) => ({
+        type: 'text' as const,
+        text: block.text,
+        ...(cachedIndexes.includes(i) ? { cache_control: { type: 'ephemeral' as const } } : {}),
+      })),
+      { type: 'text' as const, text: answerFormat(req.output) },
+    ],
     messages: req.messages.map((message) => ({ role: message.role, content: message.text })),
-    output_config: { effort: req.effort, format: { type: 'json_schema', schema } },
+    output_config: { effort: req.effort },
     ...(supportsFallback(req.model) ? { betas: [FALLBACK_BETA], fallbacks: 'default' as const } : {}),
   };
 }

@@ -99,7 +99,7 @@ describe('C5 timeout, refusal, bad JSON', () => {
     ]);
   });
 
-  it('the Anthropic adapter sends structured output, cache breakpoints, the configured model and no SDK-side retries', async () => {
+  it('the Anthropic adapter sends the effort, cache breakpoints, the configured model and no SDK-side retries (Q-285: no structured output, no tool)', async () => {
     stub = await startAnthropicStub({ kind: 'json', value: GOOD, usage: { input_tokens: 1000, cache_read_input_tokens: 4000, output_tokens: 200 } });
     const config = aiConfig({ AI_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'test-key-not-real', ANTHROPIC_BASE_URL: stub.baseUrl });
     harness = makeService(providerFor(config), config);
@@ -111,9 +111,11 @@ describe('C5 timeout, refusal, bad JSON', () => {
     expect(sent.headers['x-api-key'] ?? sent.headers.authorization).toMatch(/^(?:Bearer )?test-key-not-real$/);
     expect(sent.body.model).toBe('claude-sonnet-5-5');
     expect(sent.body).toMatchObject({
-      output_config: { format: { type: 'json_schema' } },
-      system: [{ type: 'text', cache_control: { type: 'ephemeral' } }],
+      output_config: { effort: 'medium' },
+      system: [{ type: 'text', cache_control: { type: 'ephemeral' } }, { type: 'text' }],
     });
+    expect(sent.body.output_config).not.toHaveProperty('format');
+    expect(sent.body).not.toHaveProperty('tools');
     expect(sent.body).not.toHaveProperty('tool_choice');
     const [row] = usageRows(harness.opened.sqlite);
     // claude-sonnet-5-5: 2 USD/M input, 0.10 cached, 10 output → 1000*2 + 4000*0.1 + 200*10 micro-USD.

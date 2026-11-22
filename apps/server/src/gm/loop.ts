@@ -401,7 +401,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           addConstraint(tx, { gameId, memberId: world.byRef.get(c.player)!.memberId, text: c.text, reason: c.reason, day: at.day }, now());
         }
         for (const c of proposal.constraints.release) releaseConstraint(tx, gameId, c.id, c.reason, at.day);
-        for (const e of proposal.eventOutcomes) setEventOutcome(tx, gameId, e.eventId, e.outcome, now());
+        // Q-243: a proposal stored before `side` existed has none; the store then reads the old text prefix.
+        for (const e of proposal.eventOutcomes) setEventOutcome(tx, gameId, e.eventId, e.outcome, e.side, now());
         // GEN-059: the ending path the players completed during the finale (a proposal stored before it has none).
         if (proposal.endingPath) setEndingPath(tx, gameId, proposal.endingPath, now());
         // GEN-093: each action's Day-10 plan and role, with whether it succeeded (a proposal stored before it has none).

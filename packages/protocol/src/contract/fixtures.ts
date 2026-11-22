@@ -179,7 +179,7 @@ const gmCharacter: In<typeof p.GmCharacterView> = {
   playerBonds: [],
   curses: [{ label: 'หวาดกลัว', source: 'Venom of Despair', value: -3, turnsLeft: 2 }],
 };
-const gmTimelineEvent: In<typeof p.GmTimelineEvent> = { id: 'ev-5', day: 5, phase: 'EOSORIA', title: 'ภัยพิบัติเริ่ม', status: 'pending', outcome: null, outcomeSource: null };
+const gmTimelineEvent: In<typeof p.GmTimelineEvent> = { id: 'ev-5', day: 5, phase: 'EOSORIA', title: 'ภัยพิบัติเริ่ม', status: 'pending', outcome: null, outcomeSource: null, outcomeSide: null };
 const gmPendingTurn: In<typeof p.GmPendingTurn> = {
   at: AT,
   entries: [{ index: 0, kind: 'narration', memberId: ME, locationId: null, text: 'คุณสังเกตว่า…', edited: false }],

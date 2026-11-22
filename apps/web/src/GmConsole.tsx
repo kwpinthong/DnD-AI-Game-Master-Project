@@ -63,6 +63,9 @@ function Check({ check: c, who }: { check: GmCheckView; who: string }) {
   );
 }
 
+/** Q-243: the side of an event outcome, GM only (the sheet's own words). */
+const OUTCOME_SIDE = { good: 'Good', evil: 'Evil', neutral: 'Neutral' } as const;
+
 /** The held turn: narration texts and HP / Stamina / Karma per player, edited with one reason, then approved. */
 function HeldTurn({
   pending,
@@ -482,7 +485,7 @@ export function GmConsole({ apiBaseUrl, token, refreshKey, gmStatus }: { apiBase
           <Panel label="เหตุการณ์ตามเส้นเวลา">
             <ul className="gm-list">
               {view.events.map((e) => (
-                <li key={e.id}>{`วันที่ ${e.day} · ${PHASE_LABEL[e.phase]} · ${e.title} · ${EVENT_STATUS[e.status]}${e.outcome ? ` · ผล: ${e.outcome}` : ''}`}</li>
+                <li key={e.id}>{`วันที่ ${e.day} · ${PHASE_LABEL[e.phase]} · ${e.title} · ${EVENT_STATUS[e.status]}${e.outcome ? ` · ผล: ${e.outcome}` : ''}${e.outcomeSide ? ` · ฝ่าย: ${OUTCOME_SIDE[e.outcomeSide]}` : ''}`}</li>
               ))}
             </ul>
           </Panel>

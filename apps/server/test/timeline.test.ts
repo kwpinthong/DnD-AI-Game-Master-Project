@@ -140,7 +140,7 @@ describe('timeline events: pending → active → resolved + outcome (GEN-053)',
   it('C3: the AI answer of a phase trigger maps onto the outcome operation', async () => {
     advanceTimeline(opened.db, GAME, { day: 7, phase: 'SOLARION' });
     const mock = createMockProvider(MOCK_AI, {
-      steps: [mockReply.ok({ eventOutcomes: [{ eventId: 'd7-kidnapping', outcome: 'prevented' }] })],
+      steps: [mockReply.ok({ eventOutcomes: [{ eventId: 'd7-kidnapping', outcome: 'prevented', side: 'good' }] })],
     });
     const result = await startPhaseEvents({ db: opened.db, ai: aiWith(mock) }, GAME, { day: 7, phase: 'HESPERION' });
     expect(result.ai.ok).toBe(true);

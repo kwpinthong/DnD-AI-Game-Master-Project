@@ -54,7 +54,11 @@ function consoleView(pending: boolean): GmConsoleResponse {
     characters: [character('m-a', 'ลิน', -30), character('m-b', 'ดาริน', 20)],
     evidence: [],
     actions: [{ memberId: 'm-b', day: 1, phase: 'EOSORIA', turn: 1, text: 'แอบล้วงกระเป๋าพ่อค้า', visibility: 'secret', rest: false }],
-    events: [{ id: 'd1-bread', day: 1, phase: 'EOSORIA', title: 'ขนมปังแพง', status: 'active', outcome: null, outcomeSource: null }],
+    events: [
+      { id: 'd1-bread', day: 1, phase: 'EOSORIA', title: 'ขนมปังแพง', status: 'active', outcome: null, outcomeSource: null, outcomeSide: null },
+      { id: 'd5-disaster', day: 5, phase: 'EOSORIA', title: 'ภัยพิบัติ', status: 'resolved', outcome: 'อพยพชาวนาได้ทัน', outcomeSource: 'ai', outcomeSide: 'good' },
+      { id: 'd7-kidnapping', day: 7, phase: 'HESPERION', title: 'ลักพาตัว', status: 'resolved', outcome: 'ลัทธิได้เครื่องสังเวย', outcomeSource: 'default', outcomeSide: null },
+    ],
     legendaries: [{ id: 'dawn', name: 'พรแห่งแสงรุ่ง', type: 'skill', condition: 'ทำความดีต่อเนื่อง 10 วัน', counter: 'streak_days', target: 10, progress: 2, unlocked: false }],
     pending: pending
       ? {
@@ -95,6 +99,15 @@ describe('GEN-058 GM console (web)', () => {
     const people = await screen.findByRole('region', { name: 'ตัวละครทั้งหมด' });
     expect(within(people).getByText(/ดาริน.*หวาดกลัว \(Venom of Despair\) d20 -3 อีก 3 เทิร์น/)).toBeTruthy();
     expect(within(people).getByText(/ลิน/).textContent).not.toContain('หวาดกลัว');
+  });
+
+  it('Q-243: the GM sees the side of an event outcome as a label beside the text; an outcome without a side has none', async () => {
+    stubApi({ 'GET /api/game/gm/console': () => Response.json(consoleView(false)), 'GET /api/game/gm/log': () => Response.json(emptyLog) });
+    render(<GmConsole apiBaseUrl="http://api" token="tok" refreshKey="1" />);
+    const events = await screen.findByRole('region', { name: 'เหตุการณ์ตามเส้นเวลา' });
+    expect(within(events).getByText(/ภัยพิบัติ/).textContent).toMatch(/ผล: อพยพชาวนาได้ทัน · ฝ่าย: Good$/);
+    expect(within(events).getByText(/ลักพาตัว/).textContent).toMatch(/ผล: ลัทธิได้เครื่องสังเวย$/);
+    expect(within(events).getByText(/ขนมปังแพง/).textContent).not.toContain('ฝ่าย');
   });
 
   it('C2: edits the held narration and HP with a reason, then approves', async () => {
@@ -206,7 +219,7 @@ describe('GEN-058 GM console (web)', () => {
             },
           ],
         };
-        return Response.json({ event: { id: 'gm-1', day: 6, phase: 'SOLARION', title: 'ไฟไหม้ตลาด', status: 'pending', outcome: null, outcomeSource: null } });
+        return Response.json({ event: { id: 'gm-1', day: 6, phase: 'SOLARION', title: 'ไฟไหม้ตลาด', status: 'pending', outcome: null, outcomeSource: null, outcomeSide: null } });
       },
     });
     render(<GmConsole apiBaseUrl="http://api" token="tok" refreshKey="1" />);
