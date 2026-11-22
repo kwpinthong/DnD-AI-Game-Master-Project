@@ -66,9 +66,40 @@ export function createAnthropicProvider(config: AiConfig): AiProvider {
   };
 }
 
+/**
+ * Schema keywords the Messages API refuses in `output_config.format.schema` (400 "For 'array' type, property
+ * 'maxItems' is not supported", GEN-059 Q-234): sizes and ranges, plus annotations it has no use for.
+ */
+const UNSUPPORTED_KEYWORDS = new Set(['$schema', 'maxItems', 'minLength', 'maxLength', 'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf', 'pattern', 'default']);
+/** Keywords whose value is a map of name → schema: the names are the caller's, never keywords. */
+const SCHEMA_MAPS = new Set(['properties', '$defs', 'definitions']);
+/** Keywords whose value is data, not a schema. */
+const DATA_KEYWORDS = new Set(['enum', 'const', 'required']);
+
+/**
+ * The JSON schema as the API takes it: the same shape (types, required, enum, anyOf, additionalProperties)
+ * without the size / range constraints. Those rules are not lost: the AI service parses every answer with the
+ * full zod schema, so a breach is a `schema_mismatch` and the call is retried.
+ */
+export function forStructuredOutput(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(forStructuredOutput);
+  if (schema === null || typeof schema !== 'object') return schema;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (UNSUPPORTED_KEYWORDS.has(key)) continue;
+    // "At least one" is the only array size the API takes.
+    if (key === 'minItems' && value !== 0 && value !== 1) continue;
+    if (DATA_KEYWORDS.has(key)) out[key] = value;
+    else if (SCHEMA_MAPS.has(key) && value !== null && typeof value === 'object') {
+      out[key] = Object.fromEntries(Object.entries(value).map(([name, sub]) => [name, forStructuredOutput(sub)]));
+    } else out[key] = forStructuredOutput(value);
+  }
+  return out;
+}
+
 function toParams(req: AiCallRequest): Anthropic.Beta.MessageCreateParamsNonStreaming {
   const cachedIndexes = req.system.flatMap((block, i) => (block.cache ? [i] : [])).slice(-MAX_CACHE_BREAKPOINTS);
-  const { $schema: _drop, ...schema } = req.output.jsonSchema;
+  const schema = forStructuredOutput(req.output.jsonSchema) as Record<string, unknown>;
   return {
     model: req.model,
     max_tokens: req.maxOutputTokens,
