@@ -1,10 +1,10 @@
 import { CharacterResponse, defaultScenario, OriginResponse, SurroundingsResponse, type OriginView } from '@isekai/protocol';
-import { applyTagging, SeededRng, type Rng } from '@isekai/rules';
+import { applyTagging, ReplayRng, SeededRng, type PhaseAction, type Rng } from '@isekai/rules';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AiCallRequest, AiCallResult, AiProvider } from '../src/ai/provider.ts';
 import { mockReply } from '../src/ai/providers/mock.ts';
 import { loadGameAssets } from '../src/assets/load.ts';
-import { crossPlayerState } from '../src/crossplayer/phase.ts';
+import { applyPhaseActions, crossPlayerState } from '../src/crossplayer/phase.ts';
 import { tagContexts } from '../src/crossplayer/tags.ts';
 import { rollSpawn, spawnTable, treatChronicIllness } from '../src/game/origin.ts';
 import { syncCharacterStats, ensurePhaseState } from '../src/room/store.ts';
@@ -212,6 +212,44 @@ describe('GEN-065 start scenarios', { timeout: 60_000 }, () => {
     const toBarracks = (seat: Seat) => travel(server!.orm, assets, gameId, seat.memberId, { to: 'ค่ายทหารป้องกันเมือง' }, CLOCK);
     expect(toBarracks(t.b)).toMatchObject({ ok: false, code: 'restricted' });
     expect(toBarracks(t.a)).toMatchObject({ ok: true, place: { id: 'barracks' } });
+  });
+
+  it('C4: in a phase, a successful HEAL counts as a treatment; a failed one does not', async () => {
+    await boot(new ScriptedRng([SICKLY, MUSICIAN, MUSICIAN]));
+    const t = await startedTable(server!, false);
+    const gameId = gameIdOf(t.a);
+    const noEffects = { repDelta: 0, karmaDelta: 0, affinity: [], damage: null, selfDamage: null, heal: null, addStatus: [], removeStatus: [] };
+    const heal = (actionId: string, dc: number): PhaseAction => ({
+      actorId: t.a.memberId,
+      proposal: {
+        actionId,
+        kind: 'general',
+        tags: [],
+        opposed: false,
+        staminaCost: 3,
+        visibility: 'public',
+        target: null,
+        check: { type: 'dc', dc },
+        modifiers: [],
+        witnessNpcIds: [],
+        repDeltaIfCaught: 0,
+        onSuccess: noEffects,
+        onFail: noEffects,
+        reason: 'ดื่มยาสมุนไพร',
+        tagging: { verbTags: ['HEAL'], targetTags: [], activate: [] },
+      },
+      targetPlayer: null,
+      moveTo: null,
+      awareness: 'normal',
+    });
+    const illnessLeft = () => dbRow<{ illness_left: number }>('select illness_left from character_origin where member_id = ?', t.a.memberId).illness_left;
+
+    const failed = applyPhaseActions(server!.orm, gameId, [heal('fail', 23)], new ReplayRng([10, 2]), CLOCK, { assets, day: 1 });
+    expect(failed.ok, JSON.stringify(!failed.ok && failed.errors)).toBe(true);
+    expect(illnessLeft()).toBe(2);
+    const healed = applyPhaseActions(server!.orm, gameId, [heal('ok', 5)], new ReplayRng([10, 15]), CLOCK, { assets, day: 1 });
+    expect(healed.ok, JSON.stringify(!healed.ok && healed.errors)).toBe(true);
+    expect(illnessLeft()).toBe(1);
   });
 
   it('C5: the start Passive is a d20 bonus through tag matching when its condition holds (PERSUADE in a PUBLIC place)', async () => {
