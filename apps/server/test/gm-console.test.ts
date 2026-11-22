@@ -353,6 +353,8 @@ describe('GEN-058 Human GM console', { timeout: 60_000 }, () => {
       expect.objectContaining({ ...who, kind: 'event', at: { day: 1, phase: 'EOSORIA', turn: 1 }, before: null, reason: 'เพิ่มแรงกดดันกลางเรื่อง' }),
       { ...who, id: 0, createdAt: 0, kind: 'narration', at: { day: 1, phase: 'EOSORIA', turn: 1 }, target: 'entry:0', before: ORIGINAL_A, after: EDITED_A, reason: REASON },
       { ...who, id: 0, createdAt: 0, kind: 'result', at: { day: 1, phase: 'EOSORIA', turn: 1 }, target: `${t.c.memberId}.hp`, before: 100, after: 95, reason: REASON },
+      // Q-176: the approval itself is a row too, with how many edits it published.
+      { ...who, id: 0, createdAt: 0, kind: 'approve', at: { day: 1, phase: 'EOSORIA', turn: 1 }, target: 'turn', before: null, after: { edits: 2 }, reason: '' },
     ]);
     expect(overrides[1]!.target).toMatch(/^event:/);
     expect(overrides[1]!.after).toMatchObject({ day: 6, phase: 'EOSORIA', title: 'ไฟไหม้ตลาด' });
@@ -364,6 +366,23 @@ describe('GEN-058 Human GM console', { timeout: 60_000 }, () => {
         for (const secret of ['โดนพิษจากควัน', 'เพิ่มแรงกดดันกลางเรื่อง', REASON, ORIGINAL_A]) expect(frame).not.toContain(secret);
       }
     }
+  });
+
+  it('Q-176: approving a turn with no edits still logs one "approve" row for that turn; a refused approve logs nothing', async () => {
+    const t = await startedTable(server!, true);
+    expect((await t.call('POST', '/api/game/gm/turn/approve', { token: t.gm!.token })).status).toBe(409);
+    expect(overrideCount()).toBe(0);
+    script.respond(() => ({ entries: [{ kind: 'narration', memberId: t.a.memberId, text: ORIGINAL_A }] }));
+    const players = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    for (const p of players) await act(p, 'ทำอะไรสักอย่าง');
+    await approveHeldTurn(t.call, t.gm!.token);
+    const overrides = GmLogResponse.parse((await t.call('GET', '/api/game/gm/log', { token: t.gm!.token })).body).overrides;
+    expect(overrides).toEqual([
+      expect.objectContaining({ gmMemberId: t.gm!.memberId, kind: 'approve', at: { day: 1, phase: 'EOSORIA', turn: 1 }, target: 'turn', before: null, after: { edits: 0 } }),
+    ]);
+    // Players still never see the log.
+    await players[0]!.waitFor(turnIs(2));
+    for (const p of players) for (const frame of p.raw) expect(frame).not.toContain('"approve"');
   });
 
   it('C6: a game without a Human GM publishes each turn at once; its owner has no console', async () => {

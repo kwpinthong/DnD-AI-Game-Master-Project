@@ -123,7 +123,8 @@ export const GmInsertEventRequest = z.strictObject({
 });
 export type GmInsertEventRequest = z.input<typeof GmInsertEventRequest>;
 
-export const GmOverrideKind = z.enum(['narration', 'result', 'adjust', 'event']);
+/** `approve` (Q-176): one row per approved turn, target `turn`, after `{ edits: n }` (0 = approved as the AI GM wrote it). */
+export const GmOverrideKind = z.enum(['narration', 'result', 'adjust', 'event', 'approve']);
 export type GmOverrideKind = z.infer<typeof GmOverrideKind>;
 
 /** One override: who changed what, from what to what, and why. */

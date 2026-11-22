@@ -50,7 +50,7 @@ export function registerGmConsoleRoutes(app: FastifyInstance, db: Db, now: Clock
   app.post(`${GM_CONSOLE_PATH}/turn/approve`, async (request, reply) => {
     const gm = gmOf(request, reply);
     if (!gm) return reply;
-    const result = approveTurn(db, room, gm);
+    const result = approveTurn(db, room, gm, now());
     if (result.ok) log(`[gm-console] game=${gm.gameId} turn approved day=${result.value.approved.day} ${result.value.approved.phase} turn=${result.value.approved.turn}`);
     return answer(reply, result);
   });

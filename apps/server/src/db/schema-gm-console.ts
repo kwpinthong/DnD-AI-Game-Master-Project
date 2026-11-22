@@ -21,7 +21,7 @@ export const gmOverride = sqliteTable(
     gmMemberId: text('gm_member_id')
       .notNull()
       .references(() => member.id, { onDelete: 'cascade' }),
-    kind: text('kind', { enum: ['narration', 'result', 'adjust', 'event'] }).notNull(),
+    kind: text('kind', { enum: ['narration', 'result', 'adjust', 'event', 'approve'] }).notNull(),
     day: integer('day').notNull(),
     phase: text('phase', { enum: PHASES }).notNull(),
     turn: integer('turn').notNull(),

@@ -91,6 +91,10 @@ function HeldTurn({
   );
 }
 
+/** Q-174: a hand edit changes the number only; the companion rules run on the next normal change. */
+const AFFINITY_HAND_EDIT_NOTE =
+  'ตั้งค่าด้วยมือจะไม่เปิดเผยชื่อ NPC ไม่ให้รางวัล +9 และไม่วิวัฒนาการทันที กฎจะทำงานตอนค่าความสัมพันธ์เปลี่ยนตามปกติครั้งถัดไป';
+
 function AdjustForm({ view, onAdjust }: { view: GmConsoleResponse; onAdjust: (body: GmAdjustRequest) => Promise<string | null> }) {
   const [memberId, setMemberId] = useState('');
   const [field, setField] = useState<GmAdjustRequest['field']>('hp');
@@ -127,10 +131,13 @@ function AdjustForm({ view, onAdjust }: { view: GmConsoleResponse; onAdjust: (bo
         </select>
       </label>
       {field === 'affinity' && (
-        <label>
-          NPC id
-          <input value={npcId} onChange={(e) => setNpcId(e.target.value)} />
-        </label>
+        <>
+          <label>
+            NPC id
+            <input value={npcId} onChange={(e) => setNpcId(e.target.value)} />
+          </label>
+          <p role="note">{AFFINITY_HAND_EDIT_NOTE}</p>
+        </>
       )}
       <label>
         ค่าใหม่
@@ -197,8 +204,20 @@ function EventForm({ onInsert }: { onInsert: (body: GmInsertEventRequest) => Pro
   );
 }
 
-const overrideLine = (o: GmOverrideView) =>
-  `วันที่ ${o.at.day} · ${o.at.phase} · เทิร์น ${o.at.turn} · ${o.gmName} · ${o.kind} · ${o.target} · ${JSON.stringify(o.before)} → ${JSON.stringify(o.after)} · เหตุผล: ${o.reason}`;
+/** Q-176: how many edits an `approve` row published. */
+function approvedEdits(o: GmOverrideView): number {
+  const edits = (o.after as { edits?: unknown } | null)?.edits;
+  return typeof edits === 'number' ? edits : 0;
+}
+
+const overrideLine = (o: GmOverrideView) => {
+  const when = `วันที่ ${o.at.day} · ${o.at.phase} · เทิร์น ${o.at.turn} · ${o.gmName}`;
+  if (o.kind === 'approve') {
+    const edits = approvedEdits(o);
+    return `${when} · ${edits === 0 ? 'อนุมัติผลของเทิร์นตามที่ AI GM เขียน' : `อนุมัติผลของเทิร์น (แก้ ${edits} จุด)`}`;
+  }
+  return `${when} · ${o.kind} · ${o.target} · ${JSON.stringify(o.before)} → ${JSON.stringify(o.after)} · เหตุผล: ${o.reason}`;
+};
 
 /**
  * The Human GM console (GEN-058): every character with Karma, every action (Secret too), the timeline, the

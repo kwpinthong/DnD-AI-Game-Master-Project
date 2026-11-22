@@ -301,10 +301,22 @@ function withoutUndefined(r: { hp?: number | undefined; stamina?: number | undef
   return Object.fromEntries(Object.entries(r).filter(([k, v]) => k !== 'memberId' && v !== undefined)) as PlayerResult;
 }
 
-export function approveTurn(db: Db, room: RoomService, gm: MemberRow): ConsoleResult<{ approved: GmTurnPoint }> {
+export function approveTurn(db: Db, room: RoomService, gm: MemberRow, now: number): ConsoleResult<{ approved: GmTurnPoint }> {
   const turn = room.heldTurn(gm.gameId);
   if (!turn) return notAllowed(NO_HELD_TURN);
-  const published = room.approve(gm.gameId, (t) => editedResolution(t, turnEdits(db, gm.gameId, t.at)));
+  const published = room.approve(gm.gameId, (t) => {
+    const edits = turnEdits(db, gm.gameId, t.at);
+    const resolution = editedResolution(t, edits);
+    const count = edits.narrations.size + [...edits.results.values()].reduce((n, r) => n + Object.keys(r).length, 0);
+    // Q-176: every approval is logged, in the same transaction that publishes the turn.
+    return {
+      ...resolution,
+      apply: (tx) => {
+        resolution.apply?.(tx);
+        logOverride(tx, gm, { kind: 'approve', at: t.at, target: 'turn', before: null, after: { edits: count }, reason: '' }, now);
+      },
+    };
+  });
   if (!published) return notAllowed('เผยแพร่ผลของเทิร์นนี้ไม่ได้ ลองใหม่อีกครั้ง');
   return ok({ approved: turn.at });
 }
