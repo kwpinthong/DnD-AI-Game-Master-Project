@@ -4,7 +4,7 @@ import { and, asc, desc, eq, isNotNull } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
 import type { DbOrTx } from '../db/client.ts';
 import { character, npcBond } from '../db/schema.ts';
-import { getEnding, protectionsOf } from '../finale/store.ts';
+import { getEnding, protectionsOf, strategyRefuges } from '../finale/store.ts';
 import type { ResolutionEntry } from '../room/resolver.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { isSafeZone } from '../skills/progress.ts';
@@ -59,6 +59,7 @@ export function buildFinaleContext(db: DbOrTx, assets: GameAssets, gameId: strin
   const scenario = getGameScenario(db, gameId);
   const titles = new Map((scenario?.timeline ?? []).map((e) => [e.id, e.title]));
   const placeName = new Map(world.places.map((p) => [p.id, p.name]));
+  const refuges = strategyRefuges(db, gameId);
   const players = Object.entries(ending.outcomes).flatMap(([memberId, outcome]) => {
     const p = world.players.get(memberId);
     if (!p) return [];
@@ -72,8 +73,8 @@ export function buildFinaleContext(db: DbOrTx, assets: GameAssets, gameId: strin
         karmaBand: karmaBand(karma),
         companions: companionIdsOf(db, memberId).map(npcToken),
         outcome,
-        protectedBy: protectionsOf(db, assets, gameId, memberId),
-        inSafeZone: isSafeZone(db, assets, gameId, p.locationId),
+        protectedBy: [...protectionsOf(db, assets, gameId, memberId), ...(refuges.buffs.get(memberId) ?? [])],
+        inSafeZone: isSafeZone(db, assets, gameId, p.locationId) || refuges.places.has(p.locationId),
       },
     ];
   });

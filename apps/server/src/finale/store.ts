@@ -63,16 +63,36 @@ export function protectionsOf(db: DbOrTx, assets: GameAssets, gameId: string, me
   ];
 }
 
+/** What the Day-10 plans (Day10_Strategies) give for surviving day 12. */
+export interface StrategyRefuges {
+  /** memberId → S-level buffs a plan gave them (e.g. D10-S1 'แสงรุ่งอรุณคืนเมือง', D10-S3 'พันธสัญญาจันทราโลหิต'). */
+  buffs: ReadonlyMap<string, readonly string[]>;
+  /** Scenario place ids a plan made a refuge (e.g. D10-S1 the church, D10-S2 the clinic when day 5 went Good). */
+  places: ReadonlySet<string>;
+}
+
+/**
+ * SEAM (Q-203): nothing records yet which Day-10 strategy succeeded or who took part, so no plan gives a
+ * buff or a refuge. The follow-up task (AI GM records strategyId + participants) fills this in; the ending
+ * rule already counts what it returns (`protectedBy` / `inSafeZone`).
+ */
+export function strategyRefuges(db: DbOrTx, gameId: string): StrategyRefuges {
+  void db;
+  void gameId;
+  return { buffs: new Map(), places: new Set() };
+}
+
 /** What the ending rule reads for each player of the engine state. */
 export function endingFacts(db: DbOrTx, assets: GameAssets, gameId: string, state: PhaseState): EndingPlayerFacts[] {
   const places = locationSnapshot(db, gameId);
   const skills = skillsInGame(db, gameId);
+  const refuges = strategyRefuges(db, gameId);
   return state.order.map((memberId) => {
     const place = places.get(memberId);
     return {
       memberId,
-      protectedBy: protectionsOf(db, assets, gameId, memberId, skills),
-      inSafeZone: place !== undefined && isSafeZone(db, assets, gameId, place),
+      protectedBy: [...protectionsOf(db, assets, gameId, memberId, skills), ...(refuges.buffs.get(memberId) ?? [])],
+      inSafeZone: place !== undefined && (isSafeZone(db, assets, gameId, place) || refuges.places.has(place)),
     };
   });
 }
