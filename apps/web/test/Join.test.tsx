@@ -142,6 +142,42 @@ describe('Join page', () => {
     expect(screen.getByLabelText('ชื่อผู้เล่น').getAttribute('aria-invalid')).toBe('true');
   });
 
+  // GEN-092: a Thai keyboard on the number row.
+  it('GEN-092 C1: a PIN in Thai digits passes the form and is sent to the server', async () => {
+    const fetchMock = stubApi({ '/api/join': () => Response.json(joined) });
+
+    render(<App apiBaseUrl="" />);
+    fillAndSubmit({ pin: '๑๒๓๔' });
+
+    expect(await screen.findByText(/เข้าเกมแล้ว/)).toBeTruthy();
+    expect(callsTo(fetchMock, '/api/join')).toHaveLength(1);
+  });
+
+  it('GEN-092 C3: Thai letters in the PIN say the keyboard may be Thai, without calling the server', async () => {
+    const fetchMock = stubApi({ '/api/join': () => Response.json(joined) });
+
+    render(<App apiBaseUrl="" />);
+    fillAndSubmit({ pin: 'ๅ/-ภ' });
+
+    expect(await screen.findByText(/แป้นพิมพ์อาจเป็นภาษาไทย/)).toBeTruthy();
+    expect(screen.getByLabelText('PIN').getAttribute('aria-invalid')).toBe('true');
+    expect(callsTo(fetchMock, '/api/join')).toHaveLength(0);
+  });
+
+  it('GEN-092 C4: the show button reveals the PIN and a second press hides it again', () => {
+    stubApi({});
+    render(<App apiBaseUrl="" />);
+    const pin = screen.getByLabelText('PIN');
+    fireEvent.change(pin, { target: { value: '๑๒๓๔' } });
+
+    expect(pin.getAttribute('type')).toBe('password');
+    fireEvent.click(screen.getByRole('button', { name: 'แสดง PIN' }));
+    expect(pin.getAttribute('type')).toBe('text');
+    expect((pin as HTMLInputElement).value).toBe('๑๒๓๔');
+    fireEvent.click(screen.getByRole('button', { name: 'ซ่อน PIN' }));
+    expect(pin.getAttribute('type')).toBe('password');
+  });
+
   it('C7: a kept session is checked with GET /api/me and the page opens logged in', async () => {
     localStorage.setItem(TOKEN_KEY, 'tok-abc');
     const fetchMock = stubApi({ '/api/me': () => Response.json({ member }) });

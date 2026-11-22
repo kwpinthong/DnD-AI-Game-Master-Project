@@ -120,6 +120,36 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     expect(view.players.count).toBe(1);
   });
 
+  // GEN-092: the server reads Thai digits and outer spaces itself, without the web form.
+  it('GEN-092 C1/C6: a creator PIN typed in Thai digits is the same PIN as Arabic digits', async () => {
+    await start();
+
+    const created = await createGame({ name: 'นก', pin: '๑๒๓๔' });
+
+    const again = await joinOk(created.game.inviteCode, 'นก', '1234');
+    expect(again.created).toBe(false);
+    expect(again.member.id).toBe(created.member.id);
+    expect((await joinOk(created.game.inviteCode, 'นก', ' ๑๒๓๔ ')).member.id).toBe(created.member.id);
+  });
+
+  it('GEN-092 C6/C8: joins over the API with Thai digits, and an Arabic PIN still logs in', async () => {
+    await start();
+    const created = await createGame();
+
+    const first = await joinOk(created.game.inviteCode, 'ต้น', '1111');
+    expect((await joinOk(created.game.inviteCode, 'ต้น', '๑๑๑๑')).member.id).toBe(first.member.id);
+    expect((await joinOk(created.game.inviteCode, 'ต้น', '1111')).member.id).toBe(first.member.id);
+
+    const thai = await joinOk(created.game.inviteCode, 'ฝน', '๒๒๒๒');
+    expect((await joinOk(created.game.inviteCode, 'ฝน', '2222')).member.id).toBe(thai.member.id);
+
+    const refused = await postJoin(created.game.inviteCode, 'ฟ้า', 'ๅ/-ภ');
+    expect(refused.status).toBe(400);
+    const body = error(refused.body);
+    expect(body.code).toBe('invalid_input');
+    expect(body.code === 'invalid_input' && body.fields.pin).toContain('แป้นพิมพ์อาจเป็นภาษาไทย');
+  });
+
   it('C1: without a Human GM the creator is the owner and the first player', async () => {
     await start();
 

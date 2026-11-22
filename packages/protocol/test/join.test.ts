@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { joinFieldErrors, JoinRequest, nameKey, normalizeInviteCode } from '../src/index.ts';
+import {
+  CreateGameRequest,
+  createGameFieldErrors,
+  joinFieldErrors,
+  JoinRequest,
+  nameKey,
+  normalizeInviteCode,
+  normalizePin,
+} from '../src/index.ts';
 
 const valid = { inviteCode: 'K7Q2MX', name: 'นก', pin: '1234' };
 
@@ -15,7 +23,7 @@ describe('JoinRequest', () => {
     ['PIN of 3 digits', { pin: '123' }, 'pin'],
     ['PIN of 7 digits', { pin: '1234567' }, 'pin'],
     ['PIN with a letter', { pin: '12a4' }, 'pin'],
-    ['PIN with Thai digits', { pin: '๑๒๓๔' }, 'pin'],
+    ['PIN with a space in the middle', { pin: '12 34' }, 'pin'],
     ['PIN sent as a number', { pin: 1234 }, 'pin'],
     ['empty name', { name: '' }, 'name'],
     ['name of only spaces', { name: '   ' }, 'name'],
@@ -41,6 +49,53 @@ describe('JoinRequest', () => {
     const parsed = JoinRequest.parse({ ...valid, name: `  นก   น้อย  ` });
 
     expect(parsed.name).toBe('นก น้อย');
+  });
+});
+
+// GEN-092: a Thai keyboard gives Thai digits or Thai letters on the number row.
+describe('PIN typed on a Thai keyboard (GEN-092)', () => {
+  it('C1: Thai digits are read as the same PIN as Arabic digits', () => {
+    expect(JoinRequest.parse({ ...valid, pin: '๑๒๓๔' }).pin).toBe('1234');
+    expect(JoinRequest.parse({ ...valid, pin: '๐๙๘๗๖๕' }).pin).toBe('098765');
+    expect(normalizePin('๑2๓4')).toBe('1234');
+  });
+
+  it('C2: spaces around the PIN are dropped', () => {
+    expect(JoinRequest.parse({ ...valid, pin: ' 1234 ' }).pin).toBe('1234');
+    expect(JoinRequest.parse({ ...valid, pin: '\t๑๒๓๔\n' }).pin).toBe('1234');
+  });
+
+  it('C3: Thai letters from the number row are refused with a hint about the keyboard', () => {
+    const errors = joinFieldErrors({ ...valid, pin: 'ๅ/-ภ' });
+
+    expect(Object.keys(errors)).toEqual(['pin']);
+    expect(errors.pin).toContain('PIN ต้องเป็นตัวเลข 4-6 หลัก');
+    expect(errors.pin).toContain('แป้นพิมพ์อาจเป็นภาษาไทย');
+  });
+
+  it('C3: a PIN that is only too short keeps the plain message', () => {
+    expect(joinFieldErrors({ ...valid, pin: '123' }).pin).toBe('PIN ต้องเป็นตัวเลข 4-6 หลัก');
+    expect(joinFieldErrors({ ...valid, pin: '12a4' }).pin).toBe('PIN ต้องเป็นตัวเลข 4-6 หลัก');
+  });
+
+  it.each([
+    ['3 digits', '123', false],
+    ['4 digits', '1234', true],
+    ['5 digits', '12345', true],
+    ['6 digits', '123456', true],
+    ['7 digits', '1234567', false],
+    ['3 Thai digits', '๑๒๓', false],
+    ['4 Thai digits', '๑๒๓๔', true],
+    ['6 Thai digits', '๑๒๓๔๕๖', true],
+    ['7 Thai digits', '๑๒๓๔๕๖๗', false],
+  ])('C5: a PIN of %s passes = %s', (_label, pin, ok) => {
+    expect(JoinRequest.safeParse({ ...valid, pin }).success).toBe(ok);
+  });
+
+  it('the create-game body reads the PIN the same way', () => {
+    const body = { createCode: 'x', gameName: 'เกม', mode: 'online', humanGm: false, name: 'นก', pin: ' ๑๒๓๔ ' };
+    expect(CreateGameRequest.parse(body).pin).toBe('1234');
+    expect(createGameFieldErrors({ ...body, pin: 'ๅ/-ภ' }).pin).toContain('แป้นพิมพ์อาจเป็นภาษาไทย');
   });
 });
 

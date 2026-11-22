@@ -22,6 +22,27 @@ export function normalizeInviteCode(raw: string): string {
 }
 
 const PIN_MESSAGE = 'PIN ต้องเป็นตัวเลข 4-6 หลัก';
+const PIN_THAI_KEYBOARD_MESSAGE = `${PIN_MESSAGE} (แป้นพิมพ์อาจเป็นภาษาไทย ลองสลับเป็นภาษาอังกฤษ)`;
+const THAI_DIGIT_ZERO = 0x0e50;
+
+/**
+ * How a typed PIN is read (GEN-092): outer whitespace off and Thai digits ๐-๙ as 0-9, so a PIN
+ * typed on a Thai keyboard is the same PIN as the Arabic one. Anything else is left for the check.
+ */
+export function normalizePin(raw: string): string {
+  return raw.trim().replace(/[๐-๙]/gu, (digit) => String(digit.charCodeAt(0) - THAI_DIGIT_ZERO));
+}
+
+const pin = z
+  .string({ error: PIN_MESSAGE })
+  .transform(normalizePin)
+  .pipe(
+    z.string().superRefine((value, ctx) => {
+      if (/^[0-9]{4,6}$/.test(value)) return;
+      // Thai letters here mostly mean the number row was typed with the Thai layout (ๅ/-ภถ...).
+      ctx.addIssue({ code: 'custom', message: /[฀-๿]/u.test(value) ? PIN_THAI_KEYBOARD_MESSAGE : PIN_MESSAGE });
+    }),
+  );
 
 /** Body of POST /api/join. PIN is a string so leading zeros survive. */
 export const JoinRequest = z.object({
@@ -38,7 +59,7 @@ export const JoinRequest = z.object({
         .min(1, 'กรุณาใส่ชื่อผู้เล่น')
         .refine((name) => [...name].length <= NAME_MAX_LENGTH, `ชื่อยาวได้ไม่เกิน ${NAME_MAX_LENGTH} ตัวอักษร`),
     ),
-  pin: z.string({ error: PIN_MESSAGE }).regex(/^[0-9]{4,6}$/, PIN_MESSAGE),
+  pin,
 });
 export type JoinRequest = z.infer<typeof JoinRequest>;
 
