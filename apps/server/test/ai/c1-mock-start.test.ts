@@ -47,7 +47,9 @@ describe('C1 AI_PROVIDER=mock', () => {
     expect(rows[0]).toMatchObject({ game_id: 'game-c1', purpose: 'gm_adjudicate', provider: 'mock', ok: 1, day: 1, phase: 'MORNING' });
   });
 
-  it('the real start command (node src/index.ts) reports the Mock provider as ready', async () => {
+  // Spawning a real Node process under full-suite load can take well over vitest's 5 s default;
+  // the inner wait allows 20 s, so the test itself gets 30 s (Q-110).
+  it('the real start command (node src/index.ts) reports the Mock provider as ready', { timeout: 30_000 }, async () => {
     const port = await freePort();
     const { ANTHROPIC_API_KEY: _key, ...env } = process.env;
     const child = spawn(process.execPath, ['apps/server/src/index.ts'], {
