@@ -45,6 +45,13 @@ import { witnessesOf } from '../visibility/views.ts';
 import { advanceTimeline } from '../timeline/store.ts';
 import type { GameAssets } from '../assets/load.ts';
 import { completeTravel, travel, travellingTo, withHazard } from '../travel/service.ts';
+import {
+  applyLocationLog,
+  locationActionRefusal,
+  TRAIN_CAP_MESSAGE,
+  TRAIN_USED_MESSAGE,
+  withLocationRest,
+} from '../game/location-actions.ts';
 import { weatherAt, type WeatherService } from '../weather/service.ts';
 import { settleTurnProgress, withPeriodEndEffects } from '../skills/progress.ts';
 import type { ClosedAction, FinaleResolution, PhaseResolution, PhaseResolver, ResolverStuck } from './resolver.ts';
@@ -101,7 +108,7 @@ export interface RoomService {
   /** Registers an authenticated socket: replays entries after `afterSeq`, then sends the room and `ready`. */
   join(socket: RoomSocket, me: MemberRow, afterSeq: number): void;
   leave(socket: RoomSocket): void;
-  submit(socket: RoomSocket, input: { text: string; visibility: string; rest?: boolean }): SubmitReply;
+  submit(socket: RoomSocket, input: { text: string; visibility: string; rest?: boolean; train?: boolean }): SubmitReply;
   /** A Whisper to one ally (GEN-067): stored as a `whisper` entry for sender, target and the Human GM. */
   whisper(socket: RoomSocket, input: { to: string; text: string }): WhisperReply;
   /** Tries a stuck turn again (GEN-057 C2); does nothing when the AI GM is not stuck. */
@@ -297,7 +304,7 @@ export function createRoomService(
         lock: lock ? { code: lock, message: LOCK_MESSAGE[lock] } : null,
         secretUsed: player ? secretQuotaUsed(player, state) : false,
         drowsy: player ? isDrowsy(player, state.day) : false,
-        action: mine ? { text: mine.text, visibility: mine.visibility, rest: mine.rest === true } : null,
+        action: mine ? { text: mine.text, visibility: mine.visibility, rest: mine.rest === true, ...(mine.train ? { train: true as const } : {}) } : null,
         allies: alliesOf(me),
       },
       gmStatus: gmStatusFor(me, state, gameRow.ownerMemberId),
@@ -392,14 +399,22 @@ export function createRoomService(
           resolution.apply?.(tx);
           // GEN-066: a turn spent in the forest / at the sea from day 5 costs Stamina, on top of what the resolver said.
           // GEN-055: on the period's last turn, end_of_period restores of skills / items (capped at max).
+          // GEN-069 / Q-209 / Q-218: where each player rests (Rest_Quality, the inn / infirmary, REST passives).
           const settled = (results: Readonly<Record<string, PlayerResult>>) =>
-            withPeriodEndEffects(tx, assets, gameId, current, withHazard(tx, assets, gameId, current, withKarma(tx, current, results)));
+            withLocationRest(
+              tx,
+              assets,
+              gameId,
+              current,
+              withPeriodEndEffects(tx, assets, gameId, current, withHazard(tx, assets, gameId, current, withKarma(tx, current, results))),
+            );
           let step = phaseStep(current, { type: 'resolved', results: settled(resolution.results ?? {}) }, rng);
           if (!step.ok) {
             log(`[room] resolver results refused (game ${gameId}): ${step.error.code}; the turn advances without them`);
             step = phaseStep(current, { type: 'resolved', results: settled({}) }, rng);
           }
           if (!step.ok) throw new Error(`phase engine refused an empty result: ${step.error.code}`);
+          applyLocationLog(tx, step.log, t);
           savePhaseState(tx, gameId, step.state, t);
           syncCharacterStats(tx, step.state, t);
           // GEN-055: karma per day / period for the unlock rules, then the skills that unlock now.
@@ -591,6 +606,8 @@ export function createRoomService(
     unknown_player: 'not_a_player',
     cannot_act: null,
     secret_quota_used: 'secret_quota_used',
+    train_used: 'train_used',
+    train_cap: 'train_cap',
     invalid_action: 'invalid_action',
     not_resolving: 'invalid_action',
     invalid_result: 'invalid_action',
@@ -675,20 +692,26 @@ export function createRoomService(
       if (problem) return reject(problem.code, problem.message);
       const text = normalizeActionText(input.text);
       const rest = input.rest === true;
+      const train = input.train === true;
       if (travellingTo(db, me.id) !== null) return reject('traveling', TRAVELING_ACTION_MESSAGE);
 
       const outcome = db.transaction((tx): SubmitReply | PhaseState => {
         const t = now();
         const state = ensurePhaseState(tx, me.gameId, t);
-        const action = { text, visibility: visibility.data, rest };
+        const action = { text, visibility: visibility.data, rest, ...(train ? { train } : {}) };
         const step = phaseStep(state, { type: 'submit', playerId: me.id, action }, rng);
         if (!step.ok) {
           const mapped = rejectedBy[step.error.code];
           if (mapped === 'secret_quota_used') return reject(mapped, state.phase === NIGHT_PERIOD ? NIGHT_SECRET_QUOTA_MESSAGE : SECRET_QUOTA_MESSAGE);
+          if (mapped === 'train_used') return reject(mapped, TRAIN_USED_MESSAGE);
+          if (mapped === 'train_cap') return reject(mapped, TRAIN_CAP_MESSAGE);
           if (mapped) return reject(mapped);
           const lock = lockOf(me, state);
           return reject(lock ?? 'invalid_action');
         }
+        // GEN-069: the inn's REST costs coins, TRAIN needs the guild.
+        const refusal = locationActionRefusal(tx, assets, me.gameId, me.id, { rest, train });
+        if (refusal) return reject(refusal.code, refusal.message);
         recordAction(tx, me.gameId, { day: state.day, phase: state.phase, turn: state.turn }, me.id, action, t);
         savePhaseState(tx, me.gameId, step.state, t);
         return step.state;

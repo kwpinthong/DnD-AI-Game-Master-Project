@@ -26,7 +26,8 @@ export interface RoomListener {
 }
 
 export interface RoomConnection {
-  sendAction(text: string, visibility: ActionVisibility, rest?: boolean): boolean;
+  /** `train`: TRAIN at the guild (GEN-069), never with `rest`. */
+  sendAction(text: string, visibility: ActionVisibility, rest?: boolean, train?: boolean): boolean;
   /** `to`: the ally's ref from `you.allies`. */
   sendWhisper(to: string, text: string): boolean;
   /** Asks the AI GM to try a stuck turn again (GEN-057). */
@@ -94,9 +95,9 @@ export function connectRoom(baseUrl: string, token: string, listener: RoomListen
 
   open();
   return {
-    sendAction(text, visibility, rest = false) {
+    sendAction(text, visibility, rest = false, train = false) {
       if (!socket || socket.readyState !== WebSocket.OPEN) return false;
-      socket.send(JSON.stringify({ type: 'action', text, visibility, rest }));
+      socket.send(JSON.stringify({ type: 'action', text, visibility, rest, ...(train ? { train } : {}) }));
       return true;
     },
     sendWhisper(to, text) {

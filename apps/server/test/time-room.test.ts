@@ -66,6 +66,13 @@ describe('GEN-063 time system in the play room', { timeout: 60_000 }, () => {
     cleanup();
   });
 
+  /** Everyone starts at the inn (locations[0]), where a REST costs 5 coins (GEN-069): give them the coins. */
+  async function innTable(): Promise<Table> {
+    const t = await startedTable(server!, false);
+    server!.db.prepare('update "character" set coins = 100').run();
+    return t;
+  }
+
   async function enter(seat: { token: string }): Promise<RoomClient> {
     const client = await openRoom(server!, { token: seat.token });
     sockets.push(client);
@@ -90,7 +97,7 @@ describe('GEN-063 time system in the play room', { timeout: 60_000 }, () => {
   }
 
   it('C1: the room counts turns: EOSORIA turn 1 -> turn 2 -> SOLARION turn 1', async () => {
-    const t = await startedTable(server!, false);
+    const t = await innTable();
     const [a, b, c] = [await enter(t.a), await enter(t.b), await enter(t.c)];
     expect(a.lastRoom()).toMatchObject({ day: 1, phase: 'EOSORIA', turn: 1 });
     for (const round of [1, 2]) {
@@ -108,7 +115,7 @@ describe('GEN-063 time system in the play room', { timeout: 60_000 }, () => {
   });
 
   it('C3 + C4: a free Secret in NOCTHERION, refused the second time; staying awake = Drowsy next day', async () => {
-    const t = await startedTable(server!, false);
+    const t = await innTable();
     // A already used today's Secret earlier on day 1.
     jumpTo(t, { day: 1, phase: 'NOCTHERION', turn: 1 }, (s) => ({
       ...s,
@@ -150,7 +157,7 @@ describe('GEN-063 time system in the play room', { timeout: 60_000 }, () => {
   });
 
   it('C5: the character karma decides the Evil make-up sleep (Q-087): karma -20 rests in EOSORIA, karma 0 stays Drowsy', async () => {
-    const t = await startedTable(server!, false);
+    const t = await innTable();
     jumpTo(t, { day: 1, phase: 'NOCTHERION', turn: 1 });
     // Karma written by the cross-player rules after the engine state was made.
     server!.db.prepare('update character set karma = -20 where member_id = ?').run(t.a.memberId);
@@ -171,7 +178,7 @@ describe('GEN-063 time system in the play room', { timeout: 60_000 }, () => {
   });
 
   it('C7: a restart at day 5 SOLARION turn 2 with 2 of 3 sent: same place, nobody sends again', async () => {
-    const t = await startedTable(server!, false);
+    const t = await innTable();
     jumpTo(t, { day: 5, phase: 'SOLARION', turn: 2 });
     let [a, b] = [await enter(t.a), await enter(t.b)];
     expect(a.lastRoom()).toMatchObject({ day: 5, phase: 'SOLARION', turn: 2, status: 'collecting' });
@@ -203,7 +210,7 @@ describe('GEN-063 time system in the play room', { timeout: 60_000 }, () => {
   });
 
   it('REST can be sent in any turn and comes back as your action; a non-boolean rest is a bad message', async () => {
-    const t = await startedTable(server!, false);
+    const t = await innTable();
     const a = await enter(t.a);
     expect(await send(a, 'งีบใต้ต้นไม้', 'public', true)).toEqual({ type: 'action_accepted' });
     await a.waitFor((m) => m.type === 'room' && m.you.action?.rest === true);
