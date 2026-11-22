@@ -2,6 +2,7 @@ import {
   PHASE_LABEL,
   RATING_COMMENT_MAX_LENGTH,
   RATING_MAX,
+  PHASES,
   RATING_MIN,
   type EndingPath,
   type GameRatingView,
@@ -86,7 +87,7 @@ export function useRating(apiBaseUrl: string | undefined, token: string | undefi
 
 // ---------- reveal: ending + fates + secrets ----------
 
-function FateCard({ player: p, rating, onToggleLike }: { player: GameRevealPlayer; rating: GameRatingView | null; onToggleLike: (ref: string, on: boolean) => void }) {
+function FateCard({ player: p }: { player: GameRevealPlayer }) {
   return (
     <article aria-label={p.lobbyName} className="fate">
       <header className="fate__head">
@@ -121,30 +122,65 @@ function FateCard({ player: p, rating, onToggleLike }: { player: GameRevealPlaye
         </div>
       </dl>
       {p.epilogue && <p className="fate__epilogue">{p.epilogue}</p>}
-      <h5 className="fate__secrets-title">{endText.secrets}</h5>
-      {p.secretActions.length === 0 ? (
+    </article>
+  );
+}
+
+/** Q-270: everyone's Secret actions as one list in time order (day, phase, turn), with a day filter. */
+function SecretList({ reveal, rating, onToggleLike, id }: { reveal: GameReveal; rating: GameRatingView | null; onToggleLike: (ref: string, on: boolean) => void; id?: string }) {
+  const [day, setDay] = useState('');
+  const all = reveal.players
+    .flatMap((p) => p.secretActions.map((s) => ({ ...s, who: p })))
+    .sort((a, b) => a.day - b.day || PHASES.indexOf(a.phase) - PHASES.indexOf(b.phase) || (a.turn ?? 0) - (b.turn ?? 0));
+  const days = [...new Set(all.map((s) => s.day))];
+  const shown = all.filter((s) => day === '' || s.day === Number(day));
+  return (
+    <div className="end-secrets" id={id}>
+      <div className="end-fates__head">
+        <h3>{endText.secrets}</h3>
+        {days.length > 1 && (
+          <label className="end-fates__filter">
+            {endText.byDay}
+            <select value={day} onChange={(e) => setDay(e.target.value)}>
+              <option value="">{endText.allDays}</option>
+              {days.map((d) => (
+                <option key={d} value={d}>{`วันที่ ${d}`}</option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+      {all.length === 0 ? (
         <p className="fate__no-secrets">{endText.noSecrets}</p>
       ) : (
-        <ul className="fate__secrets">
-          {p.secretActions.map((s, i) => {
+        <ul aria-label={endText.secrets} className="fate__secrets">
+          {shown.map((s, i) => {
             const ref = s.sourceRef;
             const liked = Boolean(ref && rating?.liked.includes(ref));
+            const count = (ref && rating?.thumbs?.[ref]) || 0;
             return (
               <li key={i} className="secret-row">
-                <span className="secret-row__when">{when(s)}</span>
+                <span className="secret-row__when">
+                  {when(s)} · {`${s.who.characterName} (${s.who.lobbyName})`}
+                </span>
                 <span className="secret-row__text">{s.text}</span>
                 {rating && ref && (
-                  <Button className="secret-row__like" aria-pressed={liked} aria-label={endText.likeLabel(s.text)} onClick={() => onToggleLike(ref, !liked)}>
-                    <span aria-hidden="true">👍</span>
-                    {liked ? endText.liked : endText.like}
-                  </Button>
+                  <>
+                    <span className="secret-row__thumbs" role="img" aria-label={endText.thumbsLabel(count)}>
+                      <span aria-hidden="true">👍 {count}</span>
+                    </span>
+                    <Button className="secret-row__like" aria-pressed={liked} aria-label={endText.likeLabel(s.text)} onClick={() => onToggleLike(ref, !liked)}>
+                      <span aria-hidden="true">👍</span>
+                      {liked ? endText.liked : endText.like}
+                    </Button>
+                  </>
                 )}
               </li>
             );
           })}
         </ul>
       )}
-    </article>
+    </div>
   );
 }
 
@@ -155,6 +191,7 @@ export function EndingReveal({
   onToggleLike,
   endingId,
   fatesId,
+  secretsId,
 }: {
   reveal: GameReveal;
   /** null = the rating is not loaded (or failed): no 👍 buttons. */
@@ -162,6 +199,7 @@ export function EndingReveal({
   onToggleLike: (sourceRef: string, on: boolean) => void;
   endingId?: string;
   fatesId?: string;
+  secretsId?: string;
 }) {
   const [only, setOnly] = useState('');
   const players = reveal.players.filter((p) => only === '' || p.memberId === only);
@@ -190,10 +228,11 @@ export function EndingReveal({
         </div>
         <div className="end-fates__list">
           {players.map((p) => (
-            <FateCard key={p.memberId} player={p} rating={rating} onToggleLike={onToggleLike} />
+            <FateCard key={p.memberId} player={p} />
           ))}
         </div>
       </div>
+      <SecretList reveal={reveal} rating={rating} onToggleLike={onToggleLike} {...(secretsId ? { id: secretsId } : {})} />
     </section>
   );
 }

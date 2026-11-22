@@ -37,7 +37,7 @@ endpoint / socket event 67 รายการ: ready 59, pending 8 · field ท�
 | 1. Join | `POST /api/join` | `JoinRequest` → `JoinResponse` | ทุกคน | ready | GEN-024 |  |
 | 1. Join | `PUT /api/style/opt-out` | `PlayerStyleRequest` → `PlayerStyleResponse` | ทุกคน | **pending** | GEN-082 |  |
 | 2. สร้างเกม | `POST /api/games` | `CreateGameRequest` → `CreateGameResponse` | ทุกคน | ready | GEN-025 |  |
-| 2. สร้างเกม | `GET /api/memory/sources` | - → `MemorySourcesResponse` | ทุกคน | **pending** | GEN-083 | เกมต้นทางที่ผ่านเกณฑ์ของ toggle ความทรงจำ |
+| 2. สร้างเกม | `POST /api/memory/sources` | `MemorySourcesRequest` → `MemorySourcesResponse` | ทุกคน | **pending** | GEN-083 | เกมต้นทางที่ผ่านเกณฑ์ของ toggle ความทรงจำ; รหัสผู้เล่นอยู่ใน body เท่านั้น ไม่ใส่ใน URL / header (Q-276) |
 | 2b. แก้ scenario | `GET /api/game/scenario` | - → `GameScenarioResponse` | GM คน | ready | GEN-046 |  |
 | 2b. แก้ scenario | `PUT /api/game/scenario` | `Scenario` → `GameScenarioResponse` | GM คน | ready | GEN-046 |  |
 | 2b. แก้ scenario | `POST /api/game/scenario/reset` | - → `GameScenarioResponse` | GM คน | ready | GEN-046 |  |

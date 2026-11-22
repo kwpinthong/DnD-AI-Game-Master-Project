@@ -272,7 +272,7 @@ const origin: In<typeof p.OriginView> = {
   narration: 'คุณลืมตาขึ้นท่ามกลางกองจานสกปรก…',
 } as const;
 
-const rating: In<typeof p.GameRatingView> = { mine: { score: 9, comment: 'สนุกมาก' }, liked: ['2-HESPERION-1-7'], average: 8.6, raters: 3, members: 4, eligible: true, blocker: null };
+const rating: In<typeof p.GameRatingView> = { mine: { score: 9, comment: 'สนุกมาก' }, liked: ['2-HESPERION-1-7'], thumbs: { '2-HESPERION-1-7': 3 }, average: 8.6, raters: 3, members: 4, eligible: true, blocker: null };
 const learningSource = { sourceGameId: 'g-old', sourceGameName: 'คืนจันทราโลหิต', sourceScore: 8.6, status: 'active', createdAt: 1_795_200_000_000 } as const;
 const learningEntries: In<typeof p.LearningEntryView>[] = [
   {
@@ -302,6 +302,7 @@ export const CONTRACT_FIXTURES: Fixtures = {
   CreateGameRequest: [{ createCode: 'ลับเฉพาะ', gameName: 'เมืองก่อนอุกกาบาต', mode: 'online', humanGm: false, name: 'นก', pin: '1234' }],
   CreateGameResponse: [{ token: 't0k3n', expiresAt: '2026-12-22T00:00:00.000Z', member, game: gameView }],
   GameMemorySetting: [{ enabled: true, sourceGameIds: ['g-old'] }, { enabled: false }],
+  MemorySourcesRequest: [{ playerCode: 'nok-2026' }],
   MemorySourcesResponse: [{ games: [{ id: 'g-old', name: 'คืนจันทราโลหิต', score: 8.6, endedAt: '2026-11-20T00:00:00.000Z' }] }, { games: [] }],
   UpdateGameRequest: [{ gameName: 'ชื่อใหม่' }, { mode: 'single' }],
   GameView: [gameView, { ...gameView, status: 'started', startedAt: '2026-11-22T12:00:00.000Z', startBlockers: [], memory: { enabled: true, sources: [{ id: 'g-old', name: 'คืนจันทราโลหิต' }] } }],

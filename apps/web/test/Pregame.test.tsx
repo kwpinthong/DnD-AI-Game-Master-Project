@@ -363,6 +363,13 @@ describe('the parts that wait for the backend (GEN-082 / GEN-083) follow the con
     fireEvent.click(button('ดูเกมที่ใช้ได้'));
     const source = (await screen.findByLabelText(/คืนจันทราโลหิต/)) as HTMLInputElement;
     expect(source.closest('label')!.textContent).toContain('คะแนน 8.6');
+    // Q-276: the player code travels in a POST body, never in the URL or a header
+    const lookup = fetchSpy.mock.calls.find(([input]) => String(input).endsWith('/api/memory/sources'))!;
+    const init = lookup[1] as RequestInit;
+    expect(String(lookup[0])).not.toContain('PC-7H2K');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toEqual({ playerCode: 'PC-7H2K' });
+    expect(JSON.stringify(init.headers ?? {})).not.toContain('PC-7H2K');
     fireEvent.click(source);
     expect(screen.getByText('ตั้งแล้วแก้ไม่ได้หลังเริ่มเกม')).toBeTruthy();
 

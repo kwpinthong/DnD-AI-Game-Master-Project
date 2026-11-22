@@ -34,8 +34,8 @@ const DEFAULTS: Readonly<Record<string, MockReply>> = {
   // GEN-091: a delete answers with what is left, so the library visibly loses the entry / the game.
   'DELETE /api/admin/learning/:id': ok({ entries: LIBRARY.entries.slice(1), counts: { ...LIBRARY.counts, [LIBRARY.entries[0]!.type]: 0 } }),
   'DELETE /api/admin/learning/games/:gameId': ok(CONTRACT_FIXTURES.LearningLibraryResponse[1]),
-  // taking a 👍 back answers with none left
-  'DELETE /api/game/rating/likes/:sourceRef': ok({ rating: { ...CONTRACT_FIXTURES.GameRatingResponse[0]!.rating, liked: [] } }),
+  // taking a 👍 back answers with none left of yours and one less in the total (3 → 2)
+  'DELETE /api/game/rating/likes/:sourceRef': ok({ rating: { ...CONTRACT_FIXTURES.GameRatingResponse[0]!.rating, liked: [], thumbs: { '2-HESPERION-1-7': 2 } } }),
 };
 
 function invalidInput(issues: readonly { path: readonly PropertyKey[]; message: string }[]): MockReply {

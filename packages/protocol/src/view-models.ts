@@ -188,7 +188,11 @@ export const RoomOmenRejected = z.strictObject({ type: z.literal('omen_rejected'
 export const MemorySourceGame = z.strictObject({ id: z.string(), name: z.string(), score: z.number().min(1).max(10), endedAt: z.string() });
 export type MemorySourceGame = z.infer<typeof MemorySourceGame>;
 
-/** 200 from GET /api/memory/sources (pending GEN-083). */
+/** Body of POST /api/memory/sources (pending GEN-083): the player code is in the body, never in a URL or header (Q-276). */
+export const MemorySourcesRequest = z.object({ playerCode: z.string().trim().min(1, 'ใส่รหัสผู้เล่น') });
+export type MemorySourcesRequest = z.input<typeof MemorySourcesRequest>;
+
+/** 200 from POST /api/memory/sources (pending GEN-083). */
 export const MemorySourcesResponse = z.strictObject({ games: z.array(MemorySourceGame) });
 export type MemorySourcesResponse = z.infer<typeof MemorySourcesResponse>;
 

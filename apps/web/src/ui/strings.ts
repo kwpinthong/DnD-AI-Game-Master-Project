@@ -48,7 +48,10 @@ export const gmText = {
 export const endText = {
   toc: 'สารบัญ',
   ending: 'ฉากจบ',
-  fates: 'ชะตาและความลับของแต่ละคน',
+  fates: 'ชะตาของแต่ละคน',
+  byDay: 'ดูวัน',
+  allDays: 'ทุกวัน',
+  thumbsLabel: (count: number) => `👍 ${count} คน`,
   rate: 'ให้คะแนน',
   player: (name: string) => `ผู้เล่น: ${name}`,
   spawn: 'จุดเกิด',
