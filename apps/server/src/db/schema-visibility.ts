@@ -17,6 +17,8 @@ export const characterPresence = sqliteTable(
       .references(() => game.id, { onDelete: 'cascade' }),
     ref: text('ref').notNull().unique(),
     locationId: text('location_id').notNull(),
+    /** GEN-059: where the character was first placed (จุดเกิด, revealed at the end); null = placed before migration 0022. */
+    spawnLocationId: text('spawn_location_id'),
     updatedAt: integer('updated_at').notNull(),
   },
   (t) => [index('character_presence_game_location').on(t.gameId, t.locationId)],

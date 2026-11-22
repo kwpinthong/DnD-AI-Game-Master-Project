@@ -1,6 +1,7 @@
 import { defaultScenario } from '@isekai/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { RunningServer } from '../src/server.ts';
+import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
 import { forbiddenKeysIn } from '../src/visibility/guard.ts';
 import { learnName, leaveHiddenEvidence, moveCharacter, setNpcAffinity, setPlayerBond } from '../src/visibility/store.ts';
 import { approveHeldTurn } from './gm-console-client.ts';
@@ -198,6 +199,66 @@ describe('C6: no player-facing payload carries karma (GEN-050)', { timeout: 120_
     const t = await startedTable(server, false);
     seedSecrets(t);
     expect(await scanAsPlayers(t)).toEqual([]);
+  });
+
+  it('GEN-059 spoiler rule: before the end no secret reaches a player; after it only the summary reveals them', async () => {
+    server = await startTestServer(dataDir);
+    const t = await startedTable(server, false);
+    seedSecrets(t);
+    const secretFields = ['reveal', 'characterName', 'secretActions', 'spawn', 'karmaTier'];
+    const hasSecretField = (body: unknown) => {
+      const keys: string[] = [];
+      const walk = (v: unknown) => {
+        if (Array.isArray(v)) v.forEach(walk);
+        else if (v !== null && typeof v === 'object') for (const [k, c] of Object.entries(v)) (keys.push(k), walk(c));
+      };
+      walk(body);
+      return secretFields.filter((f) => keys.includes(f) && !(f === 'reveal' && (body as { reveal?: unknown }).reveal === null));
+    };
+
+    // Before the end: every route of every player carries none of the reveal's fields (the log's reveal is null).
+    for (const seat of [t.a, t.b, t.c]) {
+      for (const [route, request] of Object.entries(playerRequests(t, seat))) {
+        if (route === 'POST /api/logout') continue;
+        const res = await t.call(request.method, request.path, { token: seat.token, ...(request.body !== undefined ? { body: request.body } : {}) });
+        expect(hasSecretField(res.body), `${route} as ${seat.name}`).toEqual([]);
+      }
+      const log = await t.call('GET', '/api/game/log', { token: seat.token });
+      expect((log.body as { reveal: unknown }).reveal).toBeNull();
+    }
+
+    // The game ends (as the engine ends it); the room tells the ending to everyone in it.
+    const gameId = (server.db.prepare('select game_id from member where id = ?').get(t.a.memberId) as { game_id: string }).game_id;
+    const clients: RoomClient[] = [];
+    try {
+      for (const seat of [t.a, t.b, t.c]) {
+        const c = await openRoom(server, { token: seat.token });
+        clients.push(c);
+        await c.waitFor(isReady);
+      }
+      const state = ensurePhaseState(server.orm, gameId, CLOCK);
+      savePhaseState(server.orm, gameId, { ...state, day: 12, phase: 'NOCTHERION', turn: 2 }, CLOCK);
+      for (const [i, c] of clients.entries()) c.action(['มองฟ้า', 'สวดมนต์', 'เขียนจดหมาย'][i]!, 'public');
+      for (const c of clients) await c.waitFor((m) => m.type === 'room' && m.status === 'finale');
+      for (const c of clients) await c.waitFor((m) => m.type === 'entry' && m.entry.kind === 'narration' && m.entry.day === 12 && /วันพิพากษา/.test(m.entry.text));
+      // The ending over the socket carries no karma key either.
+      for (const c of clients) for (const m of c.messages) expect(forbiddenKeysIn(m)).toEqual([]);
+    } finally {
+      await Promise.all(clients.map((x) => x.close()));
+    }
+
+    // After the end: the summary may carry karma, but only inside `reveal`; every other route stays clean.
+    for (const seat of [t.a, t.b, t.c]) {
+      const log = await t.call('GET', '/api/game/log', { token: seat.token });
+      const leaks = forbiddenKeysIn(log.body);
+      expect(leaks.length).toBeGreaterThan(0);
+      expect(leaks.filter((p) => !p.startsWith('reveal.'))).toEqual([]);
+      for (const [route, request] of Object.entries(playerRequests(t, seat))) {
+        if (route === 'GET /api/game/log' || route === 'POST /api/logout') continue;
+        const res = await t.call(request.method, request.path, { token: seat.token, ...(request.body !== undefined ? { body: request.body } : {}) });
+        expect(forbiddenKeysIn(res.body), `${route} as ${seat.name} after the end`).toEqual([]);
+      }
+    }
   });
 
   it('C6: forbiddenKeysIn finds nested keys and keys inside arrays', () => {

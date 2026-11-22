@@ -1,4 +1,4 @@
-import { PHASE_LABEL, type GameLogResponse, type RoomEntry } from '@isekai/protocol';
+import { PHASE_LABEL, type EndingPath, type GameLogResponse, type GameReveal, type RoomEntry } from '@isekai/protocol';
 import { useEffect, useState } from 'react';
 import { fetchGameLog } from './history-api.ts';
 import { forgetToken, loadKnownTokens } from './session.ts';
@@ -69,7 +69,61 @@ export function GameHistory({ apiBaseUrl, onClose }: { apiBaseUrl: string; onClo
   );
 }
 
-/** One game, read-only. The secret reveal of the ending is the ending screen's (GEN-059). */
+const PATH_TEXT: Record<EndingPath, string> = {
+  good: 'เส้นทาง Good: ม่านปาฏิหาริย์เบี่ยงอุกกาบาตปกป้องเมือง',
+  evil: 'เส้นทาง Evil: ดูดซับพลังอุกกาบาตครองโลก',
+  neutral: 'เส้นทาง Neutral: ร่วมกับแอสทราและเซเรน่าลบล้างผลเป็นศูนย์',
+  none: 'ไม่มีเส้นทางใดสำเร็จ: อุกกาบาตชนเมือง',
+};
+const OUTCOME_TEXT = { survived: 'รอดชีวิต', defeated: 'พ่ายแพ้ (Bad Ending)' } as const;
+
+/** GEN-059 C5: the secrets of everyone, only once the game ended (the server sends `reveal` then only). */
+function Reveal({ reveal }: { reveal: GameReveal }) {
+  return (
+    <section aria-label="ความลับของทุกคน">
+      <h3>ความลับของทุกคน</h3>
+      <p>{reveal.path === null ? 'ไม่มีบันทึกตอนจบ' : PATH_TEXT[reveal.path]}</p>
+      {reveal.players.map((p) => (
+        <article key={p.memberId} aria-label={p.lobbyName}>
+          <h4>{p.lobbyName}</h4>
+          <dl>
+            <dt>ชื่อจริง</dt>
+            <dd>{p.characterName}</dd>
+            <dt>ระดับกรรม</dt>
+            {/* Q-196: the tier word is the label, the number small beside it. */}
+            <dd>
+              <span>{p.karmaTier}</span> <small>({p.karma})</small>
+            </dd>
+            <dt>ตอนจบ</dt>
+            <dd>{p.outcome === null ? 'ไม่มีบันทึก' : OUTCOME_TEXT[p.outcome]}</dd>
+            <dt>จุดเกิด</dt>
+            <dd>{p.spawn ?? 'ไม่มีบันทึก'}</dd>
+            <dt>คู่หู</dt>
+            <dd>{p.companions.length === 0 ? 'ไม่มี' : p.companions.join(', ')}</dd>
+            <dt>Secret action</dt>
+            <dd>
+              {p.secretActions.length === 0 ? (
+                'ไม่มี Secret action'
+              ) : (
+                <ul>
+                  {p.secretActions.map((s, i) => (
+                    <li key={i}>
+                      {at(s)}: {s.text}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </dd>
+          </dl>
+        </article>
+      ))}
+      {/* GEN-077 / GEN-078: the rating form goes here. */}
+      <section aria-label="ให้คะแนนเกม" />
+    </section>
+  );
+}
+
+/** One game, read-only; after the end with the secret reveal (GEN-059). */
 function GameLog({ log, onBack }: { log: GameLogResponse; onBack: () => void }) {
   return (
     <section aria-label={`สรุปเกม ${log.game.name}`}>
@@ -78,7 +132,7 @@ function GameLog({ log, onBack }: { log: GameLogResponse; onBack: () => void }) 
         {statusText(log.game)}
         {log.game.status === 'ended' && log.game.at ? ` · หยุดที่ ${at(log.game.at)}` : ''}
       </p>
-      {log.game.status === 'ended' && <p>ความลับของทุกคนจะเปิดในหน้าฉากจบ (ยังไม่มีในเวอร์ชันนี้)</p>}
+      {log.reveal && <Reveal reveal={log.reveal} />}
 
       <h3>ผู้เล่น</h3>
       <ul aria-label="ผู้เล่น">

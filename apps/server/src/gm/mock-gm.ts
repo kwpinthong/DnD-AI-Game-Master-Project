@@ -1,5 +1,6 @@
 import type { AiCallRequest } from '../ai/provider.ts';
 import type { DayContext, JournalContext, NarrationContext, TurnContext } from './context.ts';
+import { templateFinale, type FinaleContext } from './finale.ts';
 import { GM_OUTPUT, type GmAction, type GmJournal, type GmNarration, type GmTurnProposal } from './schema.ts';
 
 /**
@@ -59,8 +60,19 @@ export function mockAction(ctx: TurnContext, actionId: string): GmAction {
   };
 }
 
+/** GEN-059 dev marker: `[mock:ending=good|evil|neutral]` in an action while the finale is active sets the ending path. */
+const ENDING_MARKER = /\[mock:ending=(good|evil|neutral)\]/;
+
 export function mockTurnProposal(ctx: TurnContext): GmTurnProposal {
-  return { actions: ctx.order.map((id) => mockAction(ctx, id)), constraints: { add: [], release: [] }, eventOutcomes: [], remember: [] };
+  const finaleActive = ctx.events.active.some((e) => e.kind === 'finale');
+  const marked = ctx.actions.map((a) => ENDING_MARKER.exec(a.text)?.[1]).find((p) => p !== undefined) as GmTurnProposal['endingPath'] | undefined;
+  return {
+    actions: ctx.order.map((id) => mockAction(ctx, id)),
+    constraints: { add: [], release: [] },
+    eventOutcomes: [],
+    endingPath: finaleActive && marked ? marked : null,
+    remember: [],
+  };
 }
 
 const RESULT_WORD: Record<string, string> = {
@@ -114,6 +126,8 @@ export async function cannedGmAnswer(req: AiCallRequest): Promise<unknown> {
       return mockDaySummary(contextOf<DayContext>(req));
     case GM_OUTPUT.journal:
       return mockJournal(contextOf<JournalContext>(req));
+    case GM_OUTPUT.finale:
+      return templateFinale(contextOf<FinaleContext>(req));
     default:
       return undefined;
   }

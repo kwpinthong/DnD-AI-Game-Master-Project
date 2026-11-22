@@ -27,9 +27,13 @@ import { buildEventContext } from '../timeline/context.ts';
 import { setEventOutcome } from '../timeline/store.ts';
 import { discoverHiddenEvidence, locationSnapshot, npcBondsOf } from '../visibility/store.ts';
 import { recordTurnProgress } from '../skills/progress.ts';
+import { setEndingPath } from '../finale/store.ts';
+import { SCENARIO_DAYS } from '@isekai/protocol';
+import { buildFinaleContext, checkFinale, finaleCheckInput, finaleEntries, templateFinale } from './finale.ts';
 import { checkNarration, checkTurnProposal, type GmError } from './check.ts';
 import {
   CONTEXT_BUDGET,
+  FINALE_BLOCK,
   JOURNAL_BLOCK,
   JOURNAL_BUDGET,
   NARRATOR_BLOCK,
@@ -49,7 +53,7 @@ import {
   type NarrationContext,
   type TurnAction,
 } from './context.ts';
-import { GM_OUTPUT, GmDaySummary, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
+import { GM_OUTPUT, GmDaySummary, GmFinale, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
 import {
   activeConstraints,
   addConstraint,
@@ -216,6 +220,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       order: o,
       activeEventIds: new Set(events.active.map((e) => e.id)),
       activeConstraintIds: new Set(constraints.map((c) => c.id)),
+      finaleActive: events.active.some((e) => e.kind === 'finale'),
     });
 
     const toTurnAction = (memberId: string): TurnAction => {
@@ -348,6 +353,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         }
         for (const c of proposal.constraints.release) releaseConstraint(tx, gameId, c.id, c.reason, at.day);
         for (const e of proposal.eventOutcomes) setEventOutcome(tx, gameId, e.eventId, e.outcome, now());
+        // GEN-059: the ending path the players completed during the finale (a proposal stored before it has none).
+        if (proposal.endingPath) setEndingPath(tx, gameId, proposal.endingPath, now());
         markApplied(tx, gameId, at, now());
       },
       after: () => summarizeFinishedDays(gameId, at),
@@ -434,10 +441,40 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     return true;
   }
 
+  /** GEN-059: one `finale` call (one repair; still wrong → the server template, Q-151); an AI error → stuck. */
+  async function tellFinale(gameId: string, signal?: AbortSignal): Promise<{ entries: ResolutionEntry[] }> {
+    const context = buildFinaleContext(db, assets, gameId);
+    if (!context) return stuck('finale without a stored ending', gameId);
+    const { forbiddenNames, npcIds } = finaleCheckInput(db, assets, gameId);
+    const out = await ask({
+      gameId,
+      at: { day: SCENARIO_DAYS, phase: 'NOCTHERION', turn: 2 },
+      purpose: 'finale',
+      repairPurpose: 'finale',
+      system: [FINALE_BLOCK],
+      context,
+      output: { name: GM_OUTPUT.finale, schema: GmFinale },
+      maxOutputTokens: 4_000,
+      budget: CONTEXT_BUDGET.finale,
+      check: (o) => checkFinale(context, o, forbiddenNames, npcIds),
+      fallback: { label: 'finale', make: () => templateFinale(context) },
+      ...(signal ? { signal } : {}),
+    });
+    return { entries: finaleEntries(db, assets, gameId, out) };
+  }
+
   return {
     async resolve(input) {
       try {
         return await resolveTurn(input);
+      } catch (error) {
+        if (error instanceof StuckError) return { stuck: error.stuck };
+        throw error;
+      }
+    },
+    async finale({ gameId, signal }) {
+      try {
+        return await tellFinale(gameId, signal);
       } catch (error) {
         if (error instanceof StuckError) return { stuck: error.stuck };
         throw error;

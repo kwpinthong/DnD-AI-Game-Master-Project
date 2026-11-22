@@ -35,7 +35,15 @@ export function estimateTokens(text: string): number {
 }
 
 /** ADR §6.2 hard caps per call. */
-export const CONTEXT_BUDGET = { gm_adjudicate: 20_000, narrate_player: 6_000, narrate_place: 5_000, summarize_day: 14_000, summarize_journal: 6_000 } as const;
+export const CONTEXT_BUDGET = {
+  gm_adjudicate: 20_000,
+  narrate_player: 6_000,
+  narrate_place: 5_000,
+  summarize_day: 14_000,
+  summarize_journal: 6_000,
+  /** GEN-059: the ending (every event outcome + one entry per player). */
+  finale: 10_000,
+} as const;
 /** ADR §6.2 / §6.3: what of a player's journal their narrator gets (saga ≤ 600 + yesterday ≤ 250 tokens). */
 export const JOURNAL_BUDGET = { saga: 600, yesterday: 250 } as const;
 /** How much of today's turn log the adjudicator gets (newest kept). */
@@ -325,7 +333,16 @@ const RULES_TEXT = [
   '5. ผู้เล่นที่ติด constraints (Constraint Lock) ยังติดอยู่จนกว่าคุณจะปลดใน constraints.release พร้อม reason ที่อธิบายว่าทำไมหลุด',
   '6. คุณไม่รู้ผลเต๋า เสนอ onSuccess และ onFail ให้สมเหตุสมผลทั้งคู่ ห้ามใส่ค่า HP / Stamina ใหม่เอง',
   '7. ห้ามเขียนชื่อจริงของตัวละคร ใช้ {{p:ref}} / {{n:id}} ที่ให้มาเท่านั้น',
+  '8. endingPath: เฉพาะตอนที่เหตุการณ์ kind finale (วันพิพากษา วันที่ 12) active เท่านั้น ถ้าผู้เล่นทำเส้นทางสำเร็จในเทิร์นนี้ ให้ตอบ good (ม่านปาฏิหาริย์เบี่ยงอุกกาบาต) / evil (ดูดซับพลังอุกกาบาต) / neutral (ร่วมกับ NPC ของเหตุการณ์ลบล้างผลเป็นศูนย์) ตาม interventionEffects ของเหตุการณ์นั้น โดยดูจากผลของวันที่ 1, 5, 7, 10 ใน past ด้วย นอกนั้นตอบ null',
 ].join('\n');
+
+const FINALE_TEXT = [
+  'คุณคือผู้เล่าตอนจบของ Game Master เกมจบแล้ว ผลของตอนจบตัดสินแล้วใน context ห้ามเปลี่ยน (path, outcome ของแต่ละคน)',
+  'overall = ตอนจบของทั้งเมืองที่ทุกคนอ่านร่วมกัน เล่าผลของ path จากเหตุการณ์ทั้งหมดใน events / players = ตอนจบส่วนตัวของผู้เล่นทุกคนใน context คนละ 1 รายการ ตาม outcome (survived = รอด, defeated = พ่ายแพ้) ระดับกรรม คู่หู และสิ่งที่ปกป้องเขา',
+  'path: good = ม่านปาฏิหาริย์เบี่ยงอุกกาบาตปกป้องเมือง / evil = ดูดซับพลังอุกกาบาตครองโลก / neutral = ร่วมกับ NPC ของเหตุการณ์ฉากจบลบล้างผลเป็นศูนย์ / none = อุกกาบาตชนเมือง (reason game_over = ทุกคนล้มลงก่อนถึงวันพิพากษา)',
+  'ใช้ {{p:ref}} / {{n:id}} แทนชื่อเสมอ ห้ามเขียนชื่อจริง ห้ามตัวเลขกรรม',
+].join('\n');
+export const FINALE_BLOCK: PromptBlock = { id: 'finale-rules', text: FINALE_TEXT, cache: true };
 
 const NARRATOR_TEXT = [
   'คุณคือผู้เล่าเรื่องของ Game Master เล่าเฉพาะ beats ที่ให้มา ตามลำดับ ทุก beat ต้องมีอย่างน้อย 1 segment ที่ actionId ตรงกับ beat',

@@ -20,6 +20,8 @@ export interface TurnCheckInput {
   order: readonly TurnAction[];
   activeEventIds: ReadonlySet<string>;
   activeConstraintIds: ReadonlySet<number>;
+  /** GEN-059: the day 12 finale event is active (only then may the proposal name an `endingPath`). */
+  finaleActive: boolean;
 }
 
 export type TurnCheck = { ok: true; actions: PhaseAction[] } | { ok: false; errors: GmError[] };
@@ -110,6 +112,10 @@ export function checkTurnProposal(input: TurnCheckInput, proposal: GmTurnProposa
   proposal.eventOutcomes.forEach((e, i) => {
     if (!input.activeEventIds.has(e.eventId)) fail('unknown_event', `eventOutcomes[${i}].eventId`, `${e.eventId} is not an active event this period`);
   });
+  // Stored proposals from before GEN-059 have no endingPath.
+  if ((proposal.endingPath ?? null) !== null && !input.finaleActive) {
+    fail('ending_path_not_allowed', 'endingPath', 'endingPath is only for the day 12 finale event while it is active; answer null');
+  }
 
   return errors.length === 0 ? { ok: true, actions } : { ok: false, errors };
 }

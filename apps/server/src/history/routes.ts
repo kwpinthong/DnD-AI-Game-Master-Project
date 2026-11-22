@@ -10,12 +10,14 @@ import { activeMembers } from '../game/service.ts';
 import { entryViewOf } from '../room/entry-view.ts';
 import { entriesFor } from '../room/store.ts';
 import { timelineFor } from '../timeline/routes.ts';
+import type { GameAssets } from '../assets/load.ts';
+import { revealFor } from '../finale/reveal.ts';
 
 /**
  * GET /api/game/log (GEN-037 C3): the caller's game as a read-only summary + log, before, during or after
  * play. It only reads: it never creates the engine state (`ensurePhaseState` would) or touches the room.
  */
-export function registerHistoryRoutes(app: FastifyInstance, db: Db, now: Clock) {
+export function registerHistoryRoutes(app: FastifyInstance, db: Db, now: Clock, assets: GameAssets) {
   app.get('/api/game/log', async (request, reply) => {
     const token = bearerToken(request.headers.authorization);
     const me = token ? memberRowForToken(db, token, now) : undefined;
@@ -42,6 +44,8 @@ export function registerHistoryRoutes(app: FastifyInstance, db: Db, now: Clock) 
       members: activeMembers(db, me.gameId).map((m) => ({ name: m.name, role: m.role })),
       timeline: timelineFor(db, me),
       entries: entriesFor(db, me.gameId, me.id, 0).map((entry) => entryViewOf(db, entry, me)),
+      // GEN-059 spoiler rule: the secrets only once the game ended.
+      reveal: ended ? revealFor(db, assets, me.gameId) : null,
     };
     return reply.send(body);
   });

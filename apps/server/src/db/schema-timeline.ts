@@ -44,6 +44,11 @@ export const gameEventState = sqliteTable(
      * where they are now, the Q-080 rule).
      */
     witnesses: text('witnesses', { mode: 'json' }).$type<string[]>(),
+    /**
+     * GEN-059, the finale event only: the ending path the AI GM says the players completed while it is
+     * active (`endingPath` of the turn proposal); null = none (yet). The last one set stands.
+     */
+    endingPath: text('ending_path', { enum: ['good', 'evil', 'neutral'] }),
     updatedAt: integer('updated_at').notNull(),
   },
   (t) => [primaryKey({ columns: [t.gameId, t.eventId] })],

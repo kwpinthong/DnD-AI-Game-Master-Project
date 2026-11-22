@@ -16,7 +16,15 @@ import type { DbOrTx } from '../db/client.ts';
  */
 export interface PhaseResolver {
   resolve(input: ClosedPhase): Promise<PhaseResolution>;
+  /**
+   * GEN-059: tells the ending of a game that just ended (its `game_ending` row is stored). Without it the
+   * room uses the server's template ending.
+   */
+  finale?(input: { readonly gameId: string; readonly signal?: AbortSignal }): Promise<FinaleResolution>;
 }
+
+/** The ending as entries (whole-town feed + one narration per player), or why it could not be told (retry). */
+export type FinaleResolution = { readonly entries: readonly ResolutionEntry[]; readonly stuck?: undefined } | { readonly stuck: ResolverStuck };
 
 export interface ClosedAction {
   readonly memberId: string;

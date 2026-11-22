@@ -120,7 +120,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerAdminRoutes(app, db, now, { ai: aiConfig, ...(config.adminCodeHash ? { adminCodeHash: config.adminCodeHash } : {}) });
   registerInventoryRoutes(app, db, now, assets);
   registerGmConsoleRoutes(app, db, now, room, assets);
-  registerHistoryRoutes(app, db, now);
+  registerHistoryRoutes(app, db, now, assets);
 
   try {
     await app.listen({ host: config.host, port: config.port });
