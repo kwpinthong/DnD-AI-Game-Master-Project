@@ -108,7 +108,11 @@ describe('C3 not executed: carried to the central clinic, 2 turns of rest, half 
 
     s = turn(s).state;
     expect(condition(s, 'pc-a')).toBe('recovering');
-    // The clinic protects: a result that hurts a recovering player is not applied.
+    expect(s.players['pc-a']!.hp).toBe(15);
+    // Q-257: a hit at the clinic counts (HP 30 hit to 20, then the clinic REST +15); they stay recovering.
+    const first = carried.state;
+    const atClinic = { ...first, players: { ...first.players, 'pc-a': { ...first.players['pc-a']!, hp: 30 } } };
+    expect(turn(atClinic, { 'pc-a': { hp: 20 } }).state.players['pc-a']).toMatchObject({ condition: 'recovering', hp: 35 });
     const released = turn(s, { 'pc-a': { hp: 0, stamina: 0 } });
     expect(released.log).toContainEqual(expect.objectContaining({ type: 'clinic_released', playerId: 'pc-a' }));
     expect(released.state.players['pc-a']).toMatchObject({ condition: 'awake', mustSubmit: true, hp: 40 });
@@ -227,15 +231,38 @@ describe('C4 EXECUTE in the cross-player rules', () => {
     expect(targetOf(r.log.outcomes).executed).toBe(true);
   });
 
-  it('EXECUTE needs the target out cold; nobody may target a player recovering at the clinic', () => {
+  it('EXECUTE needs the target out cold', () => {
     const awake = resolvePhaseActions({ state: world(pc('pc-a', 0), pc('pc-b', 1)), actions: [aimed('execute')] }, new SeededRng(1));
     expect(awake.ok).toBe(false);
     if (!awake.ok) expect(awake.errors.map((e) => e.code)).toEqual(['execute_needs_unconscious']);
+  });
+});
 
-    for (const intent of ['harm', 'steal', 'execute'] as const) {
-      const clinic = resolvePhaseActions({ state: world(pc('pc-a', 0), pc('pc-b', 1, { hp: 0, crisis: 'recovering' })), actions: [aimed(intent)] }, new SeededRng(1));
-      expect(clinic.ok, intent).toBe(false);
-      if (!clinic.ok) expect(clinic.errors.map((e) => e.code)).toContain('target_recovering');
+describe('Q-257 a player recovering at the clinic can be hit or robbed, never executed', () => {
+  const purse = [{ id: 'item-purse', tier: 'Common' as const }];
+
+  it('a hit lands (HP 30 - moderate 15)', () => {
+    const r = resolvePhaseActions({ state: world(pc('pc-a', 0), pc('pc-b', 1, { hp: 30, crisis: 'recovering' })), actions: [aimed('harm', { ...none, damage: 'moderate' })] }, new ReplayRng([10]));
+    if (!r.ok) throw new Error(JSON.stringify(r.errors));
+    expect(targetOf(r.log.outcomes).hp).toMatchObject({ damage: 15, after: 15 });
+  });
+
+  it('a steal works, even at HP 0 (the first clinic turn)', () => {
+    for (const hp of [0, 30]) {
+      const r = resolvePhaseActions({ state: world(pc('pc-a', 0), pc('pc-b', 1, { hp, crisis: 'recovering', items: purse })), actions: [aimed('steal', { ...none, takeItem: 'item-purse' })] }, new ReplayRng([10]));
+      if (!r.ok) throw new Error(JSON.stringify(r.errors));
+      expect(targetOf(r.log.outcomes).itemsLost).toEqual(['item-purse']);
+    }
+  });
+
+  it('EXECUTE is refused with a clear reason, at HP 0 or not', () => {
+    for (const hp of [0, 30]) {
+      const r = resolvePhaseActions({ state: world(pc('pc-a', 0), pc('pc-b', 1, { hp, crisis: 'recovering' })), actions: [aimed('execute')] }, new SeededRng(1));
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.errors.map((e) => e.code)).toEqual(['target_recovering']);
+        expect(r.errors[0]!.message).toContain('cannot be executed');
+      }
     }
   });
 });

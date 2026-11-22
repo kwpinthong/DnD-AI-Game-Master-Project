@@ -143,7 +143,7 @@ export function resolvePhaseActions(input: PhaseActionsInput, rng: Rng): PhaseAc
         ? ('target_dead' as const)
         : target.locationId !== actor.locationId && !remote
           ? ('not_same_place' as const)
-          : target.hp <= 0 && !UNCONSCIOUS_OK.has(targetPlayer.intent)
+          : target.hp <= 0 && target.crisis !== 'recovering' && !UNCONSCIOUS_OK.has(targetPlayer.intent)
             ? ('target_unconscious' as const)
             : null;
       if (reason !== null) {
@@ -280,10 +280,11 @@ export function validatePhaseActions(input: PhaseActionsInput): CrossPlayerError
     const target = players[t.player];
     if (target === undefined) return void fail('unknown_target', 'targetPlayer.player', `player ${t.player} is not in the game`);
     if (target.id === actor.id) return void fail('target_is_actor', 'targetPlayer.player', 'an action cannot target its own actor');
-    if (target.crisis === 'recovering') {
-      return void fail('target_recovering', 'targetPlayer.player', `${target.id} is recovering at the clinic; nobody may act on them`);
+    // Q-257: at the clinic they can be hit or robbed (even at HP 0, they are not out cold), never executed.
+    if (target.crisis === 'recovering' && t.intent === 'execute') {
+      return void fail('target_recovering', 'targetPlayer.intent', `${target.id} is recovering at the clinic and cannot be executed there`);
     }
-    if (target.hp <= 0 && !UNCONSCIOUS_OK.has(t.intent)) {
+    if (target.hp <= 0 && target.crisis !== 'recovering' && !UNCONSCIOUS_OK.has(t.intent)) {
       fail('target_unconscious', 'targetPlayer.player', `${target.id} is unconscious (HP 0); only rescue, steal or execute may target them`);
     }
     if (t.intent === 'execute' && target.hp > 0) fail('execute_needs_unconscious', 'targetPlayer.intent', `${target.id} is not out cold (HP 0); execute only targets a player at HP 0`);

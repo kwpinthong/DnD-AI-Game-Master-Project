@@ -23,7 +23,7 @@ export interface PlayerState extends ActorState {
   readonly remoteReach: readonly string[];
   /**
    * GEN-070, from the day / period engine: `exhausted` (forced REST this turn: damage on them ×1.3),
-   * `recovering` (at the clinic after HP 0: nobody may target them). Absent = neither; HP 0 = out cold.
+   * `recovering` (at the clinic after HP 0: may be hit or robbed, never executed, Q-257). Absent = neither; HP 0 = out cold.
    */
   readonly crisis?: 'exhausted' | 'recovering';
 }
@@ -193,7 +193,7 @@ export type CrossPlayerErrorCode =
   | 'unknown_target'
   | 'target_is_actor'
   | 'target_unconscious'
-  /** GEN-070: the target rests at the clinic after HP 0; nobody may act on them. */
+  /** GEN-070 / Q-257: EXECUTE on a player recovering at the clinic. */
   | 'target_recovering'
   /** GEN-070: EXECUTE only on a player out cold (HP 0). */
   | 'execute_needs_unconscious'

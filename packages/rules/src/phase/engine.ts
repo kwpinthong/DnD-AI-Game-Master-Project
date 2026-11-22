@@ -322,12 +322,13 @@ function isGameOver(order: readonly string[], players: Readonly<Record<string, P
 }
 
 /**
- * The end of a turn for a player who was out cold, recovering or dead when it closed (GEN-070). The turn's
- * results cannot hurt or heal them (damage to a player out cold is 0, spec §12.2; the clinic protects), only
- * the karma their own past acts left and an EXECUTE count.
+ * The end of a turn for a player who was out cold or recovering when it closed (GEN-070). Out cold, the
+ * turn's results cannot hurt or heal them (damage on them is 0, spec §12.2), only karma and an EXECUTE count.
+ * At the clinic a hit or a theft counts (Q-257), then the clinic REST; an EXECUTE never reaches them there.
  */
 function crisisTurn(state: PhaseState, before: PlayerPhaseState, r: PlayerResult, at: TurnPoint, log: PhaseLogEntry[]): PlayerPhaseState {
-  const p: PlayerPhaseState = { ...before, karma: r.karma ?? before.karma };
+  const hurt = before.condition === 'recovering' ? { hp: r.hp ?? before.hp, stamina: r.stamina ?? before.stamina } : {};
+  const p: PlayerPhaseState = { ...before, ...hurt, karma: r.karma ?? before.karma };
   switch (before.condition) {
     case 'unconscious':
       if (r.executed) {
