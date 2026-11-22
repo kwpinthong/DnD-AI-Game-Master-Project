@@ -59,8 +59,8 @@ export function locationSnapshot(db: DbOrTx, gameId: string): Map<string, string
 
 /**
  * Records that `viewer` learned `subject`'s real name (แนะนำตัว = introduced, สืบรู้ = discovered; GEN-050).
- * Since GEN-067 this no longer shows the name to the player: only the Title Mask rule does
- * (`namesVisibleTo`). The row stays as a record of the introduction.
+ * A discovered name shows to that viewer for good (Q-134, `namesVisibleTo`); an introduction alone does
+ * not since GEN-067 (the row stays as a record). Discovering a name already introduced upgrades the row.
  */
 export function learnName(
   db: DbOrTx,
@@ -70,7 +70,20 @@ export function learnName(
   now: number,
 ): void {
   if (viewerMemberId === subjectMemberId) return;
-  db.insert(knownName).values({ viewerMemberId, subjectMemberId, how, learnedAt: now }).onConflictDoNothing().run();
+  const insert = db.insert(knownName).values({ viewerMemberId, subjectMemberId, how, learnedAt: now });
+  if (how === 'discovered') {
+    insert.onConflictDoUpdate({ target: [knownName.viewerMemberId, knownName.subjectMemberId], set: { how, learnedAt: now } }).run();
+  } else insert.onConflictDoNothing().run();
+}
+
+/** Members whose real name `viewer` discovered (Q-134); permanent, per viewer. */
+function discoveredNamesOf(db: DbOrTx, viewerMemberId: string): string[] {
+  return db
+    .select({ subject: knownName.subjectMemberId })
+    .from(knownName)
+    .where(and(eq(knownName.viewerMemberId, viewerMemberId), eq(knownName.how, 'discovered')))
+    .all()
+    .map((r) => r.subject);
 }
 
 // --- Between players (GEN-067) ---
@@ -135,9 +148,14 @@ export function playerBondsOf(db: DbOrTx, memberId: string): Map<string, PlayerB
   );
 }
 
-/** Members whose real name `viewer` sees: allies with relationship > +9 (`revealsPlayerName`). */
+/** Allies with relationship > +9 (`revealsPlayerName`): they see each other's real name and may Whisper. */
+export function closeAlliesOf(db: DbOrTx, memberId: string): Set<string> {
+  return new Set([...playerBondsOf(db, memberId)].filter(([, bond]) => revealsPlayerName(bond)).map(([id]) => id));
+}
+
+/** Members whose real name `viewer` sees: close allies (not permanent) plus names they discovered (permanent, Q-134). */
 export function namesVisibleTo(db: DbOrTx, viewerMemberId: string): Set<string> {
-  return new Set([...playerBondsOf(db, viewerMemberId)].filter(([, bond]) => revealsPlayerName(bond)).map(([id]) => id));
+  return new Set([...closeAlliesOf(db, viewerMemberId), ...discoveredNamesOf(db, viewerMemberId)]);
 }
 
 // --- Hidden Evidence (GEN-067) ---

@@ -186,9 +186,9 @@ export const RoomActionRejected = z.strictObject({ type: z.literal('action_rejec
 
 /**
  * `not_allowed`: no ally with that ref at relationship > +9 (an unknown ref gets the same answer, so a
- * Whisper cannot probe who exists).
+ * Whisper cannot probe who exists). `unconscious`: the sender is at HP 0, the same lock as an action (Q-136).
  */
-export const RoomWhisperCode = z.enum(['empty', 'too_long', 'not_a_player', 'not_allowed', 'game_ended']);
+export const RoomWhisperCode = z.enum(['empty', 'too_long', 'not_a_player', 'not_allowed', 'game_ended', 'unconscious']);
 export type RoomWhisperCode = z.infer<typeof RoomWhisperCode>;
 export const RoomWhisperAccepted = z.strictObject({ type: z.literal('whisper_accepted') });
 export const RoomWhisperRejected = z.strictObject({ type: z.literal('whisper_rejected'), code: RoomWhisperCode, message: z.string() });
