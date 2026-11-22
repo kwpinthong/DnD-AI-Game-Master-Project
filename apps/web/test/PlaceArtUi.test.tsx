@@ -10,6 +10,7 @@ import { ClockHud } from '../src/play/chat/ClockHud.tsx';
 import { CharacterTag } from '../src/play/chat/Hud.tsx';
 import { RING_ART, ringFor } from '../src/play/ring-art.ts';
 import { weatherArt } from '../src/play/weather-art.ts';
+import { contrast } from './contrast.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (file: string) => readFileSync(join(here, '..', 'src', file), 'utf8').replace(/\r\n/g, '\n');
@@ -102,6 +103,18 @@ describe('C6/C7 the painted assets are wired through Vite, with no hard colour',
     for (const file of ['play/place-art.ts', 'play/weather-art.ts', 'play/ring-art.ts', 'play/chat/ClockHud.tsx', 'play/chat/PlaceArt.tsx', 'JoinForm.tsx', 'home-art.css']) {
       expect(read(file), file).not.toMatch(/assets\/place\/|\.png/);
     }
+  });
+
+  // Colours sampled in the browser from the temporary files of assets/ (canvas): 99th percentile of the texture, the inside of the
+  // panel frame (brightest pixel), the button's darkest 1% / mean. A replaced file needs these measured again.
+  it('C6 text on the stars, the panel frame and the primary button stays >= 4.5:1; buttons are >= 44px', () => {
+    const token = (name: string) => new RegExp(`${name}:\\s*(#[0-9A-Fa-f]{6})`).exec(read('tokens.css'))![1]!;
+    const on = (fg: string, bg: string) => contrast(token(fg), bg);
+    for (const fg of ['--text', '--text-soft', '--muted']) expect(on(fg, '#111d29'), `${fg} on the stars`).toBeGreaterThanOrEqual(4.5);
+    for (const fg of ['--text', '--text-soft', '--muted', '--accent', '--highlight']) expect(on(fg, '#15243a'), `${fg} in the panel frame`).toBeGreaterThanOrEqual(4.5);
+    expect(on('--on-accent', '#bb730c'), 'send on the darkest 1% of the button').toBeGreaterThanOrEqual(4.5);
+    expect(on('--on-accent', '#d99315')).toBeGreaterThanOrEqual(4.5);
+    expect(read('play/chat/chat.css')).toMatch(/\.play \.v3 button,[\s\S]*?min-height:\s*44px/);
   });
 
   it('the home page uses home-keyart.webp', () => {

@@ -40,6 +40,7 @@
   top: var(--space-2);
   right: var(--space-2);
   width: 44px;
+  max-width: none;
   height: 44px;
   border-radius: 50%;
   object-fit: cover;
@@ -80,7 +81,7 @@
 .clock {
   position: relative;
   flex: none;
-  width: clamp(300px, 26vw, 360px);
+  width: clamp(310px, 24vw, 340px);
   aspect-ratio: 800 / 297;
 }
 
@@ -125,13 +126,14 @@
   height: 36%;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
   overflow: hidden;
 }
 
 .clock__weather {
   flex: none;
-  height: 100%;
+  width: auto;
+  height: 78%;
   aspect-ratio: 1;
   border-radius: 50%;
   object-fit: cover;
@@ -166,7 +168,8 @@
 /* ---------- right panel frame ---------- */
 .info-panel {
   background: transparent;
-  border: 26px solid transparent;
+  /* the frame is drawn 26px wide (the ornaments), the layout keeps 18px of it so the 340 column stays readable */
+  border: 18px solid transparent;
   border-image: url('../../assets/frames/frame-panel.webp') 70 fill / 26px stretch;
 }
 
@@ -174,15 +177,22 @@
   padding: var(--space-2) var(--space-3);
 }
 
+/* one column that can shrink, so a wide child never makes the panel scroll sideways */
+.info-body {
+  grid-template-columns: minmax(0, 1fr);
+  overflow-wrap: anywhere;
+}
+
 @container play (max-width: 959.98px) {
   .info-panel {
-    border: 26px solid transparent;
+    border: 18px solid transparent;
     border-image: url('../../assets/frames/frame-panel.webp') 70 fill / 26px stretch;
   }
 }
 
 /* ---------- primary button (send) ---------- */
-.play .v3 .btn--primary {
+.play .v3 .btn--primary,
+.play .v3m .btn--primary {
   min-width: 108px;
   padding-inline: var(--space-5);
   border: 0;
@@ -192,7 +202,8 @@
   font-weight: 600;
 }
 
-.play .v3 .btn--primary:disabled {
+.play .v3 .btn--primary:disabled,
+.play .v3m .btn--primary:disabled {
   opacity: 0.6;
   filter: grayscale(0.5);
 }
