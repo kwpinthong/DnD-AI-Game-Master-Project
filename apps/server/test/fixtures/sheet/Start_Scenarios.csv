@@ -1,0 +1,4 @@
+Tier,Rate,Zone,Location,Scenario_Name,Scenario_Tags,Start_HP,Max_HP,Start_Stamina,Start_Coins,Start_Karma,Initial_Title,Passive_Bonus_&_Clues,Passive_Verb_Tags,Passive_Stat,Passive_Value,Passive_Condition,หมายเหตุ (ร่าง Claude — Nok ตรวจ)
+70% (ทั่วไป),91.75%,โซนทดสอบ,ลานทดสอบ,นักดนตรีทดสอบ,"[PERFORMER, POOR]",22,30,26,15,5,นักดนตรี,+2 เมื่อโน้มน้าว,"[PERSUADE, OBSERVE]",d20,2,location tag PUBLIC,
+29% (พิเศษ),7.25%,โซนทดสอบ,ตลาดทดสอบ,พ่อค้าทดสอบ,[TRADER],20,30,25,50,0,พ่อค้า,ส่วนลด,[TRADE],stamina_cost,-1,,
+1% (รูทลับ),1.00%,รูทลับ 1%,ลานทดสอบ,ผู้หลงทางทดสอบ,[ANOMALY],30,30,30,0,0,ผู้หลงทาง,ไม่มี,,,,,ไม่มีโบนัสตัวเลข

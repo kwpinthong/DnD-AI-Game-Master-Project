@@ -1,0 +1,186 @@
+import { describe, expect, it } from 'vitest';
+import { convertSheet, formatIssue } from '../src/assets/import.ts';
+import { REQUIRED_TABS, type TabName, type AbilityRecord, type ItemRecord, type StartScenarioRecord } from '../src/assets/model.ts';
+import { duplicateRow, fixtureCsv, keepColumnsBefore, setCell } from './assets-fixture.ts';
+
+/** Data rows of a fixture CSV (lines after the header, blank lines left out). */
+function dataRowCount(csv: string): number {
+  return csv.trim().split('\n').length - 1;
+}
+
+function requiredOnly(): Partial<Record<TabName, string>> {
+  const all = fixtureCsv();
+  return Object.fromEntries(REQUIRED_TABS.map((tab) => [tab, all[tab]!]));
+}
+
+describe('convertSheet (GEN-062)', () => {
+  // C1: Given the sheet / When import / Then 7 tabs, and each has as many records as data rows.
+  it('C1: gives one record list per required tab with one record per sheet row', () => {
+    const csv = requiredOnly();
+    const result = convertSheet(csv);
+
+    expect(result.errors.map(formatIssue)).toEqual([]);
+    expect(result.ok).toBe(true);
+    expect(Object.keys(result.files).sort()).toEqual([...REQUIRED_TABS].sort());
+    expect(result.importedTabs).toHaveLength(7);
+    for (const tab of REQUIRED_TABS) {
+      expect(result.files[tab], tab).toHaveLength(dataRowCount(csv[tab]!));
+    }
+  });
+
+  it('C1: imports the optional tabs that exist and warns about the ones that do not', () => {
+    const csv = { ...requiredOnly(), NPC_Schedule: fixtureCsv().NPC_Schedule! };
+    const result = convertSheet(csv);
+
+    expect(result.ok).toBe(true);
+    expect(result.importedTabs).toContain('NPC_Schedule');
+    expect(result.files.NPC_Schedule).toHaveLength(2);
+    expect(result.missingTabs).toEqual(['Day10_Strategies']);
+    expect(result.warnings.map(formatIssue).join('\n')).toContain('Day10_Strategies');
+  });
+
+  it('fails when a required tab is missing', () => {
+    const { NPC: _npc, ...rest } = requiredOnly();
+    const result = convertSheet(rest);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.map(formatIssue).join('\n')).toContain('NPC');
+  });
+
+  // C2: Given "[HEAL, CLEANSE]", "7.25%", "0" / Then ["HEAL","CLEANSE"], 7.25, 0.
+  it('C2: converts tag lists, percent rates and daily limits to arrays and numbers', () => {
+    const result = convertSheet(requiredOnly());
+    const ability = result.files.Ability![0] as AbilityRecord;
+    const scenario = (result.files.Start_Scenarios as StartScenarioRecord[]).find((s) => s.rate === 7.25);
+
+    expect(ability.matchVerbTags).toEqual(['HEAL', 'CLEANSE']);
+    expect(ability.dailyLimit).toBe(0);
+    expect(scenario?.rate).toBe(7.25);
+    expect(scenario?.passive).toEqual({ verbTags: ['TRADE'], stat: 'stamina_cost', value: -1, condition: '' });
+  });
+
+  it('C2 (Q-090): turns the structured effect columns into numbers the server can use', () => {
+    const result = convertSheet(requiredOnly());
+    const [dawn, shade, guard] = result.files.Ability as AbilityRecord[];
+    const chalice = (result.files.Item as ItemRecord[])[0]!;
+
+    expect(dawn!.effects).toEqual([
+      { type: 'restore', stats: ['HP', 'Stamina'], value: 15, duration: { unit: 'instant' } },
+      { type: 'dice_bonus', stats: ['d20'], value: 2, duration: { unit: 'period', count: 1 } },
+    ]);
+    expect(shade!.effects).toEqual([]);
+    expect(guard!.effects).toEqual([
+      { type: 'damage_reduce_pct', stats: ['HP'], value: 50, duration: { unit: 'period', count: 2 } },
+    ]);
+    expect(guard!.triggerType).toBe('Passive + Active');
+    expect(chalice.name).toBe('Test Chalice (จอกทดสอบ)');
+    expect(chalice.nameEn).toBe('Test Chalice');
+    expect(result.tabsWithoutEffectColumns).toEqual([]);
+  });
+
+  it('Q-090: effect columns are optional; a tab without them is reported, not failed', () => {
+    const csv = requiredOnly();
+    // Keep Rank .. Match_Target_Tags; Effect_Type onwards (and the note) are gone.
+    const result = convertSheet({ ...csv, Item: keepColumnsBefore(csv.Item!, 'Effect_Type') });
+
+    expect(result.errors.map(formatIssue)).toEqual([]);
+    expect(result.tabsWithoutEffectColumns).toEqual(['Item']);
+    expect((result.files.Item as ItemRecord[])[0]!.effects).toEqual([]);
+  });
+
+  // C3: Given Start_Scenarios rates that do not add up to 100 / Then fail and give the sum.
+  it('C3: fails when the Start_Scenarios rates do not add up to 100 and gives the sum', () => {
+    const csv = requiredOnly();
+    const result = convertSheet({ ...csv, Start_Scenarios: setCell(csv.Start_Scenarios!, 2, 'Rate', '90.00%') });
+
+    expect(result.ok).toBe(false);
+    const text = result.errors.map(formatIssue).join('\n');
+    expect(text).toContain('Start_Scenarios');
+    expect(text).toContain('98.25');
+  });
+
+  // C4: a Rank / Trigger_Type outside the allowed values or a repeated name fails with tab, row and column.
+  it('C4: fails on a Rank outside F / B / A / S / SS with the tab, row and column', () => {
+    const csv = requiredOnly();
+    const result = convertSheet({ ...csv, Ability: setCell(csv.Ability!, 3, 'Rank', 'C') });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(expect.objectContaining({ tab: 'Ability', row: 3, column: 'Rank' }));
+    const text = result.errors.map(formatIssue).join('\n');
+    expect(text).toContain('Ability');
+    expect(text).toContain('แถว 3');
+    expect(text).toContain('Rank');
+  });
+
+  it('C4: fails on a Trigger_Type outside Active / Passive / Passive + Active', () => {
+    const csv = requiredOnly();
+    const result = convertSheet({ ...csv, Item: setCell(csv.Item!, 2, 'Trigger_Type', 'Reactive') });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(expect.objectContaining({ tab: 'Item', row: 2, column: 'Trigger_Type' }));
+  });
+
+  it('C4: fails on a name used twice in one tab and names the second row', () => {
+    const csv = requiredOnly();
+    const result = convertSheet({ ...csv, Ability: duplicateRow(csv.Ability!, 2) });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(expect.objectContaining({ tab: 'Ability', row: 5, column: 'Ability Name' }));
+  });
+
+  it('fails with tab, row and column on a broken tag list or number', () => {
+    const csv = requiredOnly();
+    const result = convertSheet({
+      ...csv,
+      Ability: setCell(csv.Ability!, 2, 'Match_Verb_Tags', 'HEAL, CLEANSE'),
+      Item: setCell(csv.Item!, 3, 'Daily_Limit', 'สองครั้ง'),
+    });
+
+    expect(result.errors).toContainEqual(expect.objectContaining({ tab: 'Ability', row: 2, column: 'Match_Verb_Tags' }));
+    expect(result.errors).toContainEqual(expect.objectContaining({ tab: 'Item', row: 3, column: 'Daily_Limit' }));
+  });
+
+  it('fails on an Effect_Type outside the known list', () => {
+    const csv = requiredOnly();
+    const result = convertSheet({ ...csv, Ability: setCell(csv.Ability!, 4, 'Effect_Type', 'teleport') });
+
+    expect(result.errors).toContainEqual(expect.objectContaining({ tab: 'Ability', row: 4, column: 'Effect_Type' }));
+  });
+
+  // C5: an NPC or item that names a skill / item not in the tabs: import succeeds with a warning and the row.
+  it('C5: warns with the row when an NPC or item names a skill / item that is not in the sheet', () => {
+    const csv = requiredOnly();
+    const result = convertSheet({
+      ...csv,
+      NPC: setCell(csv.NPC!, 3, 'Rewards & Abilities', 'ความสัมพันธ์ +9: มอบ Missing Charm (B)'),
+      Item: setCell(csv.Item!, 2, 'Skill Synergy & Unlock Condition', 'เสริมสกิล: Ghost Skill (A)'),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.warnings).toContainEqual(expect.objectContaining({ tab: 'NPC', row: 3, column: 'Rewards & Abilities' }));
+    expect(result.warnings).toContainEqual(expect.objectContaining({ tab: 'Item', row: 2, column: 'Skill Synergy & Unlock Condition' }));
+    const text = result.warnings.map(formatIssue).join('\n');
+    expect(text).toContain('Missing Charm');
+    expect(text).toContain('Ghost Skill');
+  });
+
+  it('C5: no reference warnings when every named skill / item / NPC / location exists', () => {
+    const result = convertSheet({ ...requiredOnly(), NPC_Schedule: fixtureCsv().NPC_Schedule! });
+
+    expect(result.warnings.filter((w) => w.tab !== 'Day10_Strategies').map(formatIssue)).toEqual([]);
+  });
+
+  it('C5: warns when a schedule or start scenario names an NPC / location that is not in the sheet', () => {
+    const csv = { ...requiredOnly(), NPC_Schedule: fixtureCsv().NPC_Schedule! };
+    const result = convertSheet({
+      ...csv,
+      NPC_Schedule: setCell(setCell(csv.NPC_Schedule, 2, 'NPC', 'คนแปลกหน้า'), 3, 'Location', 'ที่ลับ'),
+      Start_Scenarios: setCell(csv.Start_Scenarios!, 2, 'Location', 'ที่ไม่มี'),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.warnings).toContainEqual(expect.objectContaining({ tab: 'NPC_Schedule', row: 2, column: 'NPC' }));
+    expect(result.warnings).toContainEqual(expect.objectContaining({ tab: 'NPC_Schedule', row: 3, column: 'Location' }));
+    expect(result.warnings).toContainEqual(expect.objectContaining({ tab: 'Start_Scenarios', row: 2, column: 'Location' }));
+  });
+});

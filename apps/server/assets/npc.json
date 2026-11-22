@@ -1,0 +1,308 @@
+[
+  {
+    "grade": "F",
+    "alignments": [
+      "Good",
+      "Evil"
+    ],
+    "name": "โนอา (Noa) — เด็กขอทานตาบอดข้างหนึ่งผู้รอดชีวิตจากหมู่บ้านชายแดน",
+    "aliases": [
+      "โนอา",
+      "Noa"
+    ],
+    "trueName": "สาย Good: Seraphiel, Herald of Dawn (SS) / สาย Evil: Malakor, Blood Moon Incarnate (SS)",
+    "lore": "เด็กหนุ่มผอมโซที่ไอเป็นเลือดอยู่หลังตรอกตลาด ถูกชาวเมืองรังเกียจและต้องคอยแบ่งอาหาร/Stamina ดูแล แต่แท้จริงแล้วในตัวเขามี \"ภาชนะแห่งจันทราและรุ่งอรุณ\" ที่ถูกผนึกไว้",
+    "unlockCondition": "พัฒนาความสัมพันธ์ถึง +70 และมีค่ากรรม +70 ขึ้นไป (สาย Good) หรือต่ำกว่า -70 (สาย Evil) เพื่อวิวัฒนาการเป็น SS",
+    "rewards": "สาย Good: ปลดล็อกสกิล The First Light (SS) + มอบไอเทม Chalice of the First Dawn (S) / สาย Evil: ปลดล็อกสกิล ORDO TENEBRIS (SS) + มอบไอเทม Grimoire of the Blood Moon (S)",
+    "matchVerbTags": [
+      "SHARE",
+      "HEAL",
+      "PROTECT",
+      "CORRUPT"
+    ],
+    "matchTargetTags": [
+      "POOR_OR_INJURED",
+      "BACK_ALLEY"
+    ]
+  },
+  {
+    "grade": "F",
+    "alignments": [
+      "Neutral"
+    ],
+    "name": "ลูเซีย (Lucia) — หญิงสาวความจำเสื่อมที่พกนาฬิกาพกตาย",
+    "aliases": [
+      "ลูเซีย",
+      "Lucia",
+      "Chronos-Zero, The Unbound Arbiter",
+      "SS"
+    ],
+    "trueName": "Chronos-Zero, The Unbound Arbiter (SS)",
+    "lore": "หญิงสาวพูดน้อยที่มักเดินเหม่อลอยขวางทางและทำของพังอยู่เสมอ ไม่ยินดียินร้ายต่อความดีหรือความชั่ว แต่ทุกครั้งที่เกิดเหตุร้าย เธอมักรอดชีวิตอย่างน่าประหลาด",
+    "unlockCondition": "พัฒนาความสัมพันธ์ถึง +70 และทำกิจกรรมร่วมกับลูเซียอย่างน้อย 1 เทิร์น ใน 3 ช่วงเวลาไม่ซ้ำกันต่อวัน ต่อเนื่อง 3 วันเต็มตั้งแต่วันที่ 4 เป็นต้นไป (พร้อมรักษาค่ากรรมอยู่ในช่วง -1 ถึง +1)",
+    "rewards": "สาย Neutral: ปลดล็อกสกิล I AM UNTOUCHED (SS) + มอบไอเทม Pendulum of Zero (S)",
+    "matchVerbTags": [
+      "OBSERVE",
+      "PROTECT",
+      "ESCAPE",
+      "MEDITATE"
+    ],
+    "matchTargetTags": [
+      "NO_KARMA_CHANGE",
+      "FOUNTAIN"
+    ]
+  },
+  {
+    "grade": "B",
+    "alignments": [
+      "Good"
+    ],
+    "name": "แม่ชีผู้เหนื่อยล้าแห่งโบสถ์เก่า (ยังไม่เปิดเผยชื่อจริง)",
+    "aliases": [
+      "แม่ชีผู้เหนื่อยล้าแห่งโบสถ์เก่า",
+      "ซิสเตอร์เอเลน่า",
+      "Elena"
+    ],
+    "trueName": "ซิสเตอร์เอเลน่า (Elena)",
+    "lore": "แม่ชีระดับล่างที่คอยดูแลสถานพยาบาล เธอแอบสงสัยว่าขนมปังที่นักบวชลัทธิแจกในวันที่ 1 มีส่วนผสมแปลก ๆ แต่ไม่มีอำนาจพอจะเปิดโปง",
+    "unlockCondition": "ความสัมพันธ์ถึง +9 เพื่อเปิดเผยชื่อจริง / ช่วยสืบเรื่องขนมปังสำเร็จเพื่อรับไอเทมเพิ่ม",
+    "rewards": "ความสัมพันธ์ +9: มอบ Blessed Loaf of Dawn (B) และ Silver Rosary of Hearth (B) / ช่วยสืบเรื่องขนมปังสำเร็จ: มอบ Prism of Truth (B)",
+    "matchVerbTags": [
+      "HEAL",
+      "INVESTIGATE",
+      "PRAY"
+    ],
+    "matchTargetTags": [
+      "CLINIC",
+      "CHURCH",
+      "POISON_BREAD"
+    ]
+  },
+  {
+    "grade": "B",
+    "alignments": [
+      "Good"
+    ],
+    "name": "ทหารยามหน้าตาบึ้งตึง (ยังไม่เปิดเผยชื่อจริง)",
+    "aliases": [
+      "ทหารยามหน้าตาบึ้งตึง",
+      "จ่าสิบเอกการ์เร็ต",
+      "Garrett"
+    ],
+    "trueName": "จ่าสิบเอกการ์เร็ต (Garrett)",
+    "lore": "ทหารยามประตูเมืองที่ซื่อตรงแต่ถูกหัวหน้ากดขี่ เขาเห็นขบวนขนส่งกล่องไม้ต้องสงสัยเข้าออกโกดังลัทธิยามวิกาล",
+    "unlockCondition": "ความสัมพันธ์ถึง +9 เพื่อเปิดเผยชื่อจริง / ช่วยจับกุมสายลับลัทธิเพื่อรับไอเทมระดับ A",
+    "rewards": "ความสัมพันธ์ +9: ช่วยปลดล็อกสกิล Luminous Strike (B) และ Ward of Light (B) / ช่วยจับกุมสายลับลัทธิ: มอบ Mantle of the Martyr (A)",
+    "matchVerbTags": [
+      "DEFEND",
+      "INVESTIGATE",
+      "ATTACK"
+    ],
+    "matchTargetTags": [
+      "BARRACKS",
+      "GUILD",
+      "CULT_SPY"
+    ]
+  },
+  {
+    "grade": "B",
+    "alignments": [
+      "Evil"
+    ],
+    "name": "ชายชุดคลุมมอมแมมในตรอกมืด (ยังไม่เปิดเผยชื่อจริง)",
+    "aliases": [
+      "ชายชุดคลุมมอมแมมในตรอกมืด",
+      "วิคเตอร์",
+      "Victor"
+    ],
+    "trueName": "วิคเตอร์ (Victor)",
+    "lore": "อดีตนักต้มตุ๋นและนายหน้าค้าข่าวเถื่อน รู้เส้นทางลับใต้ดินทั้งหมดของเมือง พร้อมขายข้อมูลให้ทุกคนที่กล้าจ่ายหรือกล้าทำเรื่องสกปรก",
+    "unlockCondition": "ความสัมพันธ์ถึง +9 เพื่อเปิดเผยชื่อจริง / ช่วยใส่ร้ายทหารยามสำเร็จเพื่อรับไอเทมเพิ่ม",
+    "rewards": "ความสัมพันธ์ +9: มอบ Shadow-Silk Lockpick (B) และ Mask of the Faceless (B) / ช่วยใส่ร้ายทหารยามสำเร็จ: มอบ Vial of Black Ash (B)",
+    "matchVerbTags": [
+      "STEAL",
+      "DECEIVE",
+      "INFILTRATE",
+      "TRADE"
+    ],
+    "matchTargetTags": [
+      "BLACK_MARKET",
+      "UNDERGROUND"
+    ]
+  },
+  {
+    "grade": "B",
+    "alignments": [
+      "Neutral"
+    ],
+    "name": "พ่อค้าเร่ผู้สวมแว่นหนา (ยังไม่เปิดเผยชื่อจริง)",
+    "aliases": [
+      "พ่อค้าเร่ผู้สวมแว่นหนา",
+      "มาร์คัส",
+      "Marcus"
+    ],
+    "trueName": "มาร์คัส (Marcus)",
+    "lore": "พ่อค้าวัตถุโบราณที่ไม่สนใจการเมืองหรือศาสนา ยึดถือคติ \"ของแลกของอย่างเท่าเทียม\" รู้จักประวัติของอุกกาบาตและตำนานโบราณของโลกนี้",
+    "unlockCondition": "ความสัมพันธ์ถึง +9 เพื่อเปิดเผยชื่อจริง / แลกเปลี่ยนของหายาก 2 ครั้งเพื่อรับไอเทมเพิ่ม",
+    "rewards": "ความสัมพันธ์ +9: มอบ Scales of Fair Trade (B) และ Lead-Core Pocket Watch (B) / แลกเปลี่ยนของหายาก 2 ครั้ง: มอบ Cloak of Grey Dust (B)",
+    "matchVerbTags": [
+      "TRADE",
+      "OBSERVE",
+      "INVESTIGATE"
+    ],
+    "matchTargetTags": [
+      "MARKET",
+      "FOREST",
+      "ANCIENT_LORE"
+    ]
+  },
+  {
+    "grade": "A",
+    "alignments": [
+      "Good"
+    ],
+    "name": "ลอร์ดจูเลียน แวนเดอร์บิลต์ (ขุนนางผู้ตรวจการลับ)",
+    "aliases": [
+      "ลอร์ดจูเลียน แวนเดอร์บิลต์",
+      "ลอร์ดจูเลียน ผู้พิทักษ์พันธสัญญา"
+    ],
+    "trueName": "ลอร์ดจูเลียน ผู้พิทักษ์พันธสัญญา (เกรด S)",
+    "lore": "ชนชั้นสูงที่ปลอมตัวเข้ามาสืบคดีคนหายในเมือง (เหตุการณ์วันที่ 7) เขาแบกรับคำสาปเก่าแก่ของตระกูลและกำลังตามหาหลักฐานเอาผิดลัทธิ",
+    "unlockCondition": "ช่วยปกป้องชาวบ้านในวันที่ 7 และเปิดโปงนักบวชชั้นสูงได้สำเร็จ เพื่ออัปเกรดเป็นเกรด S",
+    "rewards": "เกรด A: มอบ Censer of Purging Flame (A) / เมื่อเลื่อนเป็นเกรด S: ปลดล็อกสกิล Sanctuary Aegis (S)",
+    "matchVerbTags": [
+      "INVESTIGATE",
+      "PROTECT",
+      "PERSUADE"
+    ],
+    "matchTargetTags": [
+      "THEATER",
+      "MANOR",
+      "MISSING_PERSONS"
+    ]
+  },
+  {
+    "grade": "A",
+    "alignments": [
+      "Evil"
+    ],
+    "name": "อาร์คบิชอป มัลคอล์ม (ผู้นำนักบวชลัทธิประจำเมือง)",
+    "aliases": [
+      "อาร์คบิชอป มัลคอล์ม",
+      "มัลคอล์ม ผู้ทรงศาสตราแห่งเงามืด"
+    ],
+    "trueName": "มัลคอล์ม ผู้ทรงศาสตราแห่งเงามืด (เกรด S)",
+    "lore": "เบื้องหน้าคือนักบวชผู้ใจบุญที่แจกขนมปังในวันที่ 1 เบื้องหลังคือผู้บงการพิธีลักพาตัวและเตรียมอัญเชิญเทพมารจันทราโลหิตในวันที่ 10",
+    "unlockCondition": "ร่วมมือในแผนลักพาตัววันที่ 7 และถวายเครื่องสังเวยสำเร็จ เพื่ออัปเกรดเป็นเกรด S",
+    "rewards": "เกรด A: มอบ Ring of Whispering Hollow (A) และ Kris of Soul Thirst (A) / เมื่อเลื่อนเป็นเกรด S: ปลดล็อกสกิล Puppeteer’s Crown (S)",
+    "matchVerbTags": [
+      "RITUAL",
+      "DECEIVE",
+      "MIND_CONTROL"
+    ],
+    "matchTargetTags": [
+      "CHURCH",
+      "FOUNTAIN",
+      "SACRIFICE"
+    ]
+  },
+  {
+    "grade": "A",
+    "alignments": [
+      "Neutral"
+    ],
+    "name": "เลดี้เซเรน่า แห่งหอจดหมายเหตุ (ผู้ดูแลหอคอยนักปราชญ์)",
+    "aliases": [
+      "เลดี้เซเรน่า แห่งหอจดหมายเหตุ",
+      "เซเรน่า ผู้หยั่งรู้วิถีดารา"
+    ],
+    "trueName": "เซเรน่า ผู้หยั่งรู้วิถีดารา (เกรด S)",
+    "lore": "นักวิชาการชนชั้นสูงที่ปิดตัวเงียบอยู่ในหอคอย ไม่ยุ่งเกี่ยวกับความขัดแย้งระหว่างโบสถ์กับลัทธิ แต่กำลังคำนวณวิถีโคจรของ \"อุกกาบาตหมูเด้ง\" ในวันที่ 12",
+    "unlockCondition": "นำข้อมูลภัยพิบัติวันที่ 5 และหลักฐานจากทั้ง 2 ฝ่ายมาให้วิเคราะห์โดยไม่เข้าข้างใคร เพื่ออัปเกรดเป็นเกรด S",
+    "rewards": "เกรด A: มอบ Monocle of the Bystander (A) และ Unbound Iron Blade (A) / เมื่อเลื่อนเป็นเกรด S: ปลดล็อกสกิล Observer’s Transcendence (S)",
+    "matchVerbTags": [
+      "OBSERVE",
+      "INVESTIGATE",
+      "DEBATE"
+    ],
+    "matchTargetTags": [
+      "LIBRARY",
+      "THEATER",
+      "DAWN_CHURCH",
+      "METEOR_DATA"
+    ]
+  },
+  {
+    "grade": "S",
+    "alignments": [
+      "Good"
+    ],
+    "name": "ออเรเลีย (Aurelia) — ภูตผู้นำพาแสงสว่าง",
+    "aliases": [
+      "ออเรเลีย",
+      "Aurelia"
+    ],
+    "trueName": "ออเรเลีย (เกรด S)",
+    "lore": "จิตวิญญาณศักดิ์สิทธิ์ที่หลับใหลอยู่ในแท่นบูชาแสงแรก ณ โบสถ์แห่งรุ่งอรุณ รอคอยผู้ที่มีจิตใจบริสุทธิ์มาปลุกให้ตื่นเพื่อต่อต้านความมืด",
+    "unlockCondition": "มีค่ากรรม +50 ขึ้นไป และนำ Silver Rosary of Hearth หรือ Censer of Purging Flame ไปสวดภาวนาที่แท่นบูชาลับ",
+    "rewards": "มอบสกิล Grace of Dawn (S) และช่วยสร้างเกราะป้องกันเมืองในภัยพิบัติวันที่ 5",
+    "matchVerbTags": [
+      "PRAY",
+      "CLEANSE",
+      "DEFEND"
+    ],
+    "matchTargetTags": [
+      "DAWN_CHURCH",
+      "HOLY_GROUND"
+    ]
+  },
+  {
+    "grade": "S",
+    "alignments": [
+      "Evil"
+    ],
+    "name": "น็อกทิส (Noctis) — ภูตรับใช้แห่งความมืด",
+    "aliases": [
+      "น็อกทิส",
+      "Noctis"
+    ],
+    "trueName": "น็อกทิส (เกรด S)",
+    "lore": "เงาปีศาจโบราณที่สิงสถิตอยู่ในรอยแยกมิติใต้แท่นพิธีของลัทธิ กระหายความโกลาหลและความสิ้นหวังของมนุษย์",
+    "unlockCondition": "มีค่ากรรมต่ำกว่า -50 และทำพิธีสังเวยหรือใช้ Secret Action ทำลายความหวังของชาวเมืองครบ 3 ครั้ง",
+    "rewards": "มอบสกิล Abyssal Miasma (S) และช่วยเปิดประตูมิติแทรกซึมและลักพาตัวเป้าหมายระดับสูงได้ทันที",
+    "matchVerbTags": [
+      "RITUAL",
+      "CURSE",
+      "INFILTRATE"
+    ],
+    "matchTargetTags": [
+      "CHURCH_BASEMENT",
+      "DARK_NIGHT"
+    ]
+  },
+  {
+    "grade": "S",
+    "alignments": [
+      "Neutral"
+    ],
+    "name": "แอสทรา (Astra) — ผู้เฝ้ามองเส้นขอบฟ้า",
+    "aliases": [
+      "แอสทรา",
+      "Astra"
+    ],
+    "trueName": "แอสทรา (เกรด S)",
+    "lore": "ตัวตนไร้รูปร่างที่ปรากฏกายเฉพาะบนหน้าผาหินริมทะเลและมิติพิศวงในคืนที่ไร้เมฆ ทำหน้าที่บันทึกจุดจบของโลกใบต่าง ๆ",
+    "unlockCondition": "ผ่าน 1% มิติพิศวงออกมาได้ หรือรักษาค่ากรรมให้อยู่ในช่วง -3 ถึง +3 จนถึงวันที่ 5",
+    "rewards": "มอบสกิล Absolute Zero Law (S) และเผยวิธีรับมือและคำใบ้ลับในการเอาชีวิตรอดจากอุกกาบาตหมูเด้ง (วันที่ 12)",
+    "matchVerbTags": [
+      "OBSERVE",
+      "NULLIFY",
+      "MEDITATE"
+    ],
+    "matchTargetTags": [
+      "SEA_CLIFF",
+      "CLEAR_NIGHT",
+      "METEOR_DATA"
+    ]
+  }
+]

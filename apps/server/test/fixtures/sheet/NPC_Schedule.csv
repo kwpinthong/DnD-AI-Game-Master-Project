@@ -1,0 +1,3 @@
+NPC,Location,Period,Weather,Condition,หมายเหตุ (ร่าง Claude จากคอลัมน์ NPCs & Behavior ของแท็บ Location — Nok ตรวจ)
+โนวา,ลานทดสอบ,"EOSORIA, SOLARION",Clear,,
+มาร์โก,ตลาดทดสอบ,NOCTHERION,Dark Night,karma < -50,กลางคืน

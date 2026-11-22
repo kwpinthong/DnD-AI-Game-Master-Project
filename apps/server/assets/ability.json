@@ -1,0 +1,966 @@
+[
+  {
+    "rank": "SS",
+    "alignment": "Good",
+    "name": "The First Light",
+    "category": "Buff",
+    "description": "ต้านทานผลกระทบจากความชั่วร้ายทุกประเภท สามารถสร้างปาฏิหารย์ (d20) รักษาผู้บาดเจ็บ ลบล้างคำสาปได้",
+    "condition": "สวดภาวนาอธิษฐานอย่างแรงกล้าต่อพระผู้เป็นเจ้า ดำเนินการตามเงื่อนไขอย่างน้อย 1 เทิร์น ใน 3 ช่วงเวลาที่ไม่ซ้ำกันต่อวัน ต่อเนื่อง 3 วันเต็ม (ห้ามขาด) หรือ NPC(SS) ฝ่าย Good มอบให้",
+    "quote": "\"บัญญัติสูงสุดแห่งสรวงสวรรค์ แสงนิรันดร์ที่ไม่มีวันดับสูญ\"",
+    "triggerType": "Active",
+    "dailyLimit": 1,
+    "matchVerbTags": [
+      "HEAL",
+      "CLEANSE",
+      "DEFEND",
+      "MIRACLE"
+    ],
+    "matchTargetTags": [
+      "ALLY",
+      "CROWD",
+      "CURSE",
+      "EVIL_AURA"
+    ],
+    "effects": [],
+    "note": "ปาฏิหารย์ (d20) เชิงคุณภาพ"
+  },
+  {
+    "rank": "SS",
+    "alignment": "Evil",
+    "name": "ORDO TENEBRIS",
+    "category": "Mind-Control",
+    "description": "ต้านทานผลกระทบจากความดีทุกประเภท สามารถควบคุมให้ผู้เล่น/NPC ทำตามที่สั่งได้ (d20) สาปผู้อื่นเพื่อมอบสถานะผิดปกติได้ทุกชนิด",
+    "condition": "ทำความชั่ว ดำเนินการตามเงื่อนไขอย่างน้อย 1 เทิร์น ใน 3 ช่วงเวลาที่ไม่ซ้ำกันต่อวัน ต่อเนื่อง 3 วันเต็ม (ห้ามขาด) และต้องมีค่ากรรมน้อยกว่า -90 (ชั่วสุดขีด) หรือ NPC(SS) ฝ่าย Evil มอบให้",
+    "quote": "“OMNIA MIHI PARENT. Nulla Lux, Nulla Lex, Nulla Dei Potestas Me Vincit.”",
+    "triggerType": "Active",
+    "dailyLimit": 1,
+    "matchVerbTags": [
+      "MIND_CONTROL",
+      "CURSE",
+      "DOMINATE"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "PLAYER",
+      "CROWD",
+      "GOOD_AFFILIATED"
+    ],
+    "effects": [],
+    "note": "ควบคุมจิต (d20) เชิงคุณภาพ"
+  },
+  {
+    "rank": "SS",
+    "alignment": "Neutral",
+    "name": "I AM UNTOUCHED",
+    "category": "Buff",
+    "description": "ไม่ได้รับผลกระทบของพลังภายนอกทุกชนิด ยกเว้นพลังกายภาพ",
+    "condition": "เมื่อค่ากรรมในวันที่ 4 เป็นต้นไป อยู่ในช่วง -1 ถึง +1 ดำเนินการตามเงื่อนไขอย่างน้อย 1 เทิร์น ใน 3 ช่วงเวลาที่ไม่ซ้ำกันต่อวัน ต่อเนื่อง 3 วันเต็ม (ห้ามขาด)",
+    "quote": "“กฎของโลก...ก็ไม่อาจบังคับข้า I AM UNTOUCHED”",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "DEFEND",
+      "OBSERVE",
+      "ESCAPE",
+      "ANY"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "MAGIC_EFFECT",
+      "MIND_CONTROL",
+      "DEBUFF"
+    ],
+    "effects": [],
+    "note": "ภูมิคุ้มกันเชิงคุณภาพ"
+  },
+  {
+    "rank": "S",
+    "alignment": "Good",
+    "name": "Grace of Dawn",
+    "category": "Buff",
+    "description": "ฟื้นฟู HP และ Stamina ให้ตนเองและพันธมิตรในพื้นที่ +15 และเพิ่มโบนัสทอยเต๋า +3 ในการต้านทานคำสาปหรือสถานะผิดปกติทั้งหมด",
+    "condition": "มีสกิล Rank A สาย Good อย่างน้อย 1 สกิล, ค่ากรรม +60 ขึ้นไป หรือได้รับจาก NPC เกรด S ฝ่าย Good",
+    "quote": "\"รุ่งอรุณจะไม่ทอดทิ้งผู้ที่ยังศรัทธาในแสงสว่าง\"",
+    "triggerType": "Active",
+    "dailyLimit": 1,
+    "matchVerbTags": [
+      "HEAL",
+      "CLEANSE",
+      "SUPPORT"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "ALLY",
+      "CROWD",
+      "DEBUFF"
+    ],
+    "effects": [
+      {
+        "type": "restore",
+        "stats": [
+          "HP",
+          "Stamina"
+        ],
+        "value": 15,
+        "duration": {
+          "unit": "instant"
+        }
+      },
+      {
+        "type": "dice_bonus",
+        "stats": [
+          "d20"
+        ],
+        "value": 3,
+        "duration": {
+          "unit": "period",
+          "count": 1
+        }
+      }
+    ],
+    "note": "ตัวเอง + พันธมิตรในพื้นที่ / dice_bonus เฉพาะต้านคำสาปหรือสถานะผิดปกติ"
+  },
+  {
+    "rank": "S",
+    "alignment": "Good",
+    "name": "Sanctuary Aegis",
+    "category": "Defensive",
+    "description": "สร้างเขตแดนศักดิ์สิทธิ์ป้องกันการโจมตีและสกิลสาย Evil ทุกชนิด (หากค่ากรรมเป้าหมายต่ำกว่า -50 จะถูกผลักกระเด็นและติดสถานะ ชะงักงัน 1 ช่วงเวลา)",
+    "condition": "มีสกิล Aegis of Faith (Rank A) และปกป้อง NPC หรือผู้เล่นอื่นจากอันตรายสำเร็จ 3 ครั้ง",
+    "quote": "\"ภายใต้โล่แห่งพันธสัญญา ความมืดมิอาจย่างกราย\"",
+    "triggerType": "Active",
+    "dailyLimit": 1,
+    "matchVerbTags": [
+      "DEFEND",
+      "PROTECT",
+      "BARRIER"
+    ],
+    "matchTargetTags": [
+      "AREA",
+      "ALLY",
+      "NPC",
+      "EVIL_AURA"
+    ],
+    "effects": [],
+    "note": "เขตแดนศักดิ์สิทธิ์เชิงคุณภาพ"
+  },
+  {
+    "rank": "A",
+    "alignment": "Good",
+    "name": "Smite of Purgation",
+    "category": "Offensive",
+    "description": "โจมตีด้วยแสงชำระล้าง สร้างความเสียหายรุนแรงขึ้น 2 เท่าต่อเป้าหมายที่มีค่ากรรมติดลบ และลบล้างบัพฝ่าย Evil ของเป้าหมาย 1 อย่าง (d20)",
+    "condition": "มีสกิล Luminous Strike (Rank B) และปราบปรามสาวกลัทธิหรือศัตรูฝ่ายชั่วสำเร็จ",
+    "quote": "\"จงมอดไหม้ในแสงแห่งความจริง!\"",
+    "triggerType": "Active",
+    "dailyLimit": 2,
+    "matchVerbTags": [
+      "ATTACK",
+      "PURGE"
+    ],
+    "matchTargetTags": [
+      "EVIL_AFFILIATED",
+      "NPC",
+      "PLAYER"
+    ],
+    "effects": [
+      {
+        "type": "damage_mult",
+        "stats": [],
+        "value": 2,
+        "duration": {
+          "unit": "instant"
+        }
+      }
+    ],
+    "note": "x2 เฉพาะเป้าหมาย karma ติดลบ"
+  },
+  {
+    "rank": "A",
+    "alignment": "Good",
+    "name": "Aegis of Faith",
+    "category": "Defensive",
+    "description": "ลดความเสียหายที่ได้รับลง 50% ในช่วงเวลานั้น และสะท้อนสถานะ Debuff กลับไปยังผู้ร่ายหากทอย d20 ได้ 12 ขึ้นไป",
+    "condition": "มีสกิล Ward of Light (Rank B) และค่ากรรม +35 ขึ้นไป",
+    "quote": "\"ศรัทธาของข้าคือเกราะที่ไม่อาจทำลาย\"",
+    "triggerType": "Active",
+    "dailyLimit": 2,
+    "matchVerbTags": [
+      "DEFEND",
+      "PROTECT",
+      "COUNTER"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "NPC",
+      "ALLY"
+    ],
+    "effects": [
+      {
+        "type": "damage_reduce_pct",
+        "stats": [],
+        "value": 50,
+        "duration": {
+          "unit": "period",
+          "count": 1
+        }
+      }
+    ],
+    "note": "สะท้อน Debuff เมื่อ d20 ≥ 12 เชิงคุณภาพ"
+  },
+  {
+    "rank": "A",
+    "alignment": "Good",
+    "name": "Voice of Conscience",
+    "category": "Mind-Control",
+    "description": "กระตุ้นมโนธรรมในใจเป้าหมาย บังคับให้เป้าหมายที่มีค่ากรรมต่ำกว่า 0 หยุดการกระทำชั่วร้ายในเทิร์นนั้นทันที (d20)",
+    "condition": "มีสกิล Plea of Mercy (Rank B) และช่วยคลี่คลายความขัดแย้งโดยไม่ฆ่าฟันสำเร็จ 2 ครั้ง",
+    "quote": "\"จงฟังเสียงหัวใจที่เจ้าหลงลืมไปเสียเถิด\"",
+    "triggerType": "Active",
+    "dailyLimit": 2,
+    "matchVerbTags": [
+      "PERSUADE",
+      "INTERVENE",
+      "MIND_CONTROL"
+    ],
+    "matchTargetTags": [
+      "EVIL_AFFILIATED",
+      "NPC",
+      "PLAYER"
+    ],
+    "effects": [],
+    "note": ""
+  },
+  {
+    "rank": "B",
+    "alignment": "Good",
+    "name": "Blessing of Hearth",
+    "category": "Buff",
+    "description": "ฟื้นฟู HP +8 และลดการใช้ Stamina ลง 2 หน่วยในการกระทำช่วยเหลือผู้อื่น",
+    "condition": "ทำความดีแบบเปิดเผยติดต่อกัน 2 ช่วงเวลา",
+    "quote": "\"ขอให้ความอบอุ่นนี้คุ้มครองการเดินทางของเจ้า\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "HEAL",
+      "SUPPORT",
+      "SHARE"
+    ],
+    "matchTargetTags": [
+      "ALLY",
+      "NPC",
+      "POOR_OR_INJURED"
+    ],
+    "effects": [
+      {
+        "type": "restore",
+        "stats": [
+          "HP"
+        ],
+        "value": 8,
+        "duration": {
+          "unit": "instant"
+        }
+      },
+      {
+        "type": "stamina_cost",
+        "stats": [],
+        "value": -2,
+        "duration": {
+          "unit": "passive"
+        }
+      }
+    ],
+    "note": "-2 เฉพาะ action ช่วยเหลือ"
+  },
+  {
+    "rank": "B",
+    "alignment": "Good",
+    "name": "Glare of Truth",
+    "category": "Debuff",
+    "description": "เปิดโปงเจตนาร้าย ทำให้เป้าหมายไม่สามารถใช้ Secret Action ในช่วงเวลาถัดไปได้ (d20)",
+    "condition": "จับพิรุธหรือเปิดโปงคำโกหกของ NPC/ผู้เล่นได้ 1 ครั้ง",
+    "quote": "\"ภายใต้แสงนี้ ไม่มีเงามืดใดซ่อนเร้นได้\"",
+    "triggerType": "Active",
+    "dailyLimit": 3,
+    "matchVerbTags": [
+      "INVESTIGATE",
+      "EXPOSE",
+      "OBSERVE"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "PLAYER",
+      "SECRET_ACTION"
+    ],
+    "effects": [],
+    "note": ""
+  },
+  {
+    "rank": "B",
+    "alignment": "Good",
+    "name": "Plea of Mercy",
+    "category": "Mind-Control",
+    "description": "โน้มน้าวให้ศัตรูหรือ NPC ลดความก้าวร้าวลงชั่วคราว เพิ่มค่าความสัมพันธ์ +3 ทันทีหากทอย d20 สำเร็จ",
+    "condition": "เจรจาต่อรองกับ NPC เกรด B สำเร็จโดยไม่ใช้กำลัง",
+    "quote": "\"วางอาวุธลงเถิด เรายังมีทางเลือกอื่น\"",
+    "triggerType": "Active",
+    "dailyLimit": 3,
+    "matchVerbTags": [
+      "PERSUADE",
+      "NEGOTIATE"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "HOSTILE_OR_GUARD"
+    ],
+    "effects": [
+      {
+        "type": "affinity",
+        "stats": [],
+        "value": 3,
+        "duration": {
+          "unit": "instant"
+        }
+      }
+    ],
+    "note": "เมื่อทอย d20 สำเร็จ"
+  },
+  {
+    "rank": "B",
+    "alignment": "Good",
+    "name": "Luminous Strike",
+    "category": "Offensive",
+    "description": "อัดพลังแสงลงในอาวุธหรือการโจมตี สร้างความเสียหายเพิ่มเติมและทำให้เป้าหมายตาพร่า (ลดความแม่นยำการโจมตี)",
+    "condition": "ช่วยเหลือชาวบ้านหรือทหารยามในการต่อสู้",
+    "quote": "\"ประกายแสงจงนำทางคมดาบนี้!\"",
+    "triggerType": "Active",
+    "dailyLimit": 3,
+    "matchVerbTags": [
+      "ATTACK"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "MONSTER",
+      "EVIL_AFFILIATED"
+    ],
+    "effects": [],
+    "note": "ความเสียหายเพิ่มไม่ระบุตัวเลข — Nok ใส่ได้"
+  },
+  {
+    "rank": "B",
+    "alignment": "Good",
+    "name": "Ward of Light",
+    "category": "Defensive",
+    "description": "สร้างม่านแสงบาง ๆ ลดความเสียหายกายภาพและเวทมนตร์ 1 ครั้ง (ป้องกัน HP ลดได้สูงสุด 8 หน่วย)",
+    "condition": "สวดภาวนาหรือได้รับพรจากนักบวชฝ่ายดี",
+    "quote": "\"แสงสว่างจงโอบกอดข้าไว้\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "DEFEND",
+      "PRAY"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "INCOMING_DAMAGE"
+    ],
+    "effects": [
+      {
+        "type": "damage_block",
+        "stats": [
+          "HP"
+        ],
+        "value": 8,
+        "duration": {
+          "unit": "hit",
+          "count": 1
+        }
+      }
+    ],
+    "note": ""
+  },
+  {
+    "rank": "S",
+    "alignment": "Evil",
+    "name": "Puppeteer’s Crown",
+    "category": "Mind-Control",
+    "description": "สั่งการ NPC เกรด B–A หรือผู้เล่น 1 คนให้ทำตามคำสั่งลับแทนเจ้าของร่างได้ 1 ช่วงเวลาโดยเป้าหมายไม่รู้ตัวในภายหลัง (d20)",
+    "condition": "มีสกิล Whisper of Temptation (Rank A), ค่ากรรมต่ำกว่า -60 หรือได้รับจากนักบวชลัทธิชั้นสูง",
+    "quote": "\"เจตจำนงของเจ้า...บัดนี้เป็นของข้าแล้ว\"",
+    "triggerType": "Active",
+    "dailyLimit": 1,
+    "matchVerbTags": [
+      "MIND_CONTROL",
+      "COMMAND"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "PLAYER"
+    ],
+    "effects": [],
+    "note": ""
+  },
+  {
+    "rank": "S",
+    "alignment": "Evil",
+    "name": "Abyssal Miasma",
+    "category": "Debuff",
+    "description": "แพร่คำสาปกัดกินวิญญาณ ทำให้เป้าหมายทั้งหมดในพื้นที่สูญเสีย Stamina -5 และ HP -6 ต่อช่วงเวลา (ต่อเนื่องสูงสุด 2 ช่วงเวลา) จนกว่าจะได้รับการชำระล้าง",
+    "condition": "มีสกิล Venom of Despair (Rank A) และทำพิธีกรรมลับของลัทธิสำเร็จ 2 ครั้ง",
+    "quote": "\"จงสูดดมความสิ้นหวัง และเน่าเปื่อยไปเสีย\"",
+    "triggerType": "Active",
+    "dailyLimit": 1,
+    "matchVerbTags": [
+      "CURSE",
+      "SABOTAGE",
+      "ATTACK"
+    ],
+    "matchTargetTags": [
+      "AREA",
+      "CROWD",
+      "ALLY",
+      "NPC"
+    ],
+    "effects": [
+      {
+        "type": "dot",
+        "stats": [
+          "Stamina"
+        ],
+        "value": -5,
+        "duration": {
+          "unit": "period",
+          "count": 2
+        }
+      },
+      {
+        "type": "dot",
+        "stats": [
+          "HP"
+        ],
+        "value": -6,
+        "duration": {
+          "unit": "period",
+          "count": 2
+        }
+      }
+    ],
+    "note": "ทุกเป้าหมายในพื้นที่"
+  },
+  {
+    "rank": "A",
+    "alignment": "Evil",
+    "name": "Whisper of Temptation",
+    "category": "Mind-Control",
+    "description": "ฝังความคิดลวงตาลงในจิตใจเป้าหมาย บังคับให้เป้าหมายเลือกทำแอคชั่นที่ขัดแย้งกับพันธมิตรของตนเองในรอบถัดไป (d20)",
+    "condition": "มีสกิล Shadow Suggestion (Rank B) และยุยงให้ NPC หรือผู้เล่นแตกคอกันสำเร็จ",
+    "quote": "\"ลองคิดดูสิ...เพื่อนของเจ้ากำลังหักหลังเจ้าอยู่\"",
+    "triggerType": "Active",
+    "dailyLimit": 2,
+    "matchVerbTags": [
+      "MIND_CONTROL",
+      "DECEIVE",
+      "INSTIGATE"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "PLAYER",
+      "CROWD"
+    ],
+    "effects": [],
+    "note": ""
+  },
+  {
+    "rank": "A",
+    "alignment": "Evil",
+    "name": "Venom of Despair",
+    "category": "Debuff",
+    "description": "สาปเป้าหมาย 1 คนให้ติดสถานะ หวาดกลัว (ไม่สามารถใช้สกิลสาย Good ได้ และทอยเต๋าทุกชนิด -3 เป็นเวลา 2 ช่วงเวลา)",
+    "condition": "มีสกิล Mark of Paranoia (Rank B) และค่ากรรมต่ำกว่า -35",
+    "quote": "\"ความกลัวจะกัดกินเจ้าจากภายใน\"",
+    "triggerType": "Active",
+    "dailyLimit": 2,
+    "matchVerbTags": [
+      "CURSE",
+      "INTIMIDATE"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "PLAYER",
+      "GOOD_AFFILIATED"
+    ],
+    "effects": [
+      {
+        "type": "dice_bonus",
+        "stats": [
+          "d20"
+        ],
+        "value": -3,
+        "duration": {
+          "unit": "period",
+          "count": 2
+        }
+      }
+    ],
+    "note": "กับเป้าหมาย / ห้ามใช้ skill Good เชิงคุณภาพ"
+  },
+  {
+    "rank": "A",
+    "alignment": "Evil",
+    "name": "Soul Siphon",
+    "category": "Offensive",
+    "description": "โจมตีดูดกลืนพลังชีวิต สร้างความเสียหายแก่เป้าหมายและดูด HP +10 พร้อม Stamina +5 มาเป็นของตนเอง",
+    "condition": "มีสกิล Backstab of Greed (Rank B) และสังหารหรือทำร้ายเป้าหมายจนหมดสภาพสำเร็จ",
+    "quote": "\"พลังชีวิตของเจ้า ช่างหอมหวานนัก\"",
+    "triggerType": "Active",
+    "dailyLimit": 2,
+    "matchVerbTags": [
+      "ATTACK",
+      "DRAIN"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "PLAYER",
+      "INJURED"
+    ],
+    "effects": [
+      {
+        "type": "drain",
+        "stats": [
+          "HP"
+        ],
+        "value": 10,
+        "duration": {
+          "unit": "instant"
+        }
+      },
+      {
+        "type": "drain",
+        "stats": [
+          "Stamina"
+        ],
+        "value": 5,
+        "duration": {
+          "unit": "instant"
+        }
+      }
+    ],
+    "note": ""
+  },
+  {
+    "rank": "B",
+    "alignment": "Evil",
+    "name": "Feast of Malice",
+    "category": "Buff",
+    "description": "เมื่อกระทำเรื่องชั่วร้ายหรือใช้ Secret Action สำเร็จ จะฟื้นฟู Stamina +5 และเพิ่มโบนัสเต๋า +2 ในการลอบเร้น",
+    "condition": "ทำความชั่วแบบลับติดต่อกัน 2 ช่วงเวลา",
+    "quote": "\"ความมืดคืออาหารอันโอชะของข้า\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "STEALTH",
+      "SABOTAGE",
+      "STEAL"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "SECRET_ACTION"
+    ],
+    "effects": [
+      {
+        "type": "restore",
+        "stats": [
+          "Stamina"
+        ],
+        "value": 5,
+        "duration": {
+          "unit": "instant"
+        }
+      },
+      {
+        "type": "dice_bonus",
+        "stats": [
+          "d20"
+        ],
+        "value": 2,
+        "duration": {
+          "unit": "instant"
+        }
+      }
+    ],
+    "note": "เมื่อ Secret / ทำชั่วสำเร็จ / โบนัสลอบเร้น"
+  },
+  {
+    "rank": "B",
+    "alignment": "Evil",
+    "name": "Mark of Paranoia",
+    "category": "Debuff",
+    "description": "สาปเป้าหมายให้ระแวงคนรอบข้าง ลดค่าความสัมพันธ์ระหว่างเป้าหมายกับ NPC ที่อยู่ใกล้เคียงลง -4 ทันที",
+    "condition": "ใส่ร้ายหรือสร้างข่าวลือเท็จใส่ผู้อื่นสำเร็จ 1 ครั้ง",
+    "quote": "\"จงอย่าไว้ใจใคร แม้แต่เงาของเจ้าเอง\"",
+    "triggerType": "Active",
+    "dailyLimit": 3,
+    "matchVerbTags": [
+      "DECEIVE",
+      "SLANDER",
+      "CURSE"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "PLAYER"
+    ],
+    "effects": [
+      {
+        "type": "affinity",
+        "stats": [],
+        "value": -4,
+        "duration": {
+          "unit": "instant"
+        }
+      }
+    ],
+    "note": "กับ NPC ใกล้เคียง"
+  },
+  {
+    "rank": "B",
+    "alignment": "Evil",
+    "name": "Shadow Suggestion",
+    "category": "Mind-Control",
+    "description": "สะกดจิตอ่อน ๆ ให้เป้าหมายเผลอคายความลับหรือทำของติดตัวหล่น 1 ชิ้น (d20)",
+    "condition": "ลอบเร้นเข้าใกล้เป้าหมายโดยไม่ถูกจับได้",
+    "quote": "\"บอกความลับของเจ้ามา...แล้วเจ้าจะสบายใจขึ้น\"",
+    "triggerType": "Active",
+    "dailyLimit": 3,
+    "matchVerbTags": [
+      "MIND_CONTROL",
+      "INTERROGATE",
+      "STEAL"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "PLAYER"
+    ],
+    "effects": [],
+    "note": ""
+  },
+  {
+    "rank": "B",
+    "alignment": "Evil",
+    "name": "Backstab of Greed",
+    "category": "Offensive",
+    "description": "สร้างความเสียหายรุนแรงเมื่อโจมตีเป้าหมายที่กำลังเผลอหรือติดสถานะผิดปกติ (ใช้ Stamina น้อยลง 2 หน่วย)",
+    "condition": "ลอบโจมตีหรือขโมยของจากเป้าหมายสำเร็จ",
+    "quote": "\"ความประมาทของเจ้าคือจุดจบ\"",
+    "triggerType": "Active",
+    "dailyLimit": 3,
+    "matchVerbTags": [
+      "ATTACK",
+      "STEAL"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "PLAYER",
+      "UNAWARE_OR_DEBUFFED"
+    ],
+    "effects": [
+      {
+        "type": "stamina_cost",
+        "stats": [],
+        "value": -2,
+        "duration": {
+          "unit": "instant"
+        }
+      }
+    ],
+    "note": "ความเสียหายรุนแรงไม่ระบุตัวเลข"
+  },
+  {
+    "rank": "B",
+    "alignment": "Evil",
+    "name": "Scapegoat Veil",
+    "category": "Defensive",
+    "description": "เมื่อกำลังจะได้รับความเสียหายหรือถูกจับได้ สามารถโยนความผิดหรือเบี่ยงเบนการโจมตีไปยัง NPC/ผู้เล่นที่อยู่ใกล้ที่สุดแทน (d20)",
+    "condition": "เอาตัวรอดจากสถานการณ์วิกฤตด้วยการหลอกลวง",
+    "quote": "\"จงรับเคราะห์แทนข้าเสียเถิด\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "ESCAPE",
+      "DECEIVE",
+      "DEFEND"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "NEARBY_TARGET",
+      "CAUGHT_IN_ACT"
+    ],
+    "effects": [],
+    "note": ""
+  },
+  {
+    "rank": "S",
+    "alignment": "Neutral",
+    "name": "Absolute Zero Law",
+    "category": "Defensive",
+    "description": "ลบล้างผลกระทบของสกิล Buff, Debuff และ Mind-Control ทั้งหมดในพื้นที่ให้กลายเป็น 0 (เหลือเพียงการปะทะทางกายภาพล้วน ๆ 1 ช่วงเวลา)",
+    "condition": "มีสกิล Mirror of Equilibrium (Rank A) และรักษาค่ากรรมให้อยู่ในช่วง -5 ถึง +5 ต่อเนื่อง 2 วัน",
+    "quote": "\"ต่อหน้าความว่างเปล่า ทั้งแสงและเงาล้วนไร้ความหมาย\"",
+    "triggerType": "Active",
+    "dailyLimit": 1,
+    "matchVerbTags": [
+      "NULLIFY",
+      "INTERVENE",
+      "DEFEND"
+    ],
+    "matchTargetTags": [
+      "AREA",
+      "MAGIC_EFFECT",
+      "CHAOS"
+    ],
+    "effects": [],
+    "note": ""
+  },
+  {
+    "rank": "S",
+    "alignment": "Neutral",
+    "name": "Observer’s Transcendence",
+    "category": "Buff",
+    "description": "มองเห็นความตั้งใจและค่าสถานะที่ซ่อนอยู่ของเป้าหมาย 1 คน (รวมถึงเปิดโปงการใช้ Secret Action ในรอบนั้น) และได้รับโบนัสเต๋า +3 ในการหลบเลี่ยงทุกภัยพิบัติ",
+    "condition": "มีสกิล Detached Mind (Rank A) และไม่เข้าข้างฝ่ายใดในเหตุการณ์ขัดแย้งใหญ่ 2 ครั้ง",
+    "quote": "\"ข้าไม่ใช่นักแสดง...ข้าคือผู้ชมที่อยู่เหนือกฎเกณฑ์\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "OBSERVE",
+      "INVESTIGATE",
+      "ESCAPE"
+    ],
+    "matchTargetTags": [
+      "AREA",
+      "PLAYER",
+      "NPC",
+      "SECRET_ACTION"
+    ],
+    "effects": [
+      {
+        "type": "dice_bonus",
+        "stats": [
+          "d20"
+        ],
+        "value": 3,
+        "duration": {
+          "unit": "passive"
+        }
+      }
+    ],
+    "note": "เฉพาะหลบเลี่ยงภัยพิบัติ"
+  },
+  {
+    "rank": "A",
+    "alignment": "Neutral",
+    "name": "Mirror of Equilibrium",
+    "category": "Defensive",
+    "description": "หักล้างและดูดซับผลลัพธ์ของสกิลสาย Good หรือ Evil ที่พุ่งเป้ามาหาตนเองให้สลายหายไป 100% (ใช้ได้ 1 ครั้งต่อวัน)",
+    "condition": "มีสกิล Neutral Guard (Rank B) และค่ากรรมอยู่ระหว่าง -10 ถึง +10",
+    "quote": "\"สิ่งใดที่เจ้าส่งมา จงคืนกลับสู่ความว่างเปล่า\"",
+    "triggerType": "Active",
+    "dailyLimit": 1,
+    "matchVerbTags": [
+      "DEFEND",
+      "COUNTER",
+      "NULLIFY"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "MAGIC_EFFECT",
+      "CURSE"
+    ],
+    "effects": [],
+    "note": "ดูดซับ 100% เชิงคุณภาพ"
+  },
+  {
+    "rank": "A",
+    "alignment": "Neutral",
+    "name": "Detached Mind",
+    "category": "Buff",
+    "description": "ป้องกันสถานะ Mind-Control และ หวาดกลัว ทุกระดับ (ยกเว้น SS) และลดการสูญเสีย Stamina จากสภาพแวดล้อมลง 50%",
+    "condition": "มีสกิล Clear Horizon (Rank B) และผ่านพ้นช่วงค่ำโดยไม่เสียค่ากรรมเพิ่มหรือลด",
+    "quote": "\"จิตใจที่นิ่งสงบ ย่อมไม่สั่นคลอนต่อสิ่งใด\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "OBSERVE",
+      "REST",
+      "ENDURE"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "MIND_CONTROL",
+      "HARSH_WEATHER"
+    ],
+    "effects": [
+      {
+        "type": "env_stamina_reduce_pct",
+        "stats": [],
+        "value": 50,
+        "duration": {
+          "unit": "passive"
+        }
+      }
+    ],
+    "note": ""
+  },
+  {
+    "rank": "A",
+    "alignment": "Neutral",
+    "name": "Severance Strike",
+    "category": "Offensive",
+    "description": "การโจมตีทางกายภาพบริสุทธิ์ที่ตัดผ่านเกราะเวทมนตร์และบัพป้องกันทุกชนิดของเป้าหมายโดยไม่สนค่ากรรม",
+    "condition": "มีสกิล Calculated Blow (Rank B) และเอาชนะคู่ต่อสู้ด้วยความสามารถกายภาพหรือไหวพริบล้วน ๆ",
+    "quote": "\"ไม่มีเวทมนตร์ ไม่มีคำสาป มีเพียงคมดาบที่เป็นจริง\"",
+    "triggerType": "Active",
+    "dailyLimit": 2,
+    "matchVerbTags": [
+      "ATTACK"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "PLAYER",
+      "SHIELDED_OR_MAGIC"
+    ],
+    "effects": [],
+    "note": ""
+  },
+  {
+    "rank": "B",
+    "alignment": "Neutral",
+    "name": "Clear Horizon",
+    "category": "Buff",
+    "description": "รักษาสมดุลร่างกาย ฟื้นฟู Stamina +4 เมื่อจบช่วงเวลาหากไม่ได้กระทำการใดที่เปลี่ยนแปลงค่ากรรม",
+    "condition": "จบ 1 ช่วงเวลาโดยค่ากรรมไม่เปลี่ยนแปลง",
+    "quote": "\"ไม่ยินดี ไม่ยินร้าย เพียงก้าวเดินต่อไป\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "REST",
+      "OBSERVE",
+      "TRAVEL"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "NO_KARMA_CHANGE"
+    ],
+    "effects": [
+      {
+        "type": "restore",
+        "stats": [
+          "Stamina"
+        ],
+        "value": 4,
+        "duration": {
+          "unit": "end_of_period"
+        }
+      }
+    ],
+    "note": "เมื่อ karma ไม่เปลี่ยนในช่วงนั้น"
+  },
+  {
+    "rank": "B",
+    "alignment": "Neutral",
+    "name": "Stasis Anchor",
+    "category": "Debuff",
+    "description": "ตรึงพื้นที่รอบตัว ทำให้เป้าหมาย 1 คนไม่สามารถใช้สกิลเคลื่อนย้ายหรือหลบหนีในรอบนั้นได้ (d20)",
+    "condition": "ขัดขวางการหลบหนีหรือหยุดยั้งการปะทะของผู้อื่นสำเร็จ",
+    "quote": "\"จงหยุดนิ่งอยู่ตรงนั้น จนกว่าเหตุผลจะปรากฏ\"",
+    "triggerType": "Active",
+    "dailyLimit": 3,
+    "matchVerbTags": [
+      "INTERVENE",
+      "TRAP",
+      "DEFEND"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "PLAYER",
+      "FLEEING"
+    ],
+    "effects": [],
+    "note": ""
+  },
+  {
+    "rank": "B",
+    "alignment": "Neutral",
+    "name": "Rational Paradox",
+    "category": "Mind-Control",
+    "description": "ตั้งคำถามย้อนแย้งจนเป้าหมายเกิดความสับสน ต้องหยุดคิดและเสียโอกาสในการใช้สกิลในรอบนั้น (d20)",
+    "condition": "โต้แย้งหรือเจรจากับนักบวช/ผู้มีอำนาจด้วยเหตุผลจนอีกฝ่ายชะงัก",
+    "quote": "\"หากกฎของเจ้าสมบูรณ์จริง เหตุใดจึงยังต้องหวาดกลัว?\"",
+    "triggerType": "Active",
+    "dailyLimit": 3,
+    "matchVerbTags": [
+      "PERSUADE",
+      "DEBATE",
+      "INTERVENE"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "PLAYER",
+      "AUTHORITY_OR_CLERIC"
+    ],
+    "effects": [],
+    "note": ""
+  },
+  {
+    "rank": "B",
+    "alignment": "Neutral",
+    "name": "Calculated Blow",
+    "category": "Offensive",
+    "description": "โจมตีจุดอ่อนทางกายภาพอย่างแม่นยำ สร้างความเสียหายคงที่โดยไม่พึ่งพาพลังธาตุหรือคำสาป",
+    "condition": "ฝึกฝนหรือต่อสู้โดยไม่ใช้ไอเทมเวทมนตร์",
+    "quote": "\"ทุกสรรพสิ่งล้วนมีจุดศูนย์ถ่วงของมัน\"",
+    "triggerType": "Active",
+    "dailyLimit": 3,
+    "matchVerbTags": [
+      "ATTACK"
+    ],
+    "matchTargetTags": [
+      "NPC",
+      "MONSTER",
+      "WEAKPOINT"
+    ],
+    "effects": [],
+    "note": "ความเสียหายคงที่ไม่ระบุตัวเลข"
+  },
+  {
+    "rank": "B",
+    "alignment": "Neutral",
+    "name": "Neutral Guard",
+    "category": "Defensive",
+    "description": "ตั้งรับอย่างรัดกุม ลดความเสียหายจากทุกแหล่งลง 30% และป้องกันการถูกผลักออกจากตำแหน่งปัจจุบัน",
+    "condition": "เอาตัวรอดจากเหตุการณ์วุ่นวายในเมืองโดยไม่บาดเจ็บหนัก",
+    "quote": "\"พายุจะพัดแรงเพียงใด ข้าก็จะยืนอยู่ที่เดิม\"",
+    "triggerType": "Passive",
+    "dailyLimit": 0,
+    "matchVerbTags": [
+      "DEFEND",
+      "OBSERVE"
+    ],
+    "matchTargetTags": [
+      "SELF",
+      "CHAOS",
+      "AOE_DAMAGE"
+    ],
+    "effects": [
+      {
+        "type": "damage_reduce_pct",
+        "stats": [],
+        "value": 30,
+        "duration": {
+          "unit": "passive"
+        }
+      }
+    ],
+    "note": ""
+  }
+]

@@ -1,0 +1,3 @@
+Rank,Alignment,Category,Item Name,Buff Type,Effect,Skill Synergy & Unlock Condition,คำบรรยายไอเทม,Trigger_Type,Daily_Limit,Match_Verb_Tags,Match_Target_Tags,Effect_Type,Stat,Value,Duration,Effect2_Type,Effect2_Stat,Effect2_Value,Effect2_Duration,หมายเหตุ (ร่าง Claude — ว่าง = ผลเชิงคุณภาพส่งให้ AI)
+S,Good,Relic,Test Chalice (จอกทดสอบ),เชิงปริมาณ,ฟื้นฟู HP 15,เสริมสกิล: เพิ่มผลของ Test Dawn (SS) เป็น 2 เท่า,จอกเก่า,Active,1,"[HEAL, PRAY]","[SELF, ALLY]",restore,HP,15,instant,restore,Stamina,10,instant,
+B,Neutral,Tool,Test Lantern (ตะเกียงทดสอบ),เชิงคุณภาพ,ส่องทาง,เงื่อนไขปลดล็อก: ใช้คู่กับ Test Chalice (S) จะปลดล็อก Test Guard (A),ตะเกียง,Passive,0,[OBSERVE],[SELF],,,,,,,,,ผลเชิงคุณภาพ

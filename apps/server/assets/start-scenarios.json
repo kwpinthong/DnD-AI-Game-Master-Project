@@ -1,0 +1,417 @@
+[
+  {
+    "tier": "70% (ทั่วไป)",
+    "rate": 7,
+    "zone": "โซนใจกลางเมือง",
+    "location": "น้ำพุกลางเมือง",
+    "name": "นักดนตรีพเนจรตกอับ",
+    "tags": [
+      "PERFORMER",
+      "SOCIAL",
+      "POOR"
+    ],
+    "startHp": 22,
+    "maxHp": 30,
+    "startStamina": 26,
+    "startCoins": 15,
+    "startKarma": 5,
+    "initialTitle": "นักดนตรีพเนจรถือพิณเก่า",
+    "passiveText": "โบนัส +2 เมื่อใช้กิริยา PERSUADE หรือ OBSERVE ในที่สาธารณะ",
+    "passive": {
+      "verbTags": [
+        "PERSUADE",
+        "OBSERVE"
+      ],
+      "stat": "d20",
+      "value": 2,
+      "condition": "location tag PUBLIC"
+    },
+    "note": ""
+  },
+  {
+    "tier": "70% (ทั่วไป)",
+    "rate": 7,
+    "zone": "โซนใจกลางเมือง",
+    "location": "โรงเตี๊ยมและกิลด์นักเดินทาง",
+    "name": "ลูกมือล้างจานประจำร้าน",
+    "tags": [
+      "WORKER",
+      "STURDY",
+      "RUMOR"
+    ],
+    "startHp": 26,
+    "maxHp": 30,
+    "startStamina": 28,
+    "startCoins": 20,
+    "startKarma": 0,
+    "initialTitle": "เด็กรับใช้ประจำโรงเตี๊ยม",
+    "passiveText": "รู้ข่าวลือเบื้องต้นของกิลด์ และฟื้นฟู Stamina +2 เพิ่มเติมเมื่อพักที่โรงเตี๊ยม",
+    "passive": {
+      "verbTags": [
+        "REST"
+      ],
+      "stat": "Stamina",
+      "value": 2,
+      "condition": "location tag TAVERN"
+    },
+    "note": "เบาะแสข่าวลือกิลด์เป็นเชิงคุณภาพ (ส่งให้ AI)"
+  },
+  {
+    "tier": "70% (ทั่วไป)",
+    "rate": 7,
+    "zone": "โซนใจกลางเมือง",
+    "location": "โบสถ์",
+    "name": "เด็กกำพร้าผู้เฝ้าเชิงเทียน",
+    "tags": [
+      "DEVOUT",
+      "FRAGILE",
+      "PURE"
+    ],
+    "startHp": 18,
+    "maxHp": 30,
+    "startStamina": 25,
+    "startCoins": 10,
+    "startKarma": 12,
+    "initialTitle": "เด็กเฝ้าวิหารท่าทางสงบเสงี่ยม",
+    "passiveText": "มีเบาะแสเรื่อง ซิสเตอร์เอเลน่า และโบนัส +2 เมื่อสั่ง PRAY",
+    "passive": {
+      "verbTags": [
+        "PRAY"
+      ],
+      "stat": "d20",
+      "value": 2,
+      "condition": ""
+    },
+    "note": "เบาะแสซิสเตอร์เอเลน่าเป็นเชิงคุณภาพ"
+  },
+  {
+    "tier": "70% (ทั่วไป)",
+    "rate": 7,
+    "zone": "โซนป่าทิศตะวันออก",
+    "location": "ป่า",
+    "name": "ผู้รอดชีวิตจากท้องสไลม์",
+    "tags": [
+      "INJURED",
+      "ADRENALINE",
+      "SURVIVOR"
+    ],
+    "startHp": 14,
+    "maxHp": 30,
+    "startStamina": 20,
+    "startCoins": 5,
+    "startKarma": 0,
+    "initialTitle": "นักเดินทางตัวเปื้อนเมือก",
+    "passiveText": "บัพ 3 วันแรก: อะดรีนาลินเดือด (โบนัส ATTACK +3 แม้ HP ต่ำ)",
+    "passive": {
+      "verbTags": [
+        "ATTACK"
+      ],
+      "stat": "d20",
+      "value": 3,
+      "condition": "วันที่ 1-3"
+    },
+    "note": "อะดรีนาลิน 3 วันแรก"
+  },
+  {
+    "tier": "70% (ทั่วไป)",
+    "rate": 7,
+    "zone": "โซนป่าทิศตะวันออก",
+    "location": "แปลงเกษตรกรรม",
+    "name": "คนงานรับจ้างต่างถิ่น",
+    "tags": [
+      "LABORER",
+      "ENDURANCE",
+      "RURAL"
+    ],
+    "startHp": 28,
+    "maxHp": 30,
+    "startStamina": 28,
+    "startCoins": 15,
+    "startKarma": 5,
+    "initialTitle": "ชาวไร่หน้าตาซื่อตรง",
+    "passiveText": "ทนทานต่อสภาพอากาศแปรปรวน (ลดการเสีย Stamina กลางแจ้ง -1)",
+    "passive": {
+      "verbTags": [
+        "ANY"
+      ],
+      "stat": "stamina_cost",
+      "value": -1,
+      "condition": "location tag OUTDOOR"
+    },
+    "note": "ลดการเสีย Stamina กลางแจ้ง"
+  },
+  {
+    "tier": "70% (ทั่วไป)",
+    "rate": 7,
+    "zone": "โซนป่าทิศตะวันออก",
+    "location": "โรงละคร",
+    "name": "ตัวประกอบละครเวที",
+    "tags": [
+      "ACTOR",
+      "DECEPTION",
+      "MASKED"
+    ],
+    "startHp": 20,
+    "maxHp": 30,
+    "startStamina": 25,
+    "startCoins": 30,
+    "startKarma": -5,
+    "initialTitle": "นักแสดงตัวประกอบหน้าตาธรรมดา",
+    "passiveText": "โบนัส +2 เมื่อใช้กิริยา DECEIVE หรือแฝงตัวในฝูงชน",
+    "passive": {
+      "verbTags": [
+        "DECEIVE"
+      ],
+      "stat": "d20",
+      "value": 2,
+      "condition": ""
+    },
+    "note": "\"หรือแฝงตัวในฝูงชน\" — เพิ่ม STEALTH + location tag CROWD ได้ถ้าต้องการ"
+  },
+  {
+    "tier": "70% (ทั่วไป)",
+    "rate": 7,
+    "zone": "โซนการค้าทิศตะวันตก",
+    "location": "ย่านการค้า-ตลาดมืด",
+    "name": "หัวขโมยหน้าใหม่หลังตรอก",
+    "tags": [
+      "POOR",
+      "STREET_SMART",
+      "STEALTH"
+    ],
+    "startHp": 22,
+    "maxHp": 30,
+    "startStamina": 25,
+    "startCoins": 15,
+    "startKarma": -10,
+    "initialTitle": "คนเร่ร่อนหน้าตามอมแมม",
+    "passiveText": "โบนัส +2 เมื่อใช้ STEAL / HIDE และรู้ทางเข้าตรอกตลาดมืด",
+    "passive": {
+      "verbTags": [
+        "STEAL",
+        "STEALTH"
+      ],
+      "stat": "d20",
+      "value": 2,
+      "condition": ""
+    },
+    "note": "ชีทเดิมเขียน HIDE → ใช้ STEALTH ตาม vocabulary / รู้ทางเข้าตลาดมืด = สิทธิ์เข้า (เชิงคุณภาพ)"
+  },
+  {
+    "tier": "70% (ทั่วไป)",
+    "rate": 7,
+    "zone": "โซนการค้าทิศตะวันตก",
+    "location": "ทะเล",
+    "name": "ผู้รอดชีวิตจากเรืออับปาง",
+    "tags": [
+      "CASTAWAY",
+      "WET",
+      "RESILIENT"
+    ],
+    "startHp": 16,
+    "maxHp": 30,
+    "startStamina": 22,
+    "startCoins": 10,
+    "startKarma": 0,
+    "initialTitle": "ชาวประมงต่างถิ่นเนื้อตัวมอมแมม",
+    "passiveText": "ไร้ความทรงจำในเมืองนี้ แต่มี HP พื้นฐานฟื้นตัวเร็ว (+3) เมื่อพักริมฝั่ง",
+    "passive": {
+      "verbTags": [
+        "REST"
+      ],
+      "stat": "HP",
+      "value": 3,
+      "condition": "location tag COASTAL"
+    },
+    "note": ""
+  },
+  {
+    "tier": "70% (ทั่วไป)",
+    "rate": 7,
+    "zone": "โซนที่ราบทิศเหนือ",
+    "location": "โบสถ์แห่งรุ่งอรุณ",
+    "name": "ผู้ดูแลหอดูดาวร้าง",
+    "tags": [
+      "STARGAZER",
+      "CALM",
+      "NEUTRAL"
+    ],
+    "startHp": 20,
+    "maxHp": 30,
+    "startStamina": 28,
+    "startCoins": 25,
+    "startKarma": 0,
+    "initialTitle": "ผู้เฝ้าวิหารบนเนินเขา",
+    "passiveText": "ได้รับเบาะแสเรื่อง ดวงดาวผิดปกติ (Tag: ASTRONOMY) สำหรับค้นคว้าต่อ",
+    "passive": {
+      "verbTags": [],
+      "stat": null,
+      "value": null,
+      "condition": ""
+    },
+    "note": "เบาะแส ASTRONOMY เป็นเชิงคุณภาพ"
+  },
+  {
+    "tier": "70% (ทั่วไป)",
+    "rate": 7,
+    "zone": "โซนที่ราบทิศเหนือ",
+    "location": "สถานพยาบาลกลาง",
+    "name": "คนไข้ความจำเสื่อม",
+    "tags": [
+      "WEAK",
+      "SAFE_START",
+      "OBSERVANT"
+    ],
+    "startHp": 18,
+    "maxHp": 30,
+    "startStamina": 30,
+    "startCoins": 20,
+    "startKarma": 5,
+    "initialTitle": "ผู้ป่วยหน้าตาเซื่องซึม",
+    "passiveText": "เกิดในเขตปลอดภัย พักฟื้น HP +5 เพิ่มเติมเมื่อสั่ง REST",
+    "passive": {
+      "verbTags": [
+        "REST"
+      ],
+      "stat": "HP",
+      "value": 5,
+      "condition": ""
+    },
+    "note": ""
+  },
+  {
+    "tier": "29% (พิเศษ)",
+    "rate": 7.25,
+    "zone": "โซนป่าทิศตะวันออก",
+    "location": "เคหาสน์เจ้าเมือง",
+    "name": "คุณชาย/คุณหนูขี้โรค",
+    "tags": [
+      "NOBLE",
+      "SICK",
+      "WEALTHY"
+    ],
+    "startHp": 12,
+    "maxHp": 30,
+    "startStamina": 18,
+    "startCoins": 250,
+    "startKarma": 0,
+    "initialTitle": "ชนชั้นสูงหน้าตาซีดเซียว",
+    "passiveText": "ดีบัพ: โรคเรื้อรัง (ต้องรักษา 2 ครั้งจึงหาย) แต่รวยมากและเข้าเขตหวงห้ามได้",
+    "passive": {
+      "verbTags": [],
+      "stat": null,
+      "value": null,
+      "condition": ""
+    },
+    "note": "โรคเรื้อรัง + เข้าเขตหวงห้าม = กฎพิเศษใน GEN-065"
+  },
+  {
+    "tier": "29% (พิเศษ)",
+    "rate": 7.25,
+    "zone": "โซนการค้าทิศตะวันตก",
+    "location": "ค่ายทหารป้องกันเมือง",
+    "name": "ทหารเกณฑ์ประจำป้อม",
+    "tags": [
+      "MILITARY",
+      "ARMED",
+      "DISCIPLINED"
+    ],
+    "startHp": 30,
+    "maxHp": 30,
+    "startStamina": 26,
+    "startCoins": 50,
+    "startKarma": 8,
+    "initialTitle": "ทหารยามหน้าใหม่ประจำค่าย",
+    "passiveText": "เริ่มต้นด้วย HP เต็มหลอด โบนัส +2 เมื่อสั่ง DEFEND หรือ TRAIN",
+    "passive": {
+      "verbTags": [
+        "DEFEND",
+        "TRAIN"
+      ],
+      "stat": "d20",
+      "value": 2,
+      "condition": ""
+    },
+    "note": ""
+  },
+  {
+    "tier": "29% (พิเศษ)",
+    "rate": 7.25,
+    "zone": "โซนที่ราบทิศเหนือ",
+    "location": "หอสมุดหลวง",
+    "name": "ผู้ช่วยบรรณารักษ์เขตต้องห้าม",
+    "tags": [
+      "SCHOLAR",
+      "CURIOUS",
+      "ARCHIVIST"
+    ],
+    "startHp": 20,
+    "maxHp": 30,
+    "startStamina": 28,
+    "startCoins": 60,
+    "startKarma": 0,
+    "initialTitle": "นักอ่านขอบตาดำ",
+    "passiveText": "โบนัส +3 เมื่อสั่ง INVESTIGATE ในหอสมุด และมีกุญแจเข้าชั้นหนังสือลึก",
+    "passive": {
+      "verbTags": [
+        "INVESTIGATE"
+      ],
+      "stat": "d20",
+      "value": 3,
+      "condition": "location tag LIBRARY"
+    },
+    "note": "กุญแจชั้นหนังสือลึกเป็นเชิงคุณภาพ"
+  },
+  {
+    "tier": "29% (พิเศษ)",
+    "rate": 7.25,
+    "zone": "โซนใจกลางเมือง",
+    "location": "โบสถ์ (ชั้นใต้ดิน)",
+    "name": "ศิษย์ฝึกหัดนอกรีต",
+    "tags": [
+      "ACOLYTE",
+      "CULT_INSIDER",
+      "SECRETIVE"
+    ],
+    "startHp": 24,
+    "maxHp": 30,
+    "startStamina": 25,
+    "startCoins": 80,
+    "startKarma": -15,
+    "initialTitle": "นักบวชฝึกหัดท่าทางลับล่อ",
+    "passiveText": "รู้ทางลับใต้ดินของโบสถ์และมีเบาะแส [RITUAL, BLOOD_MOON] ติดตัว",
+    "passive": {
+      "verbTags": [],
+      "stat": null,
+      "value": null,
+      "condition": ""
+    },
+    "note": "ทางลับ + เบาะแส [RITUAL, BLOOD_MOON] เป็นเชิงคุณภาพ"
+  },
+  {
+    "tier": "1% (รูทลับ)",
+    "rate": 1,
+    "zone": "รูทลับ 1%",
+    "location": "มิติพิศวง (The Astral Rift)",
+    "name": "ผู้หลงทางเหนือกาลเวลา",
+    "tags": [
+      "ANOMALY",
+      "UNBOUND",
+      "COSMIC"
+    ],
+    "startHp": 30,
+    "maxHp": 30,
+    "startStamina": 30,
+    "startCoins": 100,
+    "startKarma": 0,
+    "initialTitle": "บุคคลปริศนาไร้ตัวตน",
+    "passiveText": "พบ แอสทรา (S) ทันที, รู้ความลับวันที่ 12 และต้านทานคำสาประดับ B",
+    "passive": {
+      "verbTags": [],
+      "stat": null,
+      "value": null,
+      "condition": ""
+    },
+    "note": "กฎพิเศษใน GEN-065 (พบแอสทรา, ต้านคำสาป B)"
+  }
+]
