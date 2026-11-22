@@ -40,11 +40,16 @@ function invalidInput(issues: readonly { path: readonly PropertyKey[]; message: 
   return { status: 400, body: { code: 'invalid_input', message: 'กรอกข้อมูลไม่ถูกต้อง', fields } };
 }
 
-export function mockHttp(scenario: MockScenario, request: MockRequest): MockReply {
+/**
+ * `elapsedMs` = scripted time since the first request to this mock server (GEN-090): a route in the scenario's
+ * `httpScript` answers with its latest step that is due, so a page that polls sees the state change.
+ */
+export function mockHttp(scenario: MockScenario, request: MockRequest, elapsedMs = 0): MockReply {
   const route = findRoute(request.method.toUpperCase(), request.path);
   // Not in the contract: the screens must not call it, so it fails the way an unreachable server does.
   if (!route) return { fail: 'network' };
-  const reply = scenario.http[routeKey(route)] ?? DEFAULTS[routeKey(route)];
+  const due = (scenario.httpScript?.[routeKey(route)] ?? []).filter((step) => step.afterMs <= elapsedMs).at(-1);
+  const reply = due?.reply ?? scenario.http[routeKey(route)] ?? DEFAULTS[routeKey(route)];
   if (reply && !('status' in reply)) return reply;
   if (route.request) {
     const parsed = CONTRACT_SCHEMAS[route.request].safeParse(request.body);

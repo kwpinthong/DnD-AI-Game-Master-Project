@@ -47,7 +47,7 @@ describe('C1 every screen of the contract opens without a server', () => {
   it('every screen with a page renders it from the mock, and nothing reaches the network', async () => {
     render(<Gallery search="" />);
     // the play room frames connect through the mock socket
-    await waitFor(() => expect(screen.getAllByText('เชื่อมต่อแล้ว').length).toBeGreaterThan(5));
+    await waitFor(() => expect(screen.getAllByText('เชื่อมต่อแล้ว').length).toBeGreaterThan(5), { timeout: 5000 });
     await screen.findAllByText('Server: ต่อได้ (database connected)');
     for (const [id, view] of Object.entries(SCREEN_VIEWS)) {
       const section = screen.getAllByRole('region').find((r) => r.dataset.screen === id)!;

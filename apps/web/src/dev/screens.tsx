@@ -8,6 +8,7 @@ import { GmConsole } from '../GmConsole.tsx';
 import { InventoryPanel } from '../Inventory.tsx';
 import { JoinForm } from '../JoinForm.tsx';
 import { Lobby } from '../Lobby.tsx';
+import { OriginCard } from '../OriginCard.tsx';
 import { PlayRoom } from '../PlayRoom.tsx';
 import { ScenarioEditor } from '../ScenarioEditor.tsx';
 import { EndingPreview, HitPreview, LibraryPreview } from './previews.tsx';
@@ -51,7 +52,16 @@ export const SCREEN_VIEWS: Record<ScreenId, ScreenView> = {
     socket: false,
     render: ({ baseUrl, token }) => <CharacterScreen apiBaseUrl={baseUrl} token={token} onBack={noop} onSessionLost={noop} />,
   },
-  'origin-card': NONE,
+  'origin-card': {
+    page: 'OriginCard',
+    socket: false,
+    // `origin-inline` keeps the card's fixed veil inside the frame
+    render: ({ baseUrl, token }) => (
+      <div className="origin-inline">
+        <OriginCard apiBaseUrl={baseUrl} token={token} onClose={noop} />
+      </div>
+    ),
+  },
   'play-top-bar': PLAY,
   'play-place': PLAY,
   'play-feed': PLAY,

@@ -57,10 +57,12 @@ function openCreateForm() {
 
 function fillCreate(values: { createCode?: string; gameName?: string; name?: string; pin?: string } = {}) {
   const { createCode = 'ลับเฉพาะ', gameName = 'เมืองก่อนอุกกาบาต', name = 'นก', pin = '1234' } = values;
-  fireEvent.change(screen.getByLabelText('Create code'), { target: { value: createCode } });
-  fireEvent.change(screen.getByLabelText('ชื่อเกม'), { target: { value: gameName } });
-  fireEvent.change(screen.getByLabelText('ชื่อผู้เล่นของคุณ'), { target: { value: name } });
-  fireEvent.change(screen.getByLabelText('PIN ของคุณ'), { target: { value: pin } });
+  // GEN-090 C2: a field tells its error once the creator leaves it, and the button is off while one is wrong.
+  for (const [label, value] of [['Create code', createCode], ['ชื่อเกม', gameName], ['ชื่อผู้เล่นของคุณ', name], ['PIN ของคุณ', pin]] as const) {
+    const input = screen.getByLabelText(label);
+    fireEvent.change(input, { target: { value } });
+    fireEvent.blur(input);
+  }
 }
 
 const submitCreate = () => fireEvent.click(screen.getByRole('button', { name: 'สร้างเกมและรับโค้ด' }));

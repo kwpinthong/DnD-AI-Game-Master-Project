@@ -84,7 +84,8 @@ const clockTime = (iso: string) =>
 
 export async function postJoin(
   baseUrl: string,
-  body: { inviteCode: string; name: string; pin: string },
+  // playerCode + noStyle: `JoinStyleFields`, pending GEN-082 (sent only when the form shows them, GEN-090).
+  body: { inviteCode: string; name: string; pin: string; playerCode?: string; noStyle?: boolean },
 ): Promise<JoinResult> {
   let res: Response;
   let json: unknown;

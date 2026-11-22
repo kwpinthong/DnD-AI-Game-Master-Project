@@ -2,6 +2,7 @@ import type { CharacterView, GameView, LootOption, LootView } from '@isekai/prot
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App.tsx';
+import { LootStep } from '../src/LootStep.tsx';
 import { TOKEN_KEY } from '../src/session.ts';
 
 type Handler = (url: string, init: RequestInit | undefined) => Response | Promise<Response>;
@@ -109,6 +110,12 @@ function loggedIn(routes: Record<string, Handler>) {
 async function openLoot() {
   render(<App apiBaseUrl="" />);
   fireEvent.click(await screen.findByRole('button', { name: /ตัวละคร/ }));
+  return screen.findByRole('region', { name: 'ของติดตัว' });
+}
+
+/** The loot step by itself, as a started game's page would hold it. */
+function openLootAlone() {
+  render(<LootStep apiBaseUrl="" token="tok-abc" onSessionLost={() => {}} />);
   return screen.findByRole('region', { name: 'ของติดตัว' });
 }
 
@@ -278,13 +285,13 @@ describe('Character loot step (GEN-048)', () => {
     expect(JSON.parse(String(call![1]?.body))).toEqual({ skillIds: ['ใหม่-s1'], itemIds: ['ใหม่-i2'] });
   });
 
+  // GEN-090 C4: after the start the character page hands over to Play, so the loot step is shown on its own here.
   it('Q-081: after the start the kept set is shown without a change button', async () => {
     loggedIn({
-      'GET /api/game/character': () => Response.json({ character: { ...saved, editable: false } }),
       'GET /api/game/character/loot': () => loot({ ...empty, canReroll: false, chosen: chosenOf(1) }),
     });
 
-    const section = await openLoot();
+    const section = await openLootAlone();
 
     expect((await within(section).findByRole('list', { name: 'ของติดตัวที่เลือก' })).textContent).toContain('สายตาเหยี่ยว');
     expect(within(section).queryByRole('button', { name: 'เปลี่ยนของติดตัว' })).toBeNull();
@@ -303,10 +310,11 @@ describe('Character loot step (GEN-048)', () => {
 
     const section = await openLoot();
     await within(section).findByRole('list', { name: 'ของติดตัวที่เลือก' });
-    fireEvent.click(screen.getByRole('button', { name: 'แก้ไข' }));
+    // GEN-090: the identity is step 1 of the page; going back to it opens the saved values for editing.
+    fireEvent.click(screen.getByRole('button', { name: 'ย้อนกลับ' }));
     expect(screen.getByText(/แก้บุคลิกแล้วของติดตัวที่เลือกไว้จะถูกล้าง/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('บุคลิก'), { target: { value: 'ใจดี ชอบช่วยคน' } });
-    fireEvent.click(screen.getByRole('button', { name: 'บันทึกตัวละคร' }));
+    fireEvent.click(screen.getByRole('button', { name: 'ถัดไป: ของติดตัว' }));
 
     const again = await screen.findByRole('region', { name: 'ของติดตัว' });
     expect(await within(again).findByRole('button', { name: 'ให้ AI วิเคราะห์บุคลิก' })).toBeTruthy();
@@ -332,11 +340,10 @@ describe('Character loot step (GEN-048)', () => {
     const old: LootOption = { ...option('old-s1', 'skill', 'ก้าวเงียบ'), rank: null, triggerType: null, verbTags: [], targetTags: [] };
     const { strength, weakness, items } = offerView().offer!;
     loggedIn({
-      'GET /api/game/character': () => Response.json({ character: { ...saved, editable: false } }),
       'GET /api/game/character/loot': () => loot({ ...empty, canReroll: false, chosen: { strength, weakness, skill: old, item: items[0]! } }),
     });
 
-    const section = await openLoot();
+    const section = await openLootAlone();
 
     const kept = await within(section).findByRole('list', { name: 'ของติดตัวที่เลือก' });
     expect(kept.textContent).toContain('skill: ก้าวเงียบ · ของเดิม (Common)');
