@@ -137,6 +137,8 @@ describe('Rules Spec §15 worked examples', () => {
     expect(rollRescue({ safety: 'normal', primaryAffinity: 0 }, new ReplayRng([8])).outcome).toBe('alone');
     expect(rollRescue({ safety: 'normal', primaryAffinity: 0 }, new ReplayRng([7])).outcome).toBe('exploited');
     expect(rescueScore(10, 'normal', -45)).toBe(10 - 4);
+    // Q-161: a RESTRICTED place counts as normal until it has a number.
+    expect(rescueScore(10, 'restricted', 0)).toBe(rescueScore(10, 'normal', 0));
     expect(wakeAfter('alone', 22)).toEqual({ hp: 10, stamina: 22 });
     const seeded = rollRescue({ safety: 'safe', primaryAffinity: 20 }, new SeededRng(42));
     expect(seeded).toEqual({ d20: 13, score: 19, outcome: 'rescued' });

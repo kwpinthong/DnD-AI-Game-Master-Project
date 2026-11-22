@@ -10,7 +10,9 @@ import {
   DICE_BONUS_CAP,
   DICE_BONUS_EXCEPTIONS,
   EFFECT_TYPES,
+  LOCATION_SAFETIES,
   OPTIONAL_TABS,
+  REST_QUALITIES,
   PERIODS,
   RANKS,
   STATS,
@@ -98,6 +100,20 @@ const tags: Kind<string[]> = (cell) => {
   if (wrong !== undefined) return bad(`tag "${wrong}" ต้องเป็นตัวพิมพ์ใหญ่ ตัวเลข หรือ _ เท่านั้น`);
   return ok(list);
 };
+
+/** "[โบสถ์, โบสถ์ (ชั้นใต้ดิน)]" → the names; an empty cell → []. Names are checked against the tab later (warning). */
+const nameList: Kind<string[]> = (cell) => {
+  if (cell === '') return ok([]);
+  const match = /^\[(.*)\]$/s.exec(cell);
+  if (!match) return bad(`ต้องอยู่ในรูป [ชื่อสถานที่, ชื่อสถานที่] แต่ได้ "${cell}"`);
+  return ok(match[1]!.split(',').map((n) => n.trim()).filter(Boolean));
+};
+
+/** An allowed value, or null for an empty cell. */
+function oneOfOrNull<const V extends readonly string[]>(values: V): Kind<V[number] | null> {
+  const one = oneOf(values);
+  return (cell) => (cell === '' ? ok(null) : one(cell));
+}
 
 const NUMBER = /^[+-]?\d+(?:\.\d+)?$/;
 
@@ -221,6 +237,7 @@ const LAYOUTS: Record<TabName, TabLayout> = {
       col('Rewards & Abilities', 'rewards', text),
       col('Match_Verb_Tags', 'matchVerbTags', tags),
       col('Match_Target_Tags', 'matchTargetTags', tags),
+      optionalCol('Public_Alias', 'publicAlias', text, ''),
     ],
     derive: (r) => {
       r.aliases = npcAliases(r.name as string, r.trueName as string);
@@ -238,6 +255,9 @@ const LAYOUTS: Record<TabName, TabLayout> = {
       col('Special Mechanics', 'specialMechanics', text),
       col('Location_Tags', 'tags', tags),
       col('Weather_Verb_Boost', 'weatherVerbBoost', text),
+      optionalCol('Connects_To', 'connectsTo', nameList, []),
+      optionalCol('Safety', 'safety', oneOfOrNull(LOCATION_SAFETIES), null),
+      optionalCol('Rest_Quality', 'restQuality', oneOfOrNull(REST_QUALITIES), null),
     ],
   },
   Start_Scenarios: {
@@ -332,7 +352,7 @@ const LAYOUTS: Record<TabName, TabLayout> = {
 };
 
 /** Tabs whose schema has a `note` field (the "หมายเหตุ ..." column; empty when absent). */
-const NOTE_TABS: ReadonlySet<TabName> = new Set(['Ability', 'Item', 'Start_Scenarios', 'NPC_Schedule', 'Day10_Strategies']);
+const NOTE_TABS: ReadonlySet<TabName> = new Set(['Ability', 'Item', 'NPC', 'Location', 'Start_Scenarios', 'NPC_Schedule', 'Day10_Strategies']);
 const isNoteHeader = (header: string) => header.startsWith('หมายเหตุ');
 
 /** "Chalice of the First Dawn (จอก...)" → "Chalice of the First Dawn". */
@@ -595,6 +615,11 @@ function checkReferences(outcomes: Map<TabName, TabOutcome>, warnings: AssetIssu
     };
     checkLocation('Start_Scenarios', 'Location', 'location');
     checkLocation('NPC_Schedule', 'Location', 'location');
+    for (const { row, record } of records('Location')) {
+      for (const name of record.connectsTo as string[]) {
+        if (!locations.has(name)) warnings.push({ tab: 'Location', row, column: 'Connects_To', message: `สถานที่ "${name}" ไม่มีในแท็บ Location` });
+      }
+    }
   }
   if (outcomes.has('NPC')) {
     for (const { row, record } of records('NPC_Schedule')) {

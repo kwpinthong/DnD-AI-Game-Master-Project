@@ -1,3 +1,5 @@
-Zone,Location,Characteristics & Spawn,Time & Weather Dynamics,NPCs & Behavior,Special Mechanics,Location_Tags,Weather_Verb_Boost
-โซนทดสอบ (Test Zone),ลานทดสอบ,ลานกว้าง,กลางวันคนเยอะ,โนวา,ไม่มี,"[PUBLIC, OUTDOOR]",Clear: [PERSUADE] / Rain: [OBSERVE]
-โซนทดสอบ (Test Zone),ตลาดทดสอบ,ตลาด,กลางคืนเงียบ,มาร์โก,ประมูล,"[TRADE_HUB, UNDERGROUND]",Clear: [TRADE]
+Zone,Location,Characteristics & Spawn,Time & Weather Dynamics,NPCs & Behavior,Special Mechanics,Location_Tags,Weather_Verb_Boost,Connects_To,Safety,Rest_Quality,หมายเหตุ (ทดสอบ)
+โซนทดสอบ (Test Zone),ลานทดสอบ,ลานกว้าง,กลางวันคนเยอะ,โนวา,ไม่มี,"[PUBLIC, OUTDOOR]",Clear: [PERSUADE] / Rain: [OBSERVE],[ตลาดทดสอบ],SAFE,good,โน้ตลาน
+โซนทดสอบ (Test Zone),ตลาดทดสอบ,ตลาด,กลางคืนเงียบ,มาร์โก,ประมูล,"[TRADE_HUB, UNDERGROUND]",Clear: [TRADE],"[ลานทดสอบ, ห้องลับ (ชั้นใต้ดิน)]",RESTRICTED,poor,
+โซนทดสอบ (Test Zone),ห้องลับ (ชั้นใต้ดิน),ห้องมืด,เงียบ,,,[INDOOR],,[ตลาดทดสอบ],DANGER,excellent,
+กฎ (Rules),กฎทดสอบ,ผลรวม,,,,[GLOBAL_WEATHER_RULES],,,,,แถวกฎ

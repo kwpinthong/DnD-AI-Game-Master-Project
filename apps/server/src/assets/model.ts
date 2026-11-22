@@ -132,6 +132,13 @@ export const ItemRecord = z
   .strict();
 export type ItemRecord = z.infer<typeof ItemRecord>;
 
+/** Location `Safety` (Q-161). */
+export const LOCATION_SAFETIES = ['SAFE', 'NORMAL', 'DANGER', 'RESTRICTED'] as const;
+/** Location `Rest_Quality` (Q-161). */
+export const REST_QUALITIES = ['poor', 'normal', 'good', 'excellent'] as const;
+export type LocationSafety = (typeof LOCATION_SAFETIES)[number];
+export type RestQualityValue = (typeof REST_QUALITIES)[number];
+
 export const NpcRecord = z
   .object({
     grade: z.enum(RANKS),
@@ -146,6 +153,9 @@ export const NpcRecord = z
     rewards: Text,
     matchVerbTags: Tags,
     matchTargetTags: Tags,
+    /** Q-161: what players see before they learn the truth (no spoilers); empty = the sheet gives none. */
+    publicAlias: Text.default(''),
+    note: Text.default(''),
     extra: Extra,
   })
   .strict();
@@ -162,6 +172,15 @@ export const LocationRecord = z
     tags: Tags,
     /** e.g. "Clear: [PERSUADE, SHARE] / Rain: [OBSERVE]" (the weather rules are GEN-068). */
     weatherVerbBoost: Text,
+    /**
+     * Q-161: places reachable as a same-zone move, by Location name, plus the special links
+     * (โบสถ์ ↔ โบสถ์ (ชั้นใต้ดิน), หอสมุดหลวง ↔ มิติพิศวง). Cross-zone travel follows System_Rules, not this list.
+     */
+    connectsTo: z.array(Name).default([]),
+    /** Q-161; null on a row that is not a place (the weather-rules row). */
+    safety: z.enum(LOCATION_SAFETIES).nullable().default(null),
+    restQuality: z.enum(REST_QUALITIES).nullable().default(null),
+    note: Text.default(''),
     extra: Extra,
   })
   .strict();

@@ -3,10 +3,11 @@ import type { Rng } from '../rng.ts';
 import { affinityMod } from './tables.ts';
 
 /** Location safety from the scenario (spec §12.2, Q-055). */
-export type Safety = 'safe' | 'normal' | 'danger';
+export type Safety = 'safe' | 'normal' | 'danger' | 'restricted';
 export type RescueOutcome = 'rescued' | 'alone' | 'exploited';
 
-export const SAFETY_MOD: Readonly<Record<Safety, number>> = { safe: 4, normal: 0, danger: -4 };
+/** `restricted` (the sheet's RESTRICTED, Q-161) has no number of its own yet: same as normal. */
+export const SAFETY_MOD: Readonly<Record<Safety, number>> = { safe: 4, normal: 0, danger: -4, restricted: 0 };
 
 /** Another player's general action against the unconscious character at this DC rescues at once (Q-056). */
 export const RESCUE_AID_DC = 8;
