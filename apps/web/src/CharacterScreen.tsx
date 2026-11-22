@@ -9,6 +9,7 @@ import {
 } from '@isekai/protocol';
 import { useEffect, useState, type FormEvent } from 'react';
 import { characterCall } from './game-api.ts';
+import { LootStep } from './LootStep.tsx';
 
 const fields: { field: CharacterField; label: string; hint: string; max: number; multiline: boolean }[] = [
   {
@@ -145,6 +146,7 @@ export function CharacterScreen({
         ) : (
           <p role="status">เกมเริ่มแล้ว แก้ตัวตนไม่ได้</p>
         )}
+        <LootStep apiBaseUrl={apiBaseUrl} token={token} onSessionLost={onSessionLost} />
       </section>
     );
   }

@@ -4,6 +4,8 @@ import {
   CreateGameRequest,
   createGameFieldErrors,
   type CharacterResponse,
+  LootChooseRequest,
+  type LootResponse,
   UpdateGameRequest,
   type CreateGameResponse,
 } from '@isekai/protocol';
@@ -15,6 +17,7 @@ import type { Db } from '../db/client.ts';
 import { readScenario, resetScenario, saveScenario, type ScenarioEditOutcome } from '../scenario/editor.ts';
 import { createCharacter, getCharacter, updateCharacter, type CharacterOutcome } from './character.ts';
 import { createCodeChecker } from './create-code.ts';
+import { chooseLoot, getLoot, LOOT_AI_FAILED, rollLoot, type LootOutcome } from './loot.ts';
 import {
   createGame,
   gameView,
@@ -29,8 +32,11 @@ import {
 export interface GameRouteOptions {
   /** scrypt hash of the create code (CREATE_CODE_HASH); without it nobody can create a game. */
   createCodeHash?: string;
-  /** The AI GM boundary: a game cannot be created or started while it is not ready (GEN-038 C4, Q-075). */
-  ai: Pick<AiService, 'ready'>;
+  /**
+   * The AI GM boundary: a game cannot be created or started while it is not ready (GEN-038 C4,
+   * Q-075); the loot step (GEN-048) calls it.
+   */
+  ai: AiService;
 }
 
 const minutesUntil = (at: number, t: number) => Math.max(1, Math.ceil((at - t) / 60_000));
@@ -254,5 +260,59 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
     const input = characterInput(request, reply);
     if (!input) return reply;
     return sendCharacter(reply, updateCharacter(db, me, input, now), 200);
+  });
+
+  // --- Loot (GEN-048): the caller's own strength / weakness + Common skill / item. ---
+
+  function sendLoot(reply: FastifyReply, outcome: LootOutcome) {
+    switch (outcome.kind) {
+      case 'ok': {
+        const body: LootResponse = { loot: outcome.loot };
+        return reply.code(200).send(body);
+      }
+      case 'gm_has_no_character':
+        return sendError(reply, 403, { code: 'forbidden', message: 'GM ไม่มีตัวละคร' });
+      case 'character_not_found':
+        return sendError(reply, 404, { code: 'character_not_found', message: 'ยังไม่ได้สร้างตัวละคร' });
+      case 'game_started':
+        return sendError(reply, 409, { code: 'game_started', message: 'เกมเริ่มแล้ว เปลี่ยนของติดตัวไม่ได้' });
+      case 'loot_closed':
+        return sendError(reply, 409, { code: 'loot_closed', message: 'เลือกของติดตัวแล้ว สุ่มหรือเลือกใหม่ไม่ได้' });
+      case 'loot_no_offer':
+        return sendError(reply, 409, { code: 'loot_no_offer', message: 'ยังไม่มีตัวเลือก ให้ AI วิเคราะห์บุคลิกก่อน' });
+      case 'invalid':
+        return sendError(reply, 400, { code: 'invalid_input', message: 'เลือกของติดตัวไม่ถูกต้อง', fields: outcome.fields });
+      case 'ai_error': {
+        // Never the failure detail (it can name the provider's error); the player gets Thai text.
+        const { error } = outcome;
+        if (error.code === 'ai_not_ready') return sendError(reply, 503, { code: 'ai_not_ready', message: error.message });
+        const message = error.code === 'budget_reached' ? error.message : LOOT_AI_FAILED;
+        return sendError(reply, 503, { code: 'ai_unavailable', message });
+      }
+    }
+  }
+
+  app.get('/api/game/character/loot', async (request, reply) => {
+    const me = caller(request, reply);
+    if (!me) return reply;
+    return sendLoot(reply, getLoot(db, me));
+  });
+
+  app.post('/api/game/character/loot', async (request, reply) => {
+    const me = caller(request, reply);
+    if (!me) return reply;
+    return sendLoot(reply, await rollLoot(db, options.ai, me, now));
+  });
+
+  app.post('/api/game/character/loot/choose', async (request, reply) => {
+    const me = caller(request, reply);
+    if (!me) return reply;
+    const parsed = LootChooseRequest.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      const fields: Record<string, string> = {};
+      for (const issue of parsed.error.issues) fields[String(issue.path[0] ?? 'form')] ??= issue.message;
+      return sendError(reply, 400, { code: 'invalid_input', message: 'เลือกของติดตัวไม่ถูกต้อง', fields });
+    }
+    return sendLoot(reply, chooseLoot(db, me, parsed.data, now));
   });
 }

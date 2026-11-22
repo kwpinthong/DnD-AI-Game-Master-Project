@@ -3,6 +3,9 @@ import {
   CharacterResponse,
   CreateGameResponse,
   GameView,
+  LootResponse,
+  type LootChooseRequest,
+  type LootView,
   type CharacterField,
   type CharacterRequest,
   type CharacterView,
@@ -93,6 +96,34 @@ export type CharacterResult =
   | { kind: 'session_lost' }
   | { kind: 'invalid'; fields: Partial<Record<CharacterField, string>> }
   | { kind: 'error'; message: string };
+
+/** A loot call's result (GEN-048): the step's state, or a Thai error (first field error when refused). */
+export type LootResult = { kind: 'ok'; loot: LootView } | { kind: 'session_lost' } | { kind: 'error'; message: string };
+
+export type LootAction = { kind: 'get' } | { kind: 'roll' } | { kind: 'choose'; body: LootChooseRequest };
+
+export async function lootCall(baseUrl: string, token: string, action: LootAction): Promise<LootResult> {
+  const headers: Record<string, string> = { authorization: `Bearer ${token}` };
+  if (action.kind === 'choose') headers['content-type'] = 'application/json';
+  const path = action.kind === 'choose' ? '/api/game/character/loot/choose' : '/api/game/character/loot';
+  const answer = await send(apiUrl(baseUrl, path), {
+    method: action.kind === 'get' ? 'GET' : 'POST',
+    headers,
+    ...(action.kind === 'choose' ? { body: JSON.stringify(action.body) } : {}),
+  });
+  if (!answer) return { kind: 'error', message: UNREACHABLE };
+  if (answer.res.ok) {
+    const parsed = LootResponse.safeParse(answer.json);
+    return parsed.success ? { kind: 'ok', loot: parsed.data.loot } : { kind: 'error', message: UNREACHABLE };
+  }
+  if (answer.res.status === 401) return { kind: 'session_lost' };
+  const error = ApiError.safeParse(answer.json);
+  if (!error.success) return { kind: 'error', message: UNREACHABLE };
+  if (error.data.code === 'invalid_input') {
+    return { kind: 'error', message: Object.values(error.data.fields).join(' / ') || error.data.message };
+  }
+  return { kind: 'error', message: error.data.message };
+}
 
 export async function characterCall(
   baseUrl: string,

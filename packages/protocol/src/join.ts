@@ -112,5 +112,11 @@ export const ApiError = z.discriminatedUnion('code', [
   z.object({ code: z.literal('character_exists'), message: z.string() }),
   /** 404: the caller has no character to edit yet. */
   z.object({ code: z.literal('character_not_found'), message: z.string() }),
+  /** 503: the AI gave no usable answer after its retries; nothing changed, try again (GEN-048 C5). */
+  z.object({ code: z.literal('ai_unavailable'), message: z.string() }),
+  /** 409: the loot step is already done, or the reroll quota is used up (GEN-048). */
+  z.object({ code: z.literal('loot_closed'), message: z.string() }),
+  /** 409: choose was called before any offer exists. */
+  z.object({ code: z.literal('loot_no_offer'), message: z.string() }),
 ]);
 export type ApiError = z.infer<typeof ApiError>;

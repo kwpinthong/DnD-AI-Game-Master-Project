@@ -50,6 +50,13 @@
       "when": 1795306826017,
       "tag": "0006_event_state",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795307359444,
+      "tag": "0007_character_loot",
+      "breakpoints": true
     }
   ]
 }

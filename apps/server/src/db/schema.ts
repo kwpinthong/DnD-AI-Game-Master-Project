@@ -122,3 +122,6 @@ export * from './schema-ai.ts';
 
 // GEN-053: timeline event state, own file for the same reason.
 export * from './schema-timeline.ts';
+
+// GEN-048: the character loot step, own file for the same reason.
+export * from './schema-loot.ts';
