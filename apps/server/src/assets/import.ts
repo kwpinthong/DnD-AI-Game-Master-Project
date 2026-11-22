@@ -542,7 +542,6 @@ function checkDiceBonusCaps(outcomes: Map<TabName, TabOutcome>, warnings: AssetI
       const rank = record.rank as Rank;
       const label = (tab === 'Item' ? record.nameEn : record.name) as string;
       const cap = DICE_BONUS_EXCEPTIONS[label] ?? DICE_BONUS_CAP[rank];
-      if (cap === undefined) continue;
       (record.effects as Effect[]).forEach((effect, i) => {
         if (effect.type === 'dice_bonus' && effect.stats.includes('d20') && effect.value > cap) {
           warnings.push({ tab, row, column: valueColumns[i]!, message: `dice_bonus +${effect.value} เกินเพดานของ Rank ${rank} (สูงสุด +${cap}, Q-114)` });
