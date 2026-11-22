@@ -102,7 +102,7 @@
 }
 
 .play .v3m-nav__btn {
-  min-height: 48px;
+  min-height: 44px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -118,11 +118,15 @@
 
 .v3m-sheet {
   position: absolute;
-  inset: 0;
+  inset: auto 0 0;
+  height: 88%;
   z-index: 5;
   display: flex;
   flex-direction: column;
   background: var(--panel);
+  border-top: 2px solid var(--highlight);
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -8px 24px color-mix(in srgb, var(--bg) 80%, transparent);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   animation: v3m-slide 0.22s ease-out;
 }
@@ -688,7 +692,8 @@
   padding-bottom: var(--space-2);
 }
 
-.info-panel .play-panel {
+.info-panel .play-panel,
+.v3m-sheet .play-panel {
   padding: 0;
   overflow: visible;
   background: transparent;

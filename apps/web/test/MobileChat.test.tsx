@@ -191,7 +191,7 @@ describe('C1 / C4 / C5 the phone CSS (measured in Chrome too; jsdom has no layou
   it('every phone button is at least 44 x 44; the icon buttons are exactly that', () => {
     expect(rule(chat, '.play .chat-quick__btn--icon')).toMatch(/width:\s*44px/);
     expect(rule(chat, '.play .chat-quick__btn--icon')).toMatch(/height:\s*44px/);
-    expect(rule(chat, '.play .v3m-nav__btn')).toMatch(/min-height:\s*48px/);
+    expect(rule(chat, '.play .v3m-nav__btn')).toMatch(/min-height:\s*44px/);
     expect(rule(chat, '.play .v3m-sheet__close')).toMatch(/min-height:\s*44px/);
   });
 
