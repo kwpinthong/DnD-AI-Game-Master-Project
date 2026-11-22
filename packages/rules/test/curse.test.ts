@@ -157,3 +157,50 @@ describe('GEN-095 curse in a PvP check (rules)', () => {
     expect(dc(recast)).toBe(8);
   });
 });
+
+/** A attacks B with a plain PvP action (no Venom, no tag source). Dice: A's priority, then the action d20. */
+function plainAttack(b: PlayerState, d20: number) {
+  const state: CrossPlayerState = { players: { 'pc-a': player('pc-a', 0), 'pc-b': b }, npcs: {} };
+  return resolvePhaseActions(
+    {
+      state,
+      actions: [
+        {
+          actorId: 'pc-a',
+          proposal: proposal({ actionId: 'act-a', kind: 'complex', staminaCost: 5, check: { type: 'pvp' }, modifiers: [], onSuccess: noEffects() }),
+          targetPlayer: { player: 'pc-b', intent: 'harm', reachRef: null, defenseRef: null, perceptionRef: null, onSuccess: none, onFail: none },
+          moveTo: null,
+          awareness: 'normal',
+        },
+      ],
+    },
+    new ReplayRng([10, d20]),
+  );
+}
+
+/** Nok's answers round 10 (Q-249, Q-250, Q-251): pinned as built, no behaviour change. */
+describe('GEN-095 answers r10 (pins)', () => {
+  const checkOf = (x: ReturnType<typeof plainAttack>) => {
+    if (!x.ok) return expect.fail(JSON.stringify(x.errors));
+    const o = x.log.outcomes[0]!;
+    return o.status === 'resolved' ? { dc: o.log.check?.dc, degree: o.log.degree } : null;
+  };
+
+  it('Q-249: an action against a cursed NPC is 3 easier (DC 14 → 11): the same d20 that fell short now succeeds', () => {
+    const against = proposal({ target: { npc: 'npc-guard' }, modifiers: [], check: { type: 'dc', dc: 14 } });
+    const results = [baseState(), withNpcCurse('npc-guard')].map((state) => resolveAction({ state, proposal: against }, new ReplayRng([11])));
+    expect(results.map((r) => r.ok && [r.log.check?.dc, r.log.degree])).toEqual([[14, 'fail'], [11, 'success']]);
+  });
+
+  it('Q-250: the curse also lowers its holder\'s defence: any PvP action against a cursed player meets DC_pvp 3 lower (11 → 8)', () => {
+    // d20 9: short of 11 against a player without the curse, enough against 8.
+    expect(checkOf(plainAttack(player('pc-b', 1), 9))).toEqual({ dc: 11, degree: 'fail' });
+    expect(checkOf(plainAttack(player('pc-b', 1, { statuses: [curse()] }), 9))).toEqual({ dc: 8, degree: 'success' });
+  });
+
+  it('Q-251: Venom\'s -3 counts on the cast (Q-131) and afterwards as the status, never both: cast on a clean target 8, plain attack on a cursed one 8, recast on a cursed one 8 (not 5)', () => {
+    const cast = venomPhase(player('pc-b', 1));
+    const recast = venomPhase(player('pc-b', 1, { statuses: [curse()] }));
+    expect([checkOf(cast)?.dc, checkOf(plainAttack(player('pc-b', 1, { statuses: [curse()] }), 9))?.dc, checkOf(recast)?.dc]).toEqual([8, 8, 8]);
+  });
+});
