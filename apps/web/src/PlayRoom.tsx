@@ -1,6 +1,7 @@
 import { PHASE_LABEL, actionTextProblem, type RoomEntry, type RoomState } from '@isekai/protocol';
 import { useEffect, useRef, useState } from 'react';
 import { GmConsole } from './GmConsole.tsx';
+import { GmNarrating } from './play/GmNarrating.tsx';
 import { ActionBox, EMPTY_DRAFT, Feed, OmenBox, PlaceHead, TravelSheet, type ActionDraft } from './play/PlaceColumn.tsx';
 import { usePlayData } from './play/play-api.ts';
 import { PrivateColumn } from './play/PrivateColumn.tsx';
@@ -147,6 +148,7 @@ export function PlayRoom({
         <p role="status" aria-label={t.connectionLabel} data-connection={connection} className={online ? 'sr-only' : 'play-conn'}>
           {t.connection[connection]}
         </p>
+        {room?.status === 'resolving' && !room.gmStatus && <GmNarrating key={`${room.day}-${room.phase}-${room.turn}`} />}
         {fatal && (
           <p role="alert" className="play-fatal">
             {fatal}
