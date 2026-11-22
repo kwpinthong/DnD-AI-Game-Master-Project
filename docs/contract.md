@@ -32,7 +32,7 @@ endpoint / socket event 68 รายการ: ready 61, pending 7 · field ท�
 | 0. หน้าแรก + รายการเกม | `GET /health` | - → `HealthResponse` | ทุกคน | ready | GEN-023 | ต่อไม่ได้ = "ติดต่อ server ไม่ได้" |
 | 0. หน้าแรก + รายการเกม | `GET /api/me` | - → `MeResponse` | ทุกคน | ready | GEN-024 |  |
 | 0. หน้าแรก + รายการเกม | `POST /api/logout` | - → 204 | ทุกคน | ready | GEN-024 |  |
-| 0. หน้าแรก + รายการเกม | `GET /api/game/log` | - → `GameLogResponse` | ผู้เล่น | ready | GEN-037 + GEN-059 | [ประวัติ] + รายการเกม; `reveal` หลังจบเท่านั้น |
+| 0. หน้าแรก + รายการเกม | `GET /api/game/log` | - → `GameLogResponse` | ผู้เล่น | ready | GEN-037 + GEN-059 | [ประวัติ] + รายการเกม; `reveal` หลังจบเท่านั้น; entries รวม kind `changes` (GEN-114) |
 | 1. Join | `GET /api/me` | - → `MeResponse` | ทุกคน | ready | GEN-024 |  |
 | 1. Join | `POST /api/join` | `JoinRequest` → `JoinResponse` | ทุกคน | ready | GEN-024 |  |
 | 1. Join | `PUT /api/style/opt-out` | `PlayerStyleRequest` → `PlayerStyleResponse` | ทุกคน | **pending** | GEN-082 |  |
@@ -55,7 +55,7 @@ endpoint / socket event 68 รายการ: ready 61, pending 7 · field ท�
 | 3. สร้างตัวละคร + ของติดตัว | `POST /api/game/character/loot/choose` | `LootChooseRequest` → `LootResponse` | ผู้เล่น | ready | GEN-048 + GEN-073 |  |
 | 4k. การ์ดจุดเกิด | `GET /api/game/origin` | - → `OriginResponse` | ผู้เล่น | ready | GEN-065 |  |
 | 4.1 Play: top bar วัน / ช่วง / อากาศ / ส่งแล้ว | `GET /api/game` | - → `GameView` | ผู้เล่น | ready | GEN-025 |  |
-| 4.1 Play: top bar วัน / ช่วง / อากาศ / ส่งแล้ว | `GET /api/game/log` | - → `GameLogResponse` | ผู้เล่น | ready | GEN-037 + GEN-059 | [ประวัติ] + รายการเกม; `reveal` หลังจบเท่านั้น |
+| 4.1 Play: top bar วัน / ช่วง / อากาศ / ส่งแล้ว | `GET /api/game/log` | - → `GameLogResponse` | ผู้เล่น | ready | GEN-037 + GEN-059 | [ประวัติ] + รายการเกม; `reveal` หลังจบเท่านั้น; entries รวม kind `changes` (GEN-114) |
 | 4.1 Play: top bar วัน / ช่วง / อากาศ / ส่งแล้ว | socket → `hello` | `RoomHello` | ผู้เล่น | ready | GEN-056 | ข้อความแรก มี token + afterSeq |
 | 4.1 Play: top bar วัน / ช่วง / อากาศ / ส่งแล้ว | socket ← `room` | `RoomState` | ผู้เล่น | ready | GEN-056 |  |
 | 4.2 Play: สถานที่ + คนที่อยู่ด้วย + เดินทาง | `GET /api/game/surroundings` | - → `SurroundingsResponse` | ผู้เล่น | ready | GEN-050 + GEN-067 |  |
@@ -66,14 +66,16 @@ endpoint / socket event 68 รายการ: ready 61, pending 7 · field ท�
 | 4.2 Play: สถานที่ + คนที่อยู่ด้วย + เดินทาง | socket ← `move_accepted` | `RoomMoveAccepted` | ผู้เล่น | ready | GEN-066 |  |
 | 4.2 Play: สถานที่ + คนที่อยู่ด้วย + เดินทาง | socket ← `move_rejected` | `RoomMoveRejected` | ผู้เล่น | ready | GEN-066 |  |
 | 4.4 Play: feed สาธารณะ | `GET /api/game/timeline` | - → `GameTimelineResponse` | ผู้เล่น | ready | GEN-053 |  |
-| 4.4 Play: feed สาธารณะ | socket ← `entry` | `RoomEntryMessage` | ผู้เล่น | ready | GEN-056 |  |
+| 4.4 Play: feed สาธารณะ | socket ← `entry` | `RoomEntryMessage` | ผู้เล่น | ready | GEN-056 | entry kind `changes` (GEN-114): RoomEntry.changes = ค่า HP / Stamina / เหรียญ / คำกรรม / ของ / สถานะ ที่เปลี่ยนในเทิร์น พร้อมเหตุผล จากตัวเลขของ server; ส่งเฉพาะเจ้าของ + GM คน; ย้อนดูได้ใน GET /api/game/log |
 | 4.4 Play: feed สาธารณะ | socket ← `ready` | `RoomReady` | ผู้เล่น | ready | GEN-056 | replay ครบแล้ว |
 | 4.5 Play: เรื่องของคุณ (narration ส่วนตัว + ผลทอย) + Whisper | socket → `whisper` | `RoomWhisper` | ผู้เล่น | ready | GEN-067 |  |
 | 4.5 Play: เรื่องของคุณ (narration ส่วนตัว + ผลทอย) + Whisper | socket ← `room` | `RoomState` | ผู้เล่น | ready | GEN-056 |  |
-| 4.5 Play: เรื่องของคุณ (narration ส่วนตัว + ผลทอย) + Whisper | socket ← `entry` | `RoomEntryMessage` | ผู้เล่น | ready | GEN-056 |  |
+| 4.5 Play: เรื่องของคุณ (narration ส่วนตัว + ผลทอย) + Whisper | socket ← `entry` | `RoomEntryMessage` | ผู้เล่น | ready | GEN-056 | entry kind `changes` (GEN-114): RoomEntry.changes = ค่า HP / Stamina / เหรียญ / คำกรรม / ของ / สถานะ ที่เปลี่ยนในเทิร์น พร้อมเหตุผล จากตัวเลขของ server; ส่งเฉพาะเจ้าของ + GM คน; ย้อนดูได้ใน GET /api/game/log |
 | 4.5 Play: เรื่องของคุณ (narration ส่วนตัว + ผลทอย) + Whisper | socket ← `whisper_accepted` | `RoomWhisperAccepted` | ผู้เล่น | ready | GEN-067 |  |
 | 4.5 Play: เรื่องของคุณ (narration ส่วนตัว + ผลทอย) + Whisper | socket ← `whisper_rejected` | `RoomWhisperRejected` | ผู้เล่น | ready | GEN-067 |  |
-| 4.5 Play: การ์ดผลที่โดน (pin) | socket ← `entry` | `RoomEntryMessage` | ผู้เล่น | ready | GEN-056 |  |
+| 4.5 Play: ค่าที่เปลี่ยนต่อเทิร์น (log ส่วนตัว + ประวัติ) | `GET /api/game/log` | - → `GameLogResponse` | ผู้เล่น | ready | GEN-037 + GEN-059 | [ประวัติ] + รายการเกม; `reveal` หลังจบเท่านั้น; entries รวม kind `changes` (GEN-114) |
+| 4.5 Play: ค่าที่เปลี่ยนต่อเทิร์น (log ส่วนตัว + ประวัติ) | socket ← `entry` | `RoomEntryMessage` | ผู้เล่น | ready | GEN-056 | entry kind `changes` (GEN-114): RoomEntry.changes = ค่า HP / Stamina / เหรียญ / คำกรรม / ของ / สถานะ ที่เปลี่ยนในเทิร์น พร้อมเหตุผล จากตัวเลขของ server; ส่งเฉพาะเจ้าของ + GM คน; ย้อนดูได้ใน GET /api/game/log |
+| 4.5 Play: การ์ดผลที่โดน (pin) | socket ← `entry` | `RoomEntryMessage` | ผู้เล่น | ready | GEN-056 | entry kind `changes` (GEN-114): RoomEntry.changes = ค่า HP / Stamina / เหรียญ / คำกรรม / ของ / สถานะ ที่เปลี่ยนในเทิร์น พร้อมเหตุผล จากตัวเลขของ server; ส่งเฉพาะเจ้าของ + GM คน; ย้อนดูได้ใน GET /api/game/log |
 | 4.3 Play: สถานะตัวเอง (HP, แรง, เหรียญ, ฉายา, กรรมเป็นคำ, ลับ) | `GET /api/game/character` | - → `CharacterResponse` | ผู้เล่น | ready | GEN-047 + GEN-067 |  |
 | 4.3 Play: สถานะตัวเอง (HP, แรง, เหรียญ, ฉายา, กรรมเป็นคำ, ลับ) | `GET /api/game/origin` | - → `OriginResponse` | ผู้เล่น | ready | GEN-065 |  |
 | 4.3 Play: สถานะตัวเอง (HP, แรง, เหรียญ, ฉายา, กรรมเป็นคำ, ลับ) | `GET /api/game/surroundings` | - → `SurroundingsResponse` | ผู้เล่น | ready | GEN-050 + GEN-067 |  |
@@ -94,7 +96,7 @@ endpoint / socket event 68 รายการ: ready 61, pending 7 · field ท�
 | 4b–4g Play: สถานะล็อก | socket ← `error` | `RoomError` | ผู้เล่น | ready | GEN-056 |  |
 | 4h Play: Astral Spirit | socket → `omen` | `RoomOmen` | ผู้เล่น | ready | GEN-070 | ลางสังหรณ์ ≤ 200 ตัว ถึงผู้เล่น 1 คน วันละครั้งใน NOCTHERION (Q-193) |
 | 4h Play: Astral Spirit | socket ← `room` | `RoomState` | ผู้เล่น | ready | GEN-056 |  |
-| 4h Play: Astral Spirit | socket ← `entry` | `RoomEntryMessage` | ผู้เล่น | ready | GEN-056 |  |
+| 4h Play: Astral Spirit | socket ← `entry` | `RoomEntryMessage` | ผู้เล่น | ready | GEN-056 | entry kind `changes` (GEN-114): RoomEntry.changes = ค่า HP / Stamina / เหรียญ / คำกรรม / ของ / สถานะ ที่เปลี่ยนในเทิร์น พร้อมเหตุผล จากตัวเลขของ server; ส่งเฉพาะเจ้าของ + GM คน; ย้อนดูได้ใน GET /api/game/log |
 | 4h Play: Astral Spirit | socket ← `omen_accepted` | `RoomOmenAccepted` | ผู้เล่น | ready | GEN-070 |  |
 | 4h Play: Astral Spirit | socket ← `omen_rejected` | `RoomOmenRejected` | ผู้เล่น | ready | GEN-070 |  |
 | 5. GM console | `GET /api/game/timeline` | - → `GameTimelineResponse` | ผู้เล่น | ready | GEN-053 |  |
@@ -107,7 +109,7 @@ endpoint / socket event 68 รายการ: ready 61, pending 7 · field ท�
 | 5. GM console | `POST /api/game/gm/events` | `GmInsertEventRequest` → `GmInsertEventResponse` | GM คน | ready | GEN-058 |  |
 | 5. GM console | `GET /api/game/gm/log` | - → `GmLogResponse` | GM คน | ready | GEN-058 |  |
 | 6. จบเกม: ฉากจบ + ชะตา + ความลับ | `GET /api/game/origin` | - → `OriginResponse` | ผู้เล่น | ready | GEN-065 |  |
-| 6. จบเกม: ฉากจบ + ชะตา + ความลับ | `GET /api/game/log` | - → `GameLogResponse` | ผู้เล่น | ready | GEN-037 + GEN-059 | [ประวัติ] + รายการเกม; `reveal` หลังจบเท่านั้น |
+| 6. จบเกม: ฉากจบ + ชะตา + ความลับ | `GET /api/game/log` | - → `GameLogResponse` | ผู้เล่น | ready | GEN-037 + GEN-059 | [ประวัติ] + รายการเกม; `reveal` หลังจบเท่านั้น; entries รวม kind `changes` (GEN-114) |
 | 6. จบเกม: ให้คะแนน + 👍 | `GET /api/game/rating` | - → `GameRatingResponse` | ผู้เล่น | ready | GEN-078 | หลังเกมจบเท่านั้น (ก่อนจบ 409); ไม่ใช่สมาชิก 403; `eligible` / `blocker` เป็นของ GEN-079 |
 | 6. จบเกม: ให้คะแนน + 👍 | `PUT /api/game/rating` | `GameRatingRequest` → `GameRatingResponse` | ผู้เล่น | ready | GEN-078 | คนละ 1 คะแนน ส่งใหม่ = แทนค่าเดิม |
 | 6. จบเกม: ให้คะแนน + 👍 | `PUT /api/game/rating/likes/:sourceRef` | - → `GameRatingResponse` | ผู้เล่น | ready | GEN-078 | 👍 action → ผล ด้วย `sourceRef` (ADR GEN-077); ref ที่หน้าสรุปไม่เปิด = 404 `ruling_not_found` |

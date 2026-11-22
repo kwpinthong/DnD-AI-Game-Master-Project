@@ -3,6 +3,7 @@ import { useEffect, useId, useState } from 'react';
 import { EndingReveal, EndingToc, RatingSection, useRating, when as at } from './Ending.tsx';
 import { fetchGameLog } from './history-api.ts';
 import { forgetToken, loadKnownTokens } from './session.ts';
+import { TurnChangesList } from './play/TurnChanges.tsx';
 import { Button } from './ui/Button.tsx';
 import { ErrorState, Skeleton } from './ui/parts.tsx';
 import { endText } from './ui/strings.ts';
@@ -20,7 +21,7 @@ function statusText(game: GameLogResponse['game']): string {
   return game.endReason === 'game_over' ? 'จบแล้ว (ทุกคนสลบ)' : 'จบแล้ว';
 }
 
-const KIND_LABEL: Record<RoomEntry['kind'], string> = { feed: 'สิ่งที่เห็น', narration: 'เฉพาะคุณ', whisper: 'กระซิบ', hit: 'เกิดกับคุณ', omen: 'ลางสังหรณ์' };
+const KIND_LABEL: Record<RoomEntry['kind'], string> = { feed: 'สิ่งที่เห็น', narration: 'เฉพาะคุณ', whisper: 'กระซิบ', hit: 'เกิดกับคุณ', changes: 'ค่าที่เปลี่ยน', omen: 'ลางสังหรณ์' };
 const EVENT_STATUS: Record<string, string> = { pending: 'ยังไม่ถึง', active: 'กำลังเกิด', resolved: 'จบแล้ว' };
 
 export function GameHistory({ apiBaseUrl, onClose }: { apiBaseUrl: string; onClose: () => void }) {
@@ -100,7 +101,7 @@ function FullLog({ log }: { log: GameLogResponse }) {
           <li key={e.seq}>
             {at(e)} · {KIND_LABEL[e.kind]}
             {e.place ? ` · ${e.place.name}` : ''}
-            {e.whisper ? ` · ${e.whisper.from} → ${e.whisper.to}` : ''}: {e.text}
+            {e.whisper ? ` · ${e.whisper.from} → ${e.whisper.to}` : ''}: {e.kind === 'changes' ? <TurnChangesList entry={e} /> : e.text}
           </li>
         ))}
       </ul>

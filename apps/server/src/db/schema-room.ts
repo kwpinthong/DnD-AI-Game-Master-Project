@@ -57,7 +57,7 @@ export const roomEntry = sqliteTable(
       .notNull()
       .references(() => game.id, { onDelete: 'cascade' }),
     /** `omen` (GEN-070): an Astral Spirit's omen; `from` / `to` like a whisper, the receiver never sees the sender. */
-    kind: text('kind', { enum: ['feed', 'narration', 'whisper', 'omen', 'hit'] }).notNull(),
+    kind: text('kind', { enum: ['feed', 'narration', 'whisper', 'omen', 'hit', 'changes'] }).notNull(),
     day: integer('day').notNull(),
     phase: text('phase', { enum: PHASES }).notNull(),
     turn: integer('turn').notNull().default(1),

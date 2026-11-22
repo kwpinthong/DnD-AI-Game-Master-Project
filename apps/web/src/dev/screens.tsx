@@ -79,6 +79,7 @@ export const SCREEN_VIEWS: Record<ScreenId, ScreenView> = {
   'play-feed': PLAY,
   'play-private': PLAY,
   'play-hit': PLAY,
+  'play-changes': PLAY,
   'play-self': PLAY,
   'play-companions': PLAY,
   'play-inventory': PLAY,

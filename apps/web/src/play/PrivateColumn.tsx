@@ -4,15 +4,24 @@ import secretIcon from '../assets/icons/visibility-secret.svg';
 import { hitChangeText, rollLine } from '../screen-models.ts';
 import { Button, HitCard, MaskIcon, playText } from '../ui/index.ts';
 import { EntryGroups } from './PlaceColumn.tsx';
+import { TurnChangesList } from './TurnChanges.tsx';
 
 const t = playText;
 
 const changesOf = (e: RoomEntry): string => (e.hit ? e.hit.changes.map(hitChangeText).join(' / ') : '');
 
 /** One private entry: a narration with its roll (F5), an omen you received, or a hit you have acknowledged. */
-function StoryEntry({ entry }: { entry: RoomEntry }) {
+function StoryEntry({ entry, who }: { entry: RoomEntry; who: boolean }) {
   const [open, setOpen] = useState(false);
   const factorsId = useId();
+  if (entry.kind === 'changes') {
+    return (
+      <li className="play-entry play-entry--changes">
+        <span className="play-entry__tag">{t.changes.kind}</span>
+        <TurnChangesList entry={entry} who={who} />
+      </li>
+    );
+  }
   return (
     <li className={entry.kind === 'hit' ? 'play-entry play-entry--hit' : 'play-entry'}>
       {entry.kind === 'hit' && <span className="play-entry__tag">{t.private.acknowledged}</span>}
@@ -133,7 +142,7 @@ export function PrivateColumn({
   const [seenWhispers, setSeenWhispers] = useState(0);
   const ids = useId();
   const pinned = entries.filter((e) => e.kind === 'hit' && !acknowledged.has(e.seq));
-  const story = entries.filter((e) => e.kind === 'narration' || e.kind === 'omen' || (e.kind === 'hit' && acknowledged.has(e.seq)));
+  const story = entries.filter((e) => e.kind === 'narration' || e.kind === 'omen' || e.kind === 'changes' || (e.kind === 'hit' && acknowledged.has(e.seq)));
   const whispers = entries.filter((e) => e.kind === 'whisper');
   const received = whispers.filter((w) => !w.whisper?.mine).length;
   const unread = tab === 'whisper' ? 0 : Math.max(0, received - seenWhispers);
@@ -169,7 +178,7 @@ export function PrivateColumn({
       </div>
       <section id={`${ids}story`} className="play-story" aria-label={t.private.story} hidden={tab !== 'story'}>
         <EntryGroups entries={story} empty={t.private.empty}>
-          {(e) => <StoryEntry key={e.seq} entry={e} />}
+          {(e) => <StoryEntry key={e.seq} entry={e} who={you.role === 'gm'} />}
         </EntryGroups>
       </section>
       <section id={`${ids}whisper`} className="play-story play-scroll" aria-label={t.private.whisper} hidden={tab !== 'whisper'}>

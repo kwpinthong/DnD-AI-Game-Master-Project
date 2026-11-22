@@ -29,6 +29,7 @@ const V2_SCREENS = [
   'play-place',
   'play-feed',
   'play-private',
+  'play-changes',
   'play-hit',
   'play-self',
   'play-companions',

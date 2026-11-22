@@ -35,6 +35,7 @@ export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string 
     // Q-229: the viewer's own roll / hit card; only the entries made for one reader carry them.
     ...(meta.roll ? { roll: meta.roll } : {}),
     ...(meta.hit ? { hit: meta.hit } : {}),
+    ...(meta.changes ? { changes: [...meta.changes] } : {}),
     ...(row.kind === 'whisper'
       ? { whisper: { from: characterNameOf(db, row.fromMemberId), to: characterNameOf(db, row.toMemberId), mine: row.fromMemberId === viewer.id } }
       : {}),
