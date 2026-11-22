@@ -1,5 +1,6 @@
 import type { LootOption, OtherCharacterView } from '@isekai/protocol';
 import {
+  DROWSY_STATUS,
   NPC_HP_MAX,
   resolvePhaseActions,
   validatePhaseActions,
@@ -17,7 +18,7 @@ import {
   type StatusEffect,
 } from '@isekai/rules';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
-import type { Db, DbOrTx } from '../db/client.ts';
+import type { DbOrTx } from '../db/client.ts';
 import { character, characterPresence, member } from '../db/schema.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { moveCharacter, namesVisibleTo, npcBondsOf, presencesInGame } from '../visibility/store.ts';
@@ -115,7 +116,7 @@ function seatedCharacters(db: DbOrTx, gameId: string) {
  * permanent statuses, held items and the chosen skill → OwnedRef plus their Quantitative effect.
  * No loot carries `reach: remote` yet (GEN-055), so `remoteReach` is empty.
  */
-export function crossPlayerState(db: DbOrTx, gameId: string): CrossPlayerState {
+export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet<string> = new Set()): CrossPlayerState {
   const loot = new Map(chosenLootInGame(db, gameId).map((l) => [l.memberId, l.chosen]));
   const items = [...itemsInGame(db, gameId).values()];
   const players: Record<string, PlayerState> = {};
@@ -153,7 +154,7 @@ export function crossPlayerState(db: DbOrTx, gameId: string): CrossPlayerState {
       affinity: Object.fromEntries(npcBondsOf(db, c.memberId).map((b) => [b.npcId, b.affinity])),
       items: held.map(owned),
       skills: chosen ? [owned(chosen.skill)] : [],
-      statuses,
+      statuses: drowsy.has(c.memberId) ? [...statuses, DROWSY_STATUS] : statuses,
       afterActionStamina,
       damageReduction,
       remoteReach: [],
@@ -185,15 +186,17 @@ function witnessesOfOutcome(outcome: ActionOutcome): string[] {
 
 /** Resolves and writes one phase's actions (see the module comment). */
 export function applyPhaseActions(
-  db: Db,
+  db: DbOrTx,
   gameId: string,
   actions: readonly PhaseAction[],
   rng: Rng,
   now: number,
   tagging?: TaggingOptions,
+  /** Members who are Drowsy today (GEN-063): they roll with `DROWSY_STATUS`. */
+  drowsy: ReadonlySet<string> = new Set(),
 ): ApplyPhaseResult {
   return db.transaction((tx) => {
-    const state = crossPlayerState(tx, gameId);
+    const state = crossPlayerState(tx, gameId, drowsy);
     const tags = tagging === undefined ? undefined : tagContexts(tx, gameId, state, tagging);
     const places = new Set((getGameScenario(tx, gameId)?.locations ?? []).map((l) => l.id));
     const errors: PhaseApplyError[] = [

@@ -2,6 +2,7 @@ import type { AiConfig, AiProviderId } from './config.ts';
 import type { AiProvider } from './provider.ts';
 import { createAnthropicProvider } from './providers/anthropic.ts';
 import { createMockProvider } from './providers/mock.ts';
+import { cannedGmAnswer } from '../gm/mock-gm.ts';
 
 export type ProviderFactory = (config: AiConfig) => AiProvider;
 
@@ -11,7 +12,8 @@ export type ProviderFactory = (config: AiConfig) => AiProvider;
  */
 const factories: Record<AiProviderId, ProviderFactory> = {
   anthropic: createAnthropicProvider,
-  mock: (config) => createMockProvider(config),
+  // Offline games get the Mock GM's valid answers (GEN-057).
+  mock: (config) => createMockProvider(config, undefined, cannedGmAnswer),
 };
 
 export function providerFor(config: AiConfig): AiProvider {

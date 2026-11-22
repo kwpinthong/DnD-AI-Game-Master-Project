@@ -147,6 +147,16 @@ export function PlayRoom({
       {room && you && (
         <>
           <p>{statusLabel[room.status]}</p>
+          {room.gmStatus && (
+            <div>
+              <p role="alert">{room.gmStatus.message}</p>
+              {room.gmStatus.canRetry && (
+                <button type="button" onClick={() => conn.current?.sendRetry()}>
+                  ลองใหม่
+                </button>
+              )}
+            </div>
+          )}
           {you.place && <p>คุณอยู่ที่: {you.place.name}</p>}
           {you.drowsy && <p role="note">คุณง่วงซึม (Drowsy) ทั้งวันนี้: ทอย d20 -2 และทุก action เสีย Stamina เพิ่ม 1</p>}
           {room.phase === 'NOCTHERION' && you.role === 'player' && (

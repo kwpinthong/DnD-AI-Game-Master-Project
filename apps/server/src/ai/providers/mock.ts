@@ -1,6 +1,9 @@
 import type { AiConfig } from '../config.ts';
 import type { AiCallRequest, AiCallResult, AiErrorKind, AiProvider, AiTokenUsage } from '../provider.ts';
 
+/** Answers a request the unscripted Mock knows a better reply to (the Mock GM, GEN-057); undefined = the schema sample. */
+export type MockAnswerer = (req: AiCallRequest) => unknown;
+
 /**
  * Mock provider for tests and offline dev (AI_PROVIDER=mock). It never touches the network.
  * With a script it answers step by step and fails loudly when the script runs out (a test bug).
@@ -17,7 +20,7 @@ export interface MockProvider extends AiProvider {
 
 const estimateTokens = (text: string) => Math.ceil(text.length / 3);
 
-export function createMockProvider(_config: AiConfig, script?: MockScript): MockProvider {
+export function createMockProvider(_config: AiConfig, script?: MockScript, answer?: MockAnswerer): MockProvider {
   const requests: AiCallRequest[] = [];
   const steps = script ? [...script.steps] : undefined;
 
@@ -30,7 +33,8 @@ export function createMockProvider(_config: AiConfig, script?: MockScript): Mock
       requests.push(req);
       if (!steps) {
         const input = estimateTokens([...req.system.map((b) => b.text), ...req.messages.map((m) => m.text)].join('\n'));
-        const json = req.purpose === 'character_analyze' ? cannedLoot(requests.length) : sampleFor(req.output.jsonSchema);
+        const json =
+          req.purpose === 'character_analyze' ? cannedLoot(requests.length) : ((await answer?.(req)) ?? sampleFor(req.output.jsonSchema));
         return {
           ok: true,
           json,

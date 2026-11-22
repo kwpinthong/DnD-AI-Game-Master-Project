@@ -137,3 +137,6 @@ export * from './schema-items.ts';
 
 // GEN-064: Active skill / item uses per game day (Daily_Limit), own file for the same reason.
 export * from './schema-tags.ts';
+
+// GEN-057: the AI GM turn loop (stored turn work, Constraint Lock, day memory), own file for the same reason.
+export * from './schema-gm.ts';
