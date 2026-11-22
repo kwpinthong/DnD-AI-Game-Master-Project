@@ -354,8 +354,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           }))
         : [];
     const audiences = narrationAudiences(world, resolved.log, textOf, start, events.active, evidenceFor);
-    const narrations: { key: string; ctx: NarrationContext; out: StoredNarration }[] = [];
-    for (const audience of audiences) {
+    // GEN-115: the narrations do not depend on each other, so they run together: the wait is the slowest one, not the sum.
+    const narrations = await timer.time('narrate', () => Promise.all(audiences.map(async (audience): Promise<{ key: string; ctx: NarrationContext; out: StoredNarration }> => {
       const ctx: NarrationContext = {
         kind: 'gm_narration',
         ...audience.ctx,
@@ -379,12 +379,12 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           budget: 'player' in ctx.audience ? CONTEXT_BUDGET.narrate_player : CONTEXT_BUDGET.narrate_place,
           check: (n) => checkNarration(ctx, n, forbidden),
           fallback: { label: audience.key, make: () => templateNarration(ctx) },
-          timer: { timer, stage: 'narrate' },
+          timer: { timer, stage: 'narrate_calls' },
           ...(signal ? { signal } : {}),
         }).then(({ value, fallback }) => (fallback === null ? value : { ...value, fallback })));
       if (!saved) timer.time('db', () => saveNarration(db, gameId, at, audience.key, out, now()));
-      narrations.push({ key: audience.key, ctx, out });
-    }
+      return { key: audience.key, ctx, out };
+    })));
 
     // 6: what the room publishes and applies.
     const entries: ResolutionEntry[] = narrations.map(({ ctx, out }) => {

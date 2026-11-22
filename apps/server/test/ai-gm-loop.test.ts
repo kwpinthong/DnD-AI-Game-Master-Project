@@ -247,6 +247,23 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(contextOf<TurnContext>(provider.requests.filter(isTurn).at(-1)!).actions.map((a) => a.text).sort()).toEqual(['ขโมยขนม', 'ร้องเพลง', 'เต้นรำ'].sort());
   });
 
+  it('GEN-115 C4: the narrations of a turn are asked together, not one after another', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    await boot({}, async (req, n) => {
+      if (!isNarration(req)) return noRoll(req, n);
+      peak = Math.max(peak, ++inFlight);
+      await new Promise((r) => setTimeout(r, 50));
+      inFlight--;
+      return undefined;
+    });
+    const t = await startedTable(server!, false);
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    await playTurn(clients, ['สำรวจโรงเตี๊ยม', 'ถามข่าว', 'ค้นห้อง'], { day: 1, phase: 'EOSORIA', turn: 2 });
+    expect(peak).toBeGreaterThanOrEqual(3);
+    for (const c of clients) expect(turnEntries(c, 1, 'EOSORIA', 1).filter((e) => e.kind === 'narration')).toHaveLength(1);
+  });
+
   it('GEN-115 C5: an adjudicate call that times out never hangs the turn: everyone is told, nothing changes, retry works', async () => {
     await boot({}, (req) => (isTurn(req) ? mockReply.fail('timeout') : undefined));
     const t = await startedTable(server!, false);
@@ -705,7 +722,9 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     const before = [t.a, t.b, t.c].map(stats);
     let clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
     for (const [i, c] of clients.entries()) await send(c, ['ปีนหลังคา', 'เฝ้าประตู', 'นับเงิน'][i]!);
-    await expect.poll(() => narrations, { timeout: 5_000 }).toBe(2);
+    // GEN-115: the narrations run together: the first passes and is stored, the others hang until the shutdown.
+    const storedNarrations = () => Object.keys(JSON.parse((server!.db.prepare('select narrations from gm_turn').get() as { narrations: string } | undefined)?.narrations ?? '{}') as object).length;
+    await expect.poll(() => [narrations >= 2, storedNarrations()], { timeout: 5_000 }).toEqual([true, 1]);
     const stored = turnRows();
     expect(stored).toEqual([expect.objectContaining({ status: 'adjudicated' })]);
 
