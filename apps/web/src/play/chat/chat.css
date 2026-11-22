@@ -564,15 +564,47 @@
   color: var(--muted);
 }
 
+/* Vote buttons: small icon-only pills at the bottom-right of the message. The word stays in the DOM
+   (font-size 0) so screen readers still read ถูกใจ / ไม่ถูกใจ; ::after keeps a 44px tap target. */
 .chat-narration .vote-buttons {
-  margin-top: var(--space-2);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
   font-style: normal;
 }
 
 .play .chat-narration .vote-btn,
 .play .chat-col .vote-btn {
-  min-height: 44px;
-  min-width: 44px;
+  position: relative;
+  min-height: 28px;
+  min-width: 28px;
+  padding: 2px 6px;
+  font-size: 0;
+  line-height: 1;
+  border-radius: var(--radius-pill);
+  opacity: 0.7;
+}
+
+.play .chat-narration .vote-btn > span,
+.play .chat-col .vote-btn > span {
+  font-size: var(--text-xs);
+}
+
+.play .chat-narration .vote-btn::after,
+.play .chat-col .vote-btn::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+.play .chat-narration .vote-btn:hover,
+.play .chat-narration .vote-btn:focus-visible,
+.play .chat-narration .vote-btn[aria-pressed='true'],
+.play .chat-col .vote-btn:hover,
+.play .chat-col .vote-btn:focus-visible,
+.play .chat-col .vote-btn[aria-pressed='true'] {
+  opacity: 1;
 }
 
 .chat-center {
