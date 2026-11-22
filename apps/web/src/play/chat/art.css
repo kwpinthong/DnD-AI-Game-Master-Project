@@ -1,0 +1,205 @@
+/* The painted assets of the Play page (GEN-132): place card, avatar rings, clock, stars, primary button, panel frame.
+   Tokens only (tokens.css); every image is imported by Vite from here or from the component (hashed files).
+   Loaded after chat.css so these rules win. */
+
+/* ---------- place card (สถานที่ tab) ---------- */
+.place-art {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  border: var(--line-w) solid var(--ornament);
+  background: var(--bg);
+}
+
+.place-art__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: place-art-in 0.45s ease both;
+}
+
+/* the old painting stays under the new one for the length of the fade */
+.place-art__img--before {
+  animation: none;
+}
+
+.place-art__name {
+  padding: var(--space-3);
+  text-align: center;
+  font-size: var(--text-md);
+  color: var(--text);
+}
+
+.place-art__weather {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--ornament);
+  background: var(--bg);
+}
+
+@keyframes place-art-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---------- avatar rings ---------- */
+.chat-avatar {
+  position: relative;
+}
+
+/* the painted ring replaces the coloured border */
+.chat-avatar.chat-avatar {
+  border-color: transparent;
+}
+
+.chat-avatar__ring {
+  position: absolute;
+  left: 50%;
+  top: 48.7%;
+  width: 120%;
+  height: auto;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* ---------- clock (desktop HUD) ---------- */
+.clock {
+  position: relative;
+  flex: none;
+  width: clamp(300px, 26vw, 360px);
+  aspect-ratio: 800 / 297;
+}
+
+.clock__frame,
+.clock__hand {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.clock__frame {
+  display: block;
+}
+
+.clock__hand {
+  pointer-events: none;
+}
+
+.clock__turn {
+  transition: transform 0.4s ease;
+}
+
+.clock__hand-edge {
+  stroke: var(--bg);
+  stroke-width: 12;
+  stroke-linecap: round;
+}
+
+.clock__hand-core {
+  stroke: var(--highlight);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
+/* the text slot of frames/frame-clock.webp: x 52-92%, y 47-83% */
+.clock__slot {
+  position: absolute;
+  left: 52%;
+  top: 47%;
+  width: 40%;
+  height: 36%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  overflow: hidden;
+}
+
+.clock__weather {
+  flex: none;
+  height: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.clock__slot .hud-time__text {
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.clock__slot .hud-time__day,
+.clock__slot .hud-time__now {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.hud-time--clock .hud-time__weather {
+  white-space: nowrap;
+}
+
+/* ---------- stars between the HUD and the action bar ---------- */
+.v3-main {
+  background: var(--bg) url('../../assets/textures/texture-stars.webp') 0 0 / 512px 512px repeat;
+}
+
+.v3-feed {
+  background: transparent;
+}
+
+/* ---------- right panel frame ---------- */
+.info-panel {
+  background: transparent;
+  border: 26px solid transparent;
+  border-image: url('../../assets/frames/frame-panel.webp') 70 fill / 26px stretch;
+}
+
+.info-scroll {
+  padding: var(--space-2) var(--space-3);
+}
+
+@container play (max-width: 959.98px) {
+  .info-panel {
+    border: 26px solid transparent;
+    border-image: url('../../assets/frames/frame-panel.webp') 70 fill / 26px stretch;
+  }
+}
+
+/* ---------- primary button (send) ---------- */
+.play .v3 .btn--primary {
+  min-width: 108px;
+  padding-inline: var(--space-5);
+  border: 0;
+  border-radius: 0;
+  background: url('../../assets/frames/btn-primary.webp') center / 100% 100% no-repeat;
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.play .v3 .btn--primary:disabled {
+  opacity: 0.6;
+  filter: grayscale(0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .place-art__img,
+  .clock__turn {
+    animation: none;
+    transition: none;
+  }
+}
