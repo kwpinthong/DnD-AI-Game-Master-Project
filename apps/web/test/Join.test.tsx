@@ -25,9 +25,12 @@ const callsTo = (fetchMock: ReturnType<typeof stubApi>, path: string) =>
 
 function fillAndSubmit(values: { inviteCode?: string; name?: string; pin?: string }) {
   const { inviteCode = 'K7Q2MX', name = 'นก', pin = '1234' } = values;
-  fireEvent.change(screen.getByLabelText('โค้ดเกม'), { target: { value: inviteCode } });
-  fireEvent.change(screen.getByLabelText('ชื่อผู้เล่น'), { target: { value: name } });
-  fireEvent.change(screen.getByLabelText('PIN'), { target: { value: pin } });
+  // GEN-090 C2: a field tells its error once the player leaves it, and the button is off while one is wrong.
+  for (const [label, value] of [['โค้ดเกม', inviteCode], ['ชื่อผู้เล่น', name], ['PIN', pin]] as const) {
+    const input = screen.getByLabelText(label);
+    fireEvent.change(input, { target: { value } });
+    fireEvent.blur(input);
+  }
   fireEvent.click(screen.getByRole('button', { name: 'เข้าร่วม' }));
 }
 

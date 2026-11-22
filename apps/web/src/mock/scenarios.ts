@@ -1,4 +1,4 @@
-import { GameView, RoomEntry, RoomState } from '@isekai/protocol';
+import { GameView, OriginResponse, RoomEntry, RoomState } from '@isekai/protocol';
 import { CONTRACT_FIXTURES as F, CONTRACT_SCREENS, type ScreenId } from '@isekai/protocol/contract';
 
 /**
@@ -30,6 +30,11 @@ export interface MockScenario {
   screens: readonly ScreenId[];
   /** Answers by contract route, `METHOD /path/:param` as in the registry; the rest use the default fixture. */
   http: Readonly<Record<string, MockReply>>;
+  /**
+   * Answers that change with time (GEN-090), by contract route: from `afterMs` after the first request to the
+   * mock server the route answers with that step's reply (the latest due step wins), before it with `http`.
+   */
+  httpScript?: Readonly<Record<string, readonly { afterMs: number; reply: MockReply }[]>>;
   room: {
     state: RoomState;
     entries: readonly RoomEntry[];
@@ -91,6 +96,31 @@ const noCharacterGame: GameView = {
   startBlockers: ['ยังไม่สร้างตัวละคร: นก, ต้น'],
 };
 
+
+// --- GEN-090: the pages before the game starts ---
+/** A newcomer for the lobby's member list (`lobby-join`). */
+const NEWCOMER = { id: 'm-pla', name: 'ปลา', role: 'player', isOwner: false, hasCharacter: false } as const;
+const joinedGame: GameView = {
+  ...LOBBY_GAME,
+  members: [...LOBBY_GAME.members, NEWCOMER],
+  players: { ...LOBBY_GAME.players, count: LOBBY_GAME.players.count + 1 },
+  startBlockers: ['ยังไม่สร้างตัวละคร: ต้น, ปลา'],
+};
+/** The fixture character before the start: still editable. */
+const DRAFT_CHARACTER = { character: { ...F.CharacterResponse[0]!.character!, editable: true } };
+const LOOT_OFFER = F.LootResponse[0]!;
+const LOOT_EMPTY = { loot: { ...LOOT_OFFER.loot, offer: null } };
+const LOOT_KEPT = { loot: { ...F.LootResponse[1]!.loot, canReroll: true } };
+const ORIGIN = OriginResponse.parse(F.OriginResponse[0]);
+/** A rare start whose crossing story the AI is still writing. */
+const RARE_ORIGIN = ORIGIN.view === 'player' && ORIGIN.origin ? { ...ORIGIN.origin, kind: 'special', tierLabel: 'จุดเกิดพิเศษ', narration: null } : null;
+/** Saving in the character steps answers like before the start (the default fixture is a started game's). */
+const DRAFT_SAVES = {
+  'POST /api/game/character': ok(DRAFT_CHARACTER),
+  'PUT /api/game/character': ok(DRAFT_CHARACTER),
+  'POST /api/game/character/loot/choose': ok(LOOT_KEPT),
+} as const;
+
 const ALL_SCREENS = CONTRACT_SCREENS.map((s) => s.id);
 const room = (state: RoomState, script: readonly MockStep[] = [], entries: readonly RoomEntry[] = START_ENTRIES) => ({ state, entries, script });
 
@@ -131,7 +161,69 @@ export const SCENARIOS: readonly MockScenario[] = [
     http: {
       'GET /api/game': ok(noCharacterGame),
       'GET /api/game/character': ok(F.CharacterResponse[1]),
-      'GET /api/game/character/loot': ok(F.LootResponse[0]),
+      'GET /api/game/character/loot': ok(LOOT_OFFER),
+      ...DRAFT_SAVES,
+    },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'lobby-join',
+    title: 'ห้องรอ มีคนเข้าเพิ่ม',
+    note: 'สมาชิกใหม่ (ปลา) เข้าห้องหลังเปิดหน้าไม่กี่วินาที',
+    session: 'player',
+    screens: ['lobby'],
+    http: { 'GET /api/game': ok(LOBBY_GAME) },
+    httpScript: { 'GET /api/game': [{ afterMs: 4000, reply: ok(joinedGame) }] },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'start-while-creating',
+    title: 'เกมเริ่มระหว่างสร้างตัวละคร',
+    note: 'เจ้าของกดเริ่มเกมตอนหน้าสร้างตัวละครยังเปิดอยู่: พาไปหน้าเล่น แก้ไม่ได้แล้ว',
+    session: 'player',
+    screens: ['lobby'],
+    http: { 'GET /api/game': ok({ ...LOBBY_GAME, startBlockers: [] }), 'GET /api/game/character': ok(DRAFT_CHARACTER), 'GET /api/game/character/loot': ok(LOOT_KEPT), ...DRAFT_SAVES },
+    httpScript: { 'GET /api/game': [{ afterMs: 12_000, reply: ok(STARTED_GAME) }] },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'loot-loading',
+    title: 'รอ AI เสนอของติดตัว',
+    note: 'กดให้ AI วิเคราะห์แล้วคำตอบยังไม่มา',
+    session: 'player',
+    screens: ['character'],
+    http: {
+      'GET /api/game': ok(noCharacterGame),
+      'GET /api/game/character': ok(DRAFT_CHARACTER),
+      'GET /api/game/character/loot': ok(LOOT_EMPTY),
+      'POST /api/game/character/loot': { pending: true },
+      ...DRAFT_SAVES,
+    },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'loot-error',
+    title: 'AI วิเคราะห์บุคลิกล้ม',
+    note: 'AI ไม่ตอบ (503): ขึ้นข้อความ + ปุ่มลองใหม่ ไม่นับเป็นการสุ่ม',
+    session: 'player',
+    screens: ['character'],
+    http: {
+      'GET /api/game': ok(noCharacterGame),
+      'GET /api/game/character': ok(DRAFT_CHARACTER),
+      'GET /api/game/character/loot': ok(LOOT_EMPTY),
+      'POST /api/game/character/loot': { status: 503, body: { code: 'ai_unavailable', message: 'วิเคราะห์ไม่สำเร็จ ลองอีกครั้ง' } },
+      ...DRAFT_SAVES,
+    },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'origin-rare',
+    title: 'จุดเกิดหายาก เรื่องยังเขียนไม่เสร็จ',
+    note: 'การ์ดจุดเกิดติดป้าย "หายาก" และ AI ยังเขียน narration อยู่',
+    session: 'player',
+    screens: ['origin-card'],
+    http: {
+      'GET /api/game/origin': ok({ view: 'player', origin: RARE_ORIGIN }),
     },
     room: room(BASE_ROOM),
   },

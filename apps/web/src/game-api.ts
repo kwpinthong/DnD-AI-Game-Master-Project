@@ -5,7 +5,12 @@ import {
   GameView,
   InventoryResponse,
   LootResponse,
+  MemorySourcesResponse,
+  OriginResponse,
+  type GameMemorySetting,
   type InventoryView,
+  type MemorySourceGame,
+  type OriginView,
   type LootChooseRequest,
   type LootView,
   type CharacterField,
@@ -25,6 +30,9 @@ export interface CreateGameInput {
   humanGm: boolean;
   name: string;
   pin: string;
+  /** Pending GEN-082 / GEN-083 (sent only when the form shows them, GEN-090): the creator's player code and the memory toggle. */
+  playerCode?: string;
+  memory?: GameMemorySetting;
 }
 
 export type CreateGameResult =
@@ -138,6 +146,40 @@ export async function inventoryCall(baseUrl: string, token: string): Promise<Inv
     return parsed.success ? { kind: 'ok', inventory: parsed.data.inventory } : { kind: 'error', message: UNREACHABLE };
   }
   if (answer.res.status === 401) return { kind: 'session_lost' };
+  const error = ApiError.safeParse(answer.json);
+  return { kind: 'error', message: error.success ? error.data.message : UNREACHABLE };
+}
+
+/** GET /api/game/origin (GEN-065): your own start scenario; null before the start and for the Human GM. */
+export type OriginResult = { kind: 'ok'; origin: OriginView | null } | { kind: 'session_lost' } | { kind: 'error'; message: string };
+
+export async function originCall(baseUrl: string, token: string): Promise<OriginResult> {
+  const answer = await send(apiUrl(baseUrl, '/api/game/origin'), { method: 'GET', headers: { authorization: `Bearer ${token}` } });
+  if (!answer) return { kind: 'error', message: UNREACHABLE };
+  if (answer.res.ok) {
+    const parsed = OriginResponse.safeParse(answer.json);
+    if (!parsed.success) return { kind: 'error', message: UNREACHABLE };
+    return { kind: 'ok', origin: parsed.data.view === 'player' ? parsed.data.origin : null };
+  }
+  if (answer.res.status === 401) return { kind: 'session_lost' };
+  const error = ApiError.safeParse(answer.json);
+  return { kind: 'error', message: error.success ? error.data.message : UNREACHABLE };
+}
+
+/**
+ * GET /api/memory/sources (pending GEN-083): the ended games that passed the learning gate and the creator
+ * was in. Q-225 finds them by the creator's player code; how the code travels is GEN-083's to decide, so
+ * `playerCode` is taken here and not sent yet (the contract row has no request).
+ */
+export type MemorySourcesResult = { kind: 'ok'; games: MemorySourceGame[] } | { kind: 'error'; message: string };
+
+export async function memorySourcesCall(baseUrl: string, _playerCode: string): Promise<MemorySourcesResult> {
+  const answer = await send(apiUrl(baseUrl, '/api/memory/sources'), { method: 'GET' });
+  if (!answer) return { kind: 'error', message: UNREACHABLE };
+  if (answer.res.ok) {
+    const parsed = MemorySourcesResponse.safeParse(answer.json);
+    return parsed.success ? { kind: 'ok', games: parsed.data.games } : { kind: 'error', message: UNREACHABLE };
+  }
   const error = ApiError.safeParse(answer.json);
   return { kind: 'error', message: error.success ? error.data.message : UNREACHABLE };
 }

@@ -9,6 +9,11 @@ export const uiText = {
   hit: { title: 'เกิดกับคุณ', unknownActor: 'ไม่รู้ว่าใครทำ', acknowledge: 'รับทราบ' },
   toast: { info: '', success: 'สำเร็จ:', danger: 'ผิดพลาด:', close: 'ปิด' },
   error: { title: 'เกิดข้อผิดพลาด', retry: 'ลองอีกครั้ง' },
+  stepper: {
+    count: (step: number, of: number) => `ขั้นที่ ${step} / ${of}`,
+    mark: { done: '✓', current: '◆', todo: '◇' },
+    done: '(เสร็จแล้ว)',
+  },
 } as const;
 
 // Play screen v2 view-model text (GEN-099 contract; screens in GEN-088 / 089).

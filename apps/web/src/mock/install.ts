@@ -34,6 +34,7 @@ interface Options {
 }
 let options: Options = { timeScale: 1, latencyMs: 120 };
 const servers = new Map<string, MockRoomServer>();
+const clocks = new Map<string, number>();
 
 function serverFor(target: { host: string; scenario: string }): MockRoomServer {
   let server = servers.get(target.host);
@@ -72,7 +73,11 @@ function mockFetch(realFetch: typeof fetch): typeof fetch {
         body = init.body;
       }
     }
-    const reply = mockHttp(scenarioById(target.scenario), { method, path: new URL(url).pathname, body });
+    // Each mock server has its own clock for `httpScript`, started by its first request.
+    const now = Date.now();
+    if (!clocks.has(target.host)) clocks.set(target.host, now);
+    const elapsedMs = (now - clocks.get(target.host)!) / options.timeScale;
+    const reply = mockHttp(scenarioById(target.scenario), { method, path: new URL(url).pathname, body }, elapsedMs);
     // `pending` = loading on purpose: it never settles, not even on abort, so the page stays in its loading state.
     if ('pending' in reply) return new Promise<Response>(() => {});
     return new Promise<Response>((resolve, reject) => {
@@ -187,6 +192,7 @@ export function installMock(opts: Partial<Options> = {}): () => void {
   return () => {
     for (const server of servers.values()) server.stop();
     servers.clear();
+    clocks.clear();
     globalThis.fetch = realFetch;
     globalThis.WebSocket = realWs;
   };
