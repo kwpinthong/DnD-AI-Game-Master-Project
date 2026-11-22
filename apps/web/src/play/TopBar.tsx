@@ -11,7 +11,7 @@ const DOT: Record<TurnDot, string> = { done: '●', current: '◐', todo: '○' 
  * 4.1 the top bar (44 high): day, the four periods with their two turns, the weather as a word, "ส่งแล้ว n/N"
  * (Q-195: the count only) and who the GM is. The current period says "ตอนนี้" besides its colour.
  */
-export function TopBar({ room, menuOpen, onMenu }: { room: RoomState; menuOpen: boolean; onMenu: () => void }) {
+export function TopBar({ room, menuOpen, onMenu, onHistory }: { room: RoomState; menuOpen: boolean; onMenu: () => void; onHistory: () => void }) {
   const bar = topBar(room);
   const now = bar.periods.findIndex((p) => p.current);
   return (
@@ -41,6 +41,9 @@ export function TopBar({ room, menuOpen, onMenu }: { room: RoomState; menuOpen: 
       </span>
       {bar.submitted && <span className="play-top__sent">{bar.submitted}</span>}
       <span className="play-top__gm">{room.members.some((m) => m.role === 'gm') ? t.humanGm : t.aiGm}</span>
+      <Button className="play-top__history" onClick={onHistory}>
+        {t.history}
+      </Button>
       <Button className="play-top__menu" aria-expanded={menuOpen} onClick={onMenu}>
         {t.menu}
       </Button>
@@ -49,7 +52,7 @@ export function TopBar({ room, menuOpen, onMenu }: { room: RoomState; menuOpen: 
 }
 
 /** The menu under [เมนู]: who is in the room (names + online, never who has sent: Q-195) and the way back. */
-export function RoomMenu({ room, onBack }: { room: RoomState; onBack: () => void }) {
+export function RoomMenu({ room, onBack, onGameList }: { room: RoomState; onBack: () => void; onGameList: () => void }) {
   const gmView = room.you.role === 'gm';
   return (
     <div className="play-menu panel panel--ornament">
@@ -71,6 +74,7 @@ export function RoomMenu({ room, onBack }: { room: RoomState; onBack: () => void
         ))}
       </ul>
       <Button onClick={onBack}>{playText.back}</Button>
+      <Button onClick={onGameList}>{t.gameList}</Button>
     </div>
   );
 }

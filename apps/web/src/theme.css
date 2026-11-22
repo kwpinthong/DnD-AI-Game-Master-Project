@@ -27,6 +27,11 @@ main {
   padding: var(--space-5) var(--space-4);
 }
 
+/* Q-265: the play room is a page of its own and takes the whole viewport. */
+main.app--play {
+  padding: 0;
+}
+
 /* Trirong only for page titles, place and character names (ADR); h3 and below stay Anuphan. */
 h1,
 h2 {

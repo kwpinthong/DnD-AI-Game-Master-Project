@@ -24,7 +24,7 @@ afterEach(() => {
 
 function playRoom(scenario: string) {
   const baseUrl = mockBaseUrl(scenario, `t${++cell}`);
-  render(<PlayRoom apiBaseUrl={baseUrl} token={MOCK_TOKEN} onBack={noop} onNeedCharacter={noop} onSessionLost={noop} />);
+  render(<PlayRoom apiBaseUrl={baseUrl} token={MOCK_TOKEN} onBack={noop} onGameList={noop} onNeedCharacter={noop} onSessionLost={noop} />);
   return baseUrl;
 }
 const bar = () => screen.findByRole('navigation', { name: 'แท็บหน้าเล่น' });

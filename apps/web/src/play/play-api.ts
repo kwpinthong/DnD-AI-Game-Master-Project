@@ -1,4 +1,4 @@
-import { CompanionsResponse, InventoryResponse, SurroundingsResponse, TravelResponse, type CharacterView, type CompanionView, type InventoryView, type NpcView, type OtherCharacterView } from '@isekai/protocol';
+import { ApiError, CompanionsResponse, InventoryResponse, SurroundingsResponse, TravelResponse, type CharacterView, type CompanionView, type InventoryView, type NpcView, type OtherCharacterView } from '@isekai/protocol';
 import { useEffect, useState } from 'react';
 import { apiUrl, fetchWithTimeout } from '../session.ts';
 
@@ -25,7 +25,24 @@ async function getJson<T>(baseUrl: string, token: string, path: string, schema: 
   }
 }
 
-export const fetchTravel = (baseUrl: string, token: string) => getJson(baseUrl, token, '/api/game/travel', TravelResponse);
+/** Save (POST) / release (DELETE) a companion (GEN-054). The answer is the whole list; a refusal carries the server's own words. */
+export async function changeCompanion(baseUrl: string, token: string, action: { save: string } | { release: string }): Promise<{ ok: true } | { ok: false; message: string; sessionLost: boolean }> {
+  const save = 'save' in action;
+  try {
+    const res = await fetchWithTimeout(apiUrl(baseUrl, save ? '/api/game/companions' : `/api/game/companions/${encodeURIComponent(action.release)}`), {
+      method: save ? 'POST' : 'DELETE',
+      headers: { authorization: `Bearer ${token}`, ...(save ? { 'content-type': 'application/json' } : {}) },
+      ...(save ? { body: JSON.stringify({ ref: action.save }) } : {}),
+    });
+    if (res.ok) return { ok: true };
+    const body = ApiError.safeParse(await res.json().catch(() => null));
+    return { ok: false, sessionLost: res.status === 401, message: body.success ? body.data.message : 'ทำไม่สำเร็จ ลองใหม่อีกครั้ง' };
+  } catch {
+    return { ok: false, sessionLost: false, message: 'ต่อ server ไม่ได้ ลองใหม่อีกครั้ง' };
+  }
+}
+
+export const fetchTravel =(baseUrl: string, token: string) => getJson(baseUrl, token, '/api/game/travel', TravelResponse);
 
 /** `undefined` = not loaded yet, `null` = could not load. */
 export interface PlayData {

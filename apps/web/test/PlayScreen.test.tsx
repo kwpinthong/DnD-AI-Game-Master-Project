@@ -24,7 +24,7 @@ afterEach(() => {
 
 function playRoom(scenario: string) {
   const baseUrl = mockBaseUrl(scenario, `p${++cell}`);
-  render(<PlayRoom apiBaseUrl={baseUrl} token={MOCK_TOKEN} onBack={noop} onNeedCharacter={noop} onSessionLost={noop} />);
+  render(<PlayRoom apiBaseUrl={baseUrl} token={MOCK_TOKEN} onBack={noop} onGameList={noop} onNeedCharacter={noop} onSessionLost={noop} />);
   return baseUrl;
 }
 /** Scripts at half speed, so the state before the first step can be checked (Learnings GEN-100). */
@@ -54,8 +54,9 @@ describe('C1 everything in one 1366×620 view', () => {
   it('layout: top bar 44 + three columns 272 / rest / 340 that fill the viewport, nothing scrolls sideways', () => {
     const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'play', 'play.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
     const rule = (selector: string, from = css) => new RegExp(`(?:^|[}\\s])${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(from)?.[1] ?? '';
-    expect(rule('.play')).toMatch(/position:\s*fixed/);
-    expect(rule('.play')).toMatch(/inset:\s*0/);
+    // Q-265: its own page, no longer fixed over the app header
+    expect(rule('.play')).not.toMatch(/position:\s*fixed/);
+    expect(rule('.play')).toMatch(/height:\s*100dvh/);
     expect(rule('.play')).toMatch(/overflow:\s*hidden/);
     // 1366 wide: 272 + 754 + 340; 620 high: 44 + 576 (Screens and Flows v2 4.0)
     const wide = /@container\s+play\s*\(min-width:\s*1280px\)\s*\{([\s\S]*)$/.exec(css)?.[1] ?? '';

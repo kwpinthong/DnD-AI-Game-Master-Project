@@ -32,7 +32,7 @@ export interface ScreenView {
 
 const noop = () => {};
 const playRoom = ({ baseUrl, token }: FrameContext) => (
-  <PlayRoom apiBaseUrl={baseUrl} token={token} onBack={noop} onNeedCharacter={noop} onSessionLost={noop} />
+  <PlayRoom apiBaseUrl={baseUrl} token={token} onBack={noop} onGameList={noop} onNeedCharacter={noop} onSessionLost={noop} />
 );
 const PLAY: ScreenView = { page: 'PlayRoom', socket: true, render: playRoom };
 const NONE: ScreenView = { page: '', socket: false, render: null };

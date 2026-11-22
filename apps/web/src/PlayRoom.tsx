@@ -1,9 +1,11 @@
 import { PHASE_LABEL, actionTextProblem, type RoomEntry, type RoomState } from '@isekai/protocol';
 import { useEffect, useRef, useState } from 'react';
+import { GameSummaryPage } from './GameHistory.tsx';
 import { GmConsole } from './GmConsole.tsx';
 import { GmNarrating } from './play/GmNarrating.tsx';
 import { ActionBox, EMPTY_DRAFT, Feed, OmenBox, PlaceHead, TravelSheet, type ActionDraft } from './play/PlaceColumn.tsx';
-import { usePlayData } from './play/play-api.ts';
+import { hitAcknowledged, rememberHitAcknowledged } from './play/hit-ack.ts';
+import { changeCompanion, usePlayData } from './play/play-api.ts';
 import { PlayTabs } from './play/PlayTabs.tsx';
 import { PrivateColumn } from './play/PrivateColumn.tsx';
 import { SelfColumn } from './play/SelfColumn.tsx';
@@ -30,12 +32,15 @@ export function PlayRoom({
   apiBaseUrl,
   token,
   onBack,
+  onGameList,
   onNeedCharacter,
   onSessionLost,
 }: {
   apiBaseUrl: string;
   token: string;
   onBack: () => void;
+  /** Q-265: Play is its own page, so it has its own way to the game list. */
+  onGameList: () => void;
   /** The server says this player has no character yet (C2). */
   onNeedCharacter: () => void;
   onSessionLost: () => void;
@@ -56,6 +61,9 @@ export function PlayRoom({
   const [moves, setMoves] = useState(0);
   const [acknowledged, setAcknowledged] = useState<ReadonlySet<number>>(new Set());
   const [menuOpen, setMenuOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [companionTick, setCompanionTick] = useState(0);
+  const [companionProblem, setCompanionProblem] = useState<string>();
   const [tab, setTab] = useState<PlayTab>('place');
   const [seen, setSeen] = useState<Record<PlayTab, number>>({ place: 0, private: 0, self: 0, action: 0 });
   const conn = useRef<RoomConnection | undefined>(undefined);
@@ -102,8 +110,25 @@ export function PlayRoom({
   const isPlayer = you?.role === 'player';
   const hits = entries.filter((e) => e.kind === 'hit').length;
   // Your own numbers and who is around change with the turn, a move, a lock or a hit: load them again then.
-  const refreshKey = room && isPlayer ? [room.day, room.phase, room.turn, room.status, you?.place?.id ?? '', you?.lock?.code ?? '', hits, moves].join('|') : null;
+  const refreshKey = room && isPlayer ? [room.day, room.phase, room.turn, room.status, you?.place?.id ?? '', you?.lock?.code ?? '', hits, moves, companionTick].join('|') : null;
   const data = usePlayData(apiBaseUrl, token, refreshKey, onSessionLost);
+
+  // Q-267: a hit acknowledged on this device stays acknowledged after a reload.
+  const acked = new Set(acknowledged);
+  if (room) for (const e of entries) if (e.kind === 'hit' && hitAcknowledged(room.gameId, room.you.memberId, e.seq)) acked.add(e.seq);
+  function acknowledge(seq: number) {
+    if (room) rememberHitAcknowledged(room.gameId, room.you.memberId, seq);
+    setAcknowledged((set) => new Set(set).add(seq));
+  }
+
+  async function companion(action: { save: string } | { release: string }) {
+    const result = await changeCompanion(apiBaseUrl, token, action);
+    if (result.ok) {
+      setCompanionProblem(undefined);
+      setCompanionTick((n) => n + 1);
+    } else if (result.sessionLost) onSessionLost();
+    else setCompanionProblem(result.message);
+  }
 
   function sendAction(next: ActionDraft) {
     // A chip or [พัก / นอน] alone is a whole action: its own words stand in for an empty box.
@@ -146,13 +171,17 @@ export function PlayRoom({
         {room?.mode === 'single' && ` · ${t.single}`}
       </h2>
       <div className="play-frame">
-        {room && you && <TopBar room={room} menuOpen={menuOpen} onMenu={() => setMenuOpen((v) => !v)} />}
+        {room && you && <TopBar room={room} menuOpen={menuOpen} onMenu={() => setMenuOpen((v) => !v)} onHistory={() => setHistoryOpen(true)} />}
         {room && menuOpen && (
           <RoomMenu
             room={room}
             onBack={() => {
               setMenuOpen(false);
               onBack();
+            }}
+            onGameList={() => {
+              setMenuOpen(false);
+              onGameList();
             }}
           />
         )}
@@ -172,14 +201,28 @@ export function PlayRoom({
           </div>
         )}
 
+        {/* Q-268a: the game log of this game over the columns; the socket and the draft keep running underneath. */}
+        {room && you && historyOpen && (
+          <div className="play-history">
+            <GameSummaryPage apiBaseUrl={apiBaseUrl} token={token} onBack={() => setHistoryOpen(false)} />
+          </div>
+        )}
+
         {room && you && isPlayer && (
-          <div className="play-body" data-tab={tab}>
-            <SelfColumn data={data} secret={secretQuota(room).status} drowsy={you.drowsy} onUse={you.lock ? null : (name) => setDraft((d) => ({ ...d, text: `${t.inventory.insert(name)}${d.text}`, editing: d.editing || Boolean(you.action) }))} />
+          <div className="play-body" data-tab={tab} hidden={historyOpen}>
+            <SelfColumn
+              data={data}
+              secret={secretQuota(room).status}
+              drowsy={you.drowsy}
+              onUse={you.lock ? null : (name) => setDraft((d) => ({ ...d, text: `${t.inventory.insert(name)}${d.text}`, editing: d.editing || Boolean(you.action) }))}
+              onRelease={you.astral ? null : (ref) => void companion({ release: ref })}
+              companionProblem={companionProblem}
+            />
 
             <div className="play-place">
-              <PlaceHead room={room} data={data} onTravel={you.astral ? null : () => setTravelOpen(true)} />
+              <PlaceHead room={room} data={data} onTravel={you.astral ? null : () => setTravelOpen(true)} onSave={you.astral ? null : (ref) => void companion({ save: ref })} />
               <div className="play-place__main">
-                <Feed entries={feed} placeId={you.place?.id ?? null} astral={Boolean(you.astral)} />
+                <Feed entries={feed} placeId={you.place?.id ?? null} placeName={you.place?.name} astral={Boolean(you.astral)} />
                 {travelOpen && (
                   <TravelSheet
                     apiBaseUrl={apiBaseUrl}
@@ -210,15 +253,15 @@ export function PlayRoom({
             <PrivateColumn
               entries={entries}
               you={you}
-              acknowledged={acknowledged}
-              onAcknowledge={(seq) => setAcknowledged((set) => new Set(set).add(seq))}
+              acknowledged={acked}
+              onAcknowledge={acknowledge}
               whisper={{ text: whisperText, setText: setWhisperText }}
               whisperProblem={whisperProblem}
               onWhisper={sendWhisper}
             />
           </div>
         )}
-        {room && you && isPlayer && <PlayTabs active={tab} dots={dotTabs(counts, seen, tab)} onPick={pickTab} />}
+        {room && you && isPlayer && !historyOpen && <PlayTabs active={tab} dots={dotTabs(counts, seen, tab)} onPick={pickTab} />}
 
         {/* GEN-058: the Human GM has no character: the console (it reloads whenever the turn or the GM status moves), then the room's entries. */}
         {room && you && !isPlayer && (
@@ -234,8 +277,8 @@ export function PlayRoom({
             <PrivateColumn
               entries={entries}
               you={you}
-              acknowledged={acknowledged}
-              onAcknowledge={(seq) => setAcknowledged((set) => new Set(set).add(seq))}
+              acknowledged={acked}
+              onAcknowledge={acknowledge}
               whisper={{ text: whisperText, setText: setWhisperText }}
               whisperProblem={whisperProblem}
               onWhisper={sendWhisper}

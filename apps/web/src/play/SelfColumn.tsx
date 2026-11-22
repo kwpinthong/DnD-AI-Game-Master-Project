@@ -76,10 +76,11 @@ function Part<T>({ label, value, children }: { label: string; value: T | null | 
 const MAX_COMPANIONS = 3;
 
 /** 4.3 companions: the alias or the name, "หลัก" for the main one, the bond as a word + 6 steps (F4, no number). */
-function Companions({ companions }: { companions: CompanionView[] }) {
+function Companions({ companions, onRelease, problem }: { companions: CompanionView[]; onRelease: ((ref: string) => void) | null; problem: string | undefined }) {
   return (
     <>
       <h3>{t.companions.count(companions.length)}</h3>
+      {problem && <p role="alert">{problem}</p>}
       {companions.length === 0 ? (
         <p className="muted">{t.companions.empty}</p>
       ) : (
@@ -88,6 +89,11 @@ function Companions({ companions }: { companions: CompanionView[] }) {
             <li key={c.ref} className="play-companion">
               <span className="play-companion__name">{c.name}</span>
               {c.role === 'main' && <span className="chip">{t.companions.main}</span>}
+              {onRelease && (
+                <Button className="play-companion__release" aria-label={t.companions.releaseName(c.name)} onClick={() => onRelease(c.ref)}>
+                  {t.companions.release}
+                </Button>
+              )}
               {c.bond && (
                 <span className="play-companion__bond">
                   <StepBar label={t.companions.bond(c.bond.word)} cells={bondBar(c.bond)} />
@@ -155,14 +161,28 @@ function Skills({ inventory, onUse }: { inventory: InventoryView; onUse: ((name:
 }
 
 /** The left column (272): status / companions / skills + items. */
-export function SelfColumn({ data, secret, drowsy, onUse }: { data: PlayData; secret: string; drowsy: boolean; onUse: ((name: string) => void) | null }) {
+export function SelfColumn({
+  data,
+  secret,
+  drowsy,
+  onUse,
+  onRelease,
+  companionProblem,
+}: {
+  data: PlayData;
+  secret: string;
+  drowsy: boolean;
+  onUse: ((name: string) => void) | null;
+  onRelease: ((ref: string) => void) | null;
+  companionProblem: string | undefined;
+}) {
   return (
     <aside className="play-self" aria-label={t.self.column}>
       <Part label={t.self.status} value={data.character}>
         {(character) => <SelfStatus character={character} secret={secret} drowsy={drowsy} />}
       </Part>
       <Part label={t.companions.label} value={data.companions}>
-        {(companions) => <Companions companions={companions} />}
+        {(companions) => <Companions companions={companions} onRelease={onRelease} problem={companionProblem} />}
       </Part>
       <Part label={t.inventory.label} value={data.inventory}>
         {(inventory) => <Skills inventory={inventory} onUse={onUse} />}
