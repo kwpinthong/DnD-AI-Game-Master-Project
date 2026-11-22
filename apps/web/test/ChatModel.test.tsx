@@ -63,7 +63,7 @@ describe('entries as chat', () => {
   });
 
   it('the divider names period, turn and place, and the day only when it is not today', () => {
-    const at = { day: 2, phase: 'SOLARION', turn: 1, place: { id: 'fountain', name: 'น้ำพุกลางเมือง', zone: null } } as const;
+    const at = { day: 2, phase: 'SOLARION', turn: 1, place: { id: 'fountain', name: 'น้ำพุกลางเมือง' } } as const;
     expect(dividerText(at, 2)).toBe('— บ่าย · เทิร์น 1 · น้ำพุกลางเมือง —');
     expect(dividerText({ ...at, day: 1 }, 2)).toBe('— วันที่ 1 · บ่าย · เทิร์น 1 · น้ำพุกลางเมือง —');
     expect(dividerText({ ...at, place: null }, 2)).toBe('— บ่าย · เทิร์น 1 —');

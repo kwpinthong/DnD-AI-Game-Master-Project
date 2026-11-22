@@ -1,3 +1,4 @@
+import { ResponseVoteRequest } from '@isekai/protocol';
 import { mockHttp } from './http.ts';
 import { MockRoomServer, type MockPeer } from './room.ts';
 import { scenarioById } from './scenarios.ts';
@@ -77,7 +78,10 @@ function mockFetch(realFetch: typeof fetch): typeof fetch {
     const now = Date.now();
     if (!clocks.has(target.host)) clocks.set(target.host, now);
     const elapsedMs = (now - clocks.get(target.host)!) / options.timeScale;
-    const reply = mockHttp(scenarioById(target.scenario), { method, path: new URL(url).pathname, body }, elapsedMs);
+    // GEN-122: a vote is kept by the mock room (the contract's default answer would always say the same).
+    const voteAt = /^\/api\/game\/entries\/(\d+)\/vote$/.exec(new URL(url).pathname);
+    const voteBody = method === 'PUT' && voteAt ? ResponseVoteRequest.safeParse(body) : undefined;
+    const reply = voteBody?.success ? serverFor(target).vote(Number(voteAt![1]), voteBody.data.vote) : mockHttp(scenarioById(target.scenario), { method, path: new URL(url).pathname, body }, elapsedMs);
     // `pending` = loading on purpose: it never settles, not even on abort, so the page stays in its loading state.
     if ('pending' in reply) return new Promise<Response>(() => {});
     return new Promise<Response>((resolve, reject) => {

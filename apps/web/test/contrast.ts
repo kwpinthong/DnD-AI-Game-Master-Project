@@ -45,6 +45,16 @@ export const textPairs: readonly Pair[] = [
   ['--secret', '--panel', 'action ลับในช่อง action, badge ลับ'],
   ['--secret', '--private-bg', 'action ลับของตัวเองในคอลัมน์ส่วนตัว, badge ลับ'],
   ['--card-text', '--card-bg', 'การ์ดเนื้อหายาวใน scenario editor'],
+  // GEN-122 หน้า Play แบบแชต (พื้น feed = --bg + จุดดาวจาง ๆ จึงเทียบกับ --bg)
+  ['--text', '--bubble-own', 'กล่อง action ของเรา'],
+  ['--text', '--bubble-npc', 'กล่องบทพูด NPC'],
+  ['--highlight', '--bubble-npc', 'ชื่อ NPC บนกล่อง'],
+  ['--muted', '--bubble-own', 'ป้าย "คุณ" / "ลับ" เหนือกล่อง'],
+  ['--secret', '--bubble-own', 'ป้าย "ลับ" ในกล่อง action ของเรา'],
+  ['--text-soft', '--bg', 'ตัวเอียงบรรยาย / reaction บนพื้น feed'],
+  ['--text-soft', '--panel', 'ป้ายผลทอย / ค่าที่เปลี่ยน บนแผง'],
+  ['--text-soft', '--bubble-own', 'ข้อความรองในกล่องของเรา'],
+  ['--highlight', '--bg', 'ป้ายเหรียญที่ได้ (บนพื้น feed)'],
 ];
 
 // Non-text UI parts (WCAG 1.4.11, >= 3:1).
