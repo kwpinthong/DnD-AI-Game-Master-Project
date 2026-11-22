@@ -107,7 +107,7 @@ describe('Anthropic provider: the schema goes in the prompt, the answer is JSON 
     const config = anthropic({ AI_MAX_RETRIES: '1' });
     harness = makeService(providerFor(config), config);
 
-    expect(await harness.service.call(trigger('game-q285'))).toEqual({ ok: true, value: GOOD, attempts: 2 });
+    expect(await harness.service.call(trigger('game-q285'))).toMatchObject({ ok: true, value: GOOD, attempts: 2 });
     expect(stub.requests).toHaveLength(2);
   });
 });

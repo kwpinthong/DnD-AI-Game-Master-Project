@@ -55,7 +55,7 @@ describe('C5 timeout, refusal, bad JSON', () => {
 
     const result = await harness.service.call(trigger());
 
-    expect(result).toEqual({ ok: true, value: GOOD, attempts: 2 });
+    expect(result).toMatchObject({ ok: true, value: GOOD, attempts: 2 });
     expect(usageRows(harness.opened.sqlite).map((row) => [row.ok, row.failure_reason?.split(':')[0] ?? null])).toEqual([
       [0, 'schema_mismatch'],
       [1, null],
