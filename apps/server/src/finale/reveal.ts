@@ -3,12 +3,11 @@ import { karmaTitle } from '@isekai/rules';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
 import type { DbOrTx } from '../db/client.ts';
-import { character, characterPresence, member, phaseAction } from '../db/schema.ts';
+import { character, characterPresence, member } from '../db/schema.ts';
 import { companionIdsOf } from '../gm/finale.ts';
+import { rulingsOf } from '../rating/store.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { getEnding } from './store.ts';
-
-const PERIOD_ORDER = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
 
 /**
  * The secret reveal of an ended game (GEN-059 C5): every player's real name, karma (Q-196: tier word +
@@ -29,12 +28,8 @@ export function revealFor(db: DbOrTx, assets: GameAssets, gameId: string): GameR
     // rowid breaks ties in insert order, as `activeMembers` does.
     .orderBy(asc(member.createdAt), sql`member.rowid`)
     .all();
-  const secrets = db
-    .select({ memberId: phaseAction.memberId, day: phaseAction.day, phase: phaseAction.phase, turn: phaseAction.turn, text: phaseAction.text })
-    .from(phaseAction)
-    .where(and(eq(phaseAction.gameId, gameId), eq(phaseAction.visibility, 'secret')))
-    .all()
-    .sort((a, b) => a.day - b.day || PERIOD_ORDER.indexOf(a.phase) - PERIOD_ORDER.indexOf(b.phase) || a.turn - b.turn);
+  // GEN-078: each carries the `sourceRef` a 👍 names; oldest first.
+  const secrets = rulingsOf(db, gameId).filter((r) => r.visibility === 'secret');
   return {
     path: ending?.path ?? null,
     players: rows.map((r) => ({
@@ -46,7 +41,7 @@ export function revealFor(db: DbOrTx, assets: GameAssets, gameId: string): GameR
       outcome: ending?.outcomes[r.memberId] ?? null,
       spawn: r.spawn === null ? null : (placeName.get(r.spawn) ?? r.spawn),
       companions: companionIdsOf(db, r.memberId).map((id) => npcName.get(id) ?? id),
-      secretActions: secrets.filter((s) => s.memberId === r.memberId).map((s) => ({ day: s.day, phase: s.phase, turn: s.turn === 2 ? 2 : 1, text: s.text })),
+      secretActions: secrets.filter((s) => s.memberId === r.memberId).map((s) => ({ day: s.day, phase: s.phase, turn: s.turn === 2 ? 2 : 1, text: s.text, sourceRef: s.sourceRef })),
     })),
   };
 }

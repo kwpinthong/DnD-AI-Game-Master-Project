@@ -1,4 +1,4 @@
-import type { GameLogResponse } from '@isekai/protocol';
+import type { GameLogResponse, GameRatingView } from '@isekai/protocol';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App.tsx';
@@ -54,7 +54,7 @@ const endedLog: GameLogResponse = {
         outcome: 'survived',
         spawn: 'โรงเตี๊ยมและกิลด์นักเดินทาง',
         companions: ['มาร์คัส'],
-        secretActions: [{ day: 3, phase: 'NOCTHERION', turn: 1, text: 'แอบขโมยแผนที่ดาว' }],
+        secretActions: [{ day: 3, phase: 'NOCTHERION', turn: 1, text: 'แอบขโมยแผนที่ดาว', sourceRef: '3-NOCTHERION-1-1' }],
       },
       {
         memberId: 'm-b',
@@ -78,8 +78,11 @@ const playingLog: GameLogResponse = {
   reveal: null,
 };
 
+/** `rating`: the GEN-078 endpoints of the ended game, kept in memory; every write is in `ratingCalls`. */
 function stubServer() {
   const calls: string[] = [];
+  const ratingCalls: { method: string; path: string; body: unknown }[] = [];
+  const rating: GameRatingView = { mine: null, liked: [], thumbs: {}, average: null, raters: 0, members: 2, eligible: false, blocker: 'too_few_raters' };
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -87,6 +90,29 @@ function stubServer() {
       const auth = new Headers(init?.headers).get('authorization') ?? '';
       calls.push(`${url} ${auth}`);
       if (url.endsWith('/health')) return Response.json({ ok: true, db: 'connected' });
+      const path = url.slice(url.indexOf('/api/'));
+      if (path.startsWith('/api/game/rating')) {
+        const method = init?.method ?? 'GET';
+        if (auth !== 'Bearer tok-ended') return Response.json({ code: 'not_allowed', message: 'ให้คะแนนได้เมื่อเกมจบแล้วเท่านั้น' }, { status: 409 });
+        const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
+        if (method !== 'GET') ratingCalls.push({ method, path, body });
+        if (path === '/api/game/rating' && method === 'PUT') {
+          const sent = body as { score: number; comment?: string };
+          rating.mine = { score: sent.score, comment: sent.comment ?? '' };
+          rating.raters = 1;
+          rating.average = sent.score;
+        }
+        const ref = decodeURIComponent(path.split('/likes/')[1] ?? '');
+        if (ref && method === 'PUT') {
+          rating.liked = [ref];
+          rating.thumbs = { [ref]: 3 };
+        }
+        if (ref && method === 'DELETE') {
+          rating.liked = [];
+          rating.thumbs = { [ref]: 2 };
+        }
+        return Response.json({ rating });
+      }
       if (url.endsWith('/api/game/log')) {
         if (auth === 'Bearer tok-ended') return Response.json(endedLog);
         if (auth === 'Bearer tok-playing') return Response.json(playingLog);
@@ -95,7 +121,7 @@ function stubServer() {
       return Response.json({ code: 'not_found', message: 'ไม่พบ' }, { status: 404 });
     }),
   );
-  return calls;
+  return Object.assign(calls, { ratingCalls, rating });
 }
 
 afterEach(() => {
@@ -181,7 +207,9 @@ describe('C3: game list and the summary + log of a finished game', () => {
     expect(log.getByText(/เสียงโห่ดังจากกลางตลาด/)).toBeTruthy();
     expect(log.getByText(/คุณเห็นเงาวิ่งหายไปหลังร้าน/)).toBeTruthy();
     expect(log.getByText(/ลิน → ดาริน/)).toBeTruthy();
-    expect(s.queryByRole('textbox')).toBeNull();
+    // The only thing to fill in is the rating form (GEN-078).
+    const form = s.getByRole('region', { name: 'ให้คะแนนเกม' });
+    expect(s.queryAllByRole('textbox').filter((box) => !form.contains(box))).toEqual([]);
 
     fireEvent.click(s.getByRole('button', { name: 'กลับไปรายการเกม' }));
     expect(await screen.findByRole('list', { name: 'เกมของฉัน' })).toBeTruthy();
@@ -208,8 +236,70 @@ describe('C3: game list and the summary + log of a finished game', () => {
     const darin = within(reveal.getByRole('article', { name: 'บี' }));
     expect(darin.getByText(/พ่ายแพ้/)).toBeTruthy();
     expect(darin.getByText(/ไม่มี Secret action/)).toBeTruthy();
-    // GEN-077 / GEN-078 put the rating form here later.
     expect(screen.getByRole('region', { name: 'ให้คะแนนเกม' })).toBeTruthy();
+  });
+
+  async function openEnded() {
+    localStorage.setItem(KNOWN_TOKENS_KEY, JSON.stringify(['tok-ended']));
+    const server = stubServer();
+    render(<App apiBaseUrl="" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'รายการเกม' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'ดูสรุป เมืองก่อนอุกกาบาต' }));
+    const form = within(await screen.findByRole('region', { name: 'ให้คะแนนเกม' }));
+    await form.findByLabelText('คะแนน 1–10');
+    return { server, form };
+  }
+
+  it('GEN-078 C1: on an ended game a member sends 9 + a comment and the page says the score is sent', async () => {
+    const { server, form } = await openEnded();
+    expect(form.queryByText(/ส่งคะแนนแล้ว/)).toBeNull();
+    fireEvent.change(form.getByLabelText('คะแนน 1–10'), { target: { value: '9' } });
+    fireEvent.change(form.getByLabelText('ความเห็น (ไม่บังคับ)'), { target: { value: 'สนุกมาก ทำอีกนะ' } });
+    fireEvent.click(form.getByRole('button', { name: 'ส่งคะแนน' }));
+    expect(await form.findByText(/ส่งคะแนนแล้ว/)).toBeTruthy();
+    expect(server.ratingCalls).toEqual([{ method: 'PUT', path: '/api/game/rating', body: { score: 9, comment: 'สนุกมาก ทำอีกนะ' } }]);
+    // C6: the form stays, so the score can be changed.
+    expect(form.getByRole('button', { name: 'แก้คะแนน' })).toBeTruthy();
+  });
+
+  it('GEN-078 C2: no score chosen: an error, and nothing is sent', async () => {
+    const { server, form } = await openEnded();
+    fireEvent.click(form.getByRole('button', { name: 'ส่งคะแนน' }));
+    expect((await form.findByRole('alert')).textContent).toBe('เลือกคะแนน 1–10');
+    expect(server.ratingCalls).toEqual([]);
+    // Only whole numbers 1–10 can be chosen.
+    expect(within(form.getByLabelText('คะแนน 1–10')).getAllByRole('option').map((o) => (o as HTMLOptionElement).value)).toEqual(['', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']);
+  });
+
+  it('GEN-078 C7: 👍 on a revealed action adds to its count; pressing again takes it back', async () => {
+    const { server } = await openEnded();
+    const lin = within(screen.getByRole('article', { name: 'นก' }));
+    const like = await lin.findByRole('button', { name: /👍 แอบขโมยแผนที่ดาว/ });
+    expect(like.getAttribute('aria-pressed')).toBe('false');
+    expect(like.textContent).toBe('👍 0');
+    fireEvent.click(like);
+    await lin.findByRole('button', { name: /👍 แอบขโมยแผนที่ดาว/, pressed: true });
+    expect(like.textContent).toBe('👍 3');
+    fireEvent.click(like);
+    await lin.findByRole('button', { name: /👍 แอบขโมยแผนที่ดาว/, pressed: false });
+    expect(like.textContent).toBe('👍 2');
+    expect(server.ratingCalls).toEqual([
+      { method: 'PUT', path: '/api/game/rating/likes/3-NOCTHERION-1-1', body: undefined },
+      { method: 'DELETE', path: '/api/game/rating/likes/3-NOCTHERION-1-1', body: undefined },
+    ]);
+  });
+
+  it('GEN-078 C4: a game still playing has no rating form and no 👍', async () => {
+    localStorage.setItem(KNOWN_TOKENS_KEY, JSON.stringify(['tok-playing']));
+    const server = stubServer();
+    render(<App apiBaseUrl="" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'รายการเกม' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'ดูสรุป เกมคืนวันศุกร์' }));
+    await screen.findByRole('region', { name: 'สรุปเกม เกมคืนวันศุกร์' });
+    expect(screen.queryByRole('region', { name: 'ให้คะแนนเกม' })).toBeNull();
+    expect(screen.queryByLabelText('คะแนน 1–10')).toBeNull();
+    expect(screen.queryByRole('button', { name: /👍/ })).toBeNull();
+    expect(server.filter((c) => c.includes('/api/game/rating'))).toEqual([]);
   });
 
   it('a game still playing has no reveal section', async () => {

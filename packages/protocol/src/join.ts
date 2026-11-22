@@ -147,5 +147,7 @@ export const ApiError = z.discriminatedUnion('code', [
   z.object({ code: z.literal('companion_limit'), message: z.string() }),
   /** 404: no NPC with that ref at the caller's place, or (release) not one of the caller's companions. */
   z.object({ code: z.literal('npc_not_found'), message: z.string() }),
+  /** 404 (GEN-078): the `sourceRef` names no action → result row the end page of the caller's game shows. */
+  z.object({ code: z.literal('ruling_not_found'), message: z.string() }),
 ]);
 export type ApiError = z.infer<typeof ApiError>;

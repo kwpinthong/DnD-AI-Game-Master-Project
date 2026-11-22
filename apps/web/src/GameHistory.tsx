@@ -1,6 +1,6 @@
-import { PHASE_LABEL, type EndingPath, type GameLogResponse, type GameReveal, type RoomEntry } from '@isekai/protocol';
-import { useEffect, useState } from 'react';
-import { fetchGameLog } from './history-api.ts';
+import { GameRatingRequest, PHASE_LABEL, type EndingPath, type GameLogResponse, type GameRatingView, type GameReveal, type RoomEntry } from '@isekai/protocol';
+import { useEffect, useState, type FormEvent } from 'react';
+import { fetchGameLog, fetchRating, sendRating, setRulingLike } from './history-api.ts';
 import { forgetToken, loadKnownTokens } from './session.ts';
 
 /**
@@ -24,7 +24,7 @@ const EVENT_STATUS: Record<string, string> = { pending: 'ยังไม่ถ�
 
 export function GameHistory({ apiBaseUrl, onClose }: { apiBaseUrl: string; onClose: () => void }) {
   const [games, setGames] = useState<Loaded[] | null>(null);
-  const [open, setOpen] = useState<GameLogResponse | null>(null);
+  const [open, setOpen] = useState<{ token: string; log: GameLogResponse } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,7 +39,7 @@ export function GameHistory({ apiBaseUrl, onClose }: { apiBaseUrl: string; onClo
     };
   }, [apiBaseUrl]);
 
-  if (open) return <GameLog log={open} onBack={() => setOpen(null)} />;
+  if (open) return <GameLog log={open.log} session={{ apiBaseUrl, token: open.token }} onBack={() => setOpen(null)} />;
 
   return (
     <section aria-label="รายการเกม">
@@ -54,7 +54,7 @@ export function GameHistory({ apiBaseUrl, onClose }: { apiBaseUrl: string; onClo
             ) : (
               <li key={g.token}>
                 <strong>{g.log.game.name}</strong> — {statusText(g.log.game)}{' '}
-                <button type="button" aria-label={`ดูสรุป ${g.log.game.name}`} onClick={() => setOpen(g.log as GameLogResponse)}>
+                <button type="button" aria-label={`ดูสรุป ${g.log.game.name}`} onClick={() => setOpen({ token: g.token, log: g.log as GameLogResponse })}>
                   ดูสรุป
                 </button>
               </li>
@@ -77,8 +77,80 @@ const PATH_TEXT: Record<EndingPath, string> = {
 };
 const OUTCOME_TEXT = { survived: 'รอดชีวิต', defeated: 'พ่ายแพ้ (Bad Ending)' } as const;
 
+interface RatingSession {
+  apiBaseUrl: string;
+  token: string;
+}
+
+/** GEN-078: one score 1–10 + an optional comment per member; sending again replaces it. */
+function RatingForm({ rating, session, onRating }: { rating: GameRatingView; session: RatingSession; onRating: (rating: GameRatingView) => void }) {
+  const [score, setScore] = useState(rating.mine ? String(rating.mine.score) : '');
+  const [comment, setComment] = useState(rating.mine?.comment ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const parsed = GameRatingRequest.safeParse({ score: score === '' ? undefined : Number(score), comment });
+    if (!parsed.success) return setError(parsed.error.issues[0]?.message ?? 'เลือกคะแนน 1–10');
+    setError(null);
+    setSending(true);
+    const result = await sendRating(session.apiBaseUrl, session.token, parsed.data);
+    setSending(false);
+    if (result.ok) onRating(result.rating);
+    else setError(result.message);
+  }
+
+  return (
+    <form onSubmit={submit} noValidate>
+      {rating.mine && <p role="status">ส่งคะแนนแล้ว: {rating.mine.score}/10 (แก้ได้)</p>}
+      <label>
+        คะแนน 1–10
+        <select value={score} onChange={(e) => setScore(e.target.value)}>
+          <option value="">เลือก</option>
+          {Array.from({ length: 10 }, (_, i) => String(i + 1)).map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        ความเห็น (ไม่บังคับ)
+        <textarea value={comment} maxLength={500} onChange={(e) => setComment(e.target.value)} />
+      </label>
+      {error && <p role="alert">{error}</p>}
+      <button type="submit" disabled={sending}>
+        {rating.mine ? 'แก้คะแนน' : 'ส่งคะแนน'}
+      </button>
+      <p>
+        คะแนนเกม: {rating.average === null ? 'ยังไม่มี' : rating.average.toFixed(1)} · ให้แล้ว {rating.raters}/{rating.members} คน
+      </p>
+    </form>
+  );
+}
+
 /** GEN-059 C5: the secrets of everyone, only once the game ended (the server sends `reveal` then only). */
-function Reveal({ reveal }: { reveal: GameReveal }) {
+function Reveal({ reveal, session }: { reveal: GameReveal; session?: RatingSession | undefined }) {
+  // GEN-078: the caller's score and 👍; null until loaded (or without a session: the dev gallery).
+  const [rating, setRating] = useState<GameRatingView | null>(null);
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    void fetchRating(session.apiBaseUrl, session.token).then((result) => {
+      if (!cancelled && result.ok) setRating(result.rating);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.apiBaseUrl, session?.token]);
+
+  async function toggleLike(sourceRef: string) {
+    if (!session || !rating) return;
+    const result = await setRulingLike(session.apiBaseUrl, session.token, sourceRef, !rating.liked.includes(sourceRef));
+    if (result.ok) setRating(result.rating);
+  }
+
   return (
     <section aria-label="ความลับของทุกคน">
       <h3>ความลับของทุกคน</h3>
@@ -109,6 +181,19 @@ function Reveal({ reveal }: { reveal: GameReveal }) {
                   {p.secretActions.map((s, i) => (
                     <li key={i}>
                       {at(s)}: {s.text}
+                      {rating && s.sourceRef !== undefined && (
+                        <>
+                          {' '}
+                          <button
+                            type="button"
+                            aria-label={`👍 ${s.text}`}
+                            aria-pressed={rating.liked.includes(s.sourceRef)}
+                            onClick={() => void toggleLike(s.sourceRef!)}
+                          >
+                            👍 {rating.thumbs?.[s.sourceRef] ?? 0}
+                          </button>
+                        </>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -117,14 +202,20 @@ function Reveal({ reveal }: { reveal: GameReveal }) {
           </dl>
         </article>
       ))}
-      {/* GEN-077 / GEN-078: the rating form goes here. */}
-      <section aria-label="ให้คะแนนเกม" />
+      <section aria-label="ให้คะแนนเกม">
+        {rating && session && (
+          <>
+            <h3>ให้คะแนนเกม</h3>
+            <RatingForm rating={rating} session={session} onRating={setRating} />
+          </>
+        )}
+      </section>
     </section>
   );
 }
 
 /** One game, read-only; after the end with the secret reveal (GEN-059). Exported for the dev gallery (GEN-100). */
-export function GameLog({ log, onBack }: { log: GameLogResponse; onBack: () => void }) {
+export function GameLog({ log, onBack, session }: { log: GameLogResponse; onBack: () => void; session?: { apiBaseUrl: string; token: string } }) {
   return (
     <section aria-label={`สรุปเกม ${log.game.name}`}>
       <h2>{log.game.name}</h2>
@@ -132,7 +223,7 @@ export function GameLog({ log, onBack }: { log: GameLogResponse; onBack: () => v
         {statusText(log.game)}
         {log.game.status === 'ended' && log.game.at ? ` · หยุดที่ ${at(log.game.at)}` : ''}
       </p>
-      {log.reveal && <Reveal reveal={log.reveal} />}
+      {log.reveal && <Reveal reveal={log.reveal} session={session} />}
 
       <h3>ผู้เล่น</h3>
       <ul aria-label="ผู้เล่น">
