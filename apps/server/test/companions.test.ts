@@ -59,6 +59,7 @@ describe('NPC companions from the sheet NPC tab (GEN-054)', { timeout: 60_000 },
     const npcs: Scenario['npcs'] = server.assets.npcs.map((n) => ({
       id: IDS[n.aliases[0]!]!,
       name: n.aliases[0]!,
+      otherNames: [],
       alias: n.aliases[0]!,
       rank: n.grade === 'SS' ? 'F' : n.grade,
       locationId: MARKET,

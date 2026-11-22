@@ -21,6 +21,11 @@ const MANOR = 'เคหาสน์เจ้าเมือง';
 const BARRACKS = 'ค่ายทหารป้องกันเมือง';
 const LIBRARY = 'หอสมุดหลวง';
 const RIFT = 'มิติพิศวง (The Astral Rift)';
+/**
+ * The default scenario (GEN-071) has every Location under its own id, so a move there stores and returns
+ * the scenario's id (service.ts `storedId`). Places put with `put` keep the Location name.
+ */
+const SCENARIO_ID = { church: 'temple', forest: 'forest', manor: 'manor', barracks: 'barracks', rift: 'astral-rift' } as const;
 
 /** Always rolls `face`. */
 const fixedRng = (face: number): Rng => ({ nextInt: (min, max) => Math.max(min, Math.min(max, face)) });
@@ -90,10 +95,10 @@ describe('GEN-066 travel in the play room', { timeout: 60_000 }, () => {
     const a = await enter(t.a);
 
     const before = a.messages.length;
-    expect(await move(a, CHURCH)).toEqual({ type: 'move_accepted', kind: 'same_zone', place: { id: CHURCH, name: CHURCH }, arrives: 'now' });
-    expect(placeOf(t.a.memberId)).toBe(CHURCH);
+    expect(await move(a, CHURCH)).toEqual({ type: 'move_accepted', kind: 'same_zone', place: { id: SCENARIO_ID.church, name: CHURCH }, arrives: 'now' });
+    expect(placeOf(t.a.memberId)).toBe(SCENARIO_ID.church);
     expect(staminaOf(t, t.a.memberId)).toBe(29);
-    await a.waitFor((m) => m.type === 'room' && m.you.place?.id === CHURCH, before);
+    await a.waitFor((m) => m.type === 'room' && m.you.place?.id === SCENARIO_ID.church, before);
     expect(await act(a, 'สวดภาวนาที่โบสถ์')).toEqual({ type: 'action_accepted' });
   });
 
@@ -102,7 +107,7 @@ describe('GEN-066 travel in the play room', { timeout: 60_000 }, () => {
     put(t.a.memberId, FOUNTAIN);
     const [a, b, c] = [await enter(t.a), await enter(t.b), await enter(t.c)];
 
-    expect(await move(a, FOREST)).toEqual({ type: 'move_accepted', kind: 'cross_zone', place: { id: FOREST, name: FOREST }, arrives: 'next_turn' });
+    expect(await move(a, FOREST)).toEqual({ type: 'move_accepted', kind: 'cross_zone', place: { id: SCENARIO_ID.forest, name: FOREST }, arrives: 'next_turn' });
     expect(placeOf(t.a.memberId)).toBe(FOUNTAIN);
     expect(staminaOf(t, t.a.memberId)).toBe(27);
     expect(state(t).submissions[t.a.memberId]?.text).toContain(FOREST);
@@ -113,8 +118,8 @@ describe('GEN-066 travel in the play room', { timeout: 60_000 }, () => {
     expect(await act(b, 'รอ')).toEqual({ type: 'action_accepted' });
     expect(await act(c, 'รอ')).toEqual({ type: 'action_accepted' });
     await a.waitFor(turnIs(1, 'EOSORIA', 2));
-    expect(placeOf(t.a.memberId)).toBe(FOREST);
-    expect(calls[0]!.actions.find((x) => x.memberId === t.a.memberId)).toMatchObject({ travelingTo: FOREST, locationId: FOUNTAIN });
+    expect(placeOf(t.a.memberId)).toBe(SCENARIO_ID.forest);
+    expect(calls[0]!.actions.find((x) => x.memberId === t.a.memberId)).toMatchObject({ travelingTo: SCENARIO_ID.forest, locationId: FOUNTAIN });
     expect(calls[0]!.actions.find((x) => x.memberId === t.b.memberId)).toMatchObject({ travelingTo: null });
     // Next turn the player acts as usual.
     expect(await act(a, 'เก็บสมุนไพร')).toEqual({ type: 'action_accepted' });
@@ -213,7 +218,7 @@ describe('GEN-066 travel in the play room', { timeout: 60_000 }, () => {
     // A success: the trip to the manor (another zone) is on.
     put(t.b.memberId, FOUNTAIN);
     const entered = travel(server!.orm, server!.assets, gameId, t.b.memberId, { to: MANOR, infiltrate: { input: infiltration(t.b.memberId), rng: fixedRng(18) } }, CLOCK);
-    expect(entered).toMatchObject({ ok: true, kind: 'cross_zone', arrives: 'next_turn', place: { id: MANOR } });
+    expect(entered).toMatchObject({ ok: true, kind: 'cross_zone', arrives: 'next_turn', place: { id: SCENARIO_ID.manor, name: MANOR } });
     expect(entered.infiltration?.degree).toBe('success');
     expect(staminaOf(t, t.b.memberId)).toBe(30 - 3 - 3);
 
@@ -221,13 +226,13 @@ describe('GEN-066 travel in the play room', { timeout: 60_000 }, () => {
     put(t.c.memberId, 'ย่านการค้า-ตลาดมืด');
     const soldier = travel(server!.orm, server!.assets, gameId, t.c.memberId, { to: BARRACKS, startScenario: 'ทหารเกณฑ์ประจำป้อม' }, CLOCK);
     expect(soldier).toMatchObject({ ok: true, kind: 'same_zone', arrives: 'now', infiltration: null });
-    expect(placeOf(t.c.memberId)).toBe(BARRACKS);
+    expect(placeOf(t.c.memberId)).toBe(SCENARIO_ID.barracks);
 
     // The turn closes: B arrives at the manor.
     const clients = [await enter(t.a), await enter(t.c)];
     for (const client of clients) expect(await act(client, 'รอ')).toEqual({ type: 'action_accepted' });
     await clients[0]!.waitFor(turnIs(1, 'EOSORIA', 2));
-    expect(placeOf(t.b.memberId)).toBe(MANOR);
+    expect(placeOf(t.b.memberId)).toBe(SCENARIO_ID.manor);
   });
 
   it('C6: from the library on a clear night with karma +10 the player spends one turn in the rift and comes back; karma +20 or rain is refused', async () => {
@@ -248,7 +253,7 @@ describe('GEN-066 travel in the play room', { timeout: 60_000 }, () => {
       kind: 'rift',
       arrives: 'now',
     });
-    expect(placeOf(t.a.memberId)).toBe(RIFT);
+    expect(placeOf(t.a.memberId)).toBe(SCENARIO_ID.rift);
     expect(npcsMetBy(server!.orm, server!.assets, gameId, t.a.memberId)).toEqual(['แอสทรา']);
 
     const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
@@ -264,9 +269,12 @@ describe('GEN-066 travel in the play room', { timeout: 60_000 }, () => {
     expect(npcsMetBy(server!.orm, server!.assets, gameId, t.a.memberId)).not.toContain('ลูเซีย');
     editState(t, (s) => ({ ...s, phase: 'SOLARION' }));
     expect(npcsMetBy(server!.orm, server!.assets, gameId, t.a.memberId)).toEqual(expect.arrayContaining(['ลูเซีย', 'โนอา']));
-    // B is at the default scenario's own place (not a Location): nobody from the schedule.
+    // B starts at the default scenario's `inn`, read as the Location "โรงเตี๊ยมและกิลด์นักเดินทาง":
+    // the schedule puts Garrett there in SOLARION only.
     expect(placeOf(t.b.memberId)).toBe('inn');
-    expect(npcsMetBy(server!.orm, server!.assets, gameId, t.b.memberId)).toEqual([]);
+    expect(npcsMetBy(server!.orm, server!.assets, gameId, t.b.memberId)).toEqual(['จ่าสิบเอกการ์เร็ต']);
+    editState(t, (s) => ({ ...s, phase: 'HESPERION' }));
+    expect(npcsMetBy(server!.orm, server!.assets, gameId, t.b.memberId)).not.toContain('จ่าสิบเอกการ์เร็ต');
   });
 
   it('C8: a location id that does not exist is an error and the place does not change', async () => {
@@ -279,7 +287,7 @@ describe('GEN-066 travel in the play room', { timeout: 60_000 }, () => {
     }
     expect(placeOf(t.a.memberId)).toBe('inn');
     expect(staminaOf(t, t.a.memberId)).toBe(30);
-    // From the default scenario's own place every move counts as another zone.
-    expect(await move(a, CHURCH)).toMatchObject({ type: 'move_accepted', kind: 'cross_zone', arrives: 'next_turn' });
+    // The start place `inn` is the Central Zone's inn: the forest is another zone.
+    expect(await move(a, FOREST)).toMatchObject({ type: 'move_accepted', kind: 'cross_zone', arrives: 'next_turn' });
   });
 });
