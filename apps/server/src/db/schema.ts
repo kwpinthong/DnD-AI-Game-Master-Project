@@ -148,3 +148,7 @@ export * from './schema-travel.ts';
 
 // GEN-068: the weather of each period, own file for the same reason.
 export * from './schema-weather.ts';
+// GEN-055: unlocked skills, unlock progress and library reveals, own file for the same reason.
+export * from './schema-skills.ts';
+// GEN-058: the Human GM's override log, own file for the same reason.
+export * from './schema-gm-console.ts';

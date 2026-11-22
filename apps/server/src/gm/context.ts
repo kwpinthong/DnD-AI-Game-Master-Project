@@ -3,14 +3,14 @@ import { karmaBand, socialTitle, type CrossPlayerState, type PeriodWeather, type
 import { and, eq, isNull } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
 import type { PromptBlock } from '../ai/provider.ts';
-import { chosenLootInGame, itemsInGame } from '../crossplayer/items.ts';
+import { itemsInGame, skillsInGame } from '../crossplayer/items.ts';
 import { isLegacyOption, type StoredOption } from '../game/loot.ts';
 import type { DbOrTx } from '../db/client.ts';
 import { character, member } from '../db/schema.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { buildEventContext, type EventContext } from '../timeline/context.ts';
 import { namesVisibleTo, presencesInGame } from '../visibility/store.ts';
-import { activeConstraints, dayLog, memoryFor } from './store.ts';
+import { activeConstraints, dayLog, journalFor, memoryFor } from './store.ts';
 
 /**
  * What the AI GM sees (GEN-057, ADR "Isekai Chronicles - AI GM" §6). Every request is one JSON object in
@@ -35,7 +35,9 @@ export function estimateTokens(text: string): number {
 }
 
 /** ADR §6.2 hard caps per call. */
-export const CONTEXT_BUDGET = { gm_adjudicate: 20_000, narrate_player: 6_000, narrate_place: 5_000, summarize_day: 14_000 } as const;
+export const CONTEXT_BUDGET = { gm_adjudicate: 20_000, narrate_player: 6_000, narrate_place: 5_000, summarize_day: 14_000, summarize_journal: 6_000 } as const;
+/** ADR §6.2 / §6.3: what of a player's journal their narrator gets (saga ≤ 600 + yesterday ≤ 250 tokens). */
+export const JOURNAL_BUDGET = { saga: 600, yesterday: 250 } as const;
 /** How much of today's turn log the adjudicator gets (newest kept). */
 const TODAY_LOG_TOKENS = 3_000;
 
@@ -119,8 +121,9 @@ export interface PlayerContext {
   stamina: number;
   karmaBand: number;
   drowsy: boolean;
-  items: { id: string; name: string; tier: string }[];
-  skills: { id: string; name: string; tier: string }[];
+  /** `effect`: the qualitative text the AI judges (GEN-055); the numbers come through `tagSources`. */
+  items: { id: string; name: string; tier: string; effect: string }[];
+  skills: { id: string; name: string; tier: string; effect: string }[];
   tagSources: { id: string; kind: string; verbTags: string[]; targetTags: string[]; trigger: string; dailyLimit: number; usesToday: number }[];
   constraints: { id: number; text: string; reason: string; sinceDay: number }[];
 }
@@ -156,12 +159,15 @@ export interface TurnContextInput {
   resting: readonly string[];
   /** The period's weather (GEN-068); null = none chosen. */
   weather?: PeriodWeather | null;
+  /** Game data: each skill / item's Rank and qualitative text (GEN-055). */
+  assets?: GameAssets;
 }
 
 export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnContext {
   const { world, state, at } = input;
-  const loot = new Map(chosenLootInGame(db, world.gameId).map((l) => [l.memberId, l.chosen]));
+  const skills = skillsInGame(db, world.gameId);
   const items = [...itemsInGame(db, world.gameId).values()];
+  const gear = (o: StoredOption) => ({ id: o.id, name: world.tokenise(o.name), tier: optionTier(o, input.assets), effect: qualitativeText(o, input.assets) });
   const constraints = activeConstraints(db, world.gameId);
   const ref = (memberId: string) => world.players.get(memberId)?.ref ?? memberId;
 
@@ -169,7 +175,6 @@ export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnConte
     const p = world.players.get(s.id);
     if (!p) return [];
     const ctx = input.tags[s.id];
-    const skill = loot.get(s.id)?.skill;
     return [
       {
         ref: p.ref,
@@ -180,8 +185,8 @@ export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnConte
         stamina: s.stamina,
         karmaBand: karmaBand(s.karma),
         drowsy: input.drowsy.has(s.id),
-        items: items.filter((i) => i.holderMemberId === s.id).map((i) => ({ id: i.id, name: world.tokenise(i.name), tier: optionTier(i) })),
-        skills: skill ? [{ id: skill.id, name: world.tokenise(skill.name), tier: optionTier(skill) }] : [],
+        items: items.filter((i) => i.holderMemberId === s.id).map(gear),
+        skills: (skills.get(s.id) ?? []).map(gear),
         tagSources: (ctx?.sources ?? []).map((src) => ({
           id: src.id,
           kind: src.kind,
@@ -216,6 +221,30 @@ export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnConte
     tagVocabulary: [...input.vocabulary],
     events: { active: events.active, past: events.past },
     memory: memoryContext(db, world.gameId, at),
+  };
+}
+
+/** The longest start of `text` within `max` tokens (`estimateTokens`). */
+export function withinTokens(text: string, max: number): string {
+  if (estimateTokens(text) <= max) return text;
+  let out = '';
+  let ascii = 0;
+  let other = 0;
+  for (const ch of text) {
+    if (ch.charCodeAt(0) < 128) ascii++;
+    else other++;
+    if (other + Math.ceil(ascii / 4) > max) break;
+    out += ch;
+  }
+  return out;
+}
+
+/** A player's journal for their narrations on `day`, cut to the ADR budget (Q-153). */
+export function narrationJournal(db: DbOrTx, memberId: string, day: number): NonNullable<NarrationContext['journal']> {
+  const j = journalFor(db, memberId, day);
+  return {
+    saga: j.saga === null ? null : withinTokens(j.saga, JOURNAL_BUDGET.saga),
+    yesterday: j.yesterday === null ? null : withinTokens(j.yesterday, JOURNAL_BUDGET.yesterday),
   };
 }
 
@@ -262,6 +291,20 @@ export interface NarrationContext {
   npcs: { id: string; alias: string }[];
   /** In the server's order; write one or more segments for each, in the same order. */
   beats: Beat[];
+  /** The reader's own journal (Q-153), for a private narration only; null for a place feed. */
+  journal: { saga: string | null; yesterday: string | null } | null;
+}
+
+/** `summarize_journal` (ADR §6.3, Q-153): one player's day from the entries that player received. */
+export interface JournalContext {
+  kind: 'gm_journal';
+  day: number;
+  /** The player's ref; their own entries say "คุณ" for them. */
+  player: string;
+  /** Their saga through the day before. */
+  saga: string | null;
+  /** What reached this player that day (feed + private narration), oldest first, tokens only. */
+  seen: string[];
 }
 
 export interface DayContext {
@@ -296,14 +339,34 @@ export const RULES_BLOCK: PromptBlock = { id: 'rules', text: RULES_TEXT, cache: 
 export const NARRATOR_BLOCK: PromptBlock = { id: 'narrator-rules', text: NARRATOR_TEXT, cache: true };
 export const SUMMARY_BLOCK: PromptBlock = { id: 'summary-rules', text: SUMMARY_TEXT, cache: true };
 
+const JOURNAL_TEXT =
+  'สรุปบันทึกส่วนตัวของผู้เล่นหนึ่งคนจาก seen (สิ่งที่ผู้เล่นคนนี้เห็นและได้รับรู้ในวันนั้นเท่านั้น): journal = เรื่องสำคัญของวันนี้จากมุมของเขา / saga = saga เดิมย่อรวมกับวันนี้ ห้ามเพิ่มเรื่องที่ไม่อยู่ใน seen ใช้ token แทนชื่อเสมอ ห้ามตัวเลข HP / กรรม';
+export const JOURNAL_BLOCK: PromptBlock = { id: 'journal-rules', text: JOURNAL_TEXT, cache: true };
+
 /** Tokens of a whole request (system + messages). */
 export function requestTokens(system: readonly PromptBlock[], messages: readonly { text: string }[]): number {
   return estimateTokens([...system.map((b) => b.text), ...messages.map((m) => m.text)].join('\n'));
 }
 
-/** The tier the AI GM sees: an old GEN-048 option keeps "Common", a sheet option (GEN-073) its Rank (e.g. "B"). */
-function optionTier(o: StoredOption): string {
-  return isLegacyOption(o) ? o.tier : `Rank ${o.rank ?? '?'}`;
+const sheetRow = (o: StoredOption, assets: GameAssets | undefined) => (o.kind === 'skill' ? assets?.ability(o.name) : assets?.item(o.name));
+
+/** The tier the AI GM sees: an old GEN-048 option keeps "Common", a sheet row its Rank (GEN-055: B / A / S / SS). */
+function optionTier(o: StoredOption, assets: GameAssets | undefined): string {
+  if (isLegacyOption(o)) return o.tier;
+  return `Rank ${sheetRow(o, assets)?.rank ?? o.rank ?? '?'}`;
+}
+
+/**
+ * GEN-055: what the server does not compute (the qualitative half), as text the AI judges within the Rank cap:
+ * the Ability Description / Item Effect, the item's skill-boost half of Skill Synergy, and the Note.
+ * Never the unlock condition.
+ */
+function qualitativeText(o: StoredOption, assets: GameAssets | undefined): string {
+  const row = sheetRow(o, assets);
+  if (!row) return o.description;
+  const boost = 'synergy' in row ? (/เสริมสกิล:\s*([^/]*)/.exec(row.synergy)?.[1]?.trim() ?? '') : '';
+  const text = 'effect' in row ? row.effect : row.description;
+  return [text, boost && `เสริมสกิล: ${boost}`, row.note].filter((s) => s.length > 0).join(' / ');
 }
 
 /** The weather as the AI GM reads it (GEN-068): the period's weather plus the day-5 Disaster state. */

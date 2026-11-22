@@ -5,7 +5,7 @@ import { loadAiConfig } from '../src/ai/config.ts';
 import type { AiCallRequest, AiCallResult, AiProvider } from '../src/ai/provider.ts';
 import { cannedGmAnswer, contextOf, mockTurnProposal } from '../src/gm/mock-gm.ts';
 import { mockReply } from '../src/ai/providers/mock.ts';
-import { CONTEXT_BUDGET, requestTokens, type NarrationContext, type TurnContext } from '../src/gm/context.ts';
+import { CONTEXT_BUDGET, requestTokens, type JournalContext, type NarrationContext, type TurnContext } from '../src/gm/context.ts';
 import type { GmTurnProposal } from '../src/gm/schema.ts';
 import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
 import type { RunningServer } from '../src/server.ts';
@@ -77,11 +77,15 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     cleanup();
   });
 
+  const logs: string[] = [];
+
   async function boot(env: Record<string, string> = {}, handler?: Handler): Promise<void> {
     provider = gmProvider(handler);
+    logs.length = 0;
     server = await startTestServer(dataDir, {
       aiProvider: provider,
       ai: loadAiConfig({ AI_PROVIDER: 'mock', AI_MAX_RETRIES: '0', AI_RETRY_DELAY_MS: '0', ...env }),
+      aiLog: (line) => logs.push(line),
     });
   }
 
@@ -251,6 +255,52 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(turnEntries(clients[0]!, 1, 'EOSORIA', 1).filter((e) => e.kind === 'narration')).toHaveLength(1);
   });
 
+  it('Q-151: a narration still wrong after its repair gets the server template per beat and the game goes on', async () => {
+    let refA = '';
+    const BAD = 'ข้อความเสียของเอไอ';
+    await boot({}, (req, n) => {
+      if (!isNarration(req)) return noRoll(req, n);
+      const audience = narrationFor(req);
+      const broken = ('player' in audience && audience.player === refA) || ('place' in audience && audience.place === 'inn');
+      return broken ? mockReply.ok({ segments: [{ actionId: 'act-made-up', text: `${BAD} กับ${DARIN.name}` }] }) : undefined;
+    });
+    const t = await startedTable(server!, false);
+    refA = refOf(t.a);
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    const texts = ['เช็ดโต๊ะในโรงเตี๊ยม', 'สั่งน้ำชาร้อน', 'ซ่อมเก้าอี้'];
+    // The game is not stuck: the next turn opens for everyone.
+    await playTurn(clients, texts, { day: 1, phase: 'EOSORIA', turn: 2 });
+    expect(turnRows()).toEqual([expect.objectContaining({ status: 'applied' })]);
+
+    // A's private narration and the inn feed: one first try + one repair each, then the template.
+    const isBroken = (r: AiCallRequest) => {
+      if (!isNarration(r)) return false;
+      const a = narrationFor(r);
+      return ('player' in a && a.player === refA) || ('place' in a && a.place === 'inn');
+    };
+    expect(provider.requests.filter(isBroken)).toHaveLength(4);
+    const mine = turnEntries(clients[0]!, 1, 'EOSORIA', 1).filter((e) => e.kind === 'narration');
+    expect(mine).toHaveLength(1);
+    expect(mine[0]!.text).toContain(texts[0]);
+    expect(mine[0]!.text).toContain('คุณ');
+    expect(mine[0]!.text).toMatch(/สำเร็จ|พลาด/);
+    // The inn feed tells each Public action of the inn, from the validated outcome.
+    const feed = turnEntries(clients[1]!, 1, 'EOSORIA', 1).filter((e) => e.kind === 'feed');
+    expect(feed.some((e) => texts.every((x) => e.text.includes(x)))).toBe(true);
+    for (const c of clients) {
+      expect(JSON.stringify(c.entries())).not.toContain(BAD);
+    }
+    // A does not know B's real name: the template uses how B looks.
+    expect(JSON.stringify(clients[0]!.entries())).not.toContain(DARIN.name);
+    // The fallback is logged (which audience, not the text).
+    // Only the GM narration lines: the GEN-068 weather pick logs its own `source=fallback` here.
+    const fallbackLines = logs.filter((l) => l.startsWith('[gm]') && l.includes('fallback'));
+    expect(fallbackLines).toHaveLength(2);
+    for (const line of logs) {
+      for (const secret of [...texts, BAD, LIN.name, DARIN.name, MEKHA.name]) expect(line).not.toContain(secret);
+    }
+  });
+
   it('C4: a constraint the AI sets stays in activeConstraints every turn until the AI releases it with a reason', async () => {
     let refA = '';
     const answers: ((ctx: TurnContext, proposal: GmTurnProposal, repair: boolean) => GmTurnProposal)[] = [
@@ -301,6 +351,64 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     await playTurn(clients, ['ล้างหน้า', 'กินข้าว', 'ยืดเส้น'], { day: 2, phase: 'EOSORIA', turn: 2 });
     const ctx = contextOf<TurnContext>(provider.requests.filter((r) => r.purpose === 'gm_adjudicate').at(-1)!);
     expect(ctx.memory.yesterday).toContain('เฝ้ายามทั้งคืน');
+  });
+
+  it('Q-153: a new day stores a journal per player from what that player saw, fed to that player\'s next narrations only', async () => {
+    await boot();
+    const t = await startedTable(server!, false);
+    const [refA, refB, refC] = [refOf(t.a), refOf(t.b), refOf(t.c)];
+    move(t.c, 'forest');
+    jumpTo(t, { day: 1, phase: 'NOCTHERION', turn: 2 });
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    const texts = ['เฝ้ายามหน้าโรงเตี๊ยม', 'แอบนับเหรียญใต้โต๊ะ', 'ตัดไม้ไผ่ริมลำธาร'];
+    await playTurn(clients, texts, { day: 2, phase: 'EOSORIA', turn: 1 }, ['public', 'secret', 'public']);
+
+    const journals = () => server!.db.prepare("select member_id as member, day, text from gm_journal where kind = 'day' order by member_id").all() as { member: string; day: number; text: string }[];
+    await expect.poll(() => journals().length, { timeout: 5_000 }).toBe(3);
+    expect(new Set(journals().map((j) => j.day))).toEqual(new Set([1]));
+    const journalReqs = provider.requests.filter((r) => r.purpose === 'summarize_journal');
+    expect(journalReqs).toHaveLength(3);
+    const reqFor = (ref: string) => journalReqs.find((r) => contextOf<JournalContext>(r).player === ref)!;
+    // Only what each player saw that day: A saw its own action (and nothing of B's Secret or C in the forest).
+    const seenA = reqFor(refA).messages[0]!.text;
+    expect(seenA).toContain(texts[0]);
+    expect(seenA).not.toContain(texts[1]);
+    expect(seenA).not.toContain(texts[2]);
+    expect(reqFor(refB).messages[0]!.text).toContain(texts[1]);
+    const seenC = reqFor(refC).messages[0]!.text;
+    expect(seenC).toContain(texts[2]);
+    expect(seenC).not.toContain(texts[0]);
+    for (const r of journalReqs) expect(requestTokens(r.system, r.messages)).toBeLessThanOrEqual(CONTEXT_BUDGET.summarize_journal);
+    expectNoNamesInPrompts();
+
+    // The next turn: each private narration gets only its reader's journal; a place feed gets none.
+    await playTurn(clients, ['ล้างหน้า', 'กินข้าว', 'ยืดเส้น'], { day: 2, phase: 'EOSORIA', turn: 2 });
+    const narrations = provider.requests.filter((r) => isNarration(r) && contextOf<NarrationContext>(r).turn.day === 2);
+    const privateFor = (ref: string) => narrations.map((r) => contextOf<NarrationContext>(r)).find((c) => 'player' in c.audience && c.audience.player === ref)!;
+    expect(privateFor(refA).journal?.yesterday).toContain(texts[0]);
+    expect(JSON.stringify(privateFor(refA).journal)).not.toContain(texts[2]);
+    expect(privateFor(refC).journal?.yesterday).toContain(texts[2]);
+    expect(JSON.stringify(privateFor(refC).journal)).not.toContain(texts[0]);
+    for (const c of narrations.map((r) => contextOf<NarrationContext>(r))) if ('place' in c.audience) expect(c.journal).toBeNull();
+    // Day 1 is summarised once per player only.
+    expect(provider.requests.filter((r) => r.purpose === 'summarize_journal')).toHaveLength(3);
+  });
+
+  it('Q-153: a failed journal summary does not hold the game and is made after the next turn', async () => {
+    let failures = 0;
+    await boot({}, (req) => {
+      if (req.purpose === 'summarize_journal' && failures < 1) {
+        failures++;
+        return mockReply.fail('timeout');
+      }
+      return undefined;
+    });
+    const t = await startedTable(server!, false);
+    jumpTo(t, { day: 1, phase: 'NOCTHERION', turn: 2 });
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    await playTurn(clients, ['จุดตะเกียง', 'ปิดหน้าต่าง', 'ร้องเพลงกล่อม'], { day: 2, phase: 'EOSORIA', turn: 1 });
+    await playTurn(clients, ['ล้างหน้า', 'กินข้าว', 'ยืดเส้น'], { day: 2, phase: 'EOSORIA', turn: 2 });
+    await expect.poll(() => (server!.db.prepare("select count(*) as n from gm_journal where kind = 'day' and day = 1").get() as { n: number }).n, { timeout: 5_000 }).toBe(3);
   });
 
   it('C5: on day 12 the context stays within the ADR budget (saga + yesterday + today only)', async () => {

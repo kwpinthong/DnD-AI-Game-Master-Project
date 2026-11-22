@@ -5,6 +5,7 @@ import { crossPlayerState } from '../src/crossplayer/phase.ts';
 import type { RunningServer } from '../src/server.ts';
 import { forbiddenKeysIn } from '../src/visibility/guard.ts';
 import { discoverHiddenEvidence, learnName, moveCharacter, presenceOf, setPlayerBond } from '../src/visibility/store.ts';
+import { approveHeldTurn } from './gm-console-client.ts';
 import { makeTempDir } from './helpers.ts';
 import { isReady, openRoom, type RoomClient } from './room-client.ts';
 import { CLOCK, startedTable, startTestServer, type Seat, type Table } from './visibility-fixture.ts';
@@ -308,6 +309,8 @@ describe('GEN-067 karma words, Title Mask, Whisper, Hidden Evidence', { timeout:
       c.action('ทำบางอย่าง', v);
       await c.waitFor((m) => m.type === 'action_accepted', from);
     }
+    // GEN-058 (Q-030): the turn waits for the GM's approval.
+    await approveHeldTurn(t.call, t.gm!.token);
     await rooms[0]!.waitFor((m) => m.type === 'room' && m.phase === 'EOSORIA' && m.turn === 2);
 
     const res = await t.call('GET', '/api/game/surroundings', { token: t.gm!.token });

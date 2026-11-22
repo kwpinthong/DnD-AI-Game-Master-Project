@@ -317,6 +317,87 @@ describe('GEN-057 AI GM status (web)', () => {
   });
 });
 
+describe('GEN-055 skills and items (web)', () => {
+  const skill = { id: 's-1', name: 'Ward of Light', rank: 'B', alignment: 'Good', category: 'Defensive', triggerType: 'Passive', dailyLimit: 0, description: 'สร้างม่านแสงบาง ๆ' };
+  const rosary = { id: 'i-1', name: 'Silver Rosary of Hearth', rank: 'B', alignment: 'Good', category: 'Accessory', triggerType: 'Passive', dailyLimit: 0, description: 'ฟื้นฟู HP +4' };
+
+  it('Q-106 / C7: the button loads your own skills, the items you hold now and what you found at the library', async () => {
+    const inventories = [
+      { inventory: { skills: [skill], items: [rosary], discoveries: [{ kind: 'skill', name: 'The First Light', text: 'สวดภาวนาอธิษฐาน 3 วัน' }] } },
+      // After a steal the list is what the server says you hold now.
+      { inventory: { skills: [skill], items: [], discoveries: [] } },
+    ];
+    let call = 0;
+    loggedIn(gameView(), { 'GET /api/game/inventory': () => Response.json(inventories[Math.min(call++, 1)]) });
+    render(<App apiBaseUrl="" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'เข้าห้องเล่น' }));
+    const socket = await waitFor(() => FakeSocket.all.at(-1)!);
+    socket.open();
+    socket.receive(roomState());
+
+    fireEvent.click(screen.getByRole('button', { name: 'สกิลและไอเท็มของฉัน' }));
+    const panel = await screen.findByRole('region', { name: 'สกิลและไอเท็มของฉัน' });
+    expect(await within(panel).findByText(/Ward of Light · Rank B · Good · Passive/)).toBeTruthy();
+    expect(within(panel).getByText(/Silver Rosary of Hearth · Rank B/)).toBeTruthy();
+    expect(within(panel).getByText(/The First Light: สวดภาวนาอธิษฐาน 3 วัน/)).toBeTruthy();
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'โหลดใหม่' }));
+    expect(await within(panel).findByText('ไม่มีไอเท็มติดตัว')).toBeTruthy();
+    expect(within(panel).queryByText(/Silver Rosary/)).toBeNull();
+    expect(within(panel).getByText('ยังไม่พบเงื่อนไขใด (ค้นได้ด้วย INVESTIGATE ที่หอสมุดหลวง)')).toBeTruthy();
+  });
+});
+
+describe('GEN-058 Human GM console in the play room (web)', () => {
+  it('the GM gets the console, which reloads when the room says a turn waits for approval; players get none', async () => {
+    const gmGame = gameView({
+      humanGm: true,
+      you: { memberId: me.id, role: 'gm', isOwner: true },
+      members: [
+        { id: me.id, name: 'นก', role: 'gm', isOwner: true, hasCharacter: false },
+        { id: 'm-bee', name: 'บี', role: 'player', isOwner: false, hasCharacter: true },
+      ],
+    });
+    let consoleCalls = 0;
+    const view = (pending: boolean) => ({
+      view: 'gm',
+      at: { day: 1, phase: 'EOSORIA', turn: 1 },
+      status: pending ? 'resolving' : 'collecting',
+      characters: [],
+      evidence: [],
+      actions: [],
+      events: [],
+      legendaries: [],
+      pending: pending ? { at: { day: 1, phase: 'EOSORIA', turn: 1 }, entries: [{ index: 0, kind: 'narration', memberId: 'm-bee', locationId: null, text: 'ฉบับเดิม', edited: false }], results: [] } : null,
+    });
+    loggedIn(gmGame, {
+      'GET /api/game/gm/console': () => Response.json(view(++consoleCalls > 1)),
+      'GET /api/game/gm/log': () => Response.json({ overrides: [] }),
+    });
+    render(<App apiBaseUrl="" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'เข้าห้องเล่น' }));
+    const socket = await waitFor(() => FakeSocket.all.at(-1) ?? Promise.reject(new Error('no socket yet')));
+    socket.open();
+    socket.receive(roomState({}, { role: 'gm', place: null, lock: { code: 'not_a_player', message: 'GM ไม่มีตัวละคร จึงส่ง action ไม่ได้' } }));
+    expect(await screen.findByText('ยังไม่มีผลของเทิร์นที่รออนุมัติ')).toBeTruthy();
+    socket.receive(
+      roomState(
+        { status: 'resolving', gmStatus: { code: 'awaiting_gm', message: 'ผลของเทิร์นนี้รอคุณตรวจใน GM console', canRetry: false } },
+        { role: 'gm', place: null, lock: null },
+      ),
+    );
+    const turn = await screen.findByRole('region', { name: 'ผลของเทิร์นที่รออนุมัติ' });
+    expect((within(turn).getByLabelText(/ข้อความ 1/) as HTMLTextAreaElement).value).toBe('ฉบับเดิม');
+  });
+
+  it('a player never loads the console', async () => {
+    const socket = await enterRoom();
+    socket.receive(roomState({ status: 'resolving', gmStatus: { code: 'awaiting_gm', message: 'ผลของเทิร์นนี้รอ GM ตรวจ', canRetry: false } }));
+    expect(screen.getByText('ผลของเทิร์นนี้รอ GM ตรวจ')).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'GM console' })).toBeNull();
+  });
+});
+
 describe('GEN-063 time system (web)', () => {
   it('C1: the heading shows the period and the turn', async () => {
     const socket = await enterRoom();

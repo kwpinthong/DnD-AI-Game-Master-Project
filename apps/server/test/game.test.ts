@@ -5,7 +5,7 @@ import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
 import { getGameScenario, updateGameScenario } from '../src/scenario/store.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
-import { makeTempDir } from './helpers.ts';
+import { makeTempDir, seedChosenLoot } from './helpers.ts';
 
 const CREATE_CODE = 'ลับเฉพาะ-2026';
 const MINUTE = 60_000;
@@ -89,9 +89,10 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     return GameView.parse(res.body);
   }
 
-  /** Characters are created by GEN-047; here a character row is seeded straight into the table. */
+  /** Characters are created by GEN-047 and loot chosen by GEN-073; here both rows are seeded straight in. */
   function seedCharacter(memberId: string) {
     server!.db.prepare('insert into character (member_id, created_at) values (?, ?)').run(memberId, clock);
+    seedChosenLoot(server!.db, memberId);
   }
 
   const error = (body: unknown) => ApiError.parse(body);
@@ -256,6 +257,41 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     const started = await call('POST', '/api/game/start', { token: created.token });
     expect(started.status).toBe(200);
     expect(GameView.parse(started.body)).toMatchObject({ status: 'started', startBlockers: [] });
+  });
+
+  it('Q-144: a player with a character but no loot choice (or an old Common one) blocks the start and is named', async () => {
+    await start();
+    const created = await createGame({ humanGm: true, name: 'GM' });
+    const bel = await joinOk(created.game.inviteCode, 'เบล');
+    const ton = await joinOk(created.game.inviteCode, 'ต้น');
+    const pla = await joinOk(created.game.inviteCode, 'ปลา');
+    for (const p of [bel, ton, pla]) server!.db.prepare('insert into character (member_id, created_at) values (?, ?)').run(p.member.id, clock);
+    seedChosenLoot(server!.db, bel.member.id);
+    seedChosenLoot(server!.db, ton.member.id, { legacy: true });
+
+    const res = await call('POST', '/api/game/start', { token: created.token });
+    expect(res.status).toBe(409);
+    expect(error(res.body)).toMatchObject({ code: 'cannot_start', reasons: ['ยังไม่ได้เลือกของติดตัว: ต้น, ปลา'] });
+    expect((await getGame(created.token)).startBlockers).toEqual(['ยังไม่ได้เลือกของติดตัว: ต้น, ปลา']);
+    expect((await getGame(created.token)).status).toBe('lobby');
+
+    // An offer on the table is not a choice yet.
+    server!.db.prepare("update character_loot set offer_json = '{}' where member_id = ?").run(ton.member.id);
+    seedChosenLoot(server!.db, ton.member.id);
+    expect((await getGame(created.token)).startBlockers).toEqual(['ยังไม่ได้เลือกของติดตัว: ปลา']);
+
+    seedChosenLoot(server!.db, pla.member.id);
+    const started = await call('POST', '/api/game/start', { token: created.token });
+    expect(started.status).toBe(200);
+    expect(GameView.parse(started.body)).toMatchObject({ status: 'started', startBlockers: [] });
+  });
+
+  it('Q-144: a player with no character is named once, under the character blocker only', async () => {
+    await start();
+    const created = await createGame({ mode: 'single' });
+    expect((await getGame(created.token)).startBlockers).toEqual(['ยังไม่สร้างตัวละคร: นก']);
+    server!.db.prepare('insert into character (member_id, created_at) values (?, ?)').run(created.member.id, clock);
+    expect((await getGame(created.token)).startBlockers).toEqual(['ยังไม่ได้เลือกของติดตัว: นก']);
   });
 
   it('C5: Single starts once its one player has a character', async () => {

@@ -3,8 +3,14 @@ import { loadConfig } from './config.ts';
 import { startServer } from './server.ts';
 
 try {
-  const server = await startServer(loadConfig(process.env), { ai: loadAiConfig(process.env) });
+  const config = loadConfig(process.env);
+  const server = await startServer(config, { ai: loadAiConfig(process.env) });
   console.log(`[isekai-server] database ${server.dbPath} (migrations applied: ${server.migrationsApplied})`);
+  console.log(
+    config.backup
+      ? `[isekai-server] backups: every ${config.backup.intervalMs / 3_600_000} h + at shutdown into ${config.backup.dir}, keep ${config.backup.keep}`
+      : '[isekai-server] backups: off (BACKUP_INTERVAL_HOURS=0)',
+  );
   const ai = server.ai.ready();
   console.log(
     ai.ok

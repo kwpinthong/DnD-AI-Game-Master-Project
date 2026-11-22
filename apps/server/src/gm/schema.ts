@@ -113,5 +113,12 @@ export const GmDaySummary = z.object({
 });
 export type GmDaySummary = z.infer<typeof GmDaySummary>;
 
+/** One player's journal of a finished day and their saga folded through it (ADR §6.3, Q-153). */
+export const GmJournal = z.object({
+  journal: z.string().min(1).max(750),
+  saga: z.string().min(1).max(1800),
+});
+export type GmJournal = z.infer<typeof GmJournal>;
+
 /** `output.name` of each GM request; the Mock provider answers by these names when it has no script. */
-export const GM_OUTPUT = { turn: 'gm_turn_proposal', narration: 'gm_narration', daySummary: 'gm_day_summary' } as const;
+export const GM_OUTPUT = { turn: 'gm_turn_proposal', narration: 'gm_narration', daySummary: 'gm_day_summary', journal: 'gm_journal' } as const;

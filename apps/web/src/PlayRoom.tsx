@@ -1,6 +1,8 @@
 import { ACTION_MAX_LENGTH, PHASE_LABEL, actionTextProblem, weatherText, type ActionVisibility, type RoomEntry, type RoomState } from '@isekai/protocol';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { GmConsole } from './GmConsole.tsx';
 import { connectRoom, type RoomConnection, type RoomConnectionStatus } from './room-api.ts';
+import { InventoryPanel } from './Inventory.tsx';
 
 /** "วันที่ 1 · EOSORIA (เช้า 06:00-11:59) · เทิร์น 1/2" (GEN-063: 4 periods x 2 turns). */
 const timeLabel = (t: Pick<RoomEntry, 'day' | 'phase' | 'turn'>) => `วันที่ ${t.day} · ${PHASE_LABEL[t.phase]} · เทิร์น ${t.turn}/2`;
@@ -174,6 +176,8 @@ export function PlayRoom({
             ))}
           </ul>
 
+          {you.role === 'player' && <InventoryPanel apiBaseUrl={apiBaseUrl} token={token} onSessionLost={onSessionLost} />}
+
           {you.role === 'player' && (
             <form onSubmit={submit} aria-label="ส่ง action">
               {you.action && (
@@ -216,6 +220,15 @@ export function PlayRoom({
               </button>
               {problem && <p role="alert">{problem}</p>}
             </form>
+          )}
+
+          {/* GEN-058: the Human GM's console; reloads whenever the turn or the GM status moves. */}
+          {you.role === 'gm' && (
+            <GmConsole
+              apiBaseUrl={apiBaseUrl}
+              token={token}
+              refreshKey={`${room.day}-${room.phase}-${room.turn}-${room.status}-${room.gmStatus?.code ?? ''}`}
+            />
           )}
 
           <EntryList label="เหตุการณ์ที่นี่" entries={feed} empty="ยังไม่มีอะไรเกิดขึ้นที่นี่" />

@@ -1,7 +1,7 @@
 # Deploy: server บน Railway + web บน Netlify (GEN-041a)
 
 คู่มือ deploy / update / rollback ของ skeleton ตอนนี้ (scaffold GEN-023 + join GEN-024 + สร้างเกม GEN-025) ตาม Q-060 (Railway แทน PC + Cloudflare Tunnel) และ Q-031 (web บน Netlify, server แยก origin)
-ไม่รวม backup job (GEN-037), realtime / Socket.IO (GEN-056) และ Cloudflare Access (Q-023)
+backup / restore ของ DB (GEN-037) อยู่ในข้อ 6 / ไม่รวม Cloudflare Access (Q-023)
 
 ```
 browser ──https──> https://<site>.netlify.app        (Netlify: apps/web/dist, SPA)
@@ -26,8 +26,11 @@ browser ──https──> https://<site>.netlify.app        (Netlify: apps/web/
 | Railway | `NODE_ENV` | `production` | ทำให้ `WEB_ORIGIN` กับ `DB_PATH` เป็นค่าบังคับ ขาดตัวไหน server ไม่ start และ log ชื่อตัวที่ขาด |
 | Railway | `DB_PATH` | `/data/isekai.sqlite` | ต้องอยู่ใน mount path ของ Volume ไม่งั้นข้อมูลหายทุก deploy |
 | Railway | `WEB_ORIGIN` | `https://<site>.netlify.app` | origin ของ web ไม่มี path (มี `/` ท้ายได้) ใส่หลาย origin คั่นด้วย `,` |
+| Railway | `BACKUP_DIR` | `/data/backups` | ที่เก็บ backup (GEN-037) ต้องอยู่ใน volume ไม่ตั้ง = `backups/` ข้างไฟล์ DB (ผลเท่ากัน) ดูข้อ 6 |
+| Railway | `BACKUP_INTERVAL_HOURS` / `BACKUP_KEEP` | ไม่ต้องตั้ง (ค่าเริ่ม 6 / 28) | ทุก 6 ชม. เก็บ 28 ไฟล์ล่าสุด (7 วัน) / `BACKUP_INTERVAL_HOURS=0` = ปิด backup ค่าผิด = server ไม่ start และ log ชื่อตัวแปร |
 | Railway | `RAILPACK_NODE_VERSION` | `26` | ให้ Railpack ใช้ Node 26 ตรงกับ `engines.node` |
 | Railway | `CREATE_CODE_HASH` | hash ของ create code (`scrypt$...`) ไม่ใช่ตัว code | ต้องมีถึงจะสร้างเกมได้ (Q-021) ทำ hash ตามข้อ 1.4 ไม่มีค่านี้ = หน้าสร้างเกมตอบ "server นี้ยังไม่ได้ตั้ง create code" / ค่าที่ไม่ใช่ hash = server ไม่ start (log บอกชื่อตัวแปร ไม่พิมพ์ค่า) |
+| Railway | `ADMIN_CODE_HASH` | hash ของ admin code ของเจ้าของ server (`scrypt$...`) ไม่ใช่ตัว code | เปิดหน้า AI usage dashboard ที่ `<web>/admin` (GEN-061, Q-058) ทำ hash ตามข้อ 1.5 ไม่มีค่านี้ = ไม่มีใครเปิด dashboard ได้ / ค่าที่ไม่ใช่ hash = server ไม่ start (log บอกชื่อตัวแปร ไม่พิมพ์ค่า) |
 | Railway | `ANTHROPIC_API_KEY` | API key ของ Anthropic (secret) | AI GM (GEN-038) ไม่มีค่านี้ server ยัง start ได้ แต่สร้างเกมและเริ่มเกมไม่ได้ ตอบเหตุผลเป็นภาษาไทย (Q-075) ค่าอื่นของ AI (`AI_PROVIDER`, `AI_MODEL`, เพดาน `AI_GAME_MONTHLY_USD`) ดู `apps/server/server.env.example` |
 | Railway | `PORT` | Railway ใส่เอง | ห้ามตั้งเอง |
 | Railway | `HOST` | ไม่ต้องตั้ง | production ใช้ `0.0.0.0` เป็นค่าเริ่ม |
@@ -43,7 +46,7 @@ browser ──https──> https://<site>.netlify.app        (Netlify: apps/web/
    - **Build**: Builder = Railpack, **Custom Build Command** = `pnpm --filter "@isekai/server..." run typecheck`, **Watch Paths** = `apps/server/**`, `packages/**`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `tsconfig.base.json`, `.railway/**`
    - **Deploy**: **Custom Start Command** = `node apps/server/src/index.ts`, **Pre-deploy Command** เว้นว่าง (ดูหมายเหตุ migration ข้อ 2), **Healthcheck Path** = `/health`, **Healthcheck Timeout** = `60`, **Restart Policy** = On Failure, **Max Retries** = `10`, **Replicas** = `1`
 4. **Volume**: ใน canvas ของ project กด **+ / Create → Volume** (หรือคลิกขวาที่ service → Attach volume) เลือก service นี้ **Mount Path** = `/data`
-5. **Variables** ของ service: `NODE_ENV=production`, `DB_PATH=/data/isekai.sqlite`, `RAILPACK_NODE_VERSION=26`, `CREATE_CODE_HASH=<hash จากข้อ 1.4>` (`WEB_ORIGIN` ใส่หลัง Netlify มี URL ในข้อ 1.3)
+5. **Variables** ของ service: `NODE_ENV=production`, `DB_PATH=/data/isekai.sqlite`, `BACKUP_DIR=/data/backups`, `RAILPACK_NODE_VERSION=26`, `CREATE_CODE_HASH=<hash จากข้อ 1.4>` (`WEB_ORIGIN` ใส่หลัง Netlify มี URL ในข้อ 1.3)
 6. **Settings → Networking → Generate Domain** ได้ `https://<service>.up.railway.app` จดไว้
 7. deploy แรกจะยังไม่ผ่าน healthcheck จนกว่าจะมี `WEB_ORIGIN` (server หยุดพร้อม log `NODE_ENV=production needs these environment variables: WEB_ORIGIN`) เป็นพฤติกรรมที่ตั้งใจ
 
@@ -66,6 +69,13 @@ create code คือรหัสระดับ server ที่ต้องใ
 3. บอก create code กับคนที่ให้สร้างเกมได้ทางช่องทางส่วนตัว ห้ามใส่ใน repo หรือแชทกลุ่ม
 4. เปลี่ยน code: ทำข้อ 1-2 ใหม่ (Railway redeploy เอง) เกมที่สร้างไว้แล้วไม่กระทบ
 5. ใส่ create code ผิด 10 ครั้งใน 10 นาที (นับรวมทั้ง server) = สร้างเกมไม่ได้ 10 นาที ตัวนับอยู่ใน memory รีสตาร์ทแล้วหาย
+
+### 1.5 Admin code (AI usage dashboard, GEN-061)
+admin code คือรหัสของเจ้าของ server คนเดียว (Q-058) ใช้เปิดหน้า `<web>/admin` ที่ดู token และค่าใช้จ่ายของ AI GM ทุกเกม (ไม่มี narration ชื่อ หรือ action) server เก็บแค่ hash ใน `ADMIN_CODE_HASH` ตั้งให้ต่างจาก create code
+1. รัน `pnpm --silent --filter @isekai/server run admin-code:hash` แล้วพิมพ์ admin code กด Enter ตามด้วย Ctrl+D (PowerShell / cmd: Ctrl+Z แล้ว Enter)
+2. คัดลอกบรรทัด `scrypt$...` ไปใส่ Railway → Variables → `ADMIN_CODE_HASH`
+3. เปิด `<web>/admin` ใส่ admin code → ได้ admin token อายุ 1 ชั่วโมง (เก็บใน sessionStorage ของ tab นั้น ปิด tab = ออก) server เก็บแค่ SHA-256 ของ token ใน memory รีสตาร์ทแล้วต้องใส่ใหม่
+4. ใส่ผิด 10 ครั้งใน 10 นาที = เปิดไม่ได้ 10 นาที (นับรวมทั้ง server เหมือน create code)
 
 **ย้ายจาก GEN-041a:** ถ้า Railway ยังมี `BOOTSTRAP_INVITE_CODE` ให้ลบ `BOOTSTRAP_INVITE_CODE` ออกจาก Variables (server ไม่อ่านค่านี้แล้ว เกมที่เคยสร้างจากค่านี้ยังอยู่และยัง join ได้ด้วยโค้ดเดิม แต่ไม่มีเจ้าของเกม จึงเตะ / ออกโค้ดใหม่ / เริ่มเกมไม่ได้ ให้สร้างเกมใหม่ผ่านหน้าเว็บแทน)
 
@@ -103,10 +113,41 @@ create code คือรหัสระดับ server ที่ต้องใ
 
 ## 5. ข้อจำกัดที่ต้องรู้
 - **replica เดียว**: SQLite อยู่บน volume ที่ต่อได้ทีละ container ขยายแนวนอนไม่ได้ (พอสำหรับกลุ่มเพื่อน)
-- **ไม่มี backup ในงานนี้**: ไฟล์ DB มีที่เดียวคือ volume จนกว่า GEN-037 จะทำ backup (Railway มี volume backup ให้ตั้งใน GEN-037 ได้)
+- **backup อยู่บน volume เดียวกับ DB** (ข้อ 6): กันไฟล์ DB เสีย / ลบผิด / migration พัง แต่ไม่กัน volume ทั้งก้อนหาย จนกว่าจะมีสำเนานอก Railway (offsite, Q-022 ยังไม่ได้ทำ)
 - **Netlify Free** ใช้ credit: production deploy ละ 15 credit จาก 300 ต่อเดือน (ประมาณ 20 deploy ถ้าไม่นับ bandwidth) credit หมด site หยุดถึงรอบเดือนใหม่ → deploy จาก branch ที่ไม่ push บ่อย
 - **Deploy Preview ของ Netlify** อยู่คนละ origin (`deploy-preview-N--<site>.netlify.app`) CORS จะไม่ให้ผ่านจนกว่าจะเพิ่ม origin นั้นใน `WEB_ORIGIN`
 - Railway healthcheck ตรวจแค่ตอน deploy ไม่ได้เฝ้าระหว่างรัน (ถ้าอยากรู้ตอนล่มต้องมี uptime monitor แยก)
+
+## 6. Backup และ restore (GEN-037)
+server สำรองไฟล์ DB เองระหว่างที่คนเล่นอยู่ (SQLite online backup API ไม่ต้องหยุดเกม) แต่ละไฟล์ต้องผ่าน `PRAGMA integrity_check` ก่อนได้ชื่อจริง ไฟล์ที่ทำไม่เสร็จ (เครื่องดับ / ถูก kill) ค้างเป็น `.tmp` และไม่ถูกนับ
+
+| เรื่อง | ค่า |
+|---|---|
+| ที่เก็บ | `BACKUP_DIR=/data/backups` (บน volume เดียวกับ DB) ชื่อไฟล์ `isekai-<เวลา UTC>.sqlite` เช่น `isekai-20261122T120000123Z.sqlite` |
+| เมื่อไร | ทุก `BACKUP_INTERVAL_HOURS` ชม. (ค่าเริ่ม 6) + ตอน start ถ้าไฟล์ล่าสุดเก่ากว่ารอบ + ตอน shutdown (SIGTERM ตอน deploy / restart) / `BACKUP_INTERVAL_HOURS=0` = ปิด |
+| เก็บกี่ไฟล์ | `BACKUP_KEEP` ไฟล์ล่าสุด (ค่าเริ่ม 28 = 7 วัน) ที่เก่ากว่าถูกลบหลัง backup ใหม่สำเร็จ / backup ที่ทำด้วยมือนับรวมด้วย |
+| log | Deploy Logs: `[isekai-server] backups: every 6 h + at shutdown into /data/backups, keep 28` ตอน start และ `[backup] scheduled: /data/backups/isekai-....sqlite (N bytes, M ms), removed K old` ทุกครั้ง (ไม่มีข้อมูลผู้เล่นใน log) / backup ล้ม = `[backup] ... failed: <เหตุผล>` เกมเล่นต่อได้ รอบถัดไปลองใหม่ |
+| ขนาด | ประมาณเท่าไฟล์ DB ต่อ 1 ไฟล์ × 28 ไฟล์ (DB 10 MB = ~280 MB บน volume 1 GB) |
+
+### 6.1 backup ด้วยมือ (เช่น ก่อน deploy ที่มี migration)
+1. ติดตั้ง Railway CLI แล้ว `railway login`, `railway link` (เลือก project + service)
+2. `railway ssh` (เปิด shell ใน container ที่รันอยู่)
+3. `node apps/server/src/backup/backup-cli.ts` → ได้บรรทัด `[isekai-server] backup /data/backups/isekai-....sqlite (... integrity_check ok)` ใช้ได้ระหว่างที่ server รันอยู่และมีคนเล่น
+4. ในเครื่อง (dev): `pnpm db:backup` (อ่าน `DB_PATH` / `BACKUP_DIR` จาก env เหมือน server)
+
+### 6.2 restore (ลง DB ไฟล์ใหม่เสมอ ไม่ทับไฟล์เดิม)
+1. `railway ssh` แล้ว `ls -l /data/backups` เลือกไฟล์ที่ต้องการ (ชื่อเรียงตามเวลา UTC)
+2. `node apps/server/src/backup/restore-cli.ts /data/backups/isekai-<เวลา>.sqlite /data/isekai-restored-<วันที่>.sqlite`
+   - ตรวจ `integrity_check` ของ backup → copy ลงไฟล์ใหม่ → รัน migration ที่ขาด (backup จาก version เก่า) → ตรวจ `integrity_check` อีกครั้ง → พิมพ์จำนวนแถวทุกตาราง (`member`, `room_entry`, ...)
+   - ไฟล์ปลายทางมีอยู่แล้ว / backup เสีย = หยุดพร้อมเหตุผล ไม่เขียนอะไร
+3. Railway → Variables → `DB_PATH=/data/isekai-restored-<วันที่>.sqlite` → Railway redeploy เอง (ไฟล์ DB เดิมยังอยู่ ถ้าต้องย้อนกลับให้เปลี่ยน `DB_PATH` กลับ)
+4. ตรวจ: Deploy Logs มี `database /data/isekai-restored-....sqlite (migrations applied: 0)` / เข้าเกมเดิมด้วย session เดิมได้ / หน้า "รายการเกม" เห็นเกมครบ
+5. ในเครื่อง (dev): `pnpm db:restore <backup> <ไฟล์ใหม่>` แล้วรัน server ด้วย `DB_PATH=<ไฟล์ใหม่>`
+
+### 6.3 ยังไม่ได้ทำ
+- สำเนานอก Railway (offsite, Google Drive ตาม Q-022) — backup อยู่บน volume เดียวกับ DB volume หายคือหายทั้งคู่
+- Railway volume backup (ฟีเจอร์ของ Railway) เป็นชั้นเสริมได้ ยังไม่ได้เปิด
+- backup ตอนเกมจบ (ADR เขียนว่า "ตอน Session จบ") ตอนนี้มีแค่ตามรอบ + ตอน start (ถ้าไฟล์ล่าสุดเก่ากว่ารอบ) + ตอน shutdown
 
 ## แหล่งอ้างอิง (ตรวจ 2026-11-22)
 - Railway Config as Code (deprecated, cutoff 2026-12-01): https://docs.railway.com/reference/config-as-code

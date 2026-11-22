@@ -3,7 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
-import { makeTempDir } from './helpers.ts';
+import { makeTempDir, seedChosenLoot } from './helpers.ts';
 
 const CREATE_CODE = 'ลับเฉพาะ-2026';
 
@@ -250,6 +250,7 @@ describe('character: name, appearance, personality + starting values (GEN-047)',
     expect(before.status).toBe(200);
     expect(CharacterResponse.parse(before.body).character).toMatchObject({ name: 'ลินดา', personality: 'กล้าหาญ', editable: true });
 
+    seedChosenLoot(server!.db, created.member.id);
     expect((await call('POST', '/api/game/start', { token: created.token })).status).toBe(200);
 
     for (const patch of [{ name: 'ชื่อใหม่' }, { personality: 'บุคลิกใหม่' }, { appearance: 'หน้าตาใหม่' }]) {

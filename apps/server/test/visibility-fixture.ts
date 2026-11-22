@@ -3,6 +3,7 @@ import { expect } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
 import { startServer, type RunningServer, type ServerOptions } from '../src/server.ts';
+import { seedChosenLoot } from './helpers.ts';
 
 export const CREATE_CODE = 'ลับเฉพาะ-2026';
 export const CLOCK = Date.UTC(2026, 10, 22, 12, 0, 0);
@@ -81,6 +82,7 @@ export async function startedTable(server: RunningServer, humanGm: boolean): Pro
     const res = await call('POST', '/api/game/character', { token: member.token, body: identity });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     CharacterResponse.parse(res.body);
+    seedChosenLoot(server.db, member.memberId);
     return { ...member, ...identity };
   }
 

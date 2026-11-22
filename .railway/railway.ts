@@ -53,12 +53,16 @@ export default defineRailway(() => {
     env: {
       NODE_ENV: 'production',
       DB_PATH: `${VOLUME_MOUNT}/isekai.sqlite`,
+      // Backup job (GEN-037): every 6 h + at shutdown, newest 28 kept (defaults), on the volume next to the DB.
+      BACKUP_DIR: `${VOLUME_MOUNT}/backups`,
       // engines.node is ">=26"; pin the major so Railpack does not pick a newer non-LTS Node.
       RAILPACK_NODE_VERSION: '26',
       // https://<site>.netlify.app, set in the dashboard once the Netlify site exists.
       WEB_ORIGIN: preserve(),
       // scrypt hash of the create code (Q-021) from `create-code:hash`; set in the dashboard, never in the repo.
       CREATE_CODE_HASH: preserve(),
+      // scrypt hash of the server owner's admin code (GEN-061) from `admin-code:hash`; opens the AI usage dashboard.
+      ADMIN_CODE_HASH: preserve(),
       // Secret for the AI GM (GEN-038); without it games cannot be created or started (Q-075).
       ANTHROPIC_API_KEY: preserve(),
     },

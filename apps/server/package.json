@@ -11,7 +11,10 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node src/db/migrate-cli.ts",
+    "db:backup": "node src/backup/backup-cli.ts",
+    "db:restore": "node src/backup/restore-cli.ts",
     "create-code:hash": "node src/auth/create-code-hash-cli.ts",
+    "admin-code:hash": "node src/auth/create-code-hash-cli.ts admin",
     "assets:import": "node src/assets/import-cli.ts"
   },
   "dependencies": {

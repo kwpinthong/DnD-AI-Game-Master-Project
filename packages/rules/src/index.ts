@@ -93,3 +93,4 @@ export {
 export { KARMA_MAX, KARMA_MIN, karmaTierProblems, karmaTitle, type KarmaTier } from './karma.ts';
 export * from './companion.ts';
 export * from './weather.ts';
+export * from './skills.ts';

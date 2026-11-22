@@ -6,7 +6,7 @@ import { getGameScenario, updateGameScenario } from '../src/scenario/store.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
 import { advanceTimeline, getTimeline, setEventOutcome } from '../src/timeline/store.ts';
 import { moveCharacter } from '../src/visibility/store.ts';
-import { makeTempDir } from './helpers.ts';
+import { makeTempDir, seedChosenLoot } from './helpers.ts';
 
 const CREATE_CODE = 'ลับเฉพาะ-2026';
 const MOCK_AI = loadAiConfig({ AI_PROVIDER: 'mock' });
@@ -53,8 +53,10 @@ describe('timeline over the API: start = day 1 Morning, players see no future ev
   }
 
   /** Characters are created by GEN-047; here a character row is seeded straight into the table. */
-  const seedCharacter = (memberId: string) =>
+  const seedCharacter = (memberId: string) => {
     server!.db.prepare('insert into character (member_id, created_at) values (?, ?)').run(memberId, Date.now());
+    seedChosenLoot(server!.db, memberId);
+  };
 
   /** Places a character before the game starts (start leaves placed characters where they are). */
   const seedPresence = (memberId: string, gameId: string, locationId: string) =>

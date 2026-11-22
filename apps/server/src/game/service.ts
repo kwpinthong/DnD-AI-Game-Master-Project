@@ -15,6 +15,7 @@ import { hashPin } from '../auth/pin.ts';
 import type { Db } from '../db/client.ts';
 import { character, game, member, session } from '../db/schema.ts';
 import { canEditScenario } from '../scenario/editor.ts';
+import { membersWithLootChoice } from './loot.ts';
 import { copyTemplateForGame, getGameScenario } from '../scenario/store.ts';
 import { advanceTimeline } from '../timeline/store.ts';
 import { placeUnplacedCharacters } from '../visibility/store.ts';
@@ -64,10 +65,11 @@ export function playerCount(db: Db | Tx, gameId: string): number {
 }
 
 /**
- * Why the game cannot start yet: missing players first, then players without a character.
- * Empty when it can start.
+ * Why the game cannot start yet: missing players first, then players without a character, then players
+ * with a character who have not chosen their loot from the sheet (Q-144; an old Common choice counts as
+ * not chosen). Empty when it can start.
  */
-function startBlockers(row: GameRow, members: MemberRow[], withCharacter: Set<string>): string[] {
+function startBlockers(db: Db | Tx, row: GameRow, members: MemberRow[], withCharacter: Set<string>): string[] {
   const players = members.filter((m) => m.role === 'player');
   const { min } = playerLimits(row.mode);
   const reasons: string[] = [];
@@ -76,6 +78,10 @@ function startBlockers(row: GameRow, members: MemberRow[], withCharacter: Set<st
   }
   const without = players.filter((m) => !withCharacter.has(m.id)).map((m) => m.name);
   if (without.length > 0) reasons.push(`ยังไม่สร้างตัวละคร: ${without.join(', ')}`);
+  const withCharacterIds = players.filter((m) => withCharacter.has(m.id)).map((m) => m.id);
+  const chosen = membersWithLootChoice(db, withCharacterIds);
+  const noLoot = players.filter((m) => withCharacter.has(m.id) && !chosen.has(m.id)).map((m) => m.name);
+  if (noLoot.length > 0) reasons.push(`ยังไม่ได้เลือกของติดตัว: ${noLoot.join(', ')}`);
   return reasons;
 }
 
@@ -110,7 +116,7 @@ export function gameView(db: Db | Tx, gameId: string, viewer: MemberRow): GameVi
     })),
     players: { count: members.filter((m) => m.role === 'player').length, ...limits },
     canEditScenario: canEditScenario(row, viewer),
-    startBlockers: row.startedAt === null ? startBlockers(row, members, withCharacter) : [],
+    startBlockers: row.startedAt === null ? startBlockers(db, row, members, withCharacter) : [],
   };
 }
 
@@ -230,7 +236,7 @@ export function startGame(db: Db, actor: MemberRow, now: Clock): OwnerActionOutc
   return asOwner(db, actor, (tx, row) => {
     if (row.startedAt !== null) return { kind: 'game_started' };
     const members = activeMembers(tx, row.id);
-    const reasons = startBlockers(row, members, characterOwners(tx, members));
+    const reasons = startBlockers(tx, row, members, characterOwners(tx, members));
     if (reasons.length > 0) return { kind: 'cannot_start', reasons };
     const t = now();
     tx.update(game).set({ startedAt: t }).where(eq(game.id, row.id)).run();

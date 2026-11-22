@@ -74,3 +74,25 @@ export const gmMemory = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.gameId, t.kind, t.day] })],
 );
+
+/**
+ * A player's own journal (ADR §6.3, Q-153): `day` = what that player saw on one game day, `saga` = their days
+ * so far folded into one text (row per day it was folded through). Made only from the entries that player
+ * received, tokens only, and fed only to that player's own narrations.
+ */
+export const gmJournal = sqliteTable(
+  'gm_journal',
+  {
+    gameId: text('game_id')
+      .notNull()
+      .references(() => game.id, { onDelete: 'cascade' }),
+    memberId: text('member_id')
+      .notNull()
+      .references(() => member.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: ['day', 'saga'] }).notNull(),
+    day: integer('day').notNull(),
+    text: text('text').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.memberId, t.kind, t.day] }), index('gm_journal_game').on(t.gameId)],
+);

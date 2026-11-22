@@ -193,7 +193,36 @@ export function advanceTimeline(db: DbOrTx, gameId: string, to: PhasePoint | 'en
   return { ok: true, activated, resolved };
 }
 
-export type SetOutcomeCode = 'not_found' | 'not_active' | 'already_resolved' | 'invalid_outcome';
+/**
+ * GEN-058: an event the Human GM added for the period the game is in now. `advanceTimeline` only activates
+ * events when the game moves, so this one becomes active here (witnesses as of now), for the turns left in
+ * the period. Does nothing unless the event is in the scenario, still pending, and at the current point.
+ */
+export function activateCurrentEvent(db: DbOrTx, gameId: string, eventId: string, now: number = Date.now()): boolean {
+  const event = getGameScenario(db, gameId)?.timeline.find((e) => e.id === eventId);
+  const cursor = readCursor(db, gameId);
+  if (!event || !cursor || cursor.ended || rank(cursor) !== rank(event)) return false;
+  if ((readRows(db, gameId).get(eventId)?.status ?? 'pending') !== 'pending') return false;
+  const values = { status: 'active' as const, activatedAt: now, witnesses: witnessesAtStart(event, () => locationSnapshot(db, gameId)), updatedAt: now };
+  db.insert(gameEventState)
+    .values({ gameId, eventId, ...values })
+    .onConflictDoUpdate({ target: [gameEventState.gameId, gameEventState.eventId], set: values })
+    .run();
+  return true;
+}
+
+/** Where the game is on the timeline; null before day 1 EOSORIA. `ended` after day 12 NOCTHERION. */
+export function timelinePoint(db: DbOrTx, gameId: string): (PhasePoint & { ended: boolean }) | null {
+  const cursor = readCursor(db, gameId);
+  return cursor ? { day: cursor.day, phase: cursor.phase, ended: cursor.ended } : null;
+}
+
+/** Whether `a` is earlier on the timeline than `b`. */
+export function isBefore(a: PhasePoint, b: PhasePoint): boolean {
+  return rank(a) < rank(b);
+}
+
+export type SetOutcomeCode ='not_found' | 'not_active' | 'already_resolved' | 'invalid_outcome';
 export type SetOutcomeResult = { ok: true } | { ok: false; code: SetOutcomeCode; message: string };
 
 const MESSAGES: Record<SetOutcomeCode, string> = {

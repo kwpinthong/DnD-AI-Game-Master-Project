@@ -2,6 +2,7 @@ import type { OtherCharacterView } from '@isekai/protocol';
 import {
   DROWSY_STATUS,
   NPC_HP_MAX,
+  RANK_TIER,
   resolvePhaseActions,
   validatePhaseActions,
   type ActionOutcome,
@@ -24,7 +25,8 @@ import { getGameScenario } from '../scenario/store.ts';
 import { moveCharacter, namesVisibleTo, npcBondsOf, presencesInGame } from '../visibility/store.ts';
 import { otherCharacterView, witnessesOf } from '../visibility/views.ts';
 import { isLegacyOption, type StoredOption } from '../game/loot.ts';
-import { chosenLootInGame, itemsInGame, transferItem } from './items.ts';
+import type { GameAssets } from '../assets/load.ts';
+import { chosenLootInGame, itemsInGame, skillsInGame, transferItem } from './items.ts';
 import { outdoorLocationIds, recordTagUses, tagContexts, type TaggingOptions } from './tags.ts';
 
 /**
@@ -117,9 +119,21 @@ function seatedCharacters(db: DbOrTx, gameId: string) {
  * permanent statuses, held items and the chosen skill → OwnedRef plus their Quantitative effect.
  * No loot carries `reach: remote` yet (GEN-055), so `remoteReach` is empty.
  */
-export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet<string> = new Set()): CrossPlayerState {
+export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet<string> = new Set(), assets?: GameAssets): CrossPlayerState {
   const loot = new Map(chosenLootInGame(db, gameId).map((l) => [l.memberId, l.chosen]));
   const items = [...itemsInGame(db, gameId).values()];
+  const skills = skillsInGame(db, gameId);
+  // GEN-055: a sheet row is capped by its Rank (B +2, A +3, S / SS +5); an old GEN-048 option and a row the
+  // data does not know stay Common.
+  const rankOf = (o: StoredOption) => {
+    if (isLegacyOption(o)) return undefined;
+    const record = o.kind === 'skill' ? assets?.ability(o.name) : assets?.item(o.name);
+    return record?.rank ?? o.rank ?? undefined;
+  };
+  const tierOf = (o: StoredOption): OwnedRef['tier'] => {
+    const rank = rankOf(o);
+    return rank === undefined || rank === 'F' ? 'Common' : RANK_TIER[rank];
+  };
   const players: Record<string, PlayerState> = {};
 
   seatedCharacters(db, gameId).forEach(({ character: c, locationId }, seat) => {
@@ -143,8 +157,7 @@ export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet
     }
     const held = items.filter((i) => i.holderMemberId === c.memberId);
     held.forEach(apply);
-    // Rank B (the only loot rank, GEN-073) is judged with the Common cap (+2), like the old Common loot.
-    const owned = (o: StoredOption): OwnedRef => ({ id: o.id, tier: 'Common' });
+    const owned = (o: StoredOption): OwnedRef => ({ id: o.id, tier: tierOf(o) });
 
     players[c.memberId] = {
       id: c.memberId,
@@ -156,7 +169,7 @@ export function crossPlayerState(db: DbOrTx, gameId: string, drowsy: ReadonlySet
       karma: c.karma,
       affinity: Object.fromEntries(npcBondsOf(db, c.memberId).map((b) => [b.npcId, b.affinity])),
       items: held.map(owned),
-      skills: chosen ? [owned(chosen.skill)] : [],
+      skills: (skills.get(c.memberId) ?? []).map(owned),
       statuses: drowsy.has(c.memberId) ? [...statuses, DROWSY_STATUS] : statuses,
       afterActionStamina,
       damageReduction,
@@ -199,7 +212,7 @@ export function applyPhaseActions(
   drowsy: ReadonlySet<string> = new Set(),
 ): ApplyPhaseResult {
   return db.transaction((tx) => {
-    const state = crossPlayerState(tx, gameId, drowsy);
+    const state = crossPlayerState(tx, gameId, drowsy, tagging?.assets);
     const tags = tagging === undefined ? undefined : tagContexts(tx, gameId, state, tagging);
     const current = tagging?.periodWeather;
     const weather = current ? { current, outdoorLocationIds: outdoorLocationIds(tx, gameId, tagging.assets) } : undefined;

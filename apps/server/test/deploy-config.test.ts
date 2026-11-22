@@ -49,11 +49,27 @@ describe('Railway service config (.railway/railway.ts)', () => {
     expect(source).toMatch(/CREATE_CODE_HASH:\s*preserve\(\)/);
   });
 
+  // GEN-061: the server owner's admin code hash, like CREATE_CODE_HASH: kept from Railway, empty in the example.
+  it('keeps ADMIN_CODE_HASH from Railway, lists it empty in server.env.example and explains it in docs/deploy.md', () => {
+    expect(source).toMatch(/ADMIN_CODE_HASH:\s*preserve\(\)/);
+    expect(read('apps/server/server.env.example')).toMatch(/^ADMIN_CODE_HASH=$/m);
+    expect(read('docs/deploy.md')).toContain('`ADMIN_CODE_HASH`');
+    expect(read('docs/deploy.md')).toContain('admin-code:hash');
+  });
+
   // GEN-025 (Q-065): games are created through the API, so the start-up game variable is gone.
   it('no longer sets BOOTSTRAP_INVITE_CODE (here or in server.env.example)', () => {
     expect(source).not.toContain('BOOTSTRAP_INVITE_CODE');
     expect(read('apps/server/server.env.example')).not.toContain('BOOTSTRAP_INVITE_CODE');
     expect(read('apps/server/server.env.example')).toMatch(/^CREATE_CODE_HASH=$/m);
+  });
+
+  // GEN-037: backups go to the volume (next to the DB), never to the container's own disk that a deploy wipes.
+  it('BACKUP_DIR is inside the mounted volume, next to the DB', () => {
+    expect(source).toContain('BACKUP_DIR: `${VOLUME_MOUNT}/backups`');
+    for (const name of ['BACKUP_DIR', 'BACKUP_INTERVAL_HOURS', 'BACKUP_KEEP']) {
+      expect(read('apps/server/server.env.example')).toMatch(new RegExp(`^${name}=$`, 'm'));
+    }
   });
 
   it('pins Node 26 for Railpack, matching engines.node', () => {
@@ -81,6 +97,17 @@ describe('deploy guide (docs/deploy.md) matches the config files', () => {
     expect(guide).toContain('`CREATE_CODE_HASH`');
     expect(guide).toContain('create-code:hash');
     expect(guide).toMatch(/ลบ.*`BOOTSTRAP_INVITE_CODE`/);
+  });
+
+  it('GEN-037: says where backups go, how often, how many are kept, and how to back up / restore by hand', () => {
+    expect(guide).toContain('`BACKUP_DIR=/data/backups`');
+    expect(guide).toContain('`BACKUP_INTERVAL_HOURS`');
+    expect(guide).toContain('`BACKUP_KEEP`');
+    expect(guide).toContain('node apps/server/src/backup/backup-cli.ts');
+    expect(guide).toContain('node apps/server/src/backup/restore-cli.ts');
+    expect(guide).toContain('integrity_check');
+    expect(existsSync(join(repoRoot, 'apps/server/src/backup/backup-cli.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'apps/server/src/backup/restore-cli.ts'))).toBe(true);
   });
 
   it('has a post-deploy check for every Case C1-C7', () => {

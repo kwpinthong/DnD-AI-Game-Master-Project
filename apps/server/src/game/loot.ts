@@ -13,7 +13,7 @@ import {
   type TraitView,
 } from '@isekai/protocol';
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Clock } from '../auth/join.ts';
 import { AiServiceError, type AiService } from '../ai/core/service.ts';
@@ -385,6 +385,22 @@ function unusableAnswer(): AiServiceError {
 /** The personality changed while the AI was answering. */
 function staleAnswer(): AiServiceError {
   return new AiServiceError('ai_unavailable', LOOT_AI_FAILED, 'room', 'loot answer for an edited personality');
+}
+
+/**
+ * Q-144: the members whose kept choice is a sheet one (GEN-073); an old Common choice needs a new pick
+ * before the start (the same rule as `needsNewChoice`), and an offer alone is not a choice.
+ */
+export function membersWithLootChoice(db: DbOrTx, memberIds: readonly string[]): Set<string> {
+  if (memberIds.length === 0) return new Set();
+  const rows = db.select({ memberId: characterLoot.memberId, chosenJson: characterLoot.chosenJson }).from(characterLoot).where(inArray(characterLoot.memberId, [...memberIds])).all();
+  return new Set(
+    rows.flatMap((r) => {
+      if (r.chosenJson === null) return [];
+      const chosen = JSON.parse(r.chosenJson) as StoredChosen;
+      return isLegacyOption(chosen.skill) || isLegacyOption(chosen.item) ? [] : [r.memberId];
+    }),
+  );
 }
 
 /** Q-081: editing the personality clears the offer and the choice (the reroll count stays). */

@@ -19,6 +19,8 @@ describe('loadConfig (dev)', () => {
       port: 3000,
       dbPath: join(repoRoot, 'data', 'isekai.sqlite'),
       webOrigins: ['http://localhost:5173'],
+      // GEN-037: the backup job is on by default, next to the DB.
+      backup: { dir: join(repoRoot, 'data', 'backups'), intervalMs: 6 * 3_600_000, keep: 28 },
     });
   });
 
@@ -35,6 +37,7 @@ describe('loadConfig (dev)', () => {
       port: 4100,
       dbPath: resolve('C:/isekai/volume/game.sqlite'),
       webOrigins: ['https://isekai.netlify.app', 'http://localhost:5173'],
+      backup: { dir: resolve('C:/isekai/volume/backups'), intervalMs: 6 * 3_600_000, keep: 28 },
     });
   });
 
@@ -62,6 +65,7 @@ describe('loadConfig (NODE_ENV=production, Railway)', () => {
       port: 8080,
       dbPath: resolve('/data/isekai.sqlite'),
       webOrigins: ['https://isekai.netlify.app'],
+      backup: { dir: resolve('/data/backups'), intervalMs: 6 * 3_600_000, keep: 28 },
     });
   });
 
@@ -98,5 +102,14 @@ describe('loadConfig (NODE_ENV=production, Railway)', () => {
   it('refuses a CREATE_CODE_HASH that is not a hash (e.g. the create code itself) without printing it', () => {
     expect(() => loadConfig({ ...production, CREATE_CODE_HASH: 'my-secret-code' })).toThrow(/CREATE_CODE_HASH/);
     expect(() => loadConfig({ ...production, CREATE_CODE_HASH: 'my-secret-code' })).not.toThrow(/my-secret-code/);
+  });
+
+  // GEN-061 (Q-058): the server owner's admin code opens the AI usage dashboard.
+  it('reads ADMIN_CODE_HASH when it is a scrypt hash, and refuses the code itself without printing it', () => {
+    const hash = 'scrypt$16384$8$1$c2FsdHNhbHRzYWx0c2FsdA==$aGFzaGhhc2hoYXNoaGFzaGhhc2hoYXNoaGFzaGhhc2g=';
+    expect(loadConfig({ ...production, ADMIN_CODE_HASH: hash }).adminCodeHash).toBe(hash);
+    expect(loadConfig(production)).not.toHaveProperty('adminCodeHash');
+    expect(() => loadConfig({ ...production, ADMIN_CODE_HASH: 'owner-secret' })).toThrow(/ADMIN_CODE_HASH/);
+    expect(() => loadConfig({ ...production, ADMIN_CODE_HASH: 'owner-secret' })).not.toThrow(/owner-secret/);
   });
 });

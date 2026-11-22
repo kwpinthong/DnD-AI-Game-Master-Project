@@ -26,30 +26,41 @@ import { CryptoRng } from '../rng.ts';
 import { buildEventContext } from '../timeline/context.ts';
 import { setEventOutcome } from '../timeline/store.ts';
 import { discoverHiddenEvidence, locationSnapshot, npcBondsOf } from '../visibility/store.ts';
+import { recordTurnProgress } from '../skills/progress.ts';
 import { checkNarration, checkTurnProposal, type GmError } from './check.ts';
 import {
   CONTEXT_BUDGET,
+  JOURNAL_BLOCK,
+  JOURNAL_BUDGET,
   NARRATOR_BLOCK,
   RULES_BLOCK,
   SUMMARY_BLOCK,
   TOKEN_PATTERN,
   buildTurnContext,
+  estimateTokens,
   loadWorld,
+  narrationJournal,
   requestTokens,
+  withinTokens,
   type Beat,
   type DayContext,
   type GmWorld,
+  type JournalContext,
   type NarrationContext,
   type TurnAction,
 } from './context.ts';
-import { GM_OUTPUT, GmDaySummary, GmNarration, GmTurnProposal } from './schema.ts';
+import { GM_OUTPUT, GmDaySummary, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
 import {
   activeConstraints,
   addConstraint,
   dayLog,
   getStoredTurn,
   hasDaySummary,
+  hasJournal,
+  latestJournalSaga,
   latestSaga,
+  saveJournal,
+  seenOnDay,
   markApplied,
   releaseConstraint,
   saveAdjudicated,
@@ -85,7 +96,10 @@ const STUCK_MESSAGE = 'AI GM ติดขัด สรุปผลเทิร�
 const BUDGET_PLAYER_MESSAGE = 'AI GM ติดขัด: AI ของเกมนี้ใช้ครบงบของเดือนแล้ว รอเจ้าของเกมจัดการ action ทุกอันยังอยู่';
 const NOT_READY_PLAYER_MESSAGE = 'AI GM ติดขัด: ยังเรียก AI ไม่ได้ รอเจ้าของเกมจัดการ action ทุกอันยังอยู่';
 
-const RESULT_OF = (o: ActionOutcome): string => (o.status === 'resolved' ? o.log.degree : o.status);
+/** What of a player's day goes into `summarize_journal` (cap 6k with the rules and the saga, ADR §6.2). */
+const JOURNAL_SEEN_TOKENS = 4_000;
+
+const RESULT_OF =(o: ActionOutcome): string => (o.status === 'resolved' ? o.log.degree : o.status);
 
 class StuckError extends Error {
   readonly stuck: ResolverStuck;
@@ -138,6 +152,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     maxOutputTokens: number;
     budget: number;
     check: (value: T) => GmError[];
+    /** Q-151: what to use when the answer is still wrong after the repair (narration only); without it → stuck. */
+    fallback?: { label: string; make: () => T };
     signal?: AbortSignal;
   }): Promise<T> {
     const first: { role: 'user' | 'assistant'; text: string }[] = [{ role: 'user', text: JSON.stringify(opts.context) }];
@@ -166,6 +182,10 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         { role: 'user' as const, text: JSON.stringify({ errors, instruction: 'แก้ทุกข้อแล้วตอบใหม่ทั้งก้อนในรูปแบบเดิม' }) },
       ];
     }
+    if (opts.fallback) {
+      log(`[gm] game=${opts.gameId} purpose=${opts.purpose} audience=${opts.fallback.label} fallback: server template`);
+      return opts.fallback.make();
+    }
     return stuck(`still invalid after repair (${opts.purpose})`, opts.gameId);
   }
 
@@ -173,7 +193,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     const { gameId, at, signal } = input;
     const world = loadWorld(db, gameId, assets);
     const drowsy = new Set(input.state.order.filter((id) => input.state.players[id] && isDrowsy(input.state.players[id]!, input.state.day)));
-    const state = crossPlayerState(db, gameId, drowsy);
+    const state = crossPlayerState(db, gameId, drowsy, assets);
     const tagging: TaggingOptions = weatherTagging(assets, at.day, at.phase, input.weather ?? null);
     const tags = tagContexts(db, gameId, state, tagging);
 
@@ -217,6 +237,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         actions: order,
         resting: input.actions.filter((a) => a.rest).map((a) => a.memberId),
         weather: input.weather ?? null,
+        assets,
       });
       let checked: PhaseAction[] = [];
       const proposal = await ask({
@@ -278,7 +299,13 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     const audiences = narrationAudiences(world, resolved.log, textOf, start, events.active, evidenceFor);
     const narrations: { key: string; ctx: NarrationContext; out: GmNarration }[] = [];
     for (const audience of audiences) {
-      const ctx: NarrationContext = { kind: 'gm_narration', ...audience.ctx, turn: at, place: { id: audience.placeId, name: placeName.get(audience.placeId) ?? audience.placeId } };
+      const ctx: NarrationContext = {
+        kind: 'gm_narration',
+        ...audience.ctx,
+        turn: at,
+        place: { id: audience.placeId, name: placeName.get(audience.placeId) ?? audience.placeId },
+        journal: 'player' in audience.ctx.audience ? narrationJournal(db, audience.readers[0]!, at.day) : null,
+      };
       const saved = stored.narrations[audience.key];
       const forbidden = forbiddenNamesFor(world, audience.readers);
       const out =
@@ -294,6 +321,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           maxOutputTokens: 1_500,
           budget: 'player' in ctx.audience ? CONTEXT_BUDGET.narrate_player : CONTEXT_BUDGET.narrate_place,
           check: (n) => checkNarration(ctx, n, forbidden),
+          fallback: { label: audience.key, make: () => templateNarration(ctx) },
           ...(signal ? { signal } : {}),
         }));
       if (!saved) saveNarration(db, gameId, at, audience.key, out, now());
@@ -313,6 +341,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       apply: (tx) => {
         const applied = applyPhaseActions(tx, gameId, actions, new ReplayRng(rolls), now(), tagging, drowsy);
         if (!applied.ok) throw new Error('the stored turn no longer applies');
+        // GEN-055: the unlock progress of every action (verb tags, karma) and the library's INVESTIGATE reveal.
+        recordTurnProgress(tx, assets, gameId, applied.log, { day: at.day, period: at.phase, now: now() }, investigators);
         for (const c of proposal.constraints.add) {
           addConstraint(tx, { gameId, memberId: world.byRef.get(c.player)!.memberId, text: c.text, reason: c.reason, day: at.day }, now());
         }
@@ -324,34 +354,84 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     };
   }
 
-  /** Day summaries for every finished day that has none (C5); a failure is retried after the next turn. */
+  /**
+   * Day summaries (C5) and each player's journal (Q-153) for every finished day that has none; a failure is
+   * retried after the next turn and never holds the game.
+   */
   async function summarizeFinishedDays(gameId: string, at: TurnAt): Promise<void> {
     const current = db.select({ state: gamePhase.state }).from(gamePhase).where(eq(gamePhase.gameId, gameId)).get()?.state;
     const day = current ? (JSON.parse(current) as { day: number }).day : at.day;
     for (let d = 1; d < day; d++) {
-      if (hasDaySummary(db, gameId, d)) continue;
-      const context: DayContext = { kind: 'gm_day', day: d, saga: latestSaga(db, gameId, d), log: dayLog(db, gameId, d) };
-      const system = [SUMMARY_BLOCK];
+      if (!(await summarizeDay(gameId, d))) return;
+      if (!(await summarizeJournals(gameId, d))) return;
+    }
+  }
+
+  /** One `summarize_journal` per player of the game for day `d`, from what reached that player only. */
+  async function summarizeJournals(gameId: string, d: number): Promise<boolean> {
+    const world = loadWorld(db, gameId, assets);
+    for (const p of world.players.values()) {
+      if (hasJournal(db, p.memberId, d)) continue;
+      const seen: string[] = [];
+      let used = 0;
+      // Newest kept within the budget (the saga carries the rest).
+      for (const text of seenOnDay(db, gameId, p.memberId, d).map(world.tokenise).reverse()) {
+        const cost = estimateTokens(text);
+        if (used + cost > JOURNAL_SEEN_TOKENS) break;
+        used += cost;
+        seen.unshift(text);
+      }
+      const saga = latestJournalSaga(db, p.memberId, d);
+      const context: JournalContext = { kind: 'gm_journal', day: d, player: p.ref, saga: saga === null ? null : withinTokens(saga, JOURNAL_BUDGET.saga * 2), seen };
+      const system = [JOURNAL_BLOCK];
       const messages = [{ role: 'user' as const, text: JSON.stringify(context) }];
-      if (requestTokens(system, messages) > CONTEXT_BUDGET.summarize_day) {
-        log(`[gm] game=${gameId} summarize_day day=${d} limit_exceeded`);
+      if (requestTokens(system, messages) > CONTEXT_BUDGET.summarize_journal) {
+        log(`[gm] game=${gameId} summarize_journal day=${d} player=${p.ref} limit_exceeded`);
         continue;
       }
       const result = await ai.call({
         gameId,
-        purpose: 'summarize_day',
+        purpose: 'summarize_journal',
         day: d,
         system,
         messages,
-        output: { name: GM_OUTPUT.daySummary, schema: GmDaySummary },
-        maxOutputTokens: 1_500,
+        output: { name: GM_OUTPUT.journal, schema: GmJournal },
+        maxOutputTokens: 800,
       });
       if (!result.ok) {
-        log(`[gm] game=${gameId} summarize_day day=${d} failed: ${result.error.code}`);
-        return;
+        log(`[gm] game=${gameId} summarize_journal day=${d} player=${p.ref} failed: ${result.error.code}`);
+        return false;
       }
-      saveDaySummary(db, gameId, d, result.value, now());
+      saveJournal(db, gameId, p.memberId, d, result.value, now());
     }
+    return true;
+  }
+
+  /** The GM's summary of day `d` when it has none; false when the call failed. */
+  async function summarizeDay(gameId: string, d: number): Promise<boolean> {
+    if (hasDaySummary(db, gameId, d)) return true;
+    const context: DayContext = { kind: 'gm_day', day: d, saga: latestSaga(db, gameId, d), log: dayLog(db, gameId, d) };
+    const system = [SUMMARY_BLOCK];
+    const messages = [{ role: 'user' as const, text: JSON.stringify(context) }];
+    if (requestTokens(system, messages) > CONTEXT_BUDGET.summarize_day) {
+      log(`[gm] game=${gameId} summarize_day day=${d} limit_exceeded`);
+      return true;
+    }
+    const result = await ai.call({
+      gameId,
+      purpose: 'summarize_day',
+      day: d,
+      system,
+      messages,
+      output: { name: GM_OUTPUT.daySummary, schema: GmDaySummary },
+      maxOutputTokens: 1_500,
+    });
+    if (!result.ok) {
+      log(`[gm] game=${gameId} summarize_day day=${d} failed: ${result.error.code}`);
+      return false;
+    }
+    saveDaySummary(db, gameId, d, result.value, now());
+    return true;
   }
 
   return {
@@ -451,6 +531,32 @@ function narrationAudiences(
     out.push({ key: `player:${p.ref}`, placeId, readers: [memberId], ctx: { audience: { player: p.ref }, cast: castOf(beats, [p.ref], p.ref), npcs: npcsAt(placeId), beats } });
   }
   return out;
+}
+
+const TEMPLATE_RESULT: Record<string, string> = {
+  crit: 'สำเร็จอย่างงดงาม',
+  success: 'สำเร็จ',
+  fail: 'พลาด',
+  fumble: 'พลาดอย่างหนัก',
+  no_target: 'แต่เป้าหมายไม่อยู่ตรงนั้นแล้ว',
+  skipped: 'แต่ไม่ได้ลงมือ',
+  blocked: 'แต่ทำไม่ได้',
+};
+
+/**
+ * Q-151 (ADR §2 step 8): the server's own text, one segment per beat, when the AI narration is still wrong
+ * after its repair. Built only from the audience's beats (the validated outcome), with tokens for people,
+ * so it never names someone the reader does not know nor tells what happened elsewhere.
+ */
+export function templateNarration(ctx: Pick<NarrationContext, 'beats'>): GmNarration {
+  return {
+    segments: ctx.beats.map((b) => {
+      const who = b.actor === null ? '' : `{{p:${b.actor}}}`;
+      const outcome = TEMPLATE_RESULT[b.result] ?? '';
+      const text = [who, b.text, outcome].filter((s) => s.length > 0).join(' ');
+      return { actionId: b.actionId, text: (text.length > 0 ? text : 'มีบางอย่างเกิดขึ้น').slice(0, 800) };
+    }),
+  };
 }
 
 /** Real names (players and NPCs) at least one reader does not know (GEN-050 / GEN-067). */
