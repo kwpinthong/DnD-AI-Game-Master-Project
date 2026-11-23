@@ -12,7 +12,8 @@ import { game } from '../db/schema.ts';
  */
 export function toneBlock(voice: VoiceAsset, tone: GameTone): PromptBlock {
   const t = voice.tones[tone];
-  const text = [`โทนภาษาของเกมนี้: ${t.name}`, t.description, 'บทพูด NPC ยังตามโปรไฟล์ของ NPC ตัวนั้น', 'ตัวอย่างโทน:', ...t.samples.map((s) => `- ${s}`)].join('\n');
+  // GEN-164: the labels are English; the tone's name, description and samples are Voice data and stay Thai.
+  const text = [`The language tone of this game: ${t.name}`, t.description, 'NPC lines still follow that NPC\'s own profile', 'Tone samples:', ...t.samples.map((s) => `- ${s}`)].join('\n');
   return { id: 'tone', text, cache: true };
 }
 

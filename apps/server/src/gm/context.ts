@@ -13,6 +13,7 @@ import { getGameScenario } from '../scenario/store.ts';
 import { SKILL_FLAGS } from '../skills/unlock-rules.ts';
 import { buildEventContext, type EventContext } from '../timeline/context.ts';
 import { namesVisibleTo, presencesInGame } from '../visibility/store.ts';
+import { THAI_OUTPUT } from './language.ts';
 import { activeConstraints, dayLog, journalFor, memoryFor } from './store.ts';
 
 /**
@@ -256,7 +257,7 @@ export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnConte
     // happens now, so the narration cannot run ahead of the day.
     events: { active: events.active.map(({ defaultOutcome: _ahead, ...now }) => now), past: events.past },
     memory: memoryContext(db, world.gameId, at),
-    mustAnswer: `actions ต้องมี ${input.actions.length} รายการ ตามลำดับ ${input.actions.map((a) => a.actionId).join(', ')} ทุกรายการแม้ไม่มีผลเชิงกลไก`,
+    mustAnswer: `actions must have ${input.actions.length} entries, in the order ${input.actions.map((a) => a.actionId).join(', ')}, every one even without a mechanical effect`,
   };
 }
 
@@ -381,73 +382,82 @@ export interface DayContext {
 
 // --- Prompts (static, cacheable) ---
 
+export { THAI_OUTPUT };
+/** GEN-164: the user message of a repair / a style rewrite (the errors or style issues go with it as JSON). */
+export const REPAIR_INSTRUCTION = 'Fix every error, then answer again with the whole object in the same format.';
+export const STYLE_REWRITE_INSTRUCTION = 'Rewrite the wording as each fix says, then answer again with the whole object in the same format.';
+
 const RULES_TEXT = [
-  'คุณคือ Game Master ผู้ตัดสินอย่างเคร่งครัด (Strict Referee) ของเกม Isekai Chronicles ไม่ใช่ผู้ช่วยของผู้เล่น',
-  '1. ห้ามเกราะตัวเอก: ห้ามลด DC หรือเพิ่ม modifier เพื่อช่วยผู้เล่น ความยากมาจากสถานการณ์จริงใน state เท่านั้น',
-  '2. ตอบ action ครบทุกตัวตาม `order` ที่ให้มา ห้ามข้าม ห้ามสลับลำดับ ห้ามแต่ง actionId ใหม่ `actor` คือ ref ของผู้ทำ ทุก id ใน order ต้องมี 1 รายการใน actions เสมอ แม้ไม่มีผลเชิงกลไก / คลุมเครือ / ระบุเป้าไม่ได้ / ทำไม่ได้ (ตอบ kind general, check none, ละ effects ไว้ (ค่า default 0 / null) แล้วอธิบายใน reason) จำนวน actions ต้องเท่ากับจำนวน order',
-  '3. DC อยู่บนบันได 5, 8, 11, 14, 17, 20, 23 / staminaCost: general 3, complex 5 (opposed 6), exertion 7-10',
-  '4. verbTags / targetTags ใช้ได้เฉพาะคำใน tagVocabulary ตรงตัวอักษร ห้ามคิดคำใหม่ ถ้าไม่มีคำที่เหมาะตอบ [] / activate ได้เฉพาะ tagSources ของผู้ทำที่ trigger เป็น active หรือ both และยังไม่ครบ dailyLimit (source ที่ trigger = passive ทำงานเอง ห้ามใส่ใน activate เด็ดขาด)',
-  '5. ผู้เล่นที่ติด constraints (Constraint Lock) ยังติดอยู่จนกว่าคุณจะปลดใน constraints.release พร้อม reason ที่อธิบายว่าทำไมหลุด',
-  '6. คุณไม่รู้ผลเต๋า เสนอ onSuccess และ onFail ให้สมเหตุสมผลทั้งคู่ ห้ามใส่ค่า HP / Stamina ใหม่เอง',
-  '7. ห้ามเขียนชื่อจริงของตัวละคร ใช้ {{p:ref}} / {{n:id}} ที่ให้มาเท่านั้น',
+  'You are the Game Master of Isekai Chronicles: a Strict Referee, not the players\' assistant.',
+  '1. No plot armour: never lower a DC or add a modifier to help a player. Difficulty comes only from the real situation in the state.',
+  '2. Answer every action in the given `order`: never skip one, never change the order, never invent an actionId. `actor` is the ref of who acts. Every id in order must always have exactly 1 entry in actions, even when it has no mechanical effect / is vague / has no clear target / is impossible (answer kind general, check none, leave effects out (defaults 0 / null) and explain in reason). The number of actions must equal the number of ids in order.',
+  '3. DC is on the ladder 5, 8, 11, 14, 17, 20, 23 / staminaCost: general 3, complex 5 (opposed 6), exertion 7-10',
+  '4. verbTags / targetTags may only use words of tagVocabulary, spelled exactly; never invent a word, answer [] when none fits / activate may only name the actor\'s tagSources whose trigger is active or both and whose dailyLimit is not used up (a source with trigger = passive works by itself: never put it in activate)',
+  '5. A player under constraints (Constraint Lock) stays locked until you release it in constraints.release with a reason saying why it ends',
+  '6. You do not know the dice: propose an onSuccess and an onFail that both make sense. Never set new HP / Stamina values yourself',
+  '7. Never write a character\'s real name: use only the given {{p:ref}} / {{n:id}}',
   // Q-180
-  '8. skillFlags / grants ของ action มีผลกับผู้ทำเมื่อ action นั้นสำเร็จเท่านั้น: skillFlags = เงื่อนไขปลดล็อกที่เกิดขึ้นจริงในเทิร์นนี้ ใช้ได้เฉพาะชื่อในรายการนี้: ' +
+  '8. An action\'s skillFlags / grants apply to the actor only when that action succeeds: skillFlags = unlock conditions that really happened this turn, only names from this list: ' +
     [...SKILL_FLAGS].join(', ') +
-    ' / grants = มอบสกิลที่เงื่อนไขครบแล้ว หรือสกิล / ไอเทมที่อยู่ในรางวัลของ NPC (npcId) ที่เปิดให้ผู้เล่นคนนี้แล้ว ไอเทมต้องมี npcId เสมอ นอกนั้นเว้นว่าง',
+    ' / grants = give a skill whose conditions are met, or a skill / item among the rewards an NPC (npcId) has opened to this player; an item always needs its npcId. Otherwise leave them empty',
   // GEN-070
-  '10. ผู้เล่น hp 0 คือสลบ: เป็นเป้าได้แค่ targetPlayer.intent steal / execute / rescue / execute ใช้กับผู้เล่นที่สลบเท่านั้น สำเร็จ = ตายถาวร (Astral Spirit) / ผู้เล่นที่พักฟื้นที่สถานพยาบาลโดนโจมตีหรือขโมยได้ แต่ execute ไม่ได้',
+  '10. A player at hp 0 is unconscious: they can only be the target of targetPlayer.intent steal / execute / rescue; execute works only on an unconscious player, success = permanent death (Astral Spirit) / a player recovering at a hospital can be attacked or robbed but not executed',
   // GEN-117
-  '12. looksAt: ใส่ ref ของผู้เล่นที่ action นั้นตั้งใจมอง / สังเกต / คุยด้วยจริง ๆ (นอกเหนือจาก targetPlayer) เท่านั้น ถ้าไม่ได้มองใครตอบ [] (การเดินสำรวจ / มองไปรอบ ๆ ห้องทั่วไปไม่นับ ต้องจดจ้องคนนั้นโดยเฉพาะ) ผู้เล่นจะได้รับรูปลักษณ์ของคนที่มองเท่านั้น',
+  '12. looksAt: only the refs of players the action really means to look at / watch / talk to (besides targetPlayer). Answer [] when it looks at nobody (walking around / looking round a room in general does not count: it must fix on that person). A player only learns the looks of whom they look at',
   // GEN-170 (Q-320 B)
-  '14. introducedNpcs: ใส่ id ของ NPC ที่อยู่ที่นั่นและบอกชื่อตัวเองในฉากของ action นั้น (แนะนำตัว) เท่านั้น ผู้ที่ได้ยินจะรู้ชื่อจริงของ NPC นั้น ถ้าไม่มีใครแนะนำตัวตอบ []',
-  '9. endingPath: เฉพาะตอนที่เหตุการณ์ kind finale (วันพิพากษา วันที่ 12) active เท่านั้น ถ้าผู้เล่นทำเส้นทางสำเร็จในเทิร์นนี้ ให้ตอบ good (ม่านปาฏิหาริย์เบี่ยงอุกกาบาต) / evil (ดูดซับพลังอุกกาบาต) / neutral (ร่วมกับ NPC ของเหตุการณ์ลบล้างผลเป็นศูนย์) ตาม interventionEffects ของเหตุการณ์นั้น โดยดูจากผลของวันที่ 1, 5, 7, 10 ใน past ด้วย นอกนั้นตอบ null',
+  '14. introducedNpcs: only ids of NPCs at the place who say their own name in that action\'s scene (introduce themselves). Whoever hears it learns that NPC\'s real name. Answer [] when nobody introduces themselves',
+  '9. endingPath: only while an event of kind finale (Judgement Day, day 12) is active. When the players complete a path this turn, answer good (the miracle veil turns the meteor aside) / evil (absorb the meteor\'s power) / neutral (with the event\'s NPCs, cancel it out to zero) by that event\'s interventionEffects, also weighing the results of days 1, 5, 7, 10 in past. Otherwise answer null',
   // GEN-093 (Q-203)
-  '10. strategy ของ action: เฉพาะตอนที่เหตุการณ์ที่มี strategies (คืนวันที่ 10) active เท่านั้น ถ้า action เป็นส่วนหนึ่งของแผน ให้ตอบ id ของแผนจาก strategies ของเหตุการณ์ (ห้ามใช้ D10-DRIFT) และ role = leader (ผู้นำที่ทอยตัดสินแผน) หรือ support (ผู้ร่วมสนับสนุน) ผลสำเร็จมาจากเต๋าของ action นั้น นอกนั้นตอบ null',
+  '10. An action\'s strategy: only while an event with strategies (the night of day 10) is active. When the action is part of a plan, answer the plan id from the event\'s strategies (never D10-DRIFT) and role = leader (the one whose roll decides the plan) or support (a helper). Success comes from that action\'s dice. Otherwise answer null',
   // GEN-118: the answer is mostly the time of the turn (about 175 tokens / s), so the free texts are short.
-  '13. ตอบให้สั้น: intentSummary ไม่เกิน 40 ตัวอักษร / reason ไม่เกิน 80 ตัวอักษร (หนึ่งประโยค) / remember ตอบ [] เว้นแต่มีเรื่องสำคัญจริง ๆ / ห้ามมีข้อความนอก JSON',
-  '11. eventOutcomes.side: ฝ่ายตาม interventionEffects ของเหตุการณ์ที่ผู้เล่นทำ ตอบ good / evil / neutral (interventionEffects ที่เขียนรวม เช่น Good/Neutral ให้เลือกฝ่ายเดียวที่ตรงกับสิ่งที่ผู้เล่นทำ) ถ้าไม่เข้าฝ่ายใดตอบ null / eventOutcomes.outcome เขียนเฉพาะสิ่งที่เกิดขึ้น ห้ามขึ้นต้น outcome ด้วยชื่อฝ่าย',
+  '13. Keep it short: intentSummary at most 40 characters / reason at most 80 characters (one sentence) / remember [] unless something really matters / no text outside the JSON',
+  '11. eventOutcomes.side: the side of the event\'s interventionEffects the players took: good / evil / neutral (for a combined interventionEffects such as Good/Neutral pick the one side that matches what the players did); null when none fits / eventOutcomes.outcome says only what happened, never starting with the side\'s name',
+  `${THAI_OUTPUT} The free texts (intentSummary, reason, constraints, remember, eventOutcomes.outcome) are Thai too.`,
 ].join('\n');
 
 const FINALE_TEXT = [
-  'คุณคือผู้เล่าตอนจบของ Game Master เกมจบแล้ว ผลของตอนจบตัดสินแล้วใน context ห้ามเปลี่ยน (path, outcome ของแต่ละคน)',
-  'overall = ตอนจบของทั้งเมืองที่ทุกคนอ่านร่วมกัน เล่าผลของ path จากเหตุการณ์ทั้งหมดใน events / players = ตอนจบส่วนตัวของผู้เล่นทุกคนใน context คนละ 1 รายการ ตาม outcome (survived = รอด, defeated = พ่ายแพ้) ระดับกรรม คู่หู และสิ่งที่ปกป้องเขา',
-  'path: good = ม่านปาฏิหาริย์เบี่ยงอุกกาบาตปกป้องเมือง / evil = ดูดซับพลังอุกกาบาตครองโลก (ผู้เล่นฝ่ายดีพ่ายแพ้) / neutral = ร่วมกับ NPC ของเหตุการณ์ฉากจบลบล้างผลเป็นศูนย์ / none = อุกกาบาตชนเมือง (reason game_over = ทุกคนล้มลงก่อนถึงวันพิพากษา)',
-  'ใช้ {{p:ref}} / {{n:id}} แทนชื่อเสมอ ห้ามเขียนชื่อจริง ห้ามตัวเลขกรรม',
+  'You tell the ending for the Game Master. The game is over; the ending in the context is decided: never change it (the path, each player\'s outcome).',
+  'overall = the ending of the whole town, read by everyone together: tell the result of path from all the events in events / players = a personal ending for every player in the context, 1 entry each, by their outcome (survived / defeated), karma band, companions and what protected them',
+  'path: good = the miracle veil turns the meteor aside and protects the town / evil = the meteor\'s power is absorbed to rule the world (the good-side players are defeated) / neutral = with the finale event\'s NPCs the meteor is cancelled out to zero / none = the meteor hits the town (reason game_over = everyone fell before Judgement Day)',
+  'Always use {{p:ref}} / {{n:id}} for names, never a real name, never a karma number',
+  THAI_OUTPUT,
 ].join('\n');
 export const FINALE_BLOCK: PromptBlock = { id: 'finale-rules', text: FINALE_TEXT, cache: true };
 
 const NARRATOR_TEXT = [
-  'คุณคือผู้เล่าเรื่องของ Game Master เล่าเฉพาะ beats ที่ให้มา ตามลำดับ ทุก beat ต้องมีอย่างน้อย 1 segment ที่ actionId ตรงกับ beat',
-  'ห้ามเล่าเรื่องที่ไม่อยู่ใน beats ห้ามอ้างคนที่ไม่อยู่ใน cast ใช้ {{p:ref}} / {{n:id}} แทนชื่อเสมอ ห้ามเขียนชื่อจริง',
-  'audience แบบ place = ทุกคนที่อยู่ที่นั่นอ่านร่วมกัน / แบบ player = อ่านคนเดียว (self = คุณ)',
+  'You are the Game Master\'s narrator. Tell only the given beats, in order; every beat needs at least 1 segment whose actionId matches the beat',
+  'Never tell anything that is not in the beats, never mention anyone not in the cast. Always use {{p:ref}} / {{n:id}} for names, never a real name',
+  'audience place = everyone there reads it together / audience player = one reader alone (self = the reader: write คุณ)',
   // GEN-117
-  'cast ที่ looks ว่าง = ผู้อ่านไม่ได้มองคนนั้น ห้ามบรรยายรูปร่างหน้าตา ผม ผิว เสื้อผ้า ของเขาเด็ดขาด บอกได้แค่ว่ามีคนอยู่และทำอะไร (เรียกด้วย token) / บรรยายรูปลักษณ์ได้เฉพาะ cast ที่ looks มีค่า และตามผลของ beat',
-  // GEN-116: บทพูด NPC เป็นขั้นตอนที่สองแยกต่างหาก (DIALOGUE_TEXT) ที่นี่เล่าเฉพาะ segments ไม่ต้องเขียนบทพูด NPC
-  'ห้ามใส่บทพูดของ NPC ลงใน segments (มีขั้นตอนแยกเขียนให้ทีหลัง) เล่าแค่ผลของ beats',
+  'A cast member whose looks is empty = the reader did not look at them: never describe their body, face, hair, skin or clothes; only say someone is there and what they do (by token) / describe looks only for cast with a looks value, and as the beat\'s result allows',
+  // GEN-116: NPC lines are a separate second stage (DIALOGUE_TEXT); here only the segments, no NPC lines.
+  'Never put NPC lines in segments (a separate stage writes them later): tell only the results of the beats',
   // GEN-144
-  'npcs ที่ lingering เป็น true = ยังอยู่ต่อเพราะกำลังคุยกับผู้เล่นอยู่ (เลยเวลาที่ปกติต้องไปแล้ว) เล่าได้ว่ายังอยู่ตรงนั้น',
+  'npcs with lingering true = still here because they are talking with a player (past the time they would normally leave): you may tell that they are still there',
   // GEN-146
-  'bonds.memories = สิ่งที่ NPC จำได้เกี่ยวกับผู้เล่นคนนั้น (ใหม่สุดก่อน) ใช้กำหนดท่าที สีหน้าของ NPC ต่อผู้เล่นให้สอดคล้อง ห้ามเล่าเรื่องในความทรงจำเป็น beat ใหม่',
+  'bonds.memories = what the NPC remembers about that player (newest first): let it shape the NPC\'s manner and expression toward the player; never tell a memory as a new beat',
   // GEN-143
-  'answers = NPC ที่จะตอบ beat ที่ถาม / คุย / ขอ (actionIds) ด้วยบทพูดของตัวเองในขั้นบทพูด: ใน segments ของ beat นั้นเล่าแค่ท่าทาง สีหน้า บรรยากาศ ห้ามสรุปคำตอบหรือเล่าเนื้อหาที่ NPC ตอบแทน NPC',
+  'answers = NPCs who will answer the beats that ask / talk / request (actionIds) with their own lines in the dialogue stage: in that beat\'s segments tell only gestures, expressions and mood; never sum up the answer or say what the NPC answers for them',
+  THAI_OUTPUT,
 ].join('\n');
 
 /** GEN-116: the second stage. Same rules as GEN-110 had inside the narration; the narration is given so the lines follow it. */
 const DIALOGUE_TEXT = [
-  'คุณคือผู้เขียนบทพูดของ NPC ให้ Game Master ผลของเทิร์นและบทเล่า (narration) แสดงให้ผู้เล่นอ่านไปแล้ว เขียนเฉพาะบทพูด NPC ที่ต่อจากนั้น ห้ามเล่าซ้ำ',
-  'npcLines = บทพูดของ NPC ที่อยู่ที่นี่ตอนนี้ (npcs ที่ here เป็น true ของ context เท่านั้น npcId ต้องตรง) ตอบ [] ได้เสมอ ไม่ต้องพูดทุกเทิร์น จำนวนสูงสุดอยู่ใน limits',
-  '- audience place (ทุกคนอ่านร่วมกัน): kind dialogue = NPC พูดเรื่องที่ beat นั้นทำ / พูดกับผู้ทำ ไม่เกิน limits.dialoguePerNpc บรรทัดของ NPC เดียว (NPC ที่ beat เล็งถึงด้วย targetNpc) / kind reaction = NPC คนอื่นที่อยู่ที่นั่นตอบสนองคนละ 1 บรรทัด ไม่เกิน limits.reactionNpcs คน',
-  '- audience player (อ่านคนเดียว): ใส่ npcLines ได้เฉพาะเมื่อ privateLines เป็น true (action ของผู้อ่านเป็นการกระทำลับ) เป็นสิ่งที่ NPC พูดกับผู้อ่านคนเดียว ไม่เกิน limits.privatePerPlayer บรรทัด นอกนั้นตอบ [] เสมอ (บทพูดต่อหน้าทุกคนอยู่ใน audience place แล้ว ห้ามซ้ำ)',
+  'You write the NPC lines for the Game Master. The players have already read the turn\'s results and the narration: write only the NPC lines that follow it, never retell it',
+  'npcLines = lines of the NPCs here now (only npcs of the context with here true; npcId must match). [] is always fine, they need not speak every turn; the maximums are in limits',
+  '- audience place (everyone reads together): kind dialogue = the NPC talks about what the beat did / to whoever did it, at most limits.dialoguePerNpc lines from one NPC (the NPC the beat aims at with targetNpc) / kind reaction = other NPCs there react, 1 line each, at most limits.reactionNpcs NPCs',
+  '- audience player (one reader alone): npcLines only when privateLines is true (the reader\'s action is Secret): what an NPC says to the reader alone, at most limits.privatePerPlayer lines; otherwise always [] (lines in front of everyone are already in audience place: never repeat them)',
   // GEN-143
-  '- answers: NPC แต่ละตัวใน answers ต้องเป็นผู้ตอบหลัก (kind dialogue อย่างน้อย 1 บรรทัด) ตอบสิ่งที่ beat ใน actionIds ถาม / ขอจริง ๆ (บทเล่าไม่ได้ตอบแทนไว้) / via partner = คู่สนทนาเดิม ตอบเมื่อ action นั้นพูด / ถามโดยไม่ระบุว่าใคร / หลายคนถาม NPC เดียวกัน = วงสนทนาเดียว ตอบรวมกันชุดเดียว ไม่เกิน limits.dialoguePerNpc × จำนวน actionIds',
-  '- ช่วงสำคัญ (beat มี targetNpc, ผู้เล่นเจอ NPC ครั้งแรก = bonds met เป็น false, หรือมี beat kind event) ให้พูดมากขึ้น เทิร์นธรรมดาพูดน้อย 0-2 บรรทัด',
-  '- แต่ละบรรทัดสั้น ไม่เกิน 120 ตัวอักษร เป็นภาษาไทย พูดตาม persona ของ NPC นั้น และท่าทีต่อผู้เล่นตาม bonds (affinity สูง = เป็นมิตร ต่ำ = ระแวง), karmaBand (-2 โหดร้าย .. +2 ใจบุญ) และ looks / title ของผู้เล่น (NPC รู้จักผู้เล่นแค่รูปลักษณ์กับฉายา ห้ามเรียกชื่อจริง)',
+  '- answers: every NPC in answers must be the main answerer (at least 1 kind dialogue line), answering what the beats of actionIds really ask / request (the narration did not answer for them) / via partner = the earlier conversation partner: answers when that action talks / asks without saying to whom / several players asking the same NPC = one conversation, answered together in one set, at most limits.dialoguePerNpc × the number of actionIds',
+  '- Key moments (a beat with targetNpc, a player meeting the NPC for the first time = bonds met false, or a beat of kind event): speak more. An ordinary turn: little, 0-2 lines',
+  '- Each line is short, at most 120 characters, in Thai, spoken by that NPC\'s persona, with a manner toward the player by bonds (high affinity = friendly, low = wary), karmaBand (-2 cruel .. +2 kind) and the player\'s looks / title (an NPC knows a player only by looks and title: never call them by a real name)',
   // GEN-146
-  '- bonds.memories = สิ่งที่ NPC นั้นจำได้เกี่ยวกับผู้เล่นคนนั้น (ใหม่สุดก่อน) พูดและวางท่าทีให้สอดคล้องกับความทรงจำ อ้างถึงได้เมื่อเข้ากับฉาก ไม่ต้องพูดถึงทุกเรื่อง',
-  '- ห้ามเฉลยความลับ ชื่อจริง หรือกรรมเป็นตัวเลข ห้ามพูดถึงสิ่งที่ไม่อยู่ใน beats / ห้ามเล่าเรื่องของ action ลับให้คนอื่นรู้ ใช้ {{p:ref}} / {{n:id}} แทนชื่อ ห้ามใส่ HP / กรรม / เกรด',
+  '- bonds.memories = what that NPC remembers about that player (newest first): speak and behave in keeping with it, mention it when it fits the scene, not every memory',
+  '- Never reveal a secret, a real name or karma as a number, never mention what is not in the beats / never tell others about a Secret action. Use {{p:ref}} / {{n:id}} for names, never HP / karma / grade',
+  THAI_OUTPUT,
 ].join('\n');
 
-const SUMMARY_TEXT = 'สรุปวันที่จบไปของ Game Master: recap = เรื่องสำคัญของวันนี้ / saga = เรื่องทั้งหมดจนถึงวันนี้ย่อรวมกับ saga เดิม ใช้ token แทนชื่อเสมอ';
+const SUMMARY_TEXT = `Summarise the day that just ended for the Game Master: recap = what mattered today / saga = the whole story up to today, the old saga folded together with today. Always use tokens for names. ${THAI_OUTPUT}`;
 
 export const RULES_BLOCK: PromptBlock = { id: 'rules', text: RULES_TEXT, cache: true };
 export const NARRATOR_BLOCK: PromptBlock = { id: 'narrator-rules', text: NARRATOR_TEXT, cache: true };
@@ -455,7 +465,8 @@ export const DIALOGUE_BLOCK: PromptBlock = { id: 'dialogue-rules', text: DIALOGU
 export const SUMMARY_BLOCK: PromptBlock = { id: 'summary-rules', text: SUMMARY_TEXT, cache: true };
 
 const JOURNAL_TEXT =
-  'สรุปบันทึกส่วนตัวของผู้เล่นหนึ่งคนจาก seen (สิ่งที่ผู้เล่นคนนี้เห็นและได้รับรู้ในวันนั้นเท่านั้น): journal = เรื่องสำคัญของวันนี้จากมุมของเขา ไม่เกิน 300 ตัวอักษร / saga = saga เดิมย่อรวมกับวันนี้ ไม่เกิน 900 ตัวอักษร (ถ้าเต็มให้ย่อเรื่องวันเก่าให้สั้นลง เก็บแต่เรื่องสำคัญ) ห้ามเพิ่มเรื่องที่ไม่อยู่ใน seen ใช้ token แทนชื่อเสมอ ห้ามตัวเลข HP / กรรม';
+  'Summarise one player\'s personal journal from seen (only what this player saw and learned that day): journal = what mattered today from their point of view, at most 300 characters / saga = the old saga folded together with today, at most 900 characters (when full, shorten the older days and keep only what matters). Never add anything that is not in seen. Always use tokens for names, never HP / karma numbers. ' +
+  THAI_OUTPUT;
 export const JOURNAL_BLOCK: PromptBlock = { id: 'journal-rules', text: JOURNAL_TEXT, cache: true };
 
 /** Tokens of a whole request (system + messages). */

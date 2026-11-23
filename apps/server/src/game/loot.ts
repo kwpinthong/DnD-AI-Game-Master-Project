@@ -22,6 +22,7 @@ import type { GameAssets } from '../assets/load.ts';
 import type { AbilityRecord, ItemRecord } from '../assets/model.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { character, characterLoot, game } from '../db/schema.ts';
+import { THAI_OUTPUT } from '../gm/language.ts';
 import type { MemberRow } from './service.ts';
 import { resolveOwnTokens } from './tokens.ts';
 
@@ -159,21 +160,22 @@ export function offerFrom(proposal: LootProposal, assets: GameAssets): { ok: tru
   const items = keep(proposal.items, findItem, itemOption);
 
   const problems: string[] = [];
-  if (!strength) problems.push(`strength ใช้ไม่ได้ (label ≤ ${LABEL_MAX} ตัวอักษร, scope ต้องอยู่ในรายการ)`);
-  if (!weakness) problems.push(`weakness ใช้ไม่ได้ (label ≤ ${LABEL_MAX} ตัวอักษร, scope ต้องอยู่ในรายการ)`);
-  if (skills.length === 0) problems.push(`ไม่มี skill ที่ใช้ได้ (ต้องเป็นชื่อ skill Rank ${LOOT_RANK} ในรายการเท่านั้น สะกดตรงตัว)`);
-  if (items.length === 0) problems.push(`ไม่มี item ที่ใช้ได้ (ต้องเป็นชื่อ item Rank ${LOOT_RANK} ในรายการเท่านั้น สะกดตรงตัว)`);
+  if (!strength) problems.push(`strength cannot be used (label ≤ ${LABEL_MAX} characters, scope must be in the list)`);
+  if (!weakness) problems.push(`weakness cannot be used (label ≤ ${LABEL_MAX} characters, scope must be in the list)`);
+  if (skills.length === 0) problems.push(`no usable skill (only names of Rank ${LOOT_RANK} skills in the list, spelled exactly)`);
+  if (items.length === 0) problems.push(`no usable item (only names of Rank ${LOOT_RANK} items in the list, spelled exactly)`);
   if (!strength || !weakness || problems.length > 0) return { ok: false, problems };
   return { ok: true, offer: { strength, weakness, skills, items } };
 }
 
-const RULES_PROMPT = [
-  'คุณคือ AI GM ของเกม Isekai Chronicles ขั้นสร้างตัวละคร: อ่านบุคลิกของผู้เล่น แล้ววิเคราะห์จุดแข็ง 1 ข้อ และจุดอ่อน 1 ข้อ',
-  `จากนั้นเลือก skill และ item อย่างละไม่เกิน ${LOOT_OPTION_MAX} ชื่อ จากรายการ Rank ${LOOT_RANK} ข้างล่างเท่านั้น โดยเลือกตัวที่ tag เข้ากับบุคลิก`,
-  'ตอบเป็นชื่อตามรายการตรงตัว (ภาษาอังกฤษ) ห้ามแต่งชื่อใหม่ ห้ามซ้ำ ชื่อที่ไม่อยู่ในรายการจะถูกตัดทิ้ง',
-  `scope ที่ใช้ได้ของจุดแข็ง/จุดอ่อน: ${LOOT_SCOPES.join(', ')}`,
-  `จุดแข็ง/จุดอ่อน: label สั้น ๆ ภาษาไทย ≤ ${LABEL_MAX} ตัวอักษร + scope 1 ตัว + description ≤ ${DESCRIPTION_MAX} ตัวอักษร ว่ามาจากบุคลิกส่วนไหน`,
-  'ชื่อคนในข้อความเป็น token เช่น {{p:id}} ห้ามเดาหรือแต่งชื่อจริง',
+export const RULES_PROMPT = [
+  'You are the AI GM of Isekai Chronicles at character creation: read the player\'s personality, then find 1 strength and 1 weakness',
+  `Then pick at most ${LOOT_OPTION_MAX} skills and at most ${LOOT_OPTION_MAX} items, only from the Rank ${LOOT_RANK} lists below, choosing those whose tags fit the personality`,
+  'Answer with the names exactly as listed (English); never invent a name, never repeat one; a name not in the list is dropped',
+  `The scopes a strength / weakness may use: ${LOOT_SCOPES.join(', ')}`,
+  `Strength / weakness: a short Thai label ≤ ${LABEL_MAX} characters + 1 scope + a description ≤ ${DESCRIPTION_MAX} characters of which part of the personality it comes from`,
+  'Names of people in the text are tokens such as {{p:id}}: never guess or invent a real name',
+  THAI_OUTPUT,
 ].join('\n');
 
 /**
@@ -184,9 +186,9 @@ export function lootCatalogue(assets: GameAssets): string {
   const line = (kind: string, name: string, verbs: readonly string[], targets: readonly string[], text: string) =>
     `${kind}: ${name} | ${verbs.join(', ')} | ${targets.join(', ')} | ${text.replace(/\s+/g, ' ').trim()}`;
   return [
-    `รายการ skill Rank ${LOOT_RANK} (ชื่อ | Verb tags | Target tags | คำอธิบาย):`,
+    `Skills of Rank ${LOOT_RANK} (name | Verb tags | Target tags | description):`,
     ...rankB(assets.abilities).map((a) => line('skill', a.name, a.matchVerbTags, a.matchTargetTags, a.description)),
-    `รายการ item Rank ${LOOT_RANK} (ชื่อ | Verb tags | Target tags | ผล):`,
+    `Items of Rank ${LOOT_RANK} (name | Verb tags | Target tags | effect):`,
     ...rankB(assets.items).map((i) => line('item', i.nameEn, i.matchVerbTags, i.matchTargetTags, i.effect)),
   ].join('\n');
 }
@@ -307,7 +309,7 @@ export async function rollLoot(db: Db, ai: AiService, assets: GameAssets, me: Me
     { id: 'loot_catalogue', text: lootCatalogue(assets), cache: true },
   ];
   const messages: { role: 'user' | 'assistant'; text: string }[] = [
-    { role: 'user', text: `ตัวละคร {{p:${me.id}}}\nบุคลิก:\n${personality}` },
+    { role: 'user', text: `Character {{p:${me.id}}}\nPersonality:\n${personality}` },
   ];
 
   let result = await ai.call({
@@ -330,7 +332,7 @@ export async function rollLoot(db: Db, ai: AiService, assets: GameAssets, me: Me
       messages: [
         ...messages,
         { role: 'assistant', text: JSON.stringify(result.value) },
-        { role: 'user', text: `คำตอบใช้ไม่ได้: ${checked.problems.join(' / ')}\nตอบใหม่ทั้งชุดตามกฎ` },
+        { role: 'user', text: `The answer cannot be used: ${checked.problems.join(' / ')}\nAnswer the whole set again by the rules` },
       ],
       output: { name: 'loot_options', schema: LootProposal },
       maxOutputTokens: 2_000,

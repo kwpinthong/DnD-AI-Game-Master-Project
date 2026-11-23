@@ -158,7 +158,7 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(turnRequests.map((r) => r.purpose)).toEqual(['gm_adjudicate']);
     const ctx = contextOf<TurnContext>(turnRequests[0]!);
     expect(ctx.order).toHaveLength(3);
-    expect(ctx.mustAnswer).toContain('3 รายการ'); // GEN-118
+    expect(ctx.mustAnswer).toContain('3 entries'); // GEN-118
     expect(ctx.tagVocabulary.length).toBeGreaterThan(0);
     const stored = JSON.parse((server!.db.prepare('select proposal from gm_turn').get() as { proposal: string }).proposal) as GmTurnProposal;
     expect(stored.actions.map((a) => a.tagging.verbTags.length)).toEqual([1, 1, 1]);
@@ -693,8 +693,8 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     // GEN-161 (Q-327) / GEN-180 (Q-342): 800 and then 1500 still hit max_tokens on real calls; the prompt caps the lengths.
     for (const r of journalReqs) {
       expect(r.maxOutputTokens).toBe(3_000);
-      expect(r.system.map((b) => b.text).join('\n')).toMatch(/journal[^/]*ไม่เกิน 300 ตัวอักษร/);
-      expect(r.system.map((b) => b.text).join('\n')).toMatch(/saga[^/]*ไม่เกิน 900 ตัวอักษร/);
+      expect(r.system.map((b) => b.text).join('\n')).toMatch(/journal[^/]*at most 300 characters/);
+      expect(r.system.map((b) => b.text).join('\n')).toMatch(/saga[^/]*at most 900 characters/);
     }
     const reqFor = (ref: string) => journalReqs.find((r) => contextOf<JournalContext>(r).player === ref)!;
     // Only what each player saw that day: A saw its own action (and nothing of B's Secret or C in the forest).
@@ -1260,7 +1260,7 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
 
         expect(placeCtx().answers).toEqual([{ npcId: 'amnesiac', actionIds: ['act-1'], via: 'target' }]);
         const narrator = provider.requests.find(isNarration)!.system.map((b) => b.text).join('\n');
-        expect(narrator).toContain('ห้ามสรุปคำตอบ');
+        expect(narrator).toContain('never sum up the answer');
         const lucia = npcEntries(clients[0]!).filter((e) => e.npc?.kind === 'dialogue' && e.npc.name === LUCIA);
         expect(lucia.length).toBeGreaterThanOrEqual(1);
 

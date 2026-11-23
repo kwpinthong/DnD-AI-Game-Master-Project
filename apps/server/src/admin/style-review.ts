@@ -52,16 +52,16 @@ const ReviewAnswer = z.object({
 
 const Pair = VoiceAsset.shape.pairs.element;
 
-const INSTRUCTIONS = [
-  'คุณคือบรรณาธิการภาษาไทยของเกม TRPG แฟนตาซี งานนี้คือทบทวนสำนวนของ AI GM จากสัญญาณผู้เล่น',
-  'ข้อมูล: ตารางนับ (👎 ตามชิปเหตุผล, ธงตรวจสำนวนตาม rule id, ตาม NPC id โดย "" = บรรยาย) และตัวอย่างข้อความที่ AI เขียน (ref = เลขข้อความ) พร้อมชิปและธงของแต่ละข้อความ',
-  'ชื่อคนและ NPC ถูกแทนด้วย token ({{p:player}}, {{n:id}}) ห้ามเขียนชื่อจริงหรือยกข้อความผู้เล่นมาในกฎ',
-  'ทำ: 1) patterns = รูปแบบที่ผิดซ้ำ สรุปสั้นภาษาไทย พร้อม ref ที่เป็นหลักฐานไม่เกิน 5',
-  '2) proposals = กฎใหม่ให้คู่มือสำนวน (Voice) ไม่เกิน 10 ข้อ แต่ละข้อเป็นหนึ่งใน:',
-  '- kind "forbid": content = ForbiddenRule { id (a-z0-9_), match { type literal|regex|density ... }, scope narration|dialogue|all, severity flag|block, fix } (block ใช้เฉพาะคำที่ต้องเขียนใหม่ทุกครั้ง)',
-  '- kind "pair": content = { bad, good } ตัวอย่างสั้น ≤ 120 ตัวอักษร',
-  '- kind "npc_patch": npcId = id ของ NPC ใน Voice, content = เฉพาะฟิลด์ของโปรไฟล์ที่ต้องแก้ (self, you, particles, catchphrases, never, neverWords, note, register)',
-  'เสนอเฉพาะกฎทั่วไปที่หลักฐานหนักพอ ไม่ซ้ำกับกฎที่ Voice มีแล้ว reason = เหตุผลสั้นภาษาไทย',
+export const STYLE_REVIEW_INSTRUCTIONS = [
+  'You are the Thai-language editor of a fantasy TRPG. The job: review the AI GM\'s wording from the players\' signals',
+  'Data: count tables (👎 by reason chip, style-check flags by rule id, by NPC id where "" = narration) and samples of text the AI wrote (ref = the text\'s number) with each text\'s chips and flags',
+  'People and NPC names are tokens ({{p:player}}, {{n:id}}): never write a real name or quote a player\'s text in a rule',
+  'Do: 1) patterns = mistakes that repeat, a short summary in Thai, with at most 5 refs as evidence',
+  '2) proposals = at most 10 new rules for the style guide (Voice), each one of:',
+  '- kind "forbid": content = ForbiddenRule { id (a-z0-9_), match { type literal|regex|density ... }, scope narration|dialogue|all, severity flag|block, fix } (block only for words that must be rewritten every time)',
+  '- kind "pair": content = { bad, good } short Thai examples ≤ 120 characters',
+  '- kind "npc_patch": npcId = the id of an NPC in Voice, content = only the profile fields to change (self, you, particles, catchphrases, never, neverWords, note, register)',
+  'Propose only general rules with enough evidence, not repeating a rule Voice already has. reason = a short reason in Thai. Every text a rule makes the game write (fix, good, catchphrases, ...) is natural literary Thai, not translated style',
 ].join('\n');
 
 type Snapshot = Record<string, number>;
@@ -297,8 +297,8 @@ export function createStyleReview(deps: { db: Db; ai: AiService; gameData: GameD
       gameId: SYSTEM_USAGE_ID,
       purpose: 'style_review',
       system: [
-        { id: 'style-review', text: INSTRUCTIONS, cache: true },
-        { id: 'voice', text: `คู่มือสำนวน (Voice) ปัจจุบัน:\n${JSON.stringify({ guide: voice.guide, forbidden: voice.forbidden, pairs: voice.pairs, npcs: voice.npcs })}`, cache: true },
+        { id: 'style-review', text: STYLE_REVIEW_INSTRUCTIONS, cache: true },
+        { id: 'voice', text: `The current style guide (Voice):\n${JSON.stringify({ guide: voice.guide, forbidden: voice.forbidden, pairs: voice.pairs, npcs: voice.npcs })}`, cache: true },
       ],
       messages: [{ role: 'user', text: JSON.stringify({ counts: signals.counts, examples: examplesOf(db, voice, signals) }) }],
       output: { name: 'style_review', schema: ReviewAnswer },

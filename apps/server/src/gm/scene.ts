@@ -11,6 +11,7 @@ import { locationSnapshot } from '../visibility/store.ts';
 import { weatherAt } from '../weather/service.ts';
 import { containsName } from './check.ts';
 import { CONTEXT_BUDGET, loadWorld, requestTokens, TOKEN_PATTERN, type GmWorld } from './context.ts';
+import { THAI_OUTPUT } from './language.ts';
 import { renderTokens } from './loop.ts';
 import { lingersNow, lingersOf, npcsPresentAt, type PresenceNow } from './npc-lines.ts';
 import { GM_OUTPUT, GmScene } from './schema.ts';
@@ -69,9 +70,10 @@ export interface SceneContext {
 }
 
 const SCENE_TEXT = [
-  'คุณคือผู้บรรยายฉากของ Game Master ช่วงเวลาใหม่ (turn) เพิ่งเริ่ม ผู้เล่นทุกคนที่ place อ่านฉากนี้ร่วมกันก่อนผลของเทิร์น',
-  'บรรยาย place 2-3 ประโยค: แสงของช่วงเวลานี้ อากาศ (weather) ผู้คนทั่วไป และ NPC ใน npcs: arrived = เพิ่งมาถึง / left = เพิ่งจากไป / lingering = ยังอยู่ต่อเพราะคุยกับผู้เล่นค้างไว้',
-  'เรียก NPC ด้วย {{n:id}} เท่านั้น ห้ามเขียนชื่อจริง ห้ามเอ่ยถึงผู้เล่น ห้ามแต่งเหตุการณ์ที่ไม่อยู่ใน context ตอบ JSON {"text": "..."}',
+  'You describe the scene for the Game Master. A new period (turn) has just begun; every player at the place reads this scene together before the turn\'s results',
+  'Describe the place in 2-3 sentences: the light of this period, the weather, ordinary people, and the NPCs in npcs: arrived = just came / left = just went away / lingering = still here because a talk with a player is unfinished',
+  'Call NPCs only by {{n:id}}, never a real name; never mention the players; never invent events that are not in the context. Answer JSON {"text": "..."}',
+  THAI_OUTPUT,
 ].join('\n');
 export const SCENE_BLOCK: PromptBlock = { id: 'scene-rules', text: SCENE_TEXT, cache: true };
 

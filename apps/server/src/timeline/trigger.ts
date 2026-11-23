@@ -47,7 +47,7 @@ export async function startPhaseEvents(
     day: point.day,
     phase: point.phase,
     system: [eventContextBlock(context)],
-    messages: [{ role: 'user', text: 'ช่วงเวลาใหม่เริ่มแล้ว ตอบ eventOutcomes เฉพาะเหตุการณ์ active ที่ผลเปลี่ยน (ไม่มีให้ตอบรายการว่าง)' }],
+    messages: [{ role: 'user', text: 'A new period has begun. Answer eventOutcomes only for active events whose result changes (an empty list when none). Write each outcome in natural literary Thai.' }],
     output: { name: 'event_outcomes', schema: EventOutcomeProposal },
     maxOutputTokens: 1000,
   });

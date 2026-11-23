@@ -85,7 +85,7 @@ describe('Q-243 schema: eventOutcomes[].side', () => {
   it('prompt rule 11 names the side field and no longer asks for a "Good: ..." text prefix', () => {
     const rule11 = RULES_BLOCK.text.split('\n').find((l) => l.startsWith('11.'))!;
     expect(rule11).toContain('eventOutcomes.side');
-    expect(rule11).toContain('ห้ามขึ้นต้น outcome ด้วยชื่อฝ่าย');
+    expect(rule11).toContain("never starting with the side's name");
     expect(RULES_BLOCK.text).not.toMatch(/"(Good|Evil|Neutral): \.\.\."/);
   });
 });
