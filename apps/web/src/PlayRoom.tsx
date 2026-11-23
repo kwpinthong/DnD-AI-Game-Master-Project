@@ -20,6 +20,7 @@ import { PrivateColumn } from './play/PrivateColumn.tsx';
 import { RoomMenu } from './play/TopBar.tsx';
 import { connectRoom, type RoomConnection, type RoomConnectionStatus } from './room-api.ts';
 import { secretQuota } from './screen-models.ts';
+import { FeedbackDialog } from './ui/FeedbackDialog.tsx';
 import { Button, Skeleton, playText } from './ui/index.ts';
 import './play/play.css';
 import './play/chat/chat.css';
@@ -70,6 +71,8 @@ export function PlayRoom({
   const [acknowledged, setAcknowledged] = useState<ReadonlySet<number>>(new Set());
   const [menuOpen, setMenuOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  /** ISK-011: the report box, opened from the menu; mounted here so a draft outlives the menu and the layout. */
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [companionTick, setCompanionTick] = useState(0);
   const [companionProblem, setCompanionProblem] = useState<string>();
   /** GEN-149: the NPC whose chat box is open. */
@@ -202,6 +205,10 @@ export function PlayRoom({
           onGameList={() => {
             setMenuOpen(false);
             onGameList();
+          }}
+          onFeedback={() => {
+            setMenuOpen(false);
+            setFeedbackOpen(true);
           }}
           {...(compact && isPlayer
             ? {
@@ -353,6 +360,7 @@ export function PlayRoom({
           </div>
         </div>
       )}
+      <FeedbackDialog apiBaseUrl={apiBaseUrl} token={token} page="play" open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </section>
   );
 }

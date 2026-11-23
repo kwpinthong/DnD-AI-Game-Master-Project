@@ -27,6 +27,14 @@ const ok = (body: unknown): MockReply => ({ status: 200, body });
 
 const LIBRARY = CONTRACT_FIXTURES.LearningLibraryResponse[0]!;
 
+/** ISK-011: three reports, one of each type and status, for the owner's ฟีดแบ็ก tab. */
+const [REPORT, HTML_REPORT] = CONTRACT_FIXTURES.FeedbackRow;
+const REPORTS = [
+  REPORT!,
+  { ...REPORT!, id: 9, type: 'other' as const, status: 'reviewing' as const, text: `${'ตอนเปลี่ยนช่วงเวลา หน้าจอกระพริบแล้วข้อความที่พิมพ์ไว้หายไป '.repeat(3)}เกิดบนมือถือ` },
+  HTML_REPORT!,
+];
+
 /** Defaults for every scenario: the game has started (so the app goes on to the play room). */
 const DEFAULTS: Readonly<Record<string, MockReply>> = {
   'GET /api/game': ok(CONTRACT_FIXTURES.GameView[1]),
@@ -34,7 +42,18 @@ const DEFAULTS: Readonly<Record<string, MockReply>> = {
   // GEN-091: a delete answers with what is left, so the library visibly loses the entry / the game.
   'DELETE /api/admin/learning/:id': ok({ entries: LIBRARY.entries.slice(1), counts: { ...LIBRARY.counts, [LIBRARY.entries[0]!.type]: 0 } }),
   'DELETE /api/admin/learning/games/:gameId': ok(CONTRACT_FIXTURES.LearningLibraryResponse[1]),
+  'GET /api/admin/feedback': ok({ feedback: REPORTS }),
 };
+
+const FEEDBACK_STATUS = 'PATCH /api/admin/feedback/:id';
+
+/** ISK-011: a status change answers with that report holding the sent status (the default fixture is another report). */
+function feedbackStatusReply(request: MockRequest): MockReply {
+  const id = Number(request.path.split('/').pop());
+  const found = REPORTS.find((r) => r.id === id);
+  if (!found) return { status: 404, body: { code: 'feedback_not_found', message: 'ไม่พบรายงานนี้' } };
+  return ok({ ...found, status: (request.body as { status: string }).status });
+}
 
 const RULING_VOTE = 'PUT /api/game/rating/votes/:sourceRef';
 
@@ -74,6 +93,7 @@ export function mockHttp(scenario: MockScenario, request: MockRequest, elapsedMs
   }
   if (reply) return reply;
   if (routeKey(route) === RULING_VOTE) return rulingVoteReply(scenario, request);
+  if (routeKey(route) === FEEDBACK_STATUS) return feedbackStatusReply(request);
   if (route.response === null) return { status: 204, body: null };
   return ok(CONTRACT_FIXTURES[route.response][0]);
 }

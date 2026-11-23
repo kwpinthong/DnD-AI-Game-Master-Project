@@ -207,7 +207,9 @@ describe('ISK-011 the box on every in-game page', () => {
     expect(await screen.findByText(THANKS)).toBeTruthy();
   }
 
-  const corner = async () => fireEvent.click(await screen.findByRole('button', { name: LABEL }));
+  const corner = async () => {
+    fireEvent.click(await screen.findByRole('button', { name: LABEL }));
+  };
 
   async function viaPlayMenu() {
     await screen.findByText('เชื่อมต่อแล้ว');
@@ -374,7 +376,7 @@ describe('ISK-011 the ฟีดแบ็ก tab in /admin', () => {
 
     state.patch = 'fail';
     fireEvent.change(statusOf(2), { target: { value: 'done' } });
-    expect(await screen.findByText(/บันทึกไม่ได้/)).toBeTruthy();
+    expect(await screen.findByText(/เปลี่ยนสถานะไม่สำเร็จ/)).toBeTruthy();
     expect(statusOf(2).value).toBe('reviewing');
   });
 });

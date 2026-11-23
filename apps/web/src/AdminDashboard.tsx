@@ -2,6 +2,7 @@ import type { AiUsageGameResponse, AiUsageOverviewResponse, GmRefusal, UsageCeil
 import { PHASES as PERIODS } from '@isekai/protocol';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { fetchGameUsage, fetchUsageOverview, postAdminLogout, postAdminSession } from './admin-api.ts';
+import { FeedbackAdmin } from './FeedbackAdmin.tsx';
 import { GameDataEditor } from './GameDataEditor.tsx';
 import { LearningLibrary } from './LearningLibrary.tsx';
 import { NpcLibrary } from './NpcLibrary.tsx';
@@ -89,7 +90,7 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
     return token ? { state: 'dashboard', token } : { state: 'login' };
   });
 
-  const [page, setPage] = useState<'usage' | 'library' | 'data' | 'votes' | 'style'>('usage');
+  const [page, setPage] = useState<'usage' | 'library' | 'data' | 'votes' | 'style' | 'feedback'>('usage');
   const [libraryTab, setLibraryTab] = useState<'entries' | 'npc'>('entries');
 
   function signedIn(token: string) {
@@ -111,7 +112,7 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
         <>
           {/* GEN-091: both pages sit behind the same admin code (Q-168). */}
           <nav className="admin__nav" aria-label="ผู้ดูแล">
-            {(['usage', 'library', 'data', 'votes', 'style'] as const).map((p) => (
+            {(['usage', 'library', 'data', 'votes', 'style', 'feedback'] as const).map((p) => (
               <button key={p} type="button" aria-pressed={page === p} onClick={() => setPage(p)}>
                 {libraryText.adminNav[p]}
               </button>
@@ -154,6 +155,11 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
               <StylePanel apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
               {/* GEN-167: the fixed eval set, previous round vs this round. */}
               <StyleEval apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
+            </section>
+          ) : page === 'feedback' ? (
+            <section aria-label={libraryText.adminNav.feedback}>
+              <h2>{libraryText.adminNav.feedback}</h2>
+              <FeedbackAdmin apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
             </section>
           ) : page === 'style' ? (
             <section aria-label={libraryText.adminNav.style}>

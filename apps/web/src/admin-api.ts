@@ -2,6 +2,9 @@ import {
   AdminCorrectionResponse,
   AdminCorrectionsExportResponse,
   AdminDownvotesResponse,
+  AdminFeedbackResponse,
+  type AdminFeedbackStatusRequest,
+  FeedbackRow,
   type AdminCorrectionRequest,
   AdminSessionResponse,
   AiUsageGameResponse,
@@ -188,6 +191,15 @@ export function decideStyleProposal(baseUrl: string, token: string, id: number, 
 
 export function restoreVoiceVersion(baseUrl: string, token: string, version: number) {
   return call(baseUrl, `/api/admin/style-review/voice/${version}/restore`, { method: 'POST', headers: auth(token) }, StyleReviewResponse);
+}
+
+/** ISK-010: the players' reports (latest 200, newest first) and their status. */
+export function fetchFeedback(baseUrl: string, token: string) {
+  return call(baseUrl, '/api/admin/feedback', { headers: auth(token) }, AdminFeedbackResponse);
+}
+
+export function saveFeedbackStatus(baseUrl: string, token: string, id: number, body: AdminFeedbackStatusRequest) {
+  return call(baseUrl, `/api/admin/feedback/${id}`, { method: 'PATCH', headers: { ...auth(token), 'content-type': 'application/json' }, body: JSON.stringify(body) }, FeedbackRow);
 }
 
 export async function postAdminLogout(baseUrl: string, token: string): Promise<void> {

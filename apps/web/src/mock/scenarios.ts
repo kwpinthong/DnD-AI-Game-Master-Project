@@ -512,6 +512,30 @@ export const SCENARIOS: readonly MockScenario[] = [
     http: { 'GET /api/admin/learning': { fail: 'network' } },
     room: room(BASE_ROOM),
   },
+  // ISK-011: the report box (กด ส่ง to see each answer; `normal` = sent) and the owner's ฟีดแบ็ก tab.
+  { id: 'feedback-sending', title: 'กำลังส่งรายงาน', note: 'กดส่งแล้วคำตอบยังไม่มา: ปุ่มส่งกดซ้ำไม่ได้', session: 'player', screens: ['feedback'], http: { 'POST /api/feedback': { pending: true } }, room: room(BASE_ROOM) },
+  {
+    id: 'feedback-rate-limited',
+    title: 'ส่งรายงานบ่อยเกินไป',
+    note: '429: เกิน 5 ครั้งใน 10 นาที ข้อความที่พิมพ์ยังอยู่',
+    session: 'player',
+    screens: ['feedback'],
+    http: { 'POST /api/feedback': { status: 429, body: { code: 'rate_limited', message: 'ส่งได้ 5 ครั้งใน 10 นาที ลองใหม่อีกสักครู่' } } },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'feedback-session-lost',
+    title: 'session หมดอายุตอนส่งรายงาน',
+    note: '401: บอกให้เข้าเกมใหม่ ข้อความยังอยู่',
+    session: 'player',
+    screens: ['feedback'],
+    http: { 'POST /api/feedback': { status: 401, body: { code: 'unauthorized', message: 'ยังไม่ได้เข้าเกม หรือ session หมดอายุ' } } },
+    room: room(BASE_ROOM),
+  },
+  { id: 'feedback-error', title: 'ส่งรายงานไม่ถึง server', note: 'เน็ตหลุด: ข้อความ error ข้อความที่พิมพ์ยังอยู่', session: 'player', screens: ['feedback'], http: { 'POST /api/feedback': { fail: 'network' } }, room: room(BASE_ROOM) },
+  { id: 'feedback-empty', title: 'ยังไม่มีรายงาน', note: 'ไม่มีผู้เล่นส่งรายงาน', session: 'guest', screens: ['admin-feedback'], http: { 'GET /api/admin/feedback': ok(F.AdminFeedbackResponse[1]) }, room: room(BASE_ROOM) },
+  { id: 'feedback-loading', title: 'รายงานกำลังโหลด', note: 'คำตอบไม่มาเลย', session: 'guest', screens: ['admin-feedback'], http: { 'GET /api/admin/feedback': { pending: true } }, room: room(BASE_ROOM) },
+  { id: 'feedback-list-error', title: 'รายงานโหลดไม่ได้', note: 'ติดต่อ server ไม่ได้', session: 'guest', screens: ['admin-feedback'], http: { 'GET /api/admin/feedback': { fail: 'network' } }, room: room(BASE_ROOM) },
 ];
 
 /** Unknown ids fall back to `normal`, so a typo in ?scenario= still opens a page. */

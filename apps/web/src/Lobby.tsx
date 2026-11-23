@@ -8,6 +8,7 @@ import { TonePicker } from './TonePicker.tsx';
 import { OriginCard } from './OriginCard.tsx';
 import { PlayRoom } from './PlayRoom.tsx';
 import { ScenarioEditor } from './ScenarioEditor.tsx';
+import { FeedbackButton } from './ui/FeedbackDialog.tsx';
 import { Button, Panel, Skeleton, Toast } from './ui/index.ts';
 import './pregame.css';
 
@@ -259,6 +260,7 @@ export function Lobby({
 
   return (
     <div className="pregame">
+      <FeedbackButton apiBaseUrl={apiBaseUrl} token={token} page="lobby" />
       <Panel title="ห้องรอ" className="pregame__panel lobby">
         <h2 className="pregame__title">
           {game.name} · {modeLabel[game.mode]} · {game.humanGm ? 'GM คน' : 'AI GM'}
