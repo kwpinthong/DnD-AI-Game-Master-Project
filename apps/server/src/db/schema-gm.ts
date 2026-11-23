@@ -1,8 +1,6 @@
+import { PERIODS as PHASES } from '@isekai/rules';
 import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { game, member } from './schema.ts';
-
-/** `Phase` of `@isekai/protocol` (periods, GEN-063); written out because drizzle-kit loads this file alone. */
-const PHASES = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
 
 /**
  * The AI GM's work on one turn (GEN-057), so a restart mid-resolve goes on from where it stopped instead of

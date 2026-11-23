@@ -13,7 +13,7 @@
 import type { Period } from './phase/types.ts';
 import type { ActionTag, Visibility } from './resolution/types.ts';
 
-/** Same values as `Weather` in `@isekai/protocol`. */
+/** The one list of live weathers: `@isekai/protocol` re-exports it (GEN-191). */
 export const WEATHERS = ['Clear', 'Rain', 'Fog', 'Dark Night', 'Clear Night', 'Storm'] as const;
 export type Weather = (typeof WEATHERS)[number];
 

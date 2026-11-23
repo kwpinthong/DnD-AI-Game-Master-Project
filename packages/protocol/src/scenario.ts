@@ -1,3 +1,4 @@
+import { PERIODS } from '@isekai/rules';
 import { z } from 'zod';
 
 /**
@@ -34,10 +35,10 @@ const optionalText = (max: number) => z.string().max(max, `ยาวได้ไ
 const GmNote = optionalText(2000);
 
 /**
- * The period of the day (ช่วงเวลา, System_Rules "Time System", GEN-063); each has 2 turns. Same values as
- * `PERIODS` in `@isekai/rules`. The key stays `phase` wherever a point in time is stored or sent.
+ * The period of the day (ช่วงเวลา, System_Rules "Time System", GEN-063); each has 2 turns. It is `PERIODS`
+ * of `@isekai/rules` (GEN-191). The key stays `phase` wherever a point in time is stored or sent.
  */
-export const PHASES = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
+export const PHASES = PERIODS;
 export const Phase = z.enum(PHASES, {
   error: 'ช่วงต้องเป็น EOSORIA (เช้า), SOLARION (บ่าย), HESPERION (ค่ำ) หรือ NOCTHERION (ดึก)',
 });

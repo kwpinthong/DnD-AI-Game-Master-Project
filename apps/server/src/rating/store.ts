@@ -1,12 +1,10 @@
 import type { EntryVote, GameRatingView } from '@isekai/protocol';
-import { restorePhaseState } from '@isekai/rules';
+import { PERIODS as PERIOD_ORDER, restorePhaseState } from '@isekai/rules';
 import { and, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
 import { gamePhase, gameRating, phaseAction, responseVote } from '../db/schema.ts';
 import { activeMembers, type MemberRow } from '../game/service.ts';
 import { voteFlags } from '../room/vote.ts';
-
-const PERIOD_ORDER = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
 
 /** One action → result row of the end page: an action that stood, which a 👍 may name by `sourceRef`. */
 export interface Ruling {

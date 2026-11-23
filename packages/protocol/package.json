@@ -14,6 +14,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@isekai/rules": "workspace:*",
     "zod": "4.6.7"
   },
   "devDependencies": {

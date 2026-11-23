@@ -1,8 +1,6 @@
+import { PERIODS } from '@isekai/rules';
 import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { game, member } from './schema.ts';
-
-/** `Period` of `@isekai/rules`; written out because drizzle-kit loads this file alone. */
-const PERIODS = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
 
 /**
  * The opaque handle players use for a scenario NPC in one game (GEN-054). Scenario ids such as

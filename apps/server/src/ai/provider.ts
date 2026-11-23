@@ -1,5 +1,6 @@
 // The AiProvider adapter (ADR "Isekai Chronicles - AI GM" §8, interface from GEN-021 §2).
 // No provider SDK is imported here: only src/ai/providers/* may do that (GEN-038 C3).
+import type { Period } from '@isekai/rules';
 
 /** What a call is for (ADR §8). Recorded in AiUsage. */
 export type AiPurpose =
@@ -22,8 +23,8 @@ export type AiPurpose =
   /** GEN-149: a player's chat with an NPC outside the turn (the small model, Q-309). */
   | 'npc_chat';
 
-/** The period of the day (GEN-063), as `Phase` in `@isekai/protocol`. */
-export type AiPhase = 'EOSORIA' | 'SOLARION' | 'HESPERION' | 'NOCTHERION';
+/** The period of the day (GEN-063). */
+export type AiPhase = Period;
 
 /** One system prompt block, ordered most stable → most volatile (ADR §6.2). */
 export interface PromptBlock {
