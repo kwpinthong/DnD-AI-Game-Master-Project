@@ -43,6 +43,9 @@ describe('entries as chat', () => {
     expect(look({ kind: 'hit' })).toBe('skip');
     expect(look({ kind: 'hit' }, true)).toBe('hit-line');
     expect(look({ kind: 'whisper' })).toBe('skip');
+    // GEN-129: another player's public action is the left PlayerBubble; without its actor it is plain text.
+    expect(look({ kind: 'player', actor: { name: 'ชายผมแดง' } })).toBe('player-action');
+    expect(look({ kind: 'player' })).toBe('narration');
   });
 
   it('badges: the roll, each change with its reason, coins gained in the gain tone', () => {
