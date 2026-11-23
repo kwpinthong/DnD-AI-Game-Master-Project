@@ -78,11 +78,9 @@ export function ActionBar({ room, seenBy, draft, setDraft, problem, sending, onS
     onSend({ ...draft, visibility });
   }
 
+  // GEN-137 (Q-301 B): every word, พัก too, only fills the box; the server reads REST from the text (GEN-113).
   function quick(word: QuickWord) {
-    if (word === 'พัก') {
-      const on = !(draft.rest && !draft.placeAction);
-      setDraft({ ...draft, rest: on, train: false, placeAction: null, text: on ? prefillAction(draft.text, word) : draft.text === word ? '' : draft.text });
-    } else setDraft({ ...draft, rest: false, train: false, placeAction: null, text: prefillAction(draft.text, word) });
+    setDraft({ ...draft, rest: false, train: false, placeAction: null, text: prefillAction(draft.text, word) });
     setMore(false);
     input.current?.focus();
   }
@@ -102,7 +100,6 @@ export function ActionBar({ room, seenBy, draft, setDraft, problem, sending, onS
         className={iconOnly ? 'chat-quick__btn chat-quick__btn--icon' : 'chat-quick__btn'}
         disabled={off}
         aria-label={iconOnly ? bar.actions[word] : undefined}
-        aria-pressed={word === 'พัก' ? draft.rest && !draft.placeAction : undefined}
         onClick={() => quick(word)}
       >
         <MaskIcon src={QUICK_ICON[word]} />
