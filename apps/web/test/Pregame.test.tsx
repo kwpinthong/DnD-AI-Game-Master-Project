@@ -399,6 +399,25 @@ describe('the parts that wait for the backend (GEN-082 / GEN-083) follow the con
     const sent = JSON.parse(String((post[1] as RequestInit).body)) as Record<string, unknown>;
     expect(sent.playerCode).toBe('PC-NEW');
     expect(sent.memory).toBeUndefined();
+    expect(sent.noStyle).toBeUndefined();
+  });
+
+  it('GEN-201: the create form has the join form\'s opt-out tick; it is sent only when ticked', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const onCreated = vi.fn();
+    render(<CreateGameForm apiBaseUrl={base('guest')} onCreated={onCreated} onBack={noop} />);
+    type('Create code', 'ลับเฉพาะ');
+    type('ชื่อเกม', 'เมืองก่อนอุกกาบาต');
+    type('ชื่อผู้เล่นของคุณ', 'นก');
+    type('PIN ของคุณ', '1234');
+    type(/รหัสผู้เล่นของคุณ/, ' PC-7H2K ');
+    const tick = screen.getByLabelText(/ไม่ต้องเก็บสไตล์ของฉัน/) as HTMLInputElement;
+    expect(tick.checked).toBe(false);
+    fireEvent.click(tick);
+    fireEvent.click(button('สร้างเกมและรับโค้ด'));
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    const post = fetchSpy.mock.calls.find(([input]) => String(input).endsWith('/api/games'))!;
+    expect(JSON.parse(String((post[1] as RequestInit).body))).toMatchObject({ playerCode: 'PC-7H2K', noStyle: true });
   });
 
   it('Lobby: says whether the memory is on, and from which game', async () => {

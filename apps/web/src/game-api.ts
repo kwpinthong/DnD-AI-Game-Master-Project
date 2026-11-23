@@ -41,6 +41,8 @@ export interface CreateGameInput {
   pin: string;
   /** GEN-082 / GEN-083: the creator's player code and the memory toggle (absent = off). */
   playerCode?: string;
+  /** GEN-201: the creator's opt-out tick (absent = keep). */
+  noStyle?: boolean;
   memory?: GameMemorySetting;
 }
 

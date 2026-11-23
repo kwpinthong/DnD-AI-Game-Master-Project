@@ -10,7 +10,7 @@ import { Button, Field, Panel } from './ui/index.ts';
 import './pregame.css';
 
 type TextField = 'createCode' | 'gameName' | 'name' | 'pin';
-type Base = Omit<CreateGameInput, 'playerCode' | 'memory'>;
+type Base = Omit<CreateGameInput, 'playerCode' | 'noStyle' | 'memory'>;
 
 const endedOn = (iso: string) => new Date(iso).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
 
@@ -35,6 +35,7 @@ export function CreateGameForm({
 
   const [memoryOn, setMemoryOn] = useState(false);
   const [playerCode, setPlayerCode] = useState('');
+  const [noStyle, setNoStyle] = useState(false);
   /** undefined = not looked up yet. */
   const [sources, setSources] = useState<MemorySourceGame[]>();
   const [picked, setPicked] = useState<string[]>([]);
@@ -55,7 +56,7 @@ export function CreateGameForm({
     if (busy) return;
 
     const code = playerCode.trim();
-    const body: CreateGameInput = { ...base, ...(code === '' ? {} : { playerCode: code }), ...(memoryOn ? { memory: { enabled: true, sourceGameIds: picked } } : {}) };
+    const body: CreateGameInput = { ...base, ...(code === '' ? {} : { playerCode: code }), ...(noStyle ? { noStyle } : {}), ...(memoryOn ? { memory: { enabled: true, sourceGameIds: picked } } : {}) };
     setBusy(true);
     const result = await postCreateGame(apiBaseUrl, body);
     setBusy(false);
@@ -154,6 +155,10 @@ export function CreateGameForm({
             <Button onClick={() => void lookUpSources()} disabled={playerCode.trim() === ''} loading={looking} loadingText="กำลังหาเกม…" disabledReason="ใส่รหัสผู้เล่นก่อน">
               ดูเกมที่ใช้ได้
             </Button>
+            <label className="check">
+              <input type="checkbox" checked={noStyle} onChange={(e) => setNoStyle(e.target.checked)} />
+              <span>ไม่ต้องเก็บสไตล์ของฉัน</span>
+            </label>
             {sourcesError && (
               <p className="field-error" role="alert">
                 {sourcesError}

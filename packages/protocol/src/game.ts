@@ -56,6 +56,8 @@ export const CreateGameRequest = z
     pin: JoinRequest.shape.pin,
     /** GEN-082 / GEN-083: the creator's player code (kept only as its HMAC); finds the memory's source games. */
     playerCode: z.string().trim().max(64, 'รหัสผู้เล่นยาวได้ไม่เกิน 64 ตัวอักษร').optional(),
+    /** GEN-201: the creator's "ไม่ต้องเก็บสไตล์ของฉัน" tick, like the join form's. */
+    noStyle: z.boolean().optional(),
     /** GEN-083: absent = off. */
     memory: GameMemorySetting.optional(),
   })
