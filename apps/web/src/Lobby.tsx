@@ -2,6 +2,8 @@ import { formatInviteCode, type GameMember, type GameView } from '@isekai/protoc
 import { useEffect, useRef, useState } from 'react';
 import { CharacterScreen } from './CharacterScreen.tsx';
 import { deleteGameCall, gameCall, type GameAction } from './game-api.ts';
+import { NpcDialoguePicker } from './NpcDialoguePicker.tsx';
+import { npcDialogueText } from './ui/strings.ts';
 import { OriginCard } from './OriginCard.tsx';
 import { PlayRoom } from './PlayRoom.tsx';
 import { ScenarioEditor } from './ScenarioEditor.tsx';
@@ -290,6 +292,12 @@ export function Lobby({
             </Button>
           </div>
         )}
+        <NpcDialoguePicker
+          value={game.npcDialogue ?? 'normal'}
+          disabled={!owner || !lobby || busy}
+          note={!lobby ? npcDialogueText.locked : owner ? undefined : npcDialogueText.ownerOnly}
+          onChange={(npcDialogue) => void run({ method: 'PATCH', path: '/api/game', body: { npcDialogue } })}
+        />
         {(game.canEditScenario || gmOfGame) && (
           <p className="lobby__row">
             <span>Scenario</span>
