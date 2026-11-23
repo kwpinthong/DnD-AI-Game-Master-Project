@@ -22,6 +22,8 @@ export interface ServerConfig {
   adminCodeHash?: string;
   /** Scheduled backups of the DB (GEN-037); none when left out (tests) or BACKUP_INTERVAL_HOURS=0. */
   backup?: BackupConfig;
+  /** Q-364: extract an ended game's lore + feedback this long after it ended (LEARNING_AUTO_EXTRACT_HOURS); none = off (tests). */
+  learningAutoExtractMs?: number;
 }
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -76,6 +78,11 @@ export function loadConfig(env: Record<string, string | undefined>): ServerConfi
   }
   const resolvedDbPath = dbPath ? resolve(dbPath) : resolve(repoRoot, 'data', 'isekai.sqlite');
   const backup = backupConfig(value, resolvedDbPath);
+  const extractText = value('LEARNING_AUTO_EXTRACT_HOURS') ?? '24';
+  const extractHours = Number(extractText);
+  if (!Number.isFinite(extractHours) || extractHours < 0) {
+    throw new Error(`LEARNING_AUTO_EXTRACT_HOURS must be a number of hours, 0 or more (0 = off), got "${extractText}"`);
+  }
   return {
     host: value('HOST') ?? (production ? '0.0.0.0' : '127.0.0.1'),
     port,
@@ -84,6 +91,7 @@ export function loadConfig(env: Record<string, string | undefined>): ServerConfi
     ...(createCodeHash ? { createCodeHash } : {}),
     ...(adminCodeHash ? { adminCodeHash } : {}),
     ...(backup ? { backup } : {}),
+    ...(extractHours > 0 ? { learningAutoExtractMs: Math.round(extractHours * 3_600_000) } : {}),
   };
 }
 

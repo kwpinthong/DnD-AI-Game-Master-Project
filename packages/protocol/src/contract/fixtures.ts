@@ -336,10 +336,18 @@ const learningEntries: In<typeof p.LearningEntryView>[] = [
   {
     ...learningSource,
     id: 'le-1',
-    type: 'ruling',
-    content: 'ผู้เล่นยื่นเหรียญให้ทหารยาม → โน้มน้าวสำเร็จ',
+    type: 'good_example',
+    content: 'ผู้เล่นยื่นเหรียญให้ทหารยาม → ปานกลาง สำเร็จ',
     tags: ['persuade', 'guard'],
-    detail: { sourceRef: '3-SOLARION-1-4', actionText: 'ผู้เล่นยื่นเหรียญให้ทหารยาม', check: 'ladder', dcLabel: 'ปานกลาง', d20: 12, result: 'success', thumbs: 3, players: 4 },
+    detail: { sourceRef: 'ruling-3-SOLARION-1-4', kind: 'ruling', npcId: null, up: 3, down: 0, players: 4, dcLabel: 'ปานกลาง', d20: 12, result: 'success' },
+  },
+  {
+    ...learningSource,
+    id: 'le-5',
+    type: 'avoid',
+    content: 'บรรยายยืดยาวก่อนบอกผล',
+    tags: [],
+    detail: { sourceRef: 'entry-52', kind: 'narration', npcId: null, up: 0, down: 3, players: 4, dcLabel: null, d20: null, result: null },
   },
   { ...learningSource, id: 'le-2', type: 'lore', content: 'เมืองรอดเพราะม่านปาฏิหาริย์ โนอากลายเป็นเซราฟิเอล', tags: ['ending_good'], detail: { endingPath: 'good', npcIds: ['noa'] } },
   { ...learningSource, id: 'le-3', type: 'feedback_note', content: 'อยากให้ AI GM บอกเบาะแสชัดขึ้นตอนวันที่ 7', tags: [], detail: { fromComments: 2 } },
@@ -579,10 +587,11 @@ export const CONTRACT_FIXTURES: Fixtures = {
   LearningLibraryResponse: [
     {
       entries: learningEntries,
-      counts: { lore: 1, feedback_note: 1, ruling: 1, style: 1 },
+      counts: { lore: 1, feedback_note: 1, good_example: 1, avoid: 1, style: 1 },
     },
-    { entries: [], counts: { lore: 0, feedback_note: 0, ruling: 0, style: 0 } },
+    { entries: [], counts: { lore: 0, feedback_note: 0, good_example: 0, avoid: 0, style: 0 } },
   ],
+  GameLearningResponse: [{ status: 'done' }, { status: 'failed' }, { status: 'pending' }],
   LearningExtractResponse: [
     { status: 'done', message: 'สกัดความรู้แล้ว', lore: 2, feedback: 1 },
     { status: 'failed', message: 'สกัดไม่สำเร็จ', lore: 0, feedback: 0 },
@@ -673,8 +682,9 @@ export const CONTRACT_FIXTURES: Fixtures = {
       ],
       candidates: [{ ...correction, id: 2, seq: 44, original: 'ฝนตกหนัก', edited: 'ฝนตกพรำ ๆ ทั่วลานน้ำพุ', npc: null, scene: 'narration', reasons: [] }],
       npcChoices: [{ id: 'npc-noa', name: 'โนอา' }, { id: 'npc-mira', name: 'มีรา' }],
+      goodLines: [{ gameId: 'g-old', seq: 52, npc: { id: 'npc-mira', name: 'มีรา' }, text: '{{n:npc-mira}} หัวเราะ "ผู้เล่นกล้าดีนี่"', up: 3 }],
     },
-    { npcs: [], upvoted: [], candidates: [], npcChoices: [] },
+    { npcs: [], upvoted: [], candidates: [], npcChoices: [], goodLines: [] },
   ],
   NpcExampleAddRequest: [
     { from: 'vote', gameId: 'g-1', seq: 48, npcId: 'npc-noa', scene: 'npc-dialogue' },

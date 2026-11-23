@@ -21,6 +21,7 @@ describe('loadConfig (dev)', () => {
       webOrigins: ['http://localhost:5173'],
       // GEN-037: the backup job is on by default, next to the DB.
       backup: { dir: join(repoRoot, 'data', 'backups'), intervalMs: 6 * 3_600_000, keep: 28 },
+      learningAutoExtractMs: 24 * 3_600_000,
     });
   });
 
@@ -38,6 +39,7 @@ describe('loadConfig (dev)', () => {
       dbPath: resolve('C:/isekai/volume/game.sqlite'),
       webOrigins: ['https://isekai.netlify.app', 'http://localhost:5173'],
       backup: { dir: resolve('C:/isekai/volume/backups'), intervalMs: 6 * 3_600_000, keep: 28 },
+      learningAutoExtractMs: 24 * 3_600_000,
     });
   });
 
@@ -66,6 +68,7 @@ describe('loadConfig (NODE_ENV=production, Railway)', () => {
       dbPath: resolve('/data/isekai.sqlite'),
       webOrigins: ['https://isekai.netlify.app'],
       backup: { dir: resolve('/data/backups'), intervalMs: 6 * 3_600_000, keep: 28 },
+      learningAutoExtractMs: 24 * 3_600_000,
     });
   });
 

@@ -459,6 +459,15 @@ export const SCENARIOS: readonly MockScenario[] = [
     room: room(endedRoom),
   },
   {
+    id: 'ended-learning-failed',
+    title: 'จบเกม สกัดความรู้ไม่สำเร็จ',
+    note: 'Q-363: เจ้าของเกมเห็น "สกัดไม่สำเร็จ" พร้อมปุ่มลองใหม่ (คนอื่นได้ 403 ไม่เห็นกล่องนี้)',
+    session: 'player',
+    screens: ['ending'],
+    http: { 'GET /api/game/log': ok(F.GameLogResponse[1]), 'GET /api/game/learning': ok(F.GameLearningResponse[1]) },
+    room: room(endedRoom),
+  },
+  {
     id: 'chat-colours',
     title: 'สีของแชต (เทียบ mockup)',
     note: 'มี badge ได้เหรียญ ปุ่มโหวต และกล่องผู้เล่นอื่น (entry kind `player`, GEN-129)',

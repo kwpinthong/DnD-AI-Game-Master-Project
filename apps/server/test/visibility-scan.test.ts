@@ -104,6 +104,13 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'POST /api/memory/sources': { method: 'POST', path: '/api/memory/sources', body: { playerCode: 'pc-scan' } },
     // GEN-080: the lore + feedback extract; a player's session is 403.
     'POST /api/admin/learning/games/:gameId/extract': { method: 'POST', path: '/api/admin/learning/games/any-game/extract' },
+    // GEN-084: the Learning library; a player's session is 403 (checked below).
+    'GET /api/admin/learning': { method: 'GET', path: '/api/admin/learning' },
+    'DELETE /api/admin/learning/:id': { method: 'DELETE', path: '/api/admin/learning/1' },
+    'DELETE /api/admin/learning/games/:gameId': { method: 'DELETE', path: '/api/admin/learning/games/any-game' },
+    // Q-363: the game owner's extract status / retry (the game here is still playing: 409; others 403).
+    'GET /api/game/learning': { method: 'GET', path: '/api/game/learning' },
+    'POST /api/game/learning/extract': { method: 'POST', path: '/api/game/learning/extract' },
     // GEN-055: the player's own skills, held items and library discoveries (no condition or progress).
     'GET /api/game/inventory': { method: 'GET', path: '/api/game/inventory' },
     // GEN-058: the Human GM console. Players get 403 (scanned for karma like every other answer).
@@ -156,6 +163,9 @@ const ADMIN_DATA_ROUTES = [
   'POST /api/admin/style-review/proposals/:id/approve',
   'POST /api/admin/style-review/proposals/:id/reject',
   'POST /api/admin/style-review/voice/:version/restore',
+  'GET /api/admin/learning',
+  'DELETE /api/admin/learning/:id',
+  'DELETE /api/admin/learning/games/:gameId',
 ];
 
 /** The join name the fixture gave each seat (A is "นก" in both table kinds). */

@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, like } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
 import { game, npcExample, responseCorrection, responseVote, roomEntry } from '../db/schema.ts';
 import { exampleTokens } from '../gm/npc-examples.ts';
+import { npcCandidates } from '../learning/examples.ts';
 import type { EntryMeta, RoomEntryRow } from '../room/store.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { correctionView, memberNames, npcOf, sceneOf } from './vote-review.ts';
@@ -61,6 +62,7 @@ export function npcLibrary(db: DbOrTx): NpcLibraryResponse {
     upvoted: upvoted(db, new Set(rows.filter((r) => r.source === 'vote').map((r) => `${r.gameId}/${r.entryId}`))),
     candidates: candidates.map(correctionView),
     npcChoices: [...choices.values()],
+    goodLines: npcCandidates(db),
   };
 }
 

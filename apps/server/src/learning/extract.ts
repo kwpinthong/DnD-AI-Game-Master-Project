@@ -1,10 +1,10 @@
 import type { LearningExtractResponse } from '@isekai/protocol';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, lte } from 'drizzle-orm';
 import type { AiService } from '../ai/core/service.ts';
 import type { GameAssets } from '../assets/load.ts';
 import type { Clock } from '../auth/join.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
-import { game, gameRating, learningEntry, learningExtract, member } from '../db/schema.ts';
+import { game, gamePhase, gameRating, learningEntry, learningExtract, member } from '../db/schema.ts';
 import { getEnding } from '../finale/store.ts';
 import { revealFor } from '../finale/reveal.ts';
 import { activeMembers } from '../game/service.ts';
@@ -174,6 +174,37 @@ export function createLearningExtractor(deps: { db: Db; ai: AiService; assets: G
       await Promise.all([...running.values()]);
     },
   };
+}
+
+/** Q-363: the extract state of a game for its owner's end page. */
+export function extractStatus(db: DbOrTx, gameId: string): 'pending' | 'done' | 'failed' {
+  return db.select({ status: learningExtract.status }).from(learningExtract).where(eq(learningExtract.gameId, gameId)).get()?.status ?? 'pending';
+}
+
+/**
+ * Q-364: ended games never extracted whose phase last changed (the end) `afterMs` or longer ago. A failed one is left
+ * to its owner's retry (Q-363), so a broken AI is not called again every check.
+ */
+export function extractDue(db: DbOrTx, now: number, afterMs: number): string[] {
+  return db
+    .select({ gameId: gamePhase.gameId })
+    .from(gamePhase)
+    .leftJoin(learningExtract, eq(learningExtract.gameId, gamePhase.gameId))
+    .where(and(isNull(learningExtract.gameId), lte(gamePhase.updatedAt, now - afterMs)))
+    .all()
+    .map((r) => r.gameId)
+    .filter((gameId) => gameEnded(db, gameId));
+}
+
+/** Q-364: checks at start and every hour; returns the stop. */
+export function startAutoExtract(db: Db, learning: LearningExtractor, now: Clock, afterMs: number): () => void {
+  const run = () => {
+    for (const gameId of extractDue(db, now(), afterMs)) void learning.extract(gameId);
+  };
+  run();
+  const timer = setInterval(run, 3_600_000);
+  timer.unref();
+  return () => clearInterval(timer);
 }
 
 /** True when every member of the ended game rated it (the extract then starts by itself). */

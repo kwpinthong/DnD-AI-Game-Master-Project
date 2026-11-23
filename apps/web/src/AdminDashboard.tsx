@@ -91,6 +91,7 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
   });
 
   const [page, setPage] = useState<'usage' | 'library' | 'data' | 'votes' | 'style'>('usage');
+  const [libraryTab, setLibraryTab] = useState<'entries' | 'npc'>('entries');
 
   function signedIn(token: string) {
     saveAdminToken(token);
@@ -130,10 +131,22 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
           ) : page === 'library' ? (
             <section aria-label={libraryText.title}>
               <h2>{libraryText.title}</h2>
-              <LearningLibrary apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
-              {/* GEN-151 / Q-322: the NPC example library shares the page. */}
-              <h2>{npcLibraryText.title}</h2>
-              <NpcLibrary apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
+              {/* GEN-084 / Q-322: the NPC example library (GEN-151) is a tab of the same page. */}
+              <nav className="admin__nav" aria-label={libraryText.title}>
+                {(['entries', 'npc'] as const).map((tab) => (
+                  <button key={tab} type="button" aria-pressed={libraryTab === tab} onClick={() => setLibraryTab(tab)}>
+                    {libraryText.tabs[tab]}
+                  </button>
+                ))}
+              </nav>
+              {libraryTab === 'entries' ? (
+                <LearningLibrary apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
+              ) : (
+                <>
+                  <h3>{npcLibraryText.title}</h3>
+                  <NpcLibrary apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
+                </>
+              )}
             </section>
           ) : page === 'votes' ? (
             <section aria-label={libraryText.adminNav.votes}>

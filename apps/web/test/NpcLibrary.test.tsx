@@ -67,4 +67,14 @@ describe('GEN-151 NPC example library (admin)', () => {
     await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
     expect(calls.find((c) => c.method === 'POST')!.body).toEqual({ from: 'correction', correctionId: pair.id, npcId: npc.id });
   });
+
+  it('GEN-084 C7: a good NPC line of GEN-081 is added to its NPC with one click (NPC picked, scene npc-dialogue)', async () => {
+    const calls = stub();
+    open();
+    const line = LIB.goodLines[0]!;
+    const item = within((await screen.findByText('มีรา หัวเราะ "ผู้เล่นกล้าดีนี่"')).closest('li')!);
+    fireEvent.click(item.getByRole('button', { name: /เพิ่มเข้าคลัง/ }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
+    expect(calls.find((c) => c.method === 'POST')!.body).toEqual({ from: 'vote', gameId: line.gameId, seq: line.seq, npcId: line.npc.id, scene: 'npc-dialogue' });
+  });
 });

@@ -12,7 +12,7 @@ import {
   type Phase,
 } from '@isekai/protocol';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ratingApi, type RatingResult } from './rating-api.ts';
+import { learningStatus, ratingApi, type RatingResult } from './rating-api.ts';
 import { Button } from './ui/Button.tsx';
 import { ErrorState, Skeleton } from './ui/parts.tsx';
 import { VoteButtons } from './ui/VoteButtons.tsx';
@@ -318,6 +318,37 @@ export function RatingSection({ rating: handle, id }: { rating: RatingHandle; id
           <p className="rating__likes">{endText.likes(Object.keys(state.rating.myVotes).length)}</p>
         </>
       )}
+    </section>
+  );
+}
+
+/** Q-363: only the game owner gets a status (anyone else 403 = nothing shown); a failed extract has a retry. */
+export function LearningRetry({ apiBaseUrl, token }: { apiBaseUrl: string; token: string }) {
+  const [status, setStatus] = useState<'pending' | 'done' | 'failed' | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void learningStatus(apiBaseUrl, token, 'GET').then((s) => live && setStatus(s));
+    return () => {
+      live = false;
+    };
+  }, [apiBaseUrl, token]);
+  if (status !== 'failed') return null;
+
+  async function retry() {
+    setBusy(true);
+    const next = await learningStatus(apiBaseUrl, token, 'POST');
+    setBusy(false);
+    setStatus(next ?? 'failed');
+  }
+  return (
+    <section aria-label={endText.learningTitle} className="rating">
+      <h3 className="rating__title">{endText.learningTitle}</h3>
+      <p role="status">{endText.learningFailed}</p>
+      <p>{endText.learningNote}</p>
+      <Button loading={busy} onClick={() => void retry()}>
+        {endText.learningRetry}
+      </Button>
     </section>
   );
 }

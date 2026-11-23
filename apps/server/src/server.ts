@@ -32,7 +32,8 @@ import { registerGmConsoleRoutes } from './gm-console/routes.ts';
 import { startBackupSchedule, type BackupSchedule } from './backup/schedule.ts';
 import { registerHistoryRoutes } from './history/routes.ts';
 import { registerRatingRoutes } from './rating/routes.ts';
-import { createLearningExtractor, everyoneRated } from './learning/extract.ts';
+import { createLearningExtractor, everyoneRated, startAutoExtract } from './learning/extract.ts';
+import { registerGameLearningRoutes } from './learning/extract-routes.ts';
 import { syncExamples } from './learning/examples.ts';
 import { buildStyles } from './learning/style.ts';
 import { registerPlayerStyleRoutes } from './learning/style-routes.ts';
@@ -196,6 +197,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerRatingRoutes(app, db, now, (gameId) => {
     if (everyoneRated(db, gameId)) void learning.extract(gameId);
   });
+  registerGameLearningRoutes(app, db, now, learning);
   registerVoteRoutes(app, db, now);
   registerPlayerStyleRoutes(app, db, now);
   if (options.webDistDir) registerWebStatic(app, options.webDistDir);
@@ -212,6 +214,8 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   backups = config.backup
     ? startBackupSchedule({ ...config.backup, sqlite, now, log: options.backupLog ?? ((line) => console.log(line)) })
     : undefined;
+  // Q-364: an ended game nobody's ratings started is extracted N hours after it ended.
+  const stopAutoExtract = config.learningAutoExtractMs ? startAutoExtract(db, learning, now, config.learningAutoExtractMs) : () => {};
 
   return {
     url: `http://${urlHost}:${port}`,
@@ -226,6 +230,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     styleReview,
     ...(backups ? { backups } : {}),
     async close() {
+      stopAutoExtract();
       await app.close();
       await weather.idle();
       await styleReview.idle();

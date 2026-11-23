@@ -1,4 +1,4 @@
-import { ApiError, GameRatingResponse, type EntryVote, type GameRatingRequest, type GameRatingView, type ResponseVoteRequest } from '@isekai/protocol';
+import { ApiError, GameLearningResponse, GameRatingResponse, type EntryVote, type GameRatingRequest, type GameRatingView, type ResponseVoteRequest } from '@isekai/protocol';
 import { apiUrl, fetchWithTimeout } from './session.ts';
 
 /**
@@ -28,6 +28,17 @@ async function call(baseUrl: string, token: string, method: 'GET' | 'PUT', path:
   if (!error.success) return { ok: false, message: UNREACHABLE };
   if (error.data.code === 'invalid_input') return { ok: false, message: Object.values(error.data.fields)[0] ?? error.data.message };
   return { ok: false, message: error.data.message };
+}
+
+/** Q-363: the game owner's learning extract status (GET) or retry (POST); null = not the owner / not ended / unreachable. */
+export async function learningStatus(baseUrl: string, token: string, method: 'GET' | 'POST'): Promise<GameLearningResponse['status'] | null> {
+  try {
+    const res = await fetchWithTimeout(apiUrl(baseUrl, method === 'GET' ? '/api/game/learning' : '/api/game/learning/extract'), { method, headers: { authorization: `Bearer ${token}` } });
+    const parsed = GameLearningResponse.safeParse(await res.json());
+    return res.ok && parsed.success ? parsed.data.status : null;
+  } catch {
+    return null;
+  }
 }
 
 export const ratingApi = (baseUrl: string, token: string) => ({

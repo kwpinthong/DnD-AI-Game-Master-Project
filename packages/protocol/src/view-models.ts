@@ -270,16 +270,18 @@ export type GameRatingResponse = z.infer<typeof GameRatingResponse>;
 /**
  * Shapes follow `LearningEntry` of the GEN-077 ADR "Learning Across Games" (proposed): `type`, source game
  * snapshot, `content`, `tags`, `status`, `detail` per type. The library view leaves out the style entry's
- * `playerKey` (an HMAC the page has no use for). Rulings carry the difficulty word, never the DC number.
+ * `playerKey` (an HMAC the page has no use for). Ruling examples carry the difficulty word, never the DC number.
+ * `good_example` / `avoid` (GEN-081) come from the votes; `suspended` = its votes no longer pass (kept, not used).
  */
-export const LearningType = z.enum(['lore', 'feedback_note', 'ruling', 'style']);
+export const LearningType = z.enum(['lore', 'feedback_note', 'good_example', 'avoid', 'style']);
 export type LearningType = z.infer<typeof LearningType>;
 
 const LearningBase = z.strictObject({
   id: z.string(),
   sourceGameId: z.string(),
   sourceGameName: z.string(),
-  sourceScore: z.number().min(0).max(10),
+  /** The game's average rating when stored; null = nobody had rated (shown only). */
+  sourceScore: z.number().min(0).max(10).nullable(),
   content: z.string(),
   tags: z.array(z.string()),
   status: z.enum(['active', 'suspended']),
@@ -287,22 +289,25 @@ const LearningBase = z.strictObject({
   createdAt: z.number().int(),
 });
 
+/** A voted example: the message (or end-page ruling) and its 👍 / 👎 out of the game's players. */
+const LearningVoteDetail = z.strictObject({
+  sourceRef: z.string(),
+  kind: z.enum(['narration', 'dialogue', 'ruling']),
+  npcId: z.string().nullable(),
+  up: z.number().int().min(0),
+  down: z.number().int().min(0),
+  players: z.number().int().min(0),
+  /** Rulings only (else null): the difficulty word the actor saw, the d20 and the result. */
+  dcLabel: z.string().nullable(),
+  d20: z.number().int().min(1).max(20).nullable(),
+  result: z.enum(['crit', 'success', 'fail', 'fumble', 'none']).nullable(),
+});
+
 export const LearningEntryView = z.discriminatedUnion('type', [
   LearningBase.extend({ type: z.literal('lore'), detail: z.strictObject({ endingPath: z.enum(['good', 'evil', 'neutral', 'none']), npcIds: z.array(z.string()) }) }),
   LearningBase.extend({ type: z.literal('feedback_note'), detail: z.strictObject({ fromComments: z.number().int().min(1) }) }),
-  LearningBase.extend({
-    type: z.literal('ruling'),
-    detail: z.strictObject({
-      sourceRef: z.string(),
-      actionText: z.string(),
-      check: z.enum(['ladder', 'pvp', 'auto', 'none']),
-      dcLabel: z.string().nullable(),
-      d20: z.number().int().min(1).max(20).nullable(),
-      result: z.enum(['crit', 'success', 'fail', 'fumble', 'blocked', 'no_target', 'auto', 'none']),
-      thumbs: z.number().int(),
-      players: z.number().int(),
-    }),
-  }),
+  LearningBase.extend({ type: z.literal('good_example'), detail: LearningVoteDetail }),
+  LearningBase.extend({ type: z.literal('avoid'), detail: LearningVoteDetail }),
   LearningBase.extend({ type: z.literal('style'), detail: z.strictObject({ topVerbs: z.array(z.string()), secretShare: z.number().min(0).max(1) }) }),
 ]);
 export type LearningEntryView = z.infer<typeof LearningEntryView>;
@@ -310,7 +315,7 @@ export type LearningEntryView = z.infer<typeof LearningEntryView>;
 /** 200 from GET /api/admin/learning (and after a delete). */
 export const LearningLibraryResponse = z.strictObject({
   entries: z.array(LearningEntryView),
-  counts: z.strictObject({ lore: z.number().int(), feedback_note: z.number().int(), ruling: z.number().int(), style: z.number().int() }),
+  counts: z.strictObject({ lore: z.number().int(), feedback_note: z.number().int(), good_example: z.number().int(), avoid: z.number().int(), style: z.number().int() }),
 });
 export type LearningLibraryResponse = z.infer<typeof LearningLibraryResponse>;
 
@@ -326,6 +331,13 @@ export const LearningExtractResponse = z.strictObject({
   feedback: z.number().int().min(0),
 });
 export type LearningExtractResponse = z.infer<typeof LearningExtractResponse>;
+
+/**
+ * GEN-084 (Q-363): 200 from GET /api/game/learning and POST /api/game/learning/extract, the game owner's end page:
+ * `pending` = not extracted yet, `failed` = "สกัดไม่สำเร็จ" (the owner may retry), `done` = stored.
+ */
+export const GameLearningResponse = z.strictObject({ status: z.enum(['pending', 'done', 'failed']) });
+export type GameLearningResponse = z.infer<typeof GameLearningResponse>;
 
 // --- GEN-082: player style across games (Q-167 player code) ---
 

@@ -220,7 +220,7 @@ describe('C2 every scenario shows its state', () => {
     expect(await screen.findByRole('alert')).toBeTruthy();
     cleanup();
     library('normal');
-    expect(await screen.findByText('ผู้เล่นยื่นเหรียญให้ทหารยาม → โน้มน้าวสำเร็จ')).toBeTruthy();
+    expect(await screen.findByText('ผู้เล่นยื่นเหรียญให้ทหารยาม → ปานกลาง สำเร็จ')).toBeTruthy();
   });
 
   it('gm / gm-finale / gm-budget: the console shows the held turn, the held finale, the budget status', async () => {
