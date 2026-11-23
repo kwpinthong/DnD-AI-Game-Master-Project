@@ -690,6 +690,25 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     await expect.poll(() => (server!.db.prepare("select count(*) as n from gm_journal where kind = 'day' and day = 1").get() as { n: number }).n, { timeout: 5_000 }).toBe(3);
   });
 
+  it('GEN-162: a failed summary logs the real cause (max_tokens) next to ai_unavailable', async () => {
+    await boot({}, (req) => {
+      if (req.purpose === 'summarize_journal') return mockReply.fail('max_tokens');
+      if (req.purpose === 'summarize_day') return mockReply.fail('provider_error');
+      return undefined;
+    });
+    const t = await startedTable(server!, false);
+    jumpTo(t, { day: 1, phase: 'NOCTHERION', turn: 2 });
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    await playTurn(clients, ['จุดตะเกียง', 'ปิดหน้าต่าง', 'ร้องเพลงกล่อม'], { day: 2, phase: 'EOSORIA', turn: 1 });
+    const failed = (stage: string) => logs.filter((l) => l.startsWith('[gm]') && l.includes(stage) && l.includes('failed:'));
+    await expect.poll(() => failed('summarize_journal').length, { timeout: 5_000 }).toBe(3);
+    for (const line of failed('summarize_journal')) expect(line).toContain('ai_unavailable (max_tokens)');
+    await expect.poll(() => failed('summarize_day').length, { timeout: 5_000 }).toBe(1);
+    expect(failed('summarize_day')[0]).toContain('ai_unavailable (provider_error)');
+    // Only the kind: never the provider's detail text.
+    for (const line of [...failed('summarize_journal'), ...failed('summarize_day')]) expect(line).not.toContain('mock ');
+  });
+
   it('C5: on day 12 the context stays within the ADR budget (saga + yesterday + today only)', async () => {
     await boot();
     const t = await startedTable(server!, false);
