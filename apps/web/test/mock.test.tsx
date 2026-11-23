@@ -13,7 +13,7 @@ import { LearningLibrary } from '../src/LearningLibrary.tsx';
 import { mockHttp } from '../src/mock/http.ts';
 import { installMock, MOCK_TOKEN, mockBaseUrl, mockRoom } from '../src/mock/install.ts';
 import { MockRoomServer, type MockPeer } from '../src/mock/room.ts';
-import { SCENARIOS, scenarioById } from '../src/mock/scenarios.ts';
+import { SCENARIOS, scenarioById, type MockScenario } from '../src/mock/scenarios.ts';
 import { PlayRoom } from '../src/PlayRoom.tsx';
 
 const REQUIRED = [
@@ -91,6 +91,22 @@ describe('C2 every scenario shows its state', () => {
     const last = rooms[rooms.length - 1]!;
     expect(last.submittedCount).toBe(1);
     expect(last.submittedCount).toBeLessThanOrEqual(last.members.filter((m) => m.role === 'player').length);
+  });
+
+  it('GEN-140 C1/C2 a Thai place name shows as Thai (no &#NNNN;) and markup in it stays text', async () => {
+    const normal = scenarioById('normal');
+    const names = ['หอคอยทิศเหนือ', 'ร้าน <b>x</b> & "y"'];
+    for (const [i, name] of names.entries()) {
+      const id = `place-text-${i}`;
+      (SCENARIOS as MockScenario[]).push({ ...normal, id, room: { ...normal.room, state: { ...normal.room.state, you: { ...normal.room.state.you, place: { id: 'p-x', zone: normal.room.state.you.place?.zone ?? null, name } } } } } as MockScenario);
+      playRoom(id);
+      expect(await screen.findByText(`— คุณมาถึง${name} —`)).toBeTruthy();
+      expect(screen.getByRole('heading', { name })).toBeTruthy();
+      expect(document.body.textContent).not.toMatch(/&#\d+;/);
+      expect(document.querySelector('b')).toBeNull();
+      cleanup();
+      (SCENARIOS as MockScenario[]).pop();
+    }
   });
 
   it('waiting: your action is in and the others are still sending, then the turn closes', { timeout: 10_000 }, async () => {
