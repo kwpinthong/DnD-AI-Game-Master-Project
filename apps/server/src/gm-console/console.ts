@@ -15,6 +15,8 @@ import {
   type GmTimelineEvent,
   type GmTurnPoint,
   type Scenario,
+  type TurnChange,
+  bondFor,
 } from '@isekai/protocol';
 import { AFFINITY_MAX, AFFINITY_MIN, KARMA_MAX, KARMA_MIN, phaseStep, type PhaseState, type PlayerResult } from '@isekai/rules';
 import { and, asc, eq, isNotNull, ne } from 'drizzle-orm';
@@ -22,10 +24,12 @@ import type { z } from 'zod';
 import type { GameAssets } from '../assets/load.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { character, gmOverride, member, npcBond, phaseAction, roomEntry, roomEntryRecipient } from '../db/schema.ts';
-import type { MemberRow } from '../game/service.ts';
+import { bondWordsOf, changeNpcAffinity } from '../companions/store.ts';
+import { activeMembers, type MemberRow } from '../game/service.ts';
 import type { PhaseResolution } from '../room/resolver.ts';
 import type { HeldTurn, RoomService } from '../room/service.ts';
-import { ensurePhaseState, karmaOf, savePhaseState } from '../room/store.ts';
+import { ensurePhaseState, insertEntry, karmaOf, savePhaseState, type RoomEntryRow } from '../room/store.ts';
+import { nameOf } from '../room/turn-changes.ts';
 import { CryptoRng } from '../rng.ts';
 import { getGameScenario, updateGameScenario } from '../scenario/store.ts';
 import { gmNpcCurses } from '../statuses/curses.ts';
@@ -367,7 +371,9 @@ export function approveTurn(db: Db, room: RoomService, gm: MemberRow, now: numbe
 
 // --- One value by hand (C3) ---
 
-export function adjustValue(db: Db, gm: MemberRow, input: unknown, now: number): ConsoleResult<GmOverrideView> {
+const GM_ADJUST_REASON = 'GM ปรับค่า';
+
+export function adjustValue(db: Db, room: RoomService, assets: GameAssets, gm: MemberRow, input: unknown, now: number): ConsoleResult<GmOverrideView> {
   const parsed = GmAdjustRequest.safeParse(input ?? {});
   if (!parsed.success) return invalid(fieldsOf(parsed.error));
   const req = parsed.data;
@@ -387,16 +393,24 @@ export function adjustValue(db: Db, gm: MemberRow, input: unknown, now: number):
     return notAllowed('ตัวละครนี้หมดสติหรือหมดแรงอยู่ แก้ HP / Stamina ได้ในผลของเทิร์น');
   }
 
+  const shown: { row: RoomEntryRow; recipients: ReadonlySet<string> }[] = [];
   const id = db.transaction((tx) => {
     if (req.field === 'affinity') {
-      const row = tx.select({ affinity: npcBond.affinity }).from(npcBond).where(and(eq(npcBond.memberId, req.memberId), eq(npcBond.npcId, req.npcId))).get();
-      // The number only: a name reveal, its rewards and evolution come from actions (GEN-054), not from the GM's hand.
-      tx.insert(npcBond)
-        .values({ memberId: req.memberId, npcId: req.npcId, affinity: req.value, updatedAt: now })
-        .onConflictDoUpdate({ target: [npcBond.memberId, npcBond.npcId], set: { affinity: req.value, updatedAt: now } })
-        .run();
-      const target = `${req.memberId}.affinity.${req.npcId}`;
-      return logOverride(tx, gm, { kind: 'adjust', at: pointOf(state), target, before: row?.affinity ?? 0, after: req.value, reason: req.reason }, now);
+      const npcId = req.npcId;
+      const before = tx.select({ affinity: npcBond.affinity }).from(npcBond).where(and(eq(npcBond.memberId, req.memberId), eq(npcBond.npcId, npcId))).get()?.affinity ?? 0;
+      const fromWord = bondWordsOf(tx, assets, req.memberId)[npcId]?.word ?? bondFor(0).word;
+      // GEN-187: the same way as the AI GM's affinity (name reveal of grade B, its rewards, evolution).
+      const changed = changeNpcAffinity(tx, assets, req.memberId, npcId, req.value - before, { day: state.day, now }, true);
+      if (!changed.ok) throw new Error(`GM affinity refused: ${changed.error.code}`);
+      const to = bondWordsOf(tx, assets, req.memberId)[npcId];
+      if (to && to.word !== fromWord) {
+        // Like the turn's change log (GEN-182): the bond word for that player (and the Human GM), never the number.
+        const recipients = new Set([req.memberId, ...activeMembers(tx, gm.gameId).filter((m) => m.role === 'gm').map((m) => m.id)]);
+        const changes: TurnChange[] = [{ stat: 'bond', name: to.name, from: fromWord, to: to.word, reason: GM_ADJUST_REASON }];
+        shown.push({ row: insertEntry(tx, gm.gameId, { kind: 'changes', at: { day: state.day, phase: state.phase, turn: state.turn }, locationId: null, text: nameOf(tx, req.memberId), meta: { changes } }, [...recipients], now), recipients });
+      }
+      const target = `${req.memberId}.affinity.${npcId}`;
+      return logOverride(tx, gm, { kind: 'adjust', at: pointOf(state), target, before, after: req.value, reason: req.reason }, now);
     }
     const before = req.field === 'karma' ? (karmaOf(tx, [req.memberId]).get(req.memberId) ?? player.karma) : player[req.field];
     tx.update(character).set({ [req.field]: req.value, updatedAt: now }).where(eq(character.memberId, req.memberId)).run();
@@ -404,6 +418,7 @@ export function adjustValue(db: Db, gm: MemberRow, input: unknown, now: number):
     savePhaseState(tx, gm.gameId, { ...state, players }, now);
     return logOverride(tx, gm, { kind: 'adjust', at: pointOf(state), target: `${req.memberId}.${req.field}`, before, after: req.value, reason: req.reason }, now);
   });
+  room.publish(gm.gameId, shown);
   return ok(overrideLog(db, gm.gameId).find((o) => o.id === id)!);
 }
 

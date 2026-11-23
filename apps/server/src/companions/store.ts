@@ -1,5 +1,7 @@
 import { bondFor, type CompanionView, type NpcView, type Scenario, type ScenarioNpc } from '@isekai/protocol';
 import {
+  AFFINITY_MAX,
+  AFFINITY_MIN,
   applyAffinityDelta,
   checkNpcSpawn,
   COMPANION_LIMIT,
@@ -244,14 +246,18 @@ export type AffinityResult =
  * One action's affinity change with one NPC (±10 at most, Rules Spec §7; a bigger one is refused and nothing
  * changes). Reaching a grade B NPC's reveal affinity shows its real name and gives its "+9" rewards, once; the
  * name stays even if affinity drops later. Then checks evolution.
+ * GEN-187: `byHand` = the Human GM's console sets the value; not one action, so no ±10 limit (still -100..100).
  */
-export function changeNpcAffinity(db: DbOrTx, assets: GameAssets, memberId: string, npcId: string, delta: number, at: GameTime): AffinityResult {
+export function changeNpcAffinity(db: DbOrTx, assets: GameAssets, memberId: string, npcId: string, delta: number, at: GameTime, byHand = false): AffinityResult {
   const ctx = contextFor(db, assets, memberId, npcId);
   if (!ctx) return unknownNpc();
   const wrongDay = badDay(at.day);
   if (wrongDay) return wrongDay;
   const before = bondOf(db, memberId, npcId);
-  const change = applyAffinityDelta(before?.affinity ?? 0, delta);
+  const current = before?.affinity ?? 0;
+  const change = byHand
+    ? { ok: true as const, before: current, delta, after: Math.max(AFFINITY_MIN, Math.min(AFFINITY_MAX, current + delta)) }
+    : applyAffinityDelta(current, delta);
   if (!change.ok) return { ok: false, error: change.error };
   return db.transaction((tx) => {
     observeKarma(tx, memberId, at.day);

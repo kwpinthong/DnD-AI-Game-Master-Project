@@ -99,9 +99,9 @@ describe('GEN-182 AI GM affinity is stored in npc_bond', { timeout: 60_000 }, ()
     server!.db.prepare('insert into npc_bond (member_id, npc_id, affinity, name_revealed, updated_at) values (?, ?, ?, 0, ?)').run(who.memberId, npcId, affinity, CLOCK);
 
   /** A started game whose NPCs are the sheet's, all at the market with the three players. */
-  async function table(options: Parameters<typeof startTestServer>[1] = {}): Promise<Table> {
+  async function table(options: Parameters<typeof startTestServer>[1] = {}, humanGm = false): Promise<Table> {
     server = await startTestServer(dataDir, options);
-    const t = await startedTable(server, false);
+    const t = await startedTable(server, humanGm);
     const gameId = gameIdOf(t.a);
     const scenario = getGameScenario(server.orm, gameId)!;
     const npcs: Scenario['npcs'] = server.assets.npcs.map((n) => ({
@@ -196,5 +196,53 @@ describe('GEN-182 AI GM affinity is stored in npc_bond', { timeout: 60_000 }, ()
     expect(JSON.stringify(changes)).not.toMatch(/โนอา|affinity|"10"/);
     // Nobody else gets A's bond line.
     for (const other of clients.slice(1)) expect(other.entries().flatMap((e) => e.changes ?? []).some((c) => c.stat === 'bond')).toBe(false);
+  });
+
+  // GEN-187: the Human GM's affinity by hand goes the same way (changeNpcAffinity), with the bond line in that player's log.
+  const gmAdjust = (t: Table, who: Seat, npcId: string, value: number) =>
+    t.call('POST', '/api/game/gm/adjust', { token: t.gm!.token, body: { field: 'affinity', memberId: who.memberId, npcId, value, reason: 'GM ปรับเอง' } });
+  const enter = async (seat: Seat) => {
+    const c = await openRoom(server!, { token: seat.token });
+    sockets.push(c);
+    await c.waitFor(isReady);
+    return c;
+  };
+
+  it('GEN-187 C1: the GM moves affinity across a word: that player sees the bond change in the log, nobody else does', async () => {
+    const t = await table({}, true);
+    const [a, b] = [await enter(t.a), await enter(t.b)];
+    const res = await gmAdjust(t, t.a, 'noa', 10);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(bond(t.a, 'noa')).toEqual({ affinity: 10, revealed: 0 });
+    await a.waitFor((m) => m.type === 'entry' && m.entry.kind === 'changes');
+    const changes = a.entries().filter((e) => e.kind === 'changes').flatMap((e) => e.changes ?? []);
+    expect(changes).toEqual([{ stat: 'bond', name: NOA_ALIAS, from: 'ห่างเหิน', to: 'คุ้นเคย', reason: expect.any(String) }]);
+    for (const c of changes) expect(TurnChange.safeParse(c).success).toBe(true);
+    expect(JSON.stringify(changes)).not.toMatch(/โนอา|affinity|"10"/);
+    expect(b.entries().some((e) => e.kind === 'changes')).toBe(false);
+    // Same word: no line.
+    expect((await gmAdjust(t, t.a, 'noa', 11)).status).toBe(200);
+    expect(bond(t.a, 'noa')?.affinity).toBe(11);
+    expect(a.entries().filter((e) => e.kind === 'changes')).toHaveLength(1);
+  });
+
+  it('GEN-187 C2: the GM brings a grade B NPC to its threshold (+9): the name is revealed to that player only', async () => {
+    const t = await table({}, true);
+    setBond(t.a, 'elena', 8);
+    expect((await gmAdjust(t, t.a, 'elena', 9)).status).toBe(200);
+    expect(bond(t.a, 'elena')).toEqual({ affinity: 9, revealed: 1 });
+    expect(bond(t.b, 'elena')).toBeUndefined();
+  });
+
+  it('GEN-187 C3: the GM value stays within -100..100 like GEN-182 (100 is kept, 120 is refused and nothing changes)', async () => {
+    const t = await table({}, true);
+    setBond(t.a, 'noa', 95);
+    expect((await gmAdjust(t, t.a, 'noa', 100)).status).toBe(200);
+    expect(bond(t.a, 'noa')?.affinity).toBe(100);
+    const bad = await gmAdjust(t, t.a, 'noa', 120);
+    expect(bad.status).toBe(400);
+    expect(bad.body).toMatchObject({ code: 'invalid_input' });
+    expect((await gmAdjust(t, t.a, 'noa', -100)).status).toBe(200);
+    expect(bond(t.a, 'noa')?.affinity).toBe(-100);
   });
 });
