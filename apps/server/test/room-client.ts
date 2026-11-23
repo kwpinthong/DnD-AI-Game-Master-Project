@@ -27,7 +27,7 @@ export function roomUrl(server: RunningServer): string {
 
 export async function openRoom(
   server: RunningServer,
-  options: { token?: string; afterSeq?: number; headers?: Record<string, string> } = {},
+  options: { token?: string; afterSeq?: number; headers?: Record<string, string>; lobby?: boolean } = {},
 ): Promise<RoomClient> {
   // Node's WebSocket (undici) takes extra headers as its second argument.
   const init = options.headers ? ({ headers: options.headers } as unknown as string[]) : undefined;
@@ -55,7 +55,7 @@ export async function openRoom(
   });
 
   const send = (message: unknown) => ws.send(JSON.stringify(message));
-  if (options.token !== undefined) send({ type: 'hello', token: options.token, afterSeq: options.afterSeq ?? 0 });
+  if (options.token !== undefined) send({ type: 'hello', token: options.token, afterSeq: options.afterSeq ?? 0, ...(options.lobby ? { lobby: true } : {}) });
 
   function waitFor(match: (m: RoomServerMessage) => boolean, from = 0): Promise<RoomServerMessage> {
     return new Promise((resolve, reject) => {
