@@ -68,6 +68,7 @@ import {
 import { createStageTimer, type StageTimer } from './timing.ts';
 import { introduceNpcs } from './npc-intro.ts';
 import { dialoguePrompt } from './npc-examples.ts';
+import { recordNpcMemories } from './npc-memory.ts';
 import { capTotal, cleanNpcLines, lingerAfter, lingersNow, npcAnswers, npcLineLimits, npcPlacesNow, npcPrompt, npcsPresentAt, saveLingers } from './npc-lines.ts';
 import { npcFarewellFor } from './server-lines.ts';
 import { periodScenes } from './scene.ts';
@@ -743,6 +744,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           recordStrategyParticipation(tx, gameId, { memberId, strategyId: a.strategy.id, role: a.strategy.role, success, day: at.day }, now());
         }
         saveLingers(tx, gameId, nextLingers);
+        // GEN-146: one memory line per NPC the turn involved, from the applied result (no AI call).
+        recordNpcMemories(tx, world, applied.log.outcomes, new Map(proposal.actions.map((a) => [a.actionId, a.intentSummary])), at, now());
         markApplied(tx, gameId, at, now());
       },
       after: (afterSignal) => summarizeFinishedDays(gameId, afterSignal),

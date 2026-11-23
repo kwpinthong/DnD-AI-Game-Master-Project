@@ -52,6 +52,33 @@ export const npcLinger = sqliteTable(
 );
 
 /**
+ * GEN-146: what an NPC remembers of one player (gm/npc-memory.ts): one line per event that involved the NPC, made
+ * from the resolve result. `text` is tokens ({{n:id}}) with the player as the NPC knows them (their look until
+ * acquainted, never a real name). `summary` = older normal lines folded into one. `witnesses`: JSON member ids of
+ * the players who saw it. GM-only.
+ */
+export const npcMemory = sqliteTable(
+  'npc_memory',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    gameId: text('game_id')
+      .notNull()
+      .references(() => game.id, { onDelete: 'cascade' }),
+    npcId: text('npc_id').notNull(),
+    memberId: text('member_id')
+      .notNull()
+      .references(() => member.id, { onDelete: 'cascade' }),
+    day: integer('day').notNull(),
+    phase: text('phase', { enum: PHASES }).notNull(),
+    text: text('text').notNull(),
+    weight: text('weight', { enum: ['normal', 'important', 'summary'] }).notNull(),
+    witnesses: text('witnesses').notNull().default('[]'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('npc_memory_pair').on(t.gameId, t.memberId, t.npcId)],
+);
+
+/**
  * Constraint Lock (GEN-057 C4): a limit the AI GM put on a player (jailed, tied up). It stays in every
  * turn's context until the AI releases it with a reason. GM-only.
  */

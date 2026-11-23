@@ -4,10 +4,96 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { GameAssets } from '../src/assets/load.ts';
 import { migrationsFolder, openDatabase, type OpenedDatabase } from '../src/db/client.ts';
-import type { GmWorld } from '../src/gm/context.ts';
+import { estimateTokens, type GmWorld } from '../src/gm/context.ts';
 import { MEMORY_LIMITS, npcMemoriesOf, recordNpcMemories } from '../src/gm/npc-memory.ts';
 import { npcPrompt } from '../src/gm/npc-lines.ts';
+import { loadAiConfig } from '../src/ai/config.ts';
+import type { AiCallRequest, AiProvider } from '../src/ai/provider.ts';
+import { mockReply } from '../src/ai/providers/mock.ts';
+import type { NarrationContext, TurnContext } from '../src/gm/context.ts';
+import { cannedGmAnswer, contextOf, mockTurnProposal } from '../src/gm/mock-gm.ts';
+import type { RunningServer } from '../src/server.ts';
 import { makeTempDir } from './helpers.ts';
+import { isReady, openRoom, type RoomClient } from './room-client.ts';
+import { CLOCK, startedTable, startTestServer } from './visibility-fixture.ts';
+import { getGameScenario, updateGameScenario } from '../src/scenario/store.ts';
+import { presenceOf } from '../src/visibility/store.ts';
+
+describe('GEN-146 the turn loop records and uses NPC memories', { timeout: 60_000 }, () => {
+  let dataDir = '';
+  let cleanup = () => {};
+  let server: RunningServer | undefined;
+  const sockets: RoomClient[] = [];
+  beforeEach(() => {
+    ({ dir: dataDir, cleanup } = makeTempDir());
+  });
+  afterEach(async () => {
+    await Promise.all(sockets.splice(0).map((s) => s.close()));
+    await server?.close();
+    server = undefined;
+    cleanup();
+  });
+
+  it('C1 + C2 + C8: an action at an NPC leaves a line; after a restart the next narration of that NPC carries it', async () => {
+    const narrations: NarrationContext[] = [];
+    let target: string | null = null;
+    const provider: AiProvider = {
+      id: 'mock',
+      ready: () => ({ ok: true }),
+      estimateTokens: (text) => Math.ceil(text.length / 3),
+      async call(req: AiCallRequest) {
+        if (req.output.name === 'gm_narration') narrations.push(contextOf<NarrationContext>(req));
+        if (req.output.name !== 'gm_turn_proposal') return mockReply.ok(await cannedGmAnswer(req));
+        const ctx = contextOf<TurnContext>(req);
+        const proposal = mockTurnProposal(ctx);
+        for (const a of proposal.actions) {
+          a.check = { type: 'none' };
+          const place = ctx.actions.find((x) => x.actionId === a.actionId)?.place;
+          target ??= ctx.npcs.find((n) => n.place === place)?.id ?? null;
+          a.targetNpc = target;
+          a.intentSummary = 'ขอขนมปังจาก NPC';
+        }
+        return { ...mockReply.ok(proposal), model: req.model };
+      },
+    };
+    const options = { aiProvider: provider, ai: loadAiConfig({ AI_PROVIDER: 'mock', AI_MAX_RETRIES: '0', AI_RETRY_DELAY_MS: '0' }) };
+    server = await startTestServer(dataDir, options);
+    const t = await startedTable(server, false);
+    // Every scenario NPC at the players' place (where no schedule row moves it).
+    const gameId = (server.db.prepare('select game_id from member where id = ?').get(t.a.memberId) as { game_id: string }).game_id;
+    const scenario = getGameScenario(server.orm, gameId)!;
+    const here = presenceOf(server.orm, t.a.memberId)!.locationId;
+    expect(updateGameScenario(server.orm, gameId, { ...scenario, npcs: scenario.npcs.map((n) => ({ ...n, locationId: here })) }, CLOCK).ok).toBe(true);
+    const turn = async () => {
+      const clients = await Promise.all([t.a, t.b, t.c].map(async (seat) => {
+        const c = await openRoom(server!, { token: seat.token });
+        sockets.push(c);
+        await c.waitFor(isReady);
+        return c;
+      }));
+      for (const c of clients) {
+        const from = c.messages.length;
+        c.action('ขอขนมปังหน่อย', 'public');
+        expect(await c.waitFor((m) => m.type === 'action_accepted' || m.type === 'action_rejected', from)).toEqual({ type: 'action_accepted' });
+      }
+      await clients[0]!.waitFor((m) => m.type === 'entry' && m.entry.kind === 'narration');
+    };
+    await turn();
+    expect(target).not.toBeNull();
+    const lines = () => server!.db.prepare('select member_id, npc_id, text from npc_memory where member_id = ?').all(t.a.memberId) as { npc_id: string; text: string }[];
+    await expect.poll(() => lines().length).toBeGreaterThan(0);
+    expect(lines()[0]!.npc_id).toBe(target);
+    expect(lines()[0]!.text).not.toContain(t.a.name);
+
+    await Promise.all(sockets.splice(0).map((s) => s.close()));
+    await server.close();
+    server = await startTestServer(dataDir, options);
+    narrations.length = 0;
+    await turn();
+    const memories = narrations.flatMap((n) => n.npcs.filter((x) => x.id === target).flatMap((x) => x.bonds.flatMap((b) => b.memories ?? [])));
+    expect(memories.some((m) => m.includes('ขอขนมปังจาก NPC'))).toBe(true);
+  });
+});
 
 /**
  * GEN-146: NPC memory. One line per event that involves an NPC, made from the resolve result (no AI call);
@@ -25,7 +111,8 @@ describe('migration npc_memory (GEN-146)', () => {
       .split('\n')
       .filter((line) => !line.trim().startsWith('--'))
       .join('\n');
-    expect(code).not.toMatch(/\bdrop\b|\bdelete\b/i);
+    // `ON DELETE cascade` of a foreign key is not a data delete.
+    expect(code.replace(/\bON DELETE\b/gi, '')).not.toMatch(/\bdrop\b|\bdelete\b/i);
   });
 });
 
@@ -148,7 +235,7 @@ describe('GEN-146 NPC memory', () => {
   it('C2: a pair of long lines stays within the token limit', () => {
     for (let turn = 1; turn <= 5; turn++) record([outcome({})], { 'act-1': 'ก'.repeat(190) });
     const lines = npcMemoriesOf(opened.db, 'g1', 'm1', 'malcolm');
-    expect(lines.join('').length).toBeLessThanOrEqual(MEMORY_LIMITS.pairTokens);
+    expect(lines.reduce((n, l) => n + estimateTokens(l), 0)).toBeLessThanOrEqual(MEMORY_LIMITS.pairTokens);
     expect(lines.length).toBeGreaterThan(0);
   });
 
@@ -251,6 +338,16 @@ describe('GEN-146 NPC memory', () => {
     expect(aron[0]).toContain('ขโมยขนมปัง');
     expect(bea).toHaveLength(1);
     expect(bea[0]).toContain('ช่วยนวดแป้ง');
+  });
+
+  it('C8 (cascade): a game deleted takes its memory lines with it', () => {
+    opened.sqlite.pragma('foreign_keys = ON');
+    opened.sqlite.prepare("insert into game (id, invite_code, name, created_at) values ('g1', 'ABC123', 'เกม', 1)").run();
+    opened.sqlite.prepare("insert into member (id, game_id, name, name_key, pin_hash, role, created_at) values ('m1', 'g1', 'm1', 'm1', 'x', 'player', 1)").run();
+    record([outcome({ npc: 'malcolm' })], { 'act-1': 'ซื้อขนมปัง' });
+    expect(rows()).toHaveLength(1);
+    opened.sqlite.prepare("delete from game where id = 'g1'").run();
+    expect(rows()).toEqual([]);
   });
 
   it('C8: the memories are the same after the database is closed and opened again', () => {

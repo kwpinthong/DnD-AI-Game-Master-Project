@@ -8,6 +8,7 @@ import type { DbOrTx } from '../db/client.ts';
 import { gamePhase, npcLinger } from '../db/schema.ts';
 import { npcsAt } from '../travel/rules.ts';
 import { npcBondsOf } from '../visibility/store.ts';
+import { npcMemoriesOf } from './npc-memory.ts';
 import { weatherAt } from '../weather/service.ts';
 import { containsName } from './check.ts';
 import { loadWorld, npcToken, TOKEN_PATTERN, withinTokens, type Beat, type GmWorld, type NarrationContext } from './context.ts';
@@ -226,7 +227,10 @@ export function npcPrompt(db: DbOrTx, assets: GameAssets, world: GmWorld, npcs: 
       persona,
       bonds: members.flatMap((m) => {
         const player = world.players.get(m);
-        return player ? [{ player: player.ref, affinity: bonds.get(m)!.get(n.id) ?? 0, met: bonds.get(m)!.has(n.id) }] : [];
+        if (!player) return [];
+        // GEN-146: what an NPC here remembers of the player (per turn, never in the cached library block).
+        const memories = here.has(n.id) ? npcMemoriesOf(db, world.gameId, m, n.id) : [];
+        return [{ player: player.ref, affinity: bonds.get(m)!.get(n.id) ?? 0, met: bonds.get(m)!.has(n.id), ...(memories.length > 0 ? { memories } : {}) }];
       }),
     };
   });
