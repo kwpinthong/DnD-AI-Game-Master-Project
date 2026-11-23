@@ -149,7 +149,7 @@ describe('GEN-091 end page', () => {
   });
 
   it('C3: after sending, the form becomes "ส่งแล้ว · แก้ได้" with the learning status; it can be opened again', async () => {
-    const { calls } = ratingServer(NOT_RATED, { average: 8.6, raters: 3, eligible: true, blocker: null });
+    const { calls } = ratingServer(NOT_RATED, { average: 8.6, raters: 3 });
     openPage();
     const r = ratingRegion();
     fireEvent.click(await r.findByRole('radio', { name: '9' }));
@@ -160,9 +160,7 @@ describe('GEN-091 end page', () => {
     expect(calls.find((c) => c.method === 'PUT')).toMatchObject({ path: '/api/game/rating', body: { score: 9, comment: 'สนุกมาก' } });
     expect(r.queryByRole('radio')).toBeNull();
     expect(r.getByText(/คุณให้ 9\/10/)).toBeTruthy();
-    const status = within(r.getByRole('status', { name: 'สถานะการเรียนรู้' }));
-    expect(status.getByText(/^ผ่านเกณฑ์/)).toBeTruthy();
-    expect(status.getByText(/8\.6 จาก 3\/4 คน/)).toBeTruthy();
+    expect(r.getByRole('status', { name: 'คะแนนเกม' }).textContent).toBe('คะแนนเกม 8.60 จาก 3 คน');
 
     fireEvent.click(r.getByRole('button', { name: 'แก้คะแนน' }));
     expect((r.getByRole('radio', { name: '9' }) as HTMLInputElement).checked).toBe(true);
@@ -179,22 +177,16 @@ describe('GEN-091 end page', () => {
   });
 
   it.each([
-    // Q-222: half the members, the Human GM counted. 4 members need 2 raters, 5 need 3.
-    [{ raters: 1, members: 4, blocker: 'too_few_raters' as const }, /^รอคะแนนอีก 1 คน/],
-    [{ raters: 1, members: 5, blocker: 'too_few_raters' as const }, /^รอคะแนนอีก 2 คน/],
-    [{ raters: 3, members: 4, average: 7.5, blocker: 'score_too_low' as const }, /^ไม่ผ่านเกณฑ์/],
-  ])('C3: learning status %j', async (part, text) => {
-    ratingServer({ ...NOT_RATED, average: 8.2, eligible: false, ...part });
+    // GEN-079 C14: the score is shown to 2 decimals with how many rated; it is no gate (no pass / fail line).
+    [{ average: 8.5, raters: 2, members: 4 }, 'คะแนนเกม 8.50 จาก 2 คน'],
+    [{ average: 4, raters: 4, members: 4 }, 'คะแนนเกม 4.00 จาก 4 คน'],
+    [{ average: null, raters: 0, members: 4 }, 'ยังไม่มีคะแนน'],
+  ])('GEN-079 C14: the game score %j', async (part, text) => {
+    ratingServer({ ...NOT_RATED, ...part });
     openPage();
-    const status = within(await ratingRegion().findByRole('status', { name: 'สถานะการเรียนรู้' }));
-    expect(status.getByText(text)).toBeTruthy();
-  });
-
-  it('Q-222: the waiting line says the GM counts', async () => {
-    ratingServer(NOT_RATED);
-    openPage();
-    const status = await ratingRegion().findByRole('status', { name: 'สถานะการเรียนรู้' });
-    expect(status.textContent).toMatch(/ครึ่งหนึ่งของสมาชิก.*GM/);
+    const status = await ratingRegion().findByRole('status', { name: 'คะแนนเกม' });
+    expect(status.textContent).toBe(text);
+    expect(ratingRegion().queryByText(/เกณฑ์|รอคะแนนอีก/)).toBeNull();
   });
 
   it('asks for a score before sending, and shows the server message when it refuses', async () => {

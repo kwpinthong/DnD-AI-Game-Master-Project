@@ -194,15 +194,16 @@ describe('GEN-078 rating + 👍 after the end', { timeout: 60_000 }, () => {
     expect((await rate(t, t.a, { score: 7 })).mine).toEqual({ score: 7, comment: '' });
   });
 
-  it('Q-163 / Q-164: the score is the average of who rated; the Human GM is a member and may rate', async () => {
+  it('Q-163 / GEN-079 C14: the score is the average of who rated, shown only (no gate); the Human GM may rate', async () => {
     const t = await endedTable(true);
-    expect(await view(t, t.gm!)).toMatchObject({ raters: 0, members: 4, average: null, eligible: false, blocker: 'too_few_raters' });
-    // 1 of 4 rated: under half.
-    expect(await rate(t, t.gm!, { score: 10 })).toMatchObject({ raters: 1, average: 10, eligible: false, blocker: 'too_few_raters' });
-    // 2 of 4 = half, 8.5 > 8.
-    expect(await rate(t, t.a, { score: 7 })).toMatchObject({ raters: 2, average: 8.5, eligible: true, blocker: null });
-    // 3 raters, exactly 8.0: not above 8.
-    expect(await rate(t, t.b, { score: 7 })).toMatchObject({ raters: 3, average: 8, eligible: false, blocker: 'score_too_low' });
+    const none = await view(t, t.gm!);
+    expect(none).toMatchObject({ raters: 0, members: 4, average: null });
+    // GEN-079: the average > 8 / half-the-members gate is gone (Q-286 / Q-287 replace it).
+    expect(none).not.toHaveProperty('eligible');
+    expect(none).not.toHaveProperty('blocker');
+    expect(await rate(t, t.a, { score: 9 })).toMatchObject({ raters: 1, average: 9 });
+    expect(await rate(t, t.b, { score: 8 })).toMatchObject({ raters: 2, average: 8.5 });
+    expect(await rate(t, t.gm!, { score: 10 })).toMatchObject({ raters: 3, average: 9 });
   });
 
   it('C7: a 👍 on a ruling is one row per member (twice = still one); cancelling removes it; nobody sees totals (GEN-171)', async () => {

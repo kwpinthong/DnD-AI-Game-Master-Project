@@ -1,37 +1,12 @@
 import { ApiError, GmVotesResponse } from '@isekai/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { insertEntry } from '../src/room/store.ts';
-import { voteVerdict } from '../src/room/vote.ts';
 import type { RunningServer } from '../src/server.ts';
 import { makeTempDir } from './helpers.ts';
 import { CLOCK, startedTable, startTestServer, type Table } from './visibility-fixture.ts';
 
-/** GEN-126: the Human GM reads the 👍 / 👎 counts per AI message, with the Q-286 good-example and Q-287 avoid flags. */
-describe('GEN-126 C3 the Q-286 / Q-287 rules', () => {
-  // [players, up, down, good, avoid]
-  const cases: [number, number, number, boolean, boolean][] = [
-    [2, 1, 0, false, false], // 1 of 2 is half, not more (the non-voter counts as 👎 for Q-286)
-    [2, 2, 0, true, false],
-    [2, 0, 1, false, false], // a tie does not mark "to avoid"
-    [2, 0, 2, false, true],
-    [3, 2, 0, true, false], // the non-voter counts as 👎, still 2 of 3 > half
-    [3, 1, 0, false, false], // 2 non-voters are not real 👎 for Q-287
-    [3, 0, 2, false, true],
-    [3, 1, 1, false, false],
-    [4, 2, 0, false, false], // tie
-    [4, 2, 2, false, false], // tie both ways
-    [4, 3, 1, true, false],
-    [4, 0, 3, false, true],
-    [5, 3, 0, true, false],
-    [5, 2, 2, false, false],
-    [5, 0, 3, false, true],
-    [5, 1, 2, false, false], // 2 non-voters + 2 👎 = 4 of 5 "not 👍", but only 2 real 👎
-    [0, 0, 0, false, false],
-  ];
-  it.each(cases)('%i players, %i up, %i down → good %s, avoid %s', (players, up, down, good, avoid) => {
-    expect(voteVerdict({ up, down }, players)).toEqual({ good, avoid });
-  });
-});
+// GEN-126: the Human GM reads the 👍 / 👎 counts per AI message, with the Q-286 good-example and Q-287 avoid
+// flags. The rule table itself lives with `voteVerdict` in packages/rules (GEN-079, learning-votes.test.ts).
 
 describe('GEN-126 GET /api/game/gm/votes', { timeout: 60_000 }, () => {
   let cleanup = () => {};
@@ -83,6 +58,23 @@ describe('GEN-126 GET /api/game/gm/votes', { timeout: 60_000 }, () => {
       [split, 'ตลาดเงียบ', 1, 1, false, false],
     ]);
     expect(body.entries[0]).toMatchObject({ kind: 'feed', at });
+  });
+
+  it('GEN-079 C12: a private message to 1 player with 👍1 is none (the divisor is every player of the game)', async () => {
+    const t = await startedTable(server!, true);
+    const gameId = (server!.db.prepare('select game_id as id from member where id = ?').get(t.a.memberId) as { id: string }).id;
+    const secret = insertEntry(server!.orm, gameId, { kind: 'feed', at, locationId: null, text: 'กระซิบในหัว' }, [t.a.memberId, t.gm!.memberId], CLOCK).id;
+    expect((await vote(t, t.a, secret, 'up')).status).toBe(200);
+    const body = GmVotesResponse.parse((await t.call('GET', '/api/game/gm/votes', { token: t.gm!.token })).body);
+    expect(body.entries.map((e) => [e.seq, e.up, e.good, e.avoid])).toEqual([[secret, 1, false, false]]);
+  });
+
+  it('GEN-079 C15: a good message where one player switches 👍 to 👎 is not good on the next read', async () => {
+    const { t, liked } = await seeded();
+    const read = async () => GmVotesResponse.parse((await t.call('GET', '/api/game/gm/votes', { token: t.gm!.token })).body).entries.find((e) => e.seq === liked)!;
+    expect(await read()).toMatchObject({ up: 2, down: 0, good: true });
+    expect((await vote(t, t.b, liked, 'down')).status).toBe(200);
+    expect(await read()).toMatchObject({ up: 1, down: 1, good: false, avoid: false });
   });
 
   it('C2: a player asking for the counts gets 403 and nothing else; on their entries they see only their own vote', async () => {

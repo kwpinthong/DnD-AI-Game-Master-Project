@@ -1,7 +1,7 @@
 import { ApiError, GameLogResponse, GameRatingResponse, type GameRatingView } from '@isekai/protocol';
+import { voteVerdict } from '@isekai/rules';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rulingVotes } from '../src/rating/store.ts';
-import { voteVerdict } from '../src/room/vote.ts';
 import { ensurePhaseState, recordAction, savePhaseState } from '../src/room/store.ts';
 import type { RunningServer } from '../src/server.ts';
 import { makeTempDir } from './helpers.ts';
@@ -107,13 +107,36 @@ describe('GEN-171 ruling 👍/👎 on the end page', { timeout: 60_000 }, () => 
   });
 
   it('C9: rulingVotes judges each ruling with voteVerdict out of the players of the game', async () => {
-    expect(voteVerdict({ up: 3, down: 0 }, 4)).toEqual({ good: true, avoid: false });
-    expect(voteVerdict({ up: 2, down: 2 }, 4)).toEqual({ good: false, avoid: false });
+    expect(voteVerdict({ players: 4, up: 3, down: 0 })).toBe('good');
+    expect(voteVerdict({ players: 4, up: 2, down: 2 })).toBe('none');
     const { t, ref } = await table(true);
     await vote(t, t.a, ref, 'up');
     await vote(t, t.b, ref, 'up');
     await vote(t, t.c, ref, 'down');
     expect(rulingVotes(server!.orm, gameIdOf(t)).get(ref)).toEqual({ up: 2, down: 1, good: true, avoid: false });
+  });
+
+  it('GEN-079 C13: a game rated 4.00 on average still keeps a ruling 👍 by most players as good (no score gate)', async () => {
+    const { t, ref } = await table(true);
+    for (const who of [t.a, t.b, t.c, t.gm!]) expect((await t.call('PUT', '/api/game/rating', { token: who.token, body: { score: 4 } })).status).toBe(200);
+    const rating = GameRatingResponse.parse((await t.call('GET', '/api/game/rating', { token: t.a.token })).body).rating;
+    expect(rating.average).toBe(4);
+    await vote(t, t.a, ref, 'up');
+    await vote(t, t.b, ref, 'up');
+    expect(rulingVotes(server!.orm, gameIdOf(t)).get(ref)).toMatchObject({ good: true, avoid: false });
+  });
+
+  it('GEN-079 C10: a kicked player leaves the divisor (and their vote leaves the count)', async () => {
+    const { t, ref } = await table(true);
+    await vote(t, t.a, ref, 'up');
+    await vote(t, t.c, ref, 'down');
+    // 3 players: 👍1 of 3 is not good.
+    expect(rulingVotes(server!.orm, gameIdOf(t)).get(ref)).toMatchObject({ up: 1, down: 1, good: false });
+    server!.db.prepare('update member set kicked_at = ? where id = ?').run(CLOCK, t.c.memberId);
+    // players = 2 (a, b): 👍1 of 2 is exactly half → still none; b's 👍 makes it good.
+    expect(rulingVotes(server!.orm, gameIdOf(t)).get(ref)).toMatchObject({ up: 1, down: 0, good: false, avoid: false });
+    await vote(t, t.b, ref, 'up');
+    expect(rulingVotes(server!.orm, gameIdOf(t)).get(ref)).toMatchObject({ up: 2, down: 0, good: true });
   });
 
   it('GEN-126 stays whole: ruling votes do not show up (or break) GET /api/game/gm/votes', async () => {
