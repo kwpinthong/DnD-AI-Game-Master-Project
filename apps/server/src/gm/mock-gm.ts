@@ -46,7 +46,7 @@ function mockCurse(ctx: TurnContext, action: TurnContext['actions'][number]): Pa
   const base = { kind: 'complex' as const, staminaCost: 5, modifiers: [{ source: 'stat' as const }] };
   const activate = [{ ref: source.id, stamina: source.kind === 'skill' ? 4 : null }];
   if (marker[1] === '=npc') {
-    const npc = ctx.npcs.find((n) => n.place === me.place);
+    const npc = ctx.npcs.find((n) => (n.placeFor?.[me.ref] ?? n.place) === me.place);
     return npc ? { ...base, check: { type: 'dc', dc: 11 }, targetNpc: npc.id, tagging: { verbTags: ['CURSE'], targetTags: ['NPC'], activate } } : null;
   }
   const other = ctx.players.find((p) => p.ref !== me.ref && p.place === me.place);
