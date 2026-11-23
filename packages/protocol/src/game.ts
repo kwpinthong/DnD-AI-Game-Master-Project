@@ -25,7 +25,7 @@ export function formatInviteCode(code: string): string {
 
 const gameName = z
   .string({ error: 'กรุณาใส่ชื่อเกม' })
-  .transform((raw) => raw.normalize('NFKC').trim().replace(/\s+/gu, ' '))
+  .transform((raw) => raw.normalize('NFC').trim().replace(/\s+/gu, ' '))
   .pipe(
     z
       .string()

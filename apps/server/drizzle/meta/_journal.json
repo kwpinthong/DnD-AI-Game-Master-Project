@@ -246,6 +246,13 @@
       "when": 1795359719244,
       "tag": "0034_round_husk",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1795360000000,
+      "tag": "0035_name_nfc",
+      "breakpoints": true
     }
   ]
 }
