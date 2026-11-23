@@ -379,6 +379,18 @@ const learningEntries: In<typeof p.LearningEntryView>[] = [
   { ...learningSource, id: 'le-4', type: 'style', status: 'suspended', content: 'ชอบสังเกตก่อนลงมือ', tags: ['observe'], detail: { topVerbs: ['observe', 'persuade'], secretShare: 0.25 } },
 ];
 
+const adminGameRow = {
+  id: 'g-1',
+  name: 'เมืองก่อนอุกกาบาต',
+  phase: 'playing',
+  endedReason: null,
+  day: 4,
+  period: 'EOSORIA',
+  playerCount: 3,
+  lastActionAt: '2026-11-23T08:00:00.000Z',
+  aiUsd: 0.42,
+} as const;
+
 export const CONTRACT_FIXTURES: Fixtures = {
   HealthResponse: [{ ok: true, db: 'connected' }],
   ApiError: [
@@ -488,7 +500,11 @@ export const CONTRACT_FIXTURES: Fixtures = {
     },
   ],
   InventoryEntry: [inventoryEntry],
-  GameLogResponse: [gameLog, { ...gameLog, game: { ...gameLog.game, status: 'ended', endReason: 'finale' }, reveal }],
+  GameLogResponse: [
+    gameLog,
+    { ...gameLog, game: { ...gameLog.game, status: 'ended', endReason: 'finale' }, reveal },
+    { ...gameLog, game: { ...gameLog.game, status: 'ended', endReason: 'closed', closedEarly: true, closeReason: 'ทดสอบระบบ' }, reveal },
+  ],
   GameRevealPlayer: [revealPlayer],
   ResponseVoteRequest: [{ vote: 'up' }, { vote: 'down' }, { vote: null }, { vote: 'down', reasons: ['translation', 'too_long'] }],
   ResponseVoteResponse: [{ seq: 11, myVote: 'up' }, { seq: 12, myVote: null }, { seq: 12, myVote: 'down', myReasons: ['translation'] }],
@@ -530,6 +546,10 @@ export const CONTRACT_FIXTURES: Fixtures = {
   RoomError: [{ type: 'error', code: 'no_character', message: 'สร้างตัวละครก่อน' }],
   RoomOmenAccepted: [{ type: 'omen_accepted' }],
   RoomOmenRejected: [{ type: 'omen_rejected', code: 'not_noctherion', message: 'ส่งลางสังหรณ์ได้อีกครั้งคืนนี้' }],
+  GameClosedEvent: [{ type: 'game_closed', reason: 'ทดสอบระบบ', hasSummary: true }, { type: 'game_closed', reason: null, hasSummary: false }],
+  AdminGamesResponse: [{ games: [adminGameRow, { ...adminGameRow, id: 'g-lobby', name: 'ห้องรอ', phase: 'lobby', day: null, period: null, playerCount: 2, lastActionAt: null, aiUsd: 0 }] }, { games: [] }],
+  AdminGameRow: [adminGameRow, { ...adminGameRow, phase: 'ended', endedReason: 'closed' }],
+  AdminCloseGameRequest: [{ confirmName: 'เมืองก่อนอุกกาบาต', reason: 'ทดสอบระบบ' }, { confirmName: 'เมืองก่อนอุกกาบาต' }],
   GmConsoleResponse: [
     {
       view: 'gm',

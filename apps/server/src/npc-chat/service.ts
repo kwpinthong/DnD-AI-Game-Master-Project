@@ -19,6 +19,7 @@ import { ensurePhaseState, insertEntry, karmaOf, type RoomEntryRow } from '../ro
 import { npcBondsOf, presenceOf, presencesInGame } from '../visibility/store.ts';
 import { weatherAt } from '../weather/service.ts';
 import { NPC_CHAT_BLOCK } from './prompt.ts';
+import { closureOf } from '../admin/games.ts';
 
 /**
  * GEN-149 (Nok 2026-11-23): a player talks to an NPC at their place outside the turn. One small-model call per message
@@ -185,6 +186,8 @@ export async function sendNpcChat(deps: NpcChatDeps, me: MemberRow, input: { npc
   const gms = members.filter((m) => m.role === 'gm').map((m) => m.id);
   const listeners = input.whisper ? [] : others.map((p) => p.memberId).filter((id) => members.some((m) => m.id === id));
   const rows = db.transaction((tx) => {
+    // ISK-001: the server owner closed the game while the NPC was answering: nothing is stored.
+    if (closureOf(tx, me.gameId)) return null;
     // Affinity moves at most once per NPC per period, so chatting cannot farm it.
     const moved = tx
       .select({ n: count() })
@@ -209,6 +212,7 @@ export async function sendNpcChat(deps: NpcChatDeps, me: MemberRow, input: { npc
     const npcEntry = { kind: 'npc' as const, at, locationId: input.whisper ? null : here.locationId, text: line, meta: { npc: { id: npcId, kind: 'dialogue' as const, ...(input.whisper ? { private: true as const } : {}) } } };
     return [...said, { row: insertEntry(tx, me.gameId, npcEntry, [...hearers], t), recipients: hearers }];
   });
+  if (rows === null) return refuse(409, { code: 'game_closed', message: 'เกมนี้ถูกผู้ดูแลปิดแล้ว' });
   deps.publish(me.gameId, rows);
 
   const body: NpcChatResponse = {

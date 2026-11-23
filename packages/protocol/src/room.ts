@@ -377,9 +377,18 @@ export const RoomWhisperRejected = z.strictObject({ type: z.literal('whisper_rej
  * The socket cannot be used; the server closes it after this. `no_character`: the web takes the player to
  * character creation (C2). `unauthorized`: back to the join form.
  */
-export const RoomErrorCode = z.enum(['unauthorized', 'no_character', 'game_not_started', 'bad_message']);
+/** `game_closed` (ISK-001): the server owner closed the game; every command is refused, nothing changes. */
+export const RoomErrorCode = z.enum(['unauthorized', 'no_character', 'game_not_started', 'bad_message', 'game_closed']);
 export type RoomErrorCode = z.infer<typeof RoomErrorCode>;
 export const RoomError = z.strictObject({ type: z.literal('error'), code: RoomErrorCode, message: z.string() });
+
+/**
+ * ISK-001: the server owner closed the game. Sent to every open socket of the game at the close, and after `ready`
+ * to anyone entering a closed game. `hasSummary` = the game was being played, so the end page (reveal, rating,
+ * votes) exists; false = it was closed in the lobby / setup (no end page).
+ */
+export const GameClosedEvent = z.strictObject({ type: z.literal('game_closed'), reason: z.string().nullable(), hasSummary: z.boolean() });
+export type GameClosedEvent = z.infer<typeof GameClosedEvent>;
 
 export const RoomServerMessage = z.discriminatedUnion('type', [
   RoomState,
@@ -395,5 +404,6 @@ export const RoomServerMessage = z.discriminatedUnion('type', [
   // GEN-070: the answer to a `RoomOmen`.
   RoomOmenAccepted,
   RoomOmenRejected,
+  GameClosedEvent,
 ]);
 export type RoomServerMessage = z.infer<typeof RoomServerMessage>;

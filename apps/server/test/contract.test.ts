@@ -218,7 +218,17 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
 
     // --- After the end (GEN-078): the same table, ended; B's Secret action of turn 1 stood and is revealed ---
     const tableGame = (server!.db.prepare('select game_id as id from member where id = ?').get(t.a.memberId) as { id: string }).id;
-    savePhaseState(server!.orm, tableGame, { ...ensurePhaseState(server!.orm, tableGame, CLOCK), status: 'finale' }, CLOCK);
+    // ISK-001: the server owner closes the table while it is played: it ends like a finale (no AI ending) and the
+    // open sockets get `game_closed`; the end page below is the same.
+    const ownerToken = ((await call('POST', '/api/admin/session', { body: { code: ADMIN_CODE } })).body as { token: string }).token;
+    await hit(call, 'GET /api/admin/games', { token: ownerToken });
+    const tableName = (server!.db.prepare('select name from game where id = ?').get(tableGame) as { name: string }).name;
+    const closePath = `/api/admin/games/${tableGame}/close`;
+    await hit(call, 'POST /api/admin/games/:id/close', { token: ownerToken, path: closePath, body: { confirmName: 'ชื่อผิด' } });
+    await hit(call, 'POST /api/admin/games/:id/close', { token: ownerToken, path: closePath, body: { confirmName: tableName, reason: 'ทดสอบสัญญา' } });
+    await hit(call, 'POST /api/admin/games/:id/close', { token: ownerToken, path: closePath, body: { confirmName: tableName } });
+    await hit(call, 'POST /api/admin/games/:id/close', { token: ownerToken, path: '/api/admin/games/nope/close', body: { confirmName: 'x' } });
+    await a.waitFor((m) => m.type === 'game_closed');
     const endedLog = GameLogResponse.parse((await hit(call, 'GET /api/game/log', { token: t.a.token })).body);
     const likedRef = endedLog.reveal?.players.flatMap((p) => p.secretActions)[0]?.sourceRef;
     expect(likedRef, 'a revealed Secret action with its ref').toBeTypeOf('string');

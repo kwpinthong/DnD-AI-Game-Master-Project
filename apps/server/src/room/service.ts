@@ -64,6 +64,7 @@ import { settleTurnProgress, withPeriodEndEffects } from '../skills/progress.ts'
 import type { ClosedAction, DialogueStage, FinaleResolution, PhaseResolution, PhaseResolver, PlaceReaders, ResolutionEntry, ResolverStuck } from './resolver.ts';
 import { getEnding, markNarrated, settleEnding } from '../finale/store.ts';
 import { templateFinaleEntries } from '../gm/finale.ts';
+import { closureOf } from '../admin/games.ts';
 import { periodAnnouncement } from '../gm/scene.ts';
 import {
   ensurePhaseState,
@@ -150,6 +151,8 @@ export interface RoomService {
   wake(gameId: string): void;
   /** GEN-149: sends entries stored outside the turn (the NPC chat) to the open sockets of their recipients. */
   publish(gameId: string, rows: readonly { row: RoomEntryRow; recipients: ReadonlySet<string> }[]): void;
+  /** ISK-001: the server owner closed the game (already stored): drop what waits for it and tell every open socket. */
+  closed(gameId: string, event: { reason: string | null; hasSummary: boolean }): void;
   /** Shutdown: forgets every socket (their close events no longer touch the database), then waits for running resolves. */
   stop(): Promise<void>;
 }
@@ -300,6 +303,7 @@ export function createRoomService(
   }
 
   function gmStatusFor(me: MemberRow, state: PhaseState, ownerMemberId: string | null): RoomGmStatus | null {
+    if (closureOf(db, me.gameId)) return null; // ISK-001: a closed game waits for nothing
     if (held.has(me.gameId) && (state.status === 'resolving' || isEnded(state))) {
       return { code: 'awaiting_gm', message: me.role === 'gm' ? AWAITING_GM_MESSAGE : AWAITING_GM_PLAYER_MESSAGE, canRetry: false };
     }
@@ -623,6 +627,7 @@ export function createRoomService(
    */
   function storeLines(gameId: string, at: TurnPoint, entries: readonly ResolutionEntry[], places: PlaceReaders, apply?: (tx: DbOrTx) => void) {
     return db.transaction((tx) => {
+      if (closureOf(tx, gameId)) return []; // ISK-001: late lines of a closed game are dropped
       const t = now();
       const state = ensurePhaseState(tx, gameId, t);
       const rows = entries.map((entry) => {
@@ -638,6 +643,7 @@ export function createRoomService(
 
   /** GEN-128: holds `turn` for the Human GM, or queues it behind what is held already. */
   function hold(gameId: string, turn: HeldTurn): void {
+    if (closureOf(db, gameId)) return; // ISK-001: what the AI finishes after a close never reaches the GM console
     if (held.has(gameId)) queued.set(gameId, [...(queued.get(gameId) ?? []), turn]);
     else held.set(gameId, turn);
     broadcastRoom(gameId);
@@ -681,7 +687,7 @@ export function createRoomService(
     const publish = () => db.transaction((tx) => {
       const t = now();
       const state = ensurePhaseState(tx, gameId, t);
-      if (state.day !== at.day || state.phase !== at.phase || state.turn !== at.turn) return [];
+      if (state.day !== at.day || state.phase !== at.phase || state.turn !== at.turn || closureOf(tx, gameId)) return [];
       const out = (resolution.entries ?? []).map((entry) => {
         const recipients = recipientsOf(tx, gameId, state, entry);
         const locationId = entry.kind === 'narration' ? null : entry.locationId;
@@ -903,6 +909,9 @@ export function createRoomService(
       broadcastRoom(me.gameId);
       const lastSeq = entriesFor(db, me.gameId, me.id, 0).at(-1)?.id ?? 0;
       send(socket, { type: 'ready', lastSeq: Math.max(lastSeq, afterSeq) });
+      // ISK-001: a closed game is only shown; nothing is woken (no AI after the close).
+      const closure = closureOf(db, me.gameId);
+      if (closure) return send(socket, { type: 'game_closed', ...closure });
       // GEN-157: a summary a restart cut short is redone (before the turn below, so its prompt waits for it).
       if (!caughtUp.has(me.gameId)) {
         caughtUp.add(me.gameId);
@@ -964,6 +973,15 @@ export function createRoomService(
     },
 
     publish: deliver,
+
+    closed(gameId, event) {
+      // Nothing that waited for this game is published any more (the store refuses late entries too).
+      held.delete(gameId);
+      queued.delete(gameId);
+      stuck.delete(gameId);
+      for (const socket of rooms.get(gameId)?.keys() ?? []) send(socket, { type: 'game_closed', ...event });
+      broadcastRoom(gameId);
+    },
 
     wake(gameId) {
       const state = ensurePhaseState(db, gameId, now());

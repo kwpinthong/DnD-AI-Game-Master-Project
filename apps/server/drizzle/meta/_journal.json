@@ -372,6 +372,13 @@
       "when": 1795448928641,
       "tag": "0052_gm_refusal",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "6",
+      "when": 1795449766264,
+      "tag": "0053_game_close",
+      "breakpoints": true
     }
   ]
 }

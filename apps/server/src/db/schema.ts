@@ -183,3 +183,5 @@ export * from './schema-style-eval.ts';
 export * from './schema-learning.ts';
 // GEN-149: chat with an NPC outside the turn, own file for the same reason.
 export * from './schema-npc-chat.ts';
+// ISK-001: games the server owner closed early (state + audit), own file for the same reason.
+export * from './schema-close.ts';
