@@ -6,6 +6,7 @@
  * These zod schemas describe the JSON files: the importer checks its own output against them and
  * the server checks the files again at start-up (a hand edit cannot slip past).
  */
+import { ASSET_ALIGNMENTS as ALIGNMENTS, ASSET_PERIODS as PERIODS, ASSET_RANKS as RANKS, ASSET_WEATHERS as WEATHERS } from '@isekai/protocol';
 import { z } from 'zod';
 
 export const REQUIRED_TABS = ['Ability', 'Item', 'NPC', 'Location', 'Start_Scenarios', 'System_Rules', 'World_Timeline'] as const;
@@ -26,11 +27,9 @@ export const TAB_FILES: Readonly<Record<TabName, string>> = {
   Day10_Strategies: 'day10-strategies.json',
 };
 
-export const RANKS = ['F', 'B', 'A', 'S', 'SS'] as const;
+// GEN-183: one set of these with the admin form, in @isekai/protocol.
+export { RANKS, ALIGNMENTS, PERIODS, WEATHERS };
 export const TRIGGER_TYPES = ['Active', 'Passive', 'Passive + Active'] as const;
-export const ALIGNMENTS = ['Good', 'Evil', 'Neutral'] as const;
-export const PERIODS = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
-export const WEATHERS = ['Clear', 'Clear Morning', 'Clear Night', 'Rain', 'Storm', 'Fog', 'Dark Night', 'Disaster'] as const;
 /** What a numeric effect changes (Q-090 `Stat`). */
 export const STATS = ['HP', 'Stamina', 'd20', 'Karma', 'Coins'] as const;
 /** What the chronic illness of a start scenario may lower (Q-208). */

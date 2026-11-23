@@ -41,3 +41,6 @@ export * from './vote-review.ts';
 
 // GEN-169: the style checker's settings and flag counts (server owner), own file for the same reason.
 export * from './style-check.ts';
+
+// GEN-183: game data enums shared by the server's asset schemas and the admin form.
+export * from './asset-enums.ts';
