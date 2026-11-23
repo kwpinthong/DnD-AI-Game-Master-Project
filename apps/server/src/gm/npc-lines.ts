@@ -53,18 +53,21 @@ export interface PresenceNow {
 }
 
 /**
- * The NPCs at `placeId` now. An NPC with rows in the NPC_Schedule tab is where the schedule puts it at this period
- * and weather (Q-092); one without rows stays at its scenario place. Without a schedule tab: the scenario places.
+ * The NPCs at `placeId` now (GEN-137, Q-300): where a NPC_Schedule row puts it at this period, weather and karma
+ * (Q-092); with no such row anywhere now, at its scenario place. A row that puts it elsewhere now keeps it away.
  */
 export function npcsPresentAt(world: GmWorld, assets: GameAssets, placeId: string, now: PresenceNow): GmWorld['npcs'] {
   const schedule = assets.npcSchedule ?? [];
   const placeName = world.places.find((p) => p.id === placeId)?.name;
   const karmas = now.karmas.length > 0 ? now.karmas : [0];
-  const scheduled = new Set(placeName === undefined ? [] : karmas.flatMap((karma) => npcsAt(schedule, placeName, { phase: now.phase, weather: now.weather, karma })));
-  return world.npcs.filter((n) => {
-    const rows = schedule.some((r) => n.names.includes(r.npc));
-    return rows ? n.names.some((name) => scheduled.has(name)) : n.locationId === placeId;
-  });
+  const locations = [...new Set(schedule.map((r) => r.location))];
+  const at = (karma: number, location: string) => npcsAt(schedule, location, { phase: now.phase, weather: now.weather, karma });
+  return world.npcs.filter((n) =>
+    karmas.some((karma) => {
+      const placed = locations.filter((loc) => n.names.some((name) => at(karma, loc).includes(name)));
+      return placed.length > 0 ? placeName !== undefined && placed.includes(placeName) : n.locationId === placeId;
+    }),
+  );
 }
 
 // --- What the AI is given ---
@@ -73,7 +76,7 @@ export function npcsPresentAt(world: GmWorld, assets: GameAssets, placeId: strin
 const PERSONA_TOKENS = 150;
 
 /**
- * The NPCs of a narration as the AI reads them (`here`: the ones the schedule has at the place now, the only ones that
+ * The NPCs of a narration as the AI reads them (`here`: the ones `npcsPresentAt` has at the place now, the only ones that
  * may speak; the others at the scenario place may still be named): alias (never the real name), grade, personality (the sheet's Lore with
  * every real name of the NPC swapped for its token) and the bond with each player of the cast: affinity and whether
  * they have met (a row exists). `members`: the players the narration is about.
