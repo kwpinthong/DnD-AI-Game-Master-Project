@@ -104,7 +104,7 @@ endpoint / socket event 69 รายการ: ready 62, pending 7 · field ท�
 | 5. GM console | `GET /api/game/timeline` | - → `GameTimelineResponse` | ผู้เล่น | ready | GEN-053 |  |
 | 5. GM console | `GET /api/game/surroundings` | - → `SurroundingsResponse` | ผู้เล่น | ready | GEN-050 + GEN-067 |  |
 | 5. GM console | socket ← `room` | `RoomState` | ผู้เล่น | ready | GEN-056 |  |
-| 5. GM console | `GET /api/game/gm/console` | - → `GmConsoleResponse` | GM คน | ready | GEN-058 |  |
+| 5. GM console | `GET /api/game/gm/console` | - → `GmConsoleResponse` | GM คน | ready | GEN-058 + GEN-105 + GEN-104 | pending.checks (ทุกการทอยของเทิร์น: DC / modifiers+label / d20 / total / outcome; ไม่มีทอย = []) และ npcs (NPC ที่ติดคำสาป + turnsLeft) พร้อมแล้ว เห็นเฉพาะ GM |
 | 5. GM console | `POST /api/game/gm/turn/edit` | `GmTurnEditRequest` → `GmPendingTurn` | GM คน | ready | GEN-058 |  |
 | 5. GM console | `POST /api/game/gm/turn/approve` | - → `GmApproveResponse` | GM คน | ready | GEN-058 |  |
 | 5. GM console | `POST /api/game/gm/adjust` | `GmAdjustRequest` → `GmAdjustResponse` | GM คน | ready | GEN-058 |  |

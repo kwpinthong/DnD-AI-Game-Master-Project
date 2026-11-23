@@ -242,7 +242,7 @@ export const CONTRACT: readonly ContractItem[] = [
   socket('server', 'omen_rejected', 'RoomOmenRejected', ready('GEN-070', 'player', ['play-astral'])),
 
   // --- Human GM ---
-  http('GET', '/api/game/gm/console', null, 'GmConsoleResponse', ready('GEN-058', 'gm', ['gm-console'])),
+  http('GET', '/api/game/gm/console', null, 'GmConsoleResponse', ready('GEN-058 + GEN-105 + GEN-104', 'gm', ['gm-console'], 'pending.checks (ทุกการทอยของเทิร์น: DC / modifiers+label / d20 / total / outcome; ไม่มีทอย = []) และ npcs (NPC ที่ติดคำสาป + turnsLeft) พร้อมแล้ว เห็นเฉพาะ GM')),
   http('POST', '/api/game/gm/turn/edit', 'GmTurnEditRequest', 'GmPendingTurn', ready('GEN-058', 'gm', ['gm-console'])),
   http('POST', '/api/game/gm/turn/approve', null, 'GmApproveResponse', ready('GEN-058', 'gm', ['gm-console'])),
   http('POST', '/api/game/gm/adjust', 'GmAdjustRequest', 'GmAdjustResponse', ready('GEN-058', 'gm', ['gm-console'])),
