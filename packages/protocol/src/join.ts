@@ -155,5 +155,7 @@ export const ApiError = z.discriminatedUnion('code', [
   z.object({ code: z.literal('ruling_not_found'), message: z.string() }),
   /** 404 (GEN-107): no AI-written room entry with that id in the caller's game (also a player's own text, or a server template). */
   z.object({ code: z.literal('response_not_found'), message: z.string() }),
+  /** 404 (GEN-147): no game data set with that name. */
+  z.object({ code: z.literal('data_set_not_found'), message: z.string() }),
 ]);
 export type ApiError = z.infer<typeof ApiError>;

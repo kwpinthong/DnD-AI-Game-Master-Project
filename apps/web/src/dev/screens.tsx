@@ -7,6 +7,7 @@ import { CreateGameForm } from '../CreateGameForm.tsx';
 import { GameSummaryPage } from '../GameHistory.tsx';
 import { JoinForm } from '../JoinForm.tsx';
 import { LearningLibrary } from '../LearningLibrary.tsx';
+import { GameDataEditor } from '../GameDataEditor.tsx';
 import { Lobby } from '../Lobby.tsx';
 import { OriginCard } from '../OriginCard.tsx';
 import { PlayRoom } from '../PlayRoom.tsx';
@@ -109,4 +110,13 @@ export const SCREEN_VIEWS: Record<ScreenId, ScreenView> = {
   },
   'ai-usage': { page: 'AdminDashboard', socket: false, render: ({ baseUrl }) => <AdminDashboard apiBaseUrl={baseUrl} /> },
   'my-style': NONE,
+  'game-data': {
+    page: 'GameDataEditor',
+    socket: false,
+    render: ({ baseUrl }) => (
+      <div className="preview">
+        <GameDataEditor apiBaseUrl={baseUrl} token={MOCK_ADMIN_TOKEN} onForbidden={noop} />
+      </div>
+    ),
+  },
 };

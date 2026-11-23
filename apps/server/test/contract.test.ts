@@ -220,6 +220,18 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     const adminToken = (admin.body as { token: string }).token;
     await hit(call, 'GET /api/admin/ai-usage', { token: adminToken });
     await hit(call, 'GET /api/admin/ai-usage/:gameId', { token: adminToken, path: `/api/admin/ai-usage/${lobby.game.id}` });
+    // GEN-147: the game data editor.
+    await hit(call, 'GET /api/admin/game-data', { token: adminToken });
+    const schedule = await hit(call, 'GET /api/admin/game-data/:name', { token: adminToken, path: '/api/admin/game-data/NPC_Schedule' });
+    const scheduleValue = (schedule.body as { value: unknown }).value;
+    await hit(call, 'PUT /api/admin/game-data/:name', { token: adminToken, path: '/api/admin/game-data/NPC_Schedule', body: { value: [] } });
+    await hit(call, 'PUT /api/admin/game-data/:name', { token: adminToken, path: '/api/admin/game-data/NPC_Schedule', body: { value: 'not a list' } });
+    await hit(call, 'POST /api/admin/game-data/:name/undo', { token: adminToken, path: '/api/admin/game-data/NPC_Schedule/undo' });
+    await hit(call, 'POST /api/admin/game-data/:name/undo', { token: adminToken, path: '/api/admin/game-data/NPC_Schedule/undo' });
+    expect((await call('GET', '/api/admin/game-data/NPC_Schedule', { token: adminToken })).body).toMatchObject({ value: scheduleValue });
+    await hit(call, 'GET /api/admin/game-data/:name', { token: adminToken, path: '/api/admin/game-data/Nope' });
+    await hit(call, 'GET /api/admin/game-data-audit', { token: adminToken });
+    await hit(call, 'GET /api/admin/game-data-export', { token: adminToken });
     await hit(call, 'POST /api/admin/logout', { token: adminToken });
     await hit(call, 'POST /api/logout', { token: p1.token });
     await hit(call, 'DELETE /api/game', { token: gm, body: { confirmName: 'เกมสัญญา 2' } });

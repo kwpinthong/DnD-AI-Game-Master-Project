@@ -131,7 +131,7 @@ export const libraryText = {
   thumbs: (thumbs: number, players: number) => `👍 ${thumbs}/${players}`,
   topVerbs: 'ทำบ่อย',
   secretShare: (share: number) => `ลงมือแบบลับ ${Math.round(share * 100)}%`,
-  adminNav: { usage: 'การใช้ AI', library: 'Learning library' },
+  adminNav: { usage: 'การใช้ AI', library: 'Learning library', data: 'ข้อมูลเกม' },
 } as const;
 
 // Play screen v2 view-model text (GEN-099 contract; screens in GEN-088 / 089).

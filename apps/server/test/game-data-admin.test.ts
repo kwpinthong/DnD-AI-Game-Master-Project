@@ -312,7 +312,7 @@ describe('game data in the DB + admin editor (GEN-147)', { timeout: 120_000 }, (
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect((await getSet(token, name)).value).toEqual(edited);
     const live = server!.assets[ASSET_KEY[name]] as readonly Record<string, unknown>[];
-    if (name === 'Server_Lines') expect(live[0]!.text).toMatch(/แก้จาก admin$/);
+    if (name === 'Server_Lines') expect(live[0]!.text).toMatch(/\(แก้จาก admin\)$/);
     else expect(live[0]!.extra).toMatchObject({ admin_note: 'แก้จาก admin' });
   });
 });

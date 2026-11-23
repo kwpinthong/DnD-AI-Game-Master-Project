@@ -37,14 +37,16 @@ export interface SheetNpc {
   evolvedName(alignment: NpcAlignment | null): string;
 }
 
-const cache = new WeakMap<GameAssets, ReadonlyMap<string, SheetNpc>>();
+// Keyed by the NPC array, not the assets object: the server's assets object stays the same across admin edits
+// (GEN-147), and every save rebuilds all data set arrays, so any edit gets a fresh entry.
+const cache = new WeakMap<readonly NpcRecord[], ReadonlyMap<string, SheetNpc>>();
 
 /** Every NPC tab row by its key (first alias). Built once per loaded asset set. */
 export function sheetNpcs(assets: GameAssets): ReadonlyMap<string, SheetNpc> {
-  let built = cache.get(assets);
+  let built = cache.get(assets.npcs);
   if (!built) {
     built = new Map(assets.npcs.map((record) => [record.aliases[0]!, readNpc(assets, record)]));
-    cache.set(assets, built);
+    cache.set(assets.npcs, built);
   }
   return built;
 }

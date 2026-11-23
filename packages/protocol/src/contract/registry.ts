@@ -35,6 +35,7 @@ export const CONTRACT_SCREENS = [
   { id: 'learning-library', title: '7. Learning library (ผู้ดูแล)' },
   { id: 'ai-usage', title: '8. AI usage (ผู้ดูแล)' },
   { id: 'my-style', title: '9. สไตล์ของฉัน' },
+  { id: 'game-data', title: '10. ข้อมูลเกม (ผู้ดูแล)' },
 ] as const;
 export type ScreenId = (typeof CONTRACT_SCREENS)[number]['id'];
 
@@ -117,6 +118,11 @@ export const CONTRACT_SCHEMAS = {
   AdminSessionResponse: p.AdminSessionResponse,
   AiUsageOverviewResponse: p.AiUsageOverviewResponse,
   AiUsageGameResponse: p.AiUsageGameResponse,
+  GameDataListResponse: p.GameDataListResponse,
+  GameDataSetResponse: p.GameDataSetResponse,
+  GameDataSaveRequest: p.GameDataSaveRequest,
+  GameDataAuditResponse: p.GameDataAuditResponse,
+  GameDataExportResponse: p.GameDataExportResponse,
   LearningLibraryResponse: p.LearningLibraryResponse,
   PlayerStyleRequest: p.PlayerStyleRequest,
   PlayerStyleResponse: p.PlayerStyleResponse,
@@ -259,8 +265,14 @@ export const CONTRACT: readonly ContractItem[] = [
   http('DELETE', '/api/game/rating/likes/:sourceRef', null, 'GameRatingResponse', ready('GEN-078', 'player', ['ending-rating'], 'ยกเลิก 👍')),
 
   // --- server owner ---
-  http('POST', '/api/admin/session', 'AdminSessionRequest', 'AdminSessionResponse', ready('GEN-061', 'any', ['ai-usage', 'learning-library'])),
-  http('POST', '/api/admin/logout', null, null, ready('GEN-061', 'admin', ['ai-usage', 'learning-library'])),
+  http('POST', '/api/admin/session', 'AdminSessionRequest', 'AdminSessionResponse', ready('GEN-061', 'any', ['ai-usage', 'learning-library', 'game-data'])),
+  http('POST', '/api/admin/logout', null, null, ready('GEN-061', 'admin', ['ai-usage', 'learning-library', 'game-data'])),
+  http('GET', '/api/admin/game-data', null, 'GameDataListResponse', ready('GEN-147', 'admin', ['game-data'])),
+  http('GET', '/api/admin/game-data/:name', null, 'GameDataSetResponse', ready('GEN-147', 'admin', ['game-data'], 'ไม่มีชุดนี้ = 404 `data_set_not_found`')),
+  http('PUT', '/api/admin/game-data/:name', 'GameDataSaveRequest', 'GameDataSetResponse', ready('GEN-147', 'admin', ['game-data'], 'ตรวจด้วย schema เดียวกับ loader; ผิด = 400 `invalid_input` + `fields` ค่าเดิมไม่เปลี่ยน; backup ก่อนแก้ + audit 1 แถว; มีผลกับเกมใหม่และเทิร์นถัดไป')),
+  http('POST', '/api/admin/game-data/:name/undo', null, 'GameDataSetResponse', ready('GEN-147', 'admin', ['game-data'], 'ย้อนการแก้ล่าสุดที่ยังไม่ถูกย้อน; ไม่มี = 409 `not_allowed`')),
+  http('GET', '/api/admin/game-data-audit', null, 'GameDataAuditResponse', ready('GEN-147', 'admin', ['game-data'])),
+  http('GET', '/api/admin/game-data-export', null, 'GameDataExportResponse', ready('GEN-147', 'admin', ['game-data'], 'ชื่อไฟล์ → JSON ที่ loader เดิมโหลดกลับได้')),
   http('GET', '/api/admin/ai-usage', null, 'AiUsageOverviewResponse', ready('GEN-061', 'admin', ['ai-usage'])),
   http('GET', '/api/admin/ai-usage/:gameId', null, 'AiUsageGameResponse', ready('GEN-061', 'admin', ['ai-usage'])),
   http('GET', '/api/admin/learning', null, 'LearningLibraryResponse', pending('GEN-084', 'admin', ['learning-library'], 'ชนิด entry ตาม ADR ของ GEN-077')),

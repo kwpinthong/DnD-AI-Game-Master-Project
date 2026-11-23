@@ -291,6 +291,15 @@ const origin: In<typeof p.OriginView> = {
 
 const rating: In<typeof p.GameRatingView> = { mine: { score: 9, comment: 'สนุกมาก' }, liked: ['2-HESPERION-1-7'], thumbs: { '2-HESPERION-1-7': 3 }, average: 8.6, raters: 3, members: 4, eligible: true, blocker: null };
 const learningSource = { sourceGameId: 'g-old', sourceGameName: 'คืนจันทราโลหิต', sourceScore: 8.6, status: 'active', createdAt: 1_795_200_000_000 } as const;
+const scheduleRow = { npc: 'โนอา', location: 'น้ำพุกลางเมือง', periods: ['SOLARION', 'HESPERION'], weathers: [], condition: '', note: 'ช่วงบ่าย-ค่ำ' };
+const gameDataSummary: In<typeof p.GameDataSetSummary> = {
+  name: 'NPC_Schedule',
+  file: 'npc-schedule.json',
+  records: 1,
+  updatedAt: '2026-11-22T12:00:00.000Z',
+  canUndo: true,
+};
+
 const learningEntries: In<typeof p.LearningEntryView>[] = [
   {
     ...learningSource,
@@ -494,6 +503,25 @@ export const CONTRACT_FIXTURES: Fixtures = {
       failures: [],
     },
   ],
+  GameDataListResponse: [{ sets: [gameDataSummary, { ...gameDataSummary, name: 'NPC', file: 'npc.json', records: 12, canUndo: false }] }],
+  GameDataSetResponse: [{ set: gameDataSummary, value: [scheduleRow] }],
+  GameDataSaveRequest: [{ value: [scheduleRow] }],
+  GameDataAuditResponse: [
+    {
+      entries: [
+        {
+          id: 1,
+          name: 'NPC_Schedule',
+          action: 'edit',
+          at: '2026-11-22T12:00:00.000Z',
+          backupFile: 'NPC_Schedule-2026-11-22T12-00-00-000Z-1a2b3c4d.json',
+          changes: [{ index: 0, old: { ...scheduleRow, periods: ['EOSORIA'] }, new: scheduleRow }],
+        },
+      ],
+    },
+    { entries: [] },
+  ],
+  GameDataExportResponse: [{ exportedAt: '2026-11-22T12:00:00.000Z', files: { 'npc-schedule.json': [scheduleRow] } }],
   LearningLibraryResponse: [
     {
       entries: learningEntries,

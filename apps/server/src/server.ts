@@ -20,7 +20,9 @@ import { createAiGmResolver } from './gm/loop.ts';
 import type { PhaseResolver } from './room/resolver.ts';
 import { registerRoomRoutes } from './room/routes.ts';
 import { createWeatherService, type WeatherService } from './weather/service.ts';
-import { DEFAULT_ASSETS_DIR, loadGameAssets, type GameAssets } from './assets/load.ts';
+import { assetFileLabel, buildGameAssets, DEFAULT_ASSETS_DIR, readRawDataSets, type GameAssets } from './assets/load.ts';
+import { openGameData, type GameDataStore } from './assets/game-data.ts';
+import { dirname, join } from 'node:path';
 import { registerCompanionRoutes } from './companions/routes.ts';
 import { registerAdminRoutes } from './admin/routes.ts';
 import { registerInventoryRoutes } from './skills/routes.ts';
@@ -46,7 +48,7 @@ export interface RunningServer {
   weather: WeatherService;
   /** `METHOD /url` of every HTTP route (HEAD left out). */
   routes: readonly string[];
-  /** Game data from the JSON in apps/server/assets (GEN-062), checked at start; never fetched while running. */
+  /** Game data from the DB (GEN-147; seeded once from apps/server/assets), always the latest admin edit. */
   assets: GameAssets;
   /** The backup job (GEN-037) when `config.backup` is set. */
   backups?: BackupSchedule;
@@ -86,8 +88,19 @@ export interface ServerOptions {
 
 export async function startServer(config: ServerConfig, options: ServerOptions = {}): Promise<RunningServer> {
   // Before the database: bad asset JSON stops start-up with nothing opened (AssetLoadError names the file and field).
-  const assets = loadGameAssets(options.assetsDir ?? DEFAULT_ASSETS_DIR);
+  const assetsDir = options.assetsDir ?? DEFAULT_ASSETS_DIR;
+  const seed = readRawDataSets(assetsDir);
+  buildGameAssets(seed, assetFileLabel(assetsDir));
   const { sqlite, db, dbPath, migrationsApplied } = openDatabase(config.dbPath);
+  // GEN-147: the DB holds the game data; the files only seed a set it does not have yet (never overwrite an edit).
+  let gameData: GameDataStore;
+  try {
+    gameData = openGameData(db, seed, { backupDir: join(config.backup?.dir ?? join(dirname(dbPath), 'backups'), 'game-data'), now: options.now ?? Date.now });
+  } catch (error) {
+    sqlite.close();
+    throw error;
+  }
+  const assets = gameData.assets;
 
   const aiConfig = options.ai ?? loadAiConfig({});
   const ai = createAiService({
@@ -125,7 +138,10 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerAuthRoutes(app, db, now);
   registerGameRoutes(app, db, now, {
     ai,
-    karmaTiers: assets.karmaTiers,
+    // A getter: an admin edit of the Karma Tiers rows reaches the next request (GEN-147).
+    get karmaTiers() {
+      return assets.karmaTiers;
+    },
     assets,
     rng: options.rng === undefined ? new CryptoRng() : options.rng,
     ...(config.createCodeHash ? { createCodeHash: config.createCodeHash } : {}),
@@ -149,6 +165,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerAdminRoutes(app, db, now, {
     ai: aiConfig,
     log: options.aiLog ?? ((line) => console.log(line)),
+    gameData,
     ...(config.adminCodeHash ? { adminCodeHash: config.adminCodeHash } : {}),
   });
   registerInventoryRoutes(app, db, now, assets);

@@ -167,3 +167,5 @@ export * from './schema-strategy.ts';
 export * from './schema-statuses.ts';
 // GEN-078: the score, comment and 👍 members give after the end, own file for the same reason.
 export * from './schema-rating.ts';
+// GEN-147: the game data (seeded once from the asset files) and its edit log, own file for the same reason.
+export * from './schema-game-data.ts';
