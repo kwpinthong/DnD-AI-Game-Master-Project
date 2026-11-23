@@ -378,6 +378,7 @@ describe('ISK-011 the ฟีดแบ็ก tab in /admin', () => {
     fireEvent.change(statusOf(2), { target: { value: 'done' } });
     expect(await screen.findByText(/เปลี่ยนสถานะไม่สำเร็จ/)).toBeTruthy();
     expect(statusOf(2).value).toBe('reviewing');
+    expect(statusOf(2).closest('.feedback-admin')).toBeTruthy();
   });
 });
 
@@ -397,10 +398,15 @@ describe('ISK-011 C11 the phone and the gallery', () => {
     expect(rule('.feedback-dialog', phone)).toMatch(/height:\s*100%/);
     expect(rule('.feedback-dialog')).toMatch(/overflow-y:\s*auto/);
     expect(rule('.feedback-dialog')).toMatch(/box-sizing:\s*border-box/);
-    expect(rule('.feedback-corner')).toMatch(/min-width:\s*44px/);
-    expect(rule('.feedback-corner')).toMatch(/min-height:\s*44px/);
+    // two classes: .btn (min-height 36px) and .dialog-backdrop load in any order and must not win
+    expect(rule('.btn.feedback-corner')).toMatch(/min-width:\s*44px/);
+    expect(rule('.btn.feedback-corner')).toMatch(/min-height:\s*44px/);
+    expect(rule('.dialog-backdrop.feedback-backdrop', phone)).toMatch(/padding:\s*0/);
     expect(rule('.feedback-dialog .btn')).toMatch(/min-height:\s*44px/);
     expect(rule('.feedback-type label')).toMatch(/min-height:\s*44px/);
+    expect(rule('.feedback-thanks .btn')).toMatch(/min-height:\s*44px/);
+    expect(rule('.feedback-admin select')).toMatch(/min-height:\s*44px/);
+    expect(rule('.feedback-admin button')).toMatch(/min-height:\s*44px/);
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/);
 
     openBox();

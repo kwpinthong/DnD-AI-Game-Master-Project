@@ -2,6 +2,7 @@ import { FEEDBACK_STATUSES, FEEDBACK_TYPES, type FeedbackRow, type FeedbackStatu
 import { useEffect, useRef, useState } from 'react';
 import { fetchFeedback, saveFeedbackStatus } from './admin-api.ts';
 import { EmptyState, ErrorState, Skeleton } from './ui/parts.tsx';
+import './ui/feedback.css';
 import { feedbackText as t } from './ui/strings.ts';
 
 /** Longer texts are cut to this many code points until the row is opened. */
@@ -48,8 +49,8 @@ export function FeedbackAdmin({ apiBaseUrl, token, onForbidden }: { apiBaseUrl: 
     put(row.id, (r) => ({ ...r, status: next }));
     const result = await saveFeedbackStatus(apiBaseUrl, token, row.id, { status: next });
     if (result.kind === 'ok') return put(row.id, () => result.data);
-    // not saved: the row goes back to what the server still has
-    put(row.id, (r) => ({ ...r, status: row.status }));
+    // not saved: back to what the server still has, unless a later change already moved the row on
+    put(row.id, (r) => (r.status === next ? { ...r, status: row.status } : r));
     if (result.kind === 'forbidden') return onForbiddenRef.current(result.message);
     setProblem(t.saveFailed(result.message));
   }
@@ -62,7 +63,7 @@ export function FeedbackAdmin({ apiBaseUrl, token, onForbidden }: { apiBaseUrl: 
   const shown = rows.filter((r) => (!status || r.status === status) && (!type || r.type === type));
 
   return (
-    <>
+    <div className="feedback-admin">
       <div className="admin__nav">
         <label>
           {t.filterStatus}
@@ -140,6 +141,6 @@ export function FeedbackAdmin({ apiBaseUrl, token, onForbidden }: { apiBaseUrl: 
           </tbody>
         </table>
       )}
-    </>
+    </div>
   );
 }

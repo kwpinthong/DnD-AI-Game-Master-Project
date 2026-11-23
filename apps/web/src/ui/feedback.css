@@ -1,6 +1,7 @@
-/* ISK-011: the report box and its corner button. Tokens only; the backdrop and the action row come from confirm-dialog.css. */
+/* ISK-011: the report box and its corner button. Tokens only; the backdrop and the action row come from confirm-dialog.css.
+   Two classes on purpose: .btn and .dialog-backdrop may load after this file. */
 
-.feedback-corner {
+.btn.feedback-corner {
   position: fixed;
   top: var(--space-2);
   right: var(--space-2);
@@ -12,7 +13,7 @@
   font-size: var(--text-md);
 }
 
-.feedback-backdrop {
+.dialog-backdrop.feedback-backdrop {
   z-index: 30;
 }
 
@@ -96,9 +97,24 @@
   z-index: 30;
 }
 
+.feedback-thanks .btn {
+  min-height: 44px;
+}
+
+/* the owner's ฟีดแบ็ก tab (FeedbackAdmin) */
+.feedback-admin select,
+.feedback-admin button {
+  min-height: 44px;
+}
+
+.feedback-admin td button {
+  font: inherit;
+  text-align: start;
+}
+
 /* phones: the box is the whole screen */
 @media (max-width: 767.98px) {
-  .feedback-backdrop {
+  .dialog-backdrop.feedback-backdrop {
     padding: 0;
   }
 
