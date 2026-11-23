@@ -543,6 +543,7 @@ export const CONTRACT_FIXTURES: Fixtures = {
       pending: gmPendingTurn,
       fallbacks: [{ at: AT, kind: 'narration', memberId: ME, locationId: null, cause: 'timeout' }],
       npcs: [{ npcId: 'merchant', name: 'พ่อค้าเร่', curses: [{ label: 'มึนงง', source: 'Mist of Confusion', value: -2, turnsLeft: 1 }] }],
+      autoApproveLines: false,
     },
   ],
   GmTurnEditRequest: [{ reason: 'ปรับถ้อยคำ', narrations: [{ index: 0, text: 'คุณเห็นนักบวช…' }], results: [{ memberId: ME, hp: 20 }] }],
@@ -553,6 +554,7 @@ export const CONTRACT_FIXTURES: Fixtures = {
   GmInsertEventRequest: [{ day: 6, phase: 'EOSORIA', title: 'ไฟไหม้ตลาด', reason: 'เพิ่มแรงกดดัน' }],
   GmInsertEventResponse: [{ event: { ...gmTimelineEvent, id: 'ev-gm-1', day: 6, title: 'ไฟไหม้ตลาด' } }],
   GmLogResponse: [{ overrides: [gmOverride] }],
+  GmSettings: [{ autoApproveLines: true }, { autoApproveLines: false }],
   GmVotesResponse: [
     {
       players: 3,

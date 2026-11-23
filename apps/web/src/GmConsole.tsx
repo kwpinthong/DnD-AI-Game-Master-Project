@@ -21,6 +21,7 @@ import { Button } from './ui/Button.tsx';
 import { ErrorState, Skeleton, VisibilityBadge } from './ui/parts.tsx';
 import { gmText, playText } from './ui/strings.ts';
 import './gm-console.css';
+import './pregame.css';
 
 const STATS: readonly (keyof GmStats)[] = ['hp', 'stamina', 'karma'];
 const STAT_LABEL: Record<keyof GmStats, string> = { hp: 'HP', stamina: 'Stamina', karma: 'Karma' };
@@ -382,6 +383,18 @@ export function GmConsole({ apiBaseUrl, token, refreshKey, gmStatus }: { apiBase
           วันที่ {view.at.day} · <span className="latin-caps">{view.at.phase}</span> · เทิร์น {view.at.turn}/2
         </p>
         <p className="gm__room">{ROOM_STATUS[view.status]}</p>
+        {/* GEN-198: on = the NPC lines go out without a second approval; the turn result still waits here. */}
+        <label className="switch">
+          <input
+            type="checkbox"
+            role="switch"
+            aria-label="อนุมัติบทพูดอัตโนมัติ"
+            checked={view.autoApproveLines === true}
+            onChange={(e) => void run(() => api.saveSettings({ autoApproveLines: e.target.checked })).then((message) => message && setError(message))}
+          />
+          <span className="switch__track" aria-hidden="true" />
+          <span>อนุมัติบทพูดอัตโนมัติ</span>
+        </label>
       </header>
       {gmStatus && (
         <div role="status" aria-label="สถานะ AI GM" className={`gm-status gm-status--${gmStatus.code}`}>

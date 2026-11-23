@@ -124,8 +124,14 @@ export const GmConsoleResponse = z.strictObject({
   fallbacks: z.array(GmFallbackView),
   /** Q-252: NPCs that carry a curse now (Q-229); an empty list = none. */
   npcs: z.array(GmNpcView).optional(),
+  /** GEN-198: the NPC lines go out at once, without waiting here (`PUT /settings`); missing = off. */
+  autoApproveLines: z.boolean().optional(),
 });
 export type GmConsoleResponse = z.infer<typeof GmConsoleResponse>;
+
+/** PUT /api/game/gm/settings and its 200: the Human GM's per-game switches (GEN-198). */
+export const GmSettings = z.strictObject({ autoApproveLines: z.boolean({ error: 'autoApproveLines ต้องเป็น true หรือ false' }) });
+export type GmSettings = z.infer<typeof GmSettings>;
 
 const Reason = z
   .string({ error: 'ต้องใส่เหตุผล' })

@@ -428,6 +428,10 @@ export function createRoomService(
     return db.select({ humanGm: game.humanGm }).from(game).where(eq(game.id, gameId)).get()?.humanGm === true;
   }
 
+  function autoApprovesLines(gameId: string): boolean {
+    return db.select({ on: game.autoApproveLines }).from(game).where(eq(game.id, gameId)).get()?.on === true;
+  }
+
   /**
    * Publishes a resolved turn in one transaction and opens the next turn. false = it is not published: the
    * turn is no longer the closed one, or the transaction failed (rolled back; the room then offers retry).
@@ -584,7 +588,8 @@ export function createRoomService(
   ): void {
     if (stopped) return;
     // GEN-128 C3: with a Human GM the lines wait in the console like a turn; they count as stored once the GM approves them.
-    const humanGm = hasHumanGm(gameId);
+    // GEN-198: unless the GM switched on "อนุมัติบทพูดอัตโนมัติ": then they go out at once, as without a GM.
+    const humanGm = hasHumanGm(gameId) && !autoApprovesLines(gameId);
     const kept: { entries: ResolutionEntry[]; stored: (() => void)[] } = { entries: [], stored: [] };
     const publishLate: Parameters<DialogueStage>[0] = (entries, stored) => {
       if (stopped || entries.length === 0) return;

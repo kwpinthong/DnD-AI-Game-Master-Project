@@ -20,6 +20,8 @@ export const game = sqliteTable('game', {
   mode: text('mode', { enum: ['online', 'single'] }).notNull().default('online'),
   /** The creator is a Human GM (no character, not a player). Single games never have one. */
   humanGm: integer('human_gm', { mode: 'boolean' }).notNull().default(false),
+  /** GEN-198: the Human GM's NPC lines go out at once instead of waiting in the console (off by default). */
+  autoApproveLines: integer('auto_approve_lines', { mode: 'boolean' }).notNull().default(false),
   /** GEN-116: how many NPC lines a turn may carry (an old game has the default: normal). */
   npcDialogue: text('npc_dialogue', { enum: ['low', 'normal', 'high'] }).notNull().default('normal'),
   /** GEN-177: the language tone, set at creation and locked at the start (an old game has A). */

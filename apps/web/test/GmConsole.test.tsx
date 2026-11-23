@@ -1,5 +1,7 @@
 import type { GmConsoleResponse, GmLogResponse } from '@isekai/protocol';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GmConsole } from '../src/GmConsole.tsx';
 
@@ -233,5 +235,43 @@ describe('GEN-058 GM console (web)', () => {
     expect(bodyOf(fetchMock, 'POST', '/api/game/gm/events')[0]).toMatchObject({ day: 6, phase: 'SOLARION', title: 'ไฟไหม้ตลาด', reason: 'เพิ่มแรงกดดัน' });
     const logView = screen.getByRole('region', { name: 'บันทึกการแก้ของ GM' });
     expect(await within(logView).findByText(/จีเอ็ม.*event:gm-1.*เพิ่มแรงกดดัน/)).toBeTruthy();
+  });
+
+  describe('GEN-198 the switch "อนุมัติบทพูดอัตโนมัติ"', () => {
+    it('C1: off by default (an answer without the field reads as off)', async () => {
+      stubApi({ 'GET /api/game/gm/console': () => Response.json(consoleView(false)), 'GET /api/game/gm/log': () => Response.json(emptyLog) });
+      render(<GmConsole apiBaseUrl="http://api" token="tok" refreshKey="1" />);
+      const toggle = await screen.findByRole('switch', { name: 'อนุมัติบทพูดอัตโนมัติ' });
+      expect((toggle as HTMLInputElement).checked).toBe(false);
+    });
+
+    it('C2: turning it on sends the setting and the console shows it on', async () => {
+      let on = false;
+      const fetchMock = stubApi({
+        'GET /api/game/gm/console': () => Response.json({ ...consoleView(false), autoApproveLines: on }),
+        'GET /api/game/gm/log': () => Response.json(emptyLog),
+        'PUT /api/game/gm/settings': (init) => {
+          on = (JSON.parse(String(init?.body)) as { autoApproveLines: boolean }).autoApproveLines;
+          return Response.json({ autoApproveLines: on });
+        },
+      });
+      render(<GmConsole apiBaseUrl="http://api" token="tok" refreshKey="1" />);
+      fireEvent.click(await screen.findByRole('switch', { name: 'อนุมัติบทพูดอัตโนมัติ' }));
+      await waitFor(() => expect(bodyOf(fetchMock, 'PUT', '/api/game/gm/settings')).toEqual([{ autoApproveLines: true }]));
+      await waitFor(() => expect((screen.getByRole('switch', { name: 'อนุมัติบทพูดอัตโนมัติ' }) as HTMLInputElement).checked).toBe(true));
+    });
+
+    it('C3: the switch is a 44px target with a visible label, styled from tokens', async () => {
+      stubApi({ 'GET /api/game/gm/console': () => Response.json(consoleView(false)), 'GET /api/game/gm/log': () => Response.json(emptyLog) });
+      render(<GmConsole apiBaseUrl="http://api" token="tok" refreshKey="1" />);
+      const toggle = await screen.findByRole('switch', { name: 'อนุมัติบทพูดอัตโนมัติ' });
+      const label = toggle.closest('label')!;
+      expect(label.className).toContain('switch');
+      expect(label.textContent).toContain('อนุมัติบทพูดอัตโนมัติ');
+      const css = readFileSync(join(__dirname, '../src/pregame.css'), 'utf8').replace(/\r\n/g, '\n');
+      expect(css).toMatch(/\.gm \.switch[^{]*\{[^}]*min-height: 44px/);
+      const block = css.slice(css.indexOf('.pregame .switch'), css.indexOf('.switch__title'));
+      expect(block).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/);
+    });
   });
 });

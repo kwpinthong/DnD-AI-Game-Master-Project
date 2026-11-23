@@ -7,6 +7,7 @@ import {
   GmInsertEventResponse,
   GmLogResponse,
   GmPendingTurn,
+  GmSettings,
   GmVotesResponse,
   type GmAdjustRequest,
   type GmInsertEventRequest,
@@ -23,7 +24,7 @@ interface Schema<T> {
   safeParse(value: unknown): { success: true; data: T } | { success: false };
 }
 
-async function gmCall<T>(baseUrl: string, token: string, method: 'GET' | 'POST', path: string, schema: Schema<T>, body?: unknown): Promise<GmCallResult<T>> {
+async function gmCall<T>(baseUrl: string, token: string, method: 'GET' | 'POST' | 'PUT', path: string, schema: Schema<T>, body?: unknown): Promise<GmCallResult<T>> {
   let json: unknown;
   let res: Response;
   try {
@@ -52,4 +53,5 @@ export const gmConsoleApi = (baseUrl: string, token: string) => ({
   approve: () => gmCall(baseUrl, token, 'POST', '/turn/approve', GmApproveResponse),
   adjust: (body: GmAdjustRequest) => gmCall(baseUrl, token, 'POST', '/adjust', GmAdjustResponse, body),
   insertEvent: (body: GmInsertEventRequest) => gmCall(baseUrl, token, 'POST', '/events', GmInsertEventResponse, body),
+  saveSettings: (body: GmSettings) => gmCall(baseUrl, token, 'PUT', '/settings', GmSettings, body),
 });

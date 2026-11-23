@@ -99,6 +99,7 @@ describe('GEN-058 Human GM console', { timeout: 60_000 }, () => {
     { method: 'POST', path: '/api/game/gm/adjust', body: { field: 'hp', memberId: t.a.memberId, value: 50, reason: REASON } },
     { method: 'POST', path: '/api/game/gm/events', body: { day: 6, phase: 'EOSORIA', title: 'ไฟไหม้ตลาด', reason: REASON } },
     { method: 'GET', path: '/api/game/gm/log' },
+    { method: 'PUT', path: '/api/game/gm/settings', body: { autoApproveLines: true } },
   ];
 
   it('C1: the GM console shows every karma, every Secret action and the Legendary conditions; players get 403', async () => {
