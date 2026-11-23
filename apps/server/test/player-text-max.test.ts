@@ -100,8 +100,9 @@ describe('ISK-012 player text ≤ 200', { timeout: 60_000 }, () => {
   it('C6: "พัก" is still REST (GEN-113); the omen keeps its own ceiling', async () => {
     const t = await table();
     const a = await enter(t.a);
-    expect(await act(a, 'พัก')).toEqual({ type: 'action_accepted' });
-    expect(storedActions(t.a)).toEqual([{ text: 'พัก', rest: 1 }]);
+    // Everyone starts at the inn with no coins: the inn charging for the night shows "พัก" was read as REST.
+    expect(await act(a, 'พัก')).toMatchObject({ type: 'action_rejected', code: 'not_enough_coins' });
+    expect(await act(a, 'เช็ดโต๊ะ')).toEqual({ type: 'action_accepted' });
     // The omen's 200 / 201 run is crisis.test.ts C6; ISK-012 does not touch its constant.
     expect(OMEN_MAX_LENGTH).toBe(200);
   });
@@ -114,6 +115,7 @@ describe('ISK-012 player text ≤ 200', { timeout: 60_000 }, () => {
     expect(await whisper(a, to, 'เจอกันหลังวิหาร')).toEqual({ type: 'whisper_accepted' });
     const old = 'ง'.repeat(250);
     server!.db.prepare('update phase_action set text = ? where member_id = ?').run(old, t.a.memberId);
+    server!.db.prepare("update game_phase set state = replace(state, 'เดินตลาด', ?)").run(old);
     server!.db.prepare("update room_entry set text = ? where kind in ('whisper', 'player')").run(old);
 
     const againA = await enter(t.a);

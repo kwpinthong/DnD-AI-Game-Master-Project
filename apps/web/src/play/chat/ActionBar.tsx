@@ -1,4 +1,4 @@
-import { ACTION_MAX_LENGTH, type ActionVisibility, type PlaceActionId, type RoomState } from '@isekai/protocol';
+import { PLAYER_TEXT_MAX, playerTextLength, type ActionVisibility, type PlaceActionId, type RoomState } from '@isekai/protocol';
 import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import attackIcon from '../../assets/icons/action-attack.svg';
 import defendIcon from '../../assets/icons/action-defend.svg';
@@ -10,7 +10,7 @@ import restIcon from '../../assets/icons/action-rest.svg';
 import stealthIcon from '../../assets/icons/action-stealth.svg';
 import { lockDetail, lockTitle, secretQuota, sentHow } from '../../screen-models.ts';
 import { Button, MaskIcon, playText, uiText } from '../../ui/index.ts';
-import { QUICK_WORDS, prefillAction, type QuickWord } from './chat-model.ts';
+import { QUICK_WORDS, limitPlayerText, prefillAction, type QuickWord } from './chat-model.ts';
 
 const t = playText;
 const bar = t.chat.bar;
@@ -32,6 +32,17 @@ const PHONE_ROW: readonly QuickWord[] = ['พูดคุย', 'สังเก�
 const PHONE_REST = QUICK_WORDS.filter((word) => !PHONE_ROW.includes(word));
 
 const QUICK_ICON: Record<QuickWord, string> = { พูดคุย: persuadeIcon, สังเกต: observeIcon, สืบค้น: investigateIcon, โจมตี: attackIcon, ป้องกัน: defendIcon, สวด: prayIcon, ลอบเร้น: stealthIcon, พัก: restIcon };
+
+/** ISK-012: "x/200" under a player's text box, and why a long paste got shorter. */
+export function TextCount({ text, cut }: { text: string; cut: boolean }) {
+  return (
+    <p className="chat-bar__count">
+      <span>{t.textLimit.count(playerTextLength(text), PLAYER_TEXT_MAX)}</span>
+      {/* the box is emptied after a send while `cut` is still set: no notice on an empty box */}
+      {cut && text !== '' && <span role="status"> {t.textLimit.cut(PLAYER_TEXT_MAX)}</span>}
+    </p>
+  );
+}
 
 /** The AI GM could not finish the turn: why, and [ลองใหม่] when it helps. */
 export function GmStatus({ room, onRetry }: { room: RoomState; onRetry: () => void }) {
@@ -75,7 +86,7 @@ export function ActionBar({ room, seenBy, draft, setDraft, problem, sending, onS
   const waiting = Boolean(sent) && !draft.editing && !lock;
   const off = Boolean(lock) || waiting;
   const visibility: ActionVisibility = draft.visibility === 'secret' && you.secretUsed ? 'public' : draft.visibility;
-  const left = ACTION_MAX_LENGTH - [...draft.text].length;
+  const [cut, setCut] = useState(false);
   const chips = you.placeActions;
 
   function submit(event: FormEvent) {
@@ -194,15 +205,20 @@ export function ActionBar({ room, seenBy, draft, setDraft, problem, sending, onS
           value={off ? '' : draft.text}
           disabled={off}
           placeholder={lock ? t.action.closed : waiting ? bar.waiting : bar.placeholder}
-          onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+          onChange={(e) => {
+            const next = limitPlayerText(e.target.value);
+            setCut(next.cut);
+            setDraft({ ...draft, text: next.text });
+          }}
         />
         <Button className="chat-send" variant="primary" type="submit" aria-label={sent ? bar.resend : bar.sendLabel} disabled={off} loading={sending} loadingText={t.action.sending}>
           {bar.send}
         </Button>
       </div>
+      {/* ISK-012: its own line under the box (not in the row with [ส่ง], and still there when the phone keyboard hides the hint). */}
+      {!off && <TextCount text={draft.text} cut={cut} />}
       {!off && (
         <p className="chat-bar__hint">
-          {left < 100 && <span>{t.action.left(left)} </span>}
           {quota.blocked && <span className="play-action__quota">{quota.blocked} </span>}
           <span>{visibility === 'secret' ? t.action.secretEffect : t.action.publicEffect(seenBy)}</span>
           {room.phase === 'NOCTHERION' && <span> {t.action.night}</span>}

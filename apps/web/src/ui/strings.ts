@@ -329,10 +329,14 @@ export const playText = {
     allPlaces: 'ทุกสถานที่',
   },
 
+  // ISK-012: under the action and Whisper boxes.
+  textLimit: {
+    count: (n: number, max: number) => `${n}/${max}`,
+    cut: (max: number) => `ตัดเหลือ ${max} ตัว`,
+  },
   action: {
     form: 'ส่ง action',
     label: (turn: string) => `คุณจะทำอะไร (${turn})`,
-    left: (n: number) => (n >= 0 ? `เหลือ ${n} ตัวอักษร` : `เกิน ${-n} ตัวอักษร`),
     who: 'ใครเห็น',
     publicEffect: (seen: number | null) => (seen === null ? 'เปิดเผย: คนที่นี่เห็น มีผลกับฉายา' : `เปิดเผย: คนที่นี่ ${seen} คนเห็น มีผลกับฉายา`),
     secretEffect: 'ลับ: เห็นคนเดียว แต่ทิ้งร่องรอยไว้ที่นี่ 1 วัน ถ้าพลาดหรือมีคนสังเกตได้ ฉายาเสีย',

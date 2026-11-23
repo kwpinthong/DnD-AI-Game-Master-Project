@@ -3,6 +3,8 @@ import { useId, useState, type FormEvent } from 'react';
 import secretIcon from '../assets/icons/visibility-secret.svg';
 import { hitChangeText, rollLine } from '../screen-models.ts';
 import { Button, HitCard, MaskIcon, playText } from '../ui/index.ts';
+import { TextCount } from './chat/ActionBar.tsx';
+import { limitPlayerText } from './chat/chat-model.ts';
 import { EntryGroups } from './PlaceColumn.tsx';
 import { TurnChangesList } from './TurnChanges.tsx';
 
@@ -72,6 +74,7 @@ export function Whispers({
   onSend: (to: string) => void;
 } & WhisperText) {
   const [to, setTo] = useState('');
+  const [cut, setCut] = useState(false);
   const toId = useId();
   const textId = useId();
 
@@ -96,7 +99,17 @@ export function Whispers({
               ))}
             </select>
             <label htmlFor={textId}>{t.whisper.text}</label>
-            <textarea id={textId} value={text} rows={2} onChange={(e) => setText(e.target.value)} />
+            <textarea
+              id={textId}
+              value={text}
+              rows={2}
+              onChange={(e) => {
+                const next = limitPlayerText(e.target.value);
+                setCut(next.cut);
+                setText(next.text);
+              }}
+            />
+            <TextCount text={text} cut={cut} />
             <Button type="submit">{t.whisper.send}</Button>
             {problem && <p role="alert">{problem}</p>}
           </form>

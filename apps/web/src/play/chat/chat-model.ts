@@ -1,5 +1,6 @@
-import { PHASES, weatherText, type EntryVote, type Phase, type RollView, type RoomEntry, type RoomState, type TurnChange } from '@isekai/protocol';
+import { PHASES, PLAYER_TEXT_MAX, playerTextLength, weatherText, type EntryVote, type Phase, type RollView, type RoomEntry, type RoomState, type TurnChange } from '@isekai/protocol';
 import { playText } from '../../ui/strings.ts';
+import { graphemes } from './stream.ts';
 
 /** GEN-122: the pure rules of the chat-style Play page (what each entry looks like, the dial, the quick words). */
 
@@ -75,6 +76,20 @@ export function entryLook(entry: Pick<RoomEntry, 'kind' | 'npc' | 'actor'>, hitA
     case 'time':
       return 'time';
   }
+}
+
+/**
+ * ISK-012: what a typed or pasted text becomes in a box that holds `PLAYER_TEXT_MAX` (counted like the server).
+ * Over it, the text is cut at a grapheme edge, so a Thai tone mark never stays without its consonant.
+ */
+export function limitPlayerText(raw: string): { text: string; cut: boolean } {
+  if (playerTextLength(raw) <= PLAYER_TEXT_MAX) return { text: raw, cut: false };
+  let text = '';
+  for (const segment of graphemes(raw)) {
+    if (playerTextLength(text + segment) > PLAYER_TEXT_MAX) break;
+    text += segment;
+  }
+  return { text, cut: true };
 }
 
 /** The vote the player sees: the pending local one wins over what the entry came with. */

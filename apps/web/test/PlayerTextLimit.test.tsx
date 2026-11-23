@@ -84,4 +84,18 @@ describe('C4: the Whisper box (the same component on desktop and in the phone sh
     expect(within(form).getByText(`200/${PLAYER_TEXT_MAX}`)).toBeTruthy();
     expect(within(form).getByText(CUT)).toBeTruthy();
   });
+
+  it('the cut notice goes when the box is emptied (after a send)', () => {
+    // Like PlayRoom: a send empties the box from outside.
+    function Cleared() {
+      const [text, setText] = useState('');
+      return <Whispers whispers={[]} allies={[{ ref: 'r', name: 'ดาริน' }]} canSend problem={undefined} onSend={() => setText('')} text={text} setText={setText} />;
+    }
+    render(<Cleared />);
+    fireEvent.change(screen.getByLabelText('ข้อความ Whisper'), { target: { value: 'ข'.repeat(250) } });
+    expect(screen.getByText(CUT)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'ส่ง Whisper' }));
+    expect(screen.queryByText(CUT)).toBeNull();
+    expect(screen.getByText(`0/${PLAYER_TEXT_MAX}`)).toBeTruthy();
+  });
 });

@@ -958,6 +958,7 @@
 }
 
 .chat-bar__hint,
+.chat-bar__count,
 .chat-bar__sent p {
   font-size: var(--text-xs);
   color: var(--text-soft);
