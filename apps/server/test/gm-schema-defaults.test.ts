@@ -24,6 +24,7 @@ const FULL = {
       targetNpc: null,
       targetPlayer: null,
       looksAt: [],
+      introducedNpcs: [],
       witnessNpcIds: [],
       repDeltaIfCaught: 0,
       onSuccess: NO_EFFECTS,
@@ -57,6 +58,7 @@ const FULL = {
         onFail: { damage: null, heal: null, takeItem: null, giveItem: null },
       },
       looksAt: [],
+      introducedNpcs: [],
       witnessNpcIds: [],
       repDeltaIfCaught: 0,
       onSuccess: { ...NO_EFFECTS, repDelta: -1 },
@@ -140,7 +142,7 @@ describe('GEN-158 adjudicate answer: fields with a default may be left out', () 
     const root = sent!.output.jsonSchema as unknown as Obj;
     const action = root.properties.actions!.items!;
     expect(action.required).toEqual(expect.arrayContaining(['actionId', 'actor', 'kind', 'check', 'intentSummary', 'reason']));
-    for (const key of ['tags', 'modifiers', 'targetNpc', 'targetPlayer', 'witnessNpcIds', 'onSuccess', 'onFail', 'tagging', 'moveTo', 'investigate', 'looksAt']) {
+    for (const key of ['tags', 'modifiers', 'targetNpc', 'targetPlayer', 'witnessNpcIds', 'onSuccess', 'onFail', 'tagging', 'moveTo', 'investigate', 'looksAt', 'introducedNpcs']) {
       expect(action.required, key).not.toContain(key);
     }
     const effects = action.properties.onSuccess!;

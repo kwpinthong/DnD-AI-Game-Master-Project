@@ -2,6 +2,7 @@ import { CompanionsResponse, SurroundingsResponse, type Scenario } from '@isekai
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   changeNpcAffinity,
+  meetNpc,
   checkNpcEvolution,
   grantNpcReward,
   npcStateFor,
@@ -233,8 +234,10 @@ describe('NPC companions from the sheet NPC tab (GEN-054)', { timeout: 60_000 },
     expect(refused.body).toMatchObject({ code: 'not_acquainted' });
     expect(await companions(t, t.a)).toEqual([]);
 
-    // C3 + C4: player A talks to Noa (an affinity step); B at the same place still sees the alias.
+    // C3 + C4: player A hears Noa's name (GEN-170: an affinity step alone no longer counts); B at the same place still sees the alias.
     changeNpcAffinity(server!.orm, server!.assets, t.a.memberId, 'noa', 1, at(1));
+    expect((await npcsSeenBy(t, t.a)).find((n) => n.ref === r.noa)).toMatchObject({ nameRevealed: false });
+    meetNpc(server!.orm, server!.assets, t.a.memberId, 'noa', CLOCK);
     expect((await npcsSeenBy(t, t.a)).find((n) => n.ref === r.noa)).toEqual({ ref: r.noa, name: 'โนอา', nameRevealed: true });
     const rB = await refs(t, t.b);
     expect((await npcsSeenBy(t, t.b)).find((n) => n.ref === rB.noa)).toMatchObject({ name: 'เด็กขอทานตาบอดข้างหนึ่ง', nameRevealed: false });

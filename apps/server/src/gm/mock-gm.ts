@@ -102,6 +102,7 @@ export function mockAction(ctx: TurnContext, actionId: string): GmAction {
     targetNpc: null,
     targetPlayer,
     looksAt: [],
+    introducedNpcs: [],
     witnessNpcIds: [],
     repDeltaIfCaught: 0,
     onSuccess: NO_EFFECTS,
