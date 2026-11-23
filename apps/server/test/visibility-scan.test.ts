@@ -93,6 +93,10 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'POST /api/admin/style-review/proposals/:id/approve': { method: 'POST', path: '/api/admin/style-review/proposals/1/approve', body: {} },
     'POST /api/admin/style-review/proposals/:id/reject': { method: 'POST', path: '/api/admin/style-review/proposals/1/reject' },
     'POST /api/admin/style-review/voice/:version/restore': { method: 'POST', path: '/api/admin/style-review/voice/1/restore' },
+    // GEN-082: a player's own style by player code (this player joined without one: 403).
+    'POST /api/style': { method: 'POST', path: '/api/style', body: { playerCode: 'pc-scan' } },
+    'PUT /api/style/opt-out': { method: 'PUT', path: '/api/style/opt-out', body: { playerCode: 'pc-scan', optOut: true } },
+    'POST /api/style/delete': { method: 'POST', path: '/api/style/delete', body: { playerCode: 'pc-scan' } },
     // GEN-080: the lore + feedback extract; a player's session is 403.
     'POST /api/admin/learning/games/:gameId/extract': { method: 'POST', path: '/api/admin/learning/games/any-game/extract' },
     // GEN-055: the player's own skills, held items and library discoveries (no condition or progress).

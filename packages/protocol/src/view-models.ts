@@ -325,7 +325,7 @@ export type LearningExtractResponse = z.infer<typeof LearningExtractResponse>;
 
 // --- GEN-082: player style across games (Q-167 player code) ---
 
-/** Join form extras (pending: GEN-082 adds them to `JoinRequest`). */
+/** Join form extras (GEN-082), sent in the POST /api/join body beside `JoinRequest`: the player code is optional. */
 export const JoinStyleFields = z.object({
   playerCode: z.string().trim().max(64).default(''),
   noStyle: z.boolean().default(false),

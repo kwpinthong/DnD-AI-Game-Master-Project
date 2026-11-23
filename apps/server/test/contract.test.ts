@@ -6,6 +6,7 @@ import { loadAiConfig } from '../src/ai/config.ts';
 import { providerFor } from '../src/ai/registry.ts';
 import { hashPin } from '../src/auth/pin.ts';
 import { runStyleEval } from '../src/eval/style-eval.ts';
+import { playerKeyOf } from '../src/learning/style.ts';
 import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
 import { ASTRAL_PLANE, moveCharacter, presenceOf, setPlayerBond } from '../src/visibility/store.ts';
@@ -290,6 +291,12 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     // GEN-080: the lore + feedback extract of the ended table game (Mock AI), then a game that is not one.
     await hit(call, 'POST /api/admin/learning/games/:gameId/extract', { token: adminToken, path: `/api/admin/learning/games/${tableGame}/extract` });
     await hit(call, 'POST /api/admin/learning/games/:gameId/extract', { token: adminToken, path: '/api/admin/learning/games/nope/extract' });
+    // GEN-082: a player's style by their player code (stored as joining with it would): look up, switch off, delete; unknown = 403.
+    server!.db.prepare("insert into member_style (member_id, game_id, player_key, opt_out, updated_at) values (?, ?, ?, 0, 0)").run(t.a.memberId, tableGame, playerKeyOf(server!.orm, 'pc-contract'));
+    await hit(call, 'POST /api/style', { body: { playerCode: 'pc-contract' } });
+    await hit(call, 'POST /api/style', { body: { playerCode: 'pc-unknown' } });
+    await hit(call, 'PUT /api/style/opt-out', { body: { playerCode: 'pc-contract', optOut: true } });
+    await hit(call, 'POST /api/style/delete', { body: { playerCode: 'pc-contract' } });
     await hit(call, 'POST /api/admin/logout', { token: adminToken });
     await hit(call, 'POST /api/logout', { token: p1.token });
     await hit(call, 'DELETE /api/game', { token: gm, body: { confirmName: 'เกมสัญญา 2' } });

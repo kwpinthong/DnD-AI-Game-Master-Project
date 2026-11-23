@@ -1,8 +1,7 @@
-import { joinFieldErrors, JoinStyleFields, type JoinField, type Member } from '@isekai/protocol';
+import { joinFieldErrors, type JoinField, type Member } from '@isekai/protocol';
 import { useState, type FormEvent } from 'react';
 import keyart from './assets/illustrations/home-keyart.webp';
 import { useFieldErrors } from './form-state.ts';
-import { PENDING_BACKEND_UI } from './pending.ts';
 import { PinInput } from './PinInput.tsx';
 import { postJoin } from './session.ts';
 import { Button, Field, Panel } from './ui/index.ts';
@@ -14,18 +13,10 @@ type Values = Record<JoinField, string>;
 /**
  * Join screen v2 (GEN-090, Screens and Flows v2 §1): invite code + player name + PIN in one form. A field
  * says what is wrong once the player leaves it and the join button stays off until all three pass (C2).
- * `pendingFields` adds the player code + style opt-out of GEN-082 (`JoinStyleFields`), which the server does
- * not read yet: on only in mock mode until GEN-102.
+ * GEN-082: the optional player code + style opt-out (`JoinStyleFields`) go in the same body; the server keeps
+ * only a hash of the code.
  */
-export function JoinForm({
-  apiBaseUrl,
-  onJoined,
-  pendingFields = PENDING_BACKEND_UI,
-}: {
-  apiBaseUrl: string;
-  onJoined: (member: Member, token: string) => void;
-  pendingFields?: boolean;
-}) {
+export function JoinForm({ apiBaseUrl, onJoined }: { apiBaseUrl: string; onJoined: (member: Member, token: string) => void }) {
   const [values, setValues] = useState<Values>({ inviteCode: '', name: '', pin: '' });
   const [playerCode, setPlayerCode] = useState('');
   const [noStyle, setNoStyle] = useState(false);
@@ -40,7 +31,9 @@ export function JoinForm({
     if (busy) return;
 
     setBusy(true);
-    const result = await postJoin(apiBaseUrl, pendingFields ? { ...values, ...JoinStyleFields.parse({ playerCode, noStyle }) } : values);
+    // Only what the player filled in: an empty code / unticked box changes nothing on a rejoin.
+    const code = playerCode.trim();
+    const result = await postJoin(apiBaseUrl, { ...values, ...(code ? { playerCode: code } : {}), ...(noStyle ? { noStyle } : {}) });
     setBusy(false);
     if (result.ok) return onJoined(result.member, result.token);
     errors.setServer(result.fields);
@@ -79,23 +72,15 @@ export function JoinForm({
           >
             {(control) => <PinInput {...control} {...bind('pin')} autoComplete="current-password" />}
           </Field>
-          {pendingFields && (
-            <>
-              <Field
-                id="join-playerCode"
-                label="รหัสผู้เล่น (ไม่บังคับ)"
-                hint="ใช้จำสไตล์การเล่นของคุณข้ามเกม เข้าครั้งแรกเว้นว่างไว้ได้ ระบบจะออกรหัสให้ จดไว้ใช้เกมถัดไป"
-              >
-                {(control) => (
-                  <input {...control} name="playerCode" value={playerCode} onChange={(e) => setPlayerCode(e.target.value)} className="code-input" autoComplete="off" spellCheck={false} />
-                )}
-              </Field>
-              <label className="check">
-                <input type="checkbox" checked={noStyle} onChange={(e) => setNoStyle(e.target.checked)} />
-                <span>ไม่ต้องเก็บสไตล์ของฉัน</span>
-              </label>
-            </>
-          )}
+          <Field id="join-playerCode" label="รหัสผู้เล่น (ไม่บังคับ)" hint="ตั้งรหัสของคุณเอง แล้วใช้รหัสเดิมทุกเกม ระบบจะจำสไตล์การเล่นของคุณข้ามเกม ไม่มีใครเห็นรหัสนี้">
+            {(control) => (
+              <input {...control} name="playerCode" value={playerCode} onChange={(e) => setPlayerCode(e.target.value)} className="code-input" autoComplete="off" spellCheck={false} maxLength={64} />
+            )}
+          </Field>
+          <label className="check">
+            <input type="checkbox" checked={noStyle} onChange={(e) => setNoStyle(e.target.checked)} />
+            <span>ไม่ต้องเก็บสไตล์ของฉัน</span>
+          </label>
           {formError && (
             <p className="field-error pregame__form-error" role="alert">
               {formError}

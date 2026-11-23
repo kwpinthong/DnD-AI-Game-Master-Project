@@ -320,14 +320,10 @@ describe('the origin card after the start (4k)', () => {
 });
 
 describe('the parts that wait for the backend (GEN-082 / GEN-083) follow the contract schema', () => {
-  it('Join: without the flag there is no player code field; with it the code and the opt-out are sent', async () => {
-    const { unmount } = render(<JoinForm apiBaseUrl={base('guest')} onJoined={noop} />);
-    expect(screen.queryByLabelText(/รหัสผู้เล่น/)).toBeNull();
-    unmount();
-
+  it('Join (GEN-082, live): the player code and the opt-out are always there and are sent', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const onJoined = vi.fn();
-    render(<JoinForm apiBaseUrl={base('guest')} onJoined={onJoined} pendingFields />);
+    render(<JoinForm apiBaseUrl={base('guest')} onJoined={onJoined} />);
     type('โค้ดเกม', 'K7Q-2MX');
     type('ชื่อผู้เล่น', 'นก');
     type('PIN', '1234');

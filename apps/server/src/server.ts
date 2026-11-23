@@ -33,6 +33,8 @@ import { registerHistoryRoutes } from './history/routes.ts';
 import { registerRatingRoutes } from './rating/routes.ts';
 import { createLearningExtractor, everyoneRated } from './learning/extract.ts';
 import { syncExamples } from './learning/examples.ts';
+import { buildStyles } from './learning/style.ts';
+import { registerPlayerStyleRoutes } from './learning/style-routes.ts';
 import { registerVoteRoutes } from './room/vote-routes.ts';
 import type { Rng } from '@isekai/rules';
 import { CryptoRng } from './rng.ts';
@@ -170,6 +172,8 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
       void styleReview.gameEnded(gameId);
       // GEN-081: the votes of play become good / avoid examples.
       syncExamples(db, gameId, now());
+      // GEN-082: the style of each player who joined with a player code.
+      buildStyles(db, gameId, now());
     },
     budgetNotice: (gameId) => ai.budgetNotice(gameId),
     ...(options.aiLog ? { log: options.aiLog } : {}),
@@ -191,6 +195,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     if (everyoneRated(db, gameId)) void learning.extract(gameId);
   });
   registerVoteRoutes(app, db, now);
+  registerPlayerStyleRoutes(app, db, now);
   if (options.webDistDir) registerWebStatic(app, options.webDistDir);
 
   try {
