@@ -253,6 +253,7 @@ const STORY_PROMPT = [
  */
 function publicStory(db: Db, scenario: Scenario, gameId: string, story: string, names: { memberId: string; names: string[] }[]): string | null {
   if (story.length === 0) return null;
+  // shortcut: catches a Secret action repeated word for word only (a paraphrase relies on STORY_PROMPT); add an AI check if real games leak one.
   const secrets = db.select({ text: phaseAction.text }).from(phaseAction).where(and(eq(phaseAction.gameId, gameId), eq(phaseAction.visibility, 'secret'))).all();
   if (secrets.some((s) => s.text.trim().length > 0 && story.includes(s.text.trim()))) return null;
   const alias = new Map(scenario.npcs.map((n) => [n.id, n.alias] as const));
