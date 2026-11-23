@@ -420,7 +420,7 @@ describe('GEN-055 skills and items (web)', () => {
 
 describe('GEN-155 the bag reloads when your own turn log says an item moved', () => {
   const prism = { id: 'i-9', name: 'Prism of Truth', rank: 'B', alignment: 'Neutral', category: 'Accessory', triggerType: 'Active', dailyLimit: 3, description: 'เผยความจริง' };
-  const changes = (seq: number, change: NonNullable<RoomEntry['changes']>[number]): RoomEntry => ({ ...entry(seq, 'changes', 'นก'), changes: [change] });
+  const changes = (seq: number, change: NonNullable<RoomEntry['changes']>[number]): RoomServerMessage => ({ type: 'entry', entry: { ...entry(seq, 'changes', 'นก'), changes: [change] } });
 
   async function open(held: { items: (typeof prism)[] }) {
     loggedIn(gameView(), { 'GET /api/game/inventory': () => Response.json({ inventory: { skills: [], items: held.items, discoveries: [] } }) });
