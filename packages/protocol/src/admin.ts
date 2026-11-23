@@ -86,6 +86,8 @@ export const GameDataSetSummary = z.strictObject({
   updatedAt: z.string(),
   /** There is an edit an undo can take back. */
   canUndo: z.boolean(),
+  /** GEN-179: the saved value fails the schema (after a deploy), so the server uses the asset file until a valid save. */
+  fallback: z.strictObject({ message: z.string(), fields: z.record(z.string(), z.string()) }).optional(),
 });
 export type GameDataSetSummary = z.infer<typeof GameDataSetSummary>;
 

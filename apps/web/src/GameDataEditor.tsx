@@ -161,6 +161,22 @@ export function GameDataEditor({ apiBaseUrl, token, onForbidden }: { apiBaseUrl:
           ))}
         </nav>
       )}
+      {sets
+        ?.filter((s) => s.fallback)
+        .map((s) => (
+          <div key={s.name} role="alert" aria-label={`${s.name}: ใช้ไฟล์ asset แทน`} className="gdata__problem">
+            <p>
+              {s.name}: ค่าใน DB ไม่ผ่าน schema ใหม่ ตอนนี้ server ใช้ไฟล์ {s.file} แทน (ค่าใน DB ยังอยู่) แก้ช่องด้านล่างแล้วบันทึก หรือนำเข้าจากไฟล์
+            </p>
+            <ul>
+              {Object.entries(s.fallback!.fields).map(([field, message]) => (
+                <li key={field}>
+                  {field}: {message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       {problem && (
         <div role="alert" className="gdata__problem">
           <p>{problem.message}</p>

@@ -26,6 +26,8 @@ export interface DataSetSummary {
   records: number;
   updatedAt: number;
   canUndo: boolean;
+  /** GEN-179: the DB row fails the schema, so the server runs on the asset file until a valid save. */
+  fallback?: { message: string; fields: Record<string, string> };
 }
 
 export interface AuditEntry {
@@ -110,10 +112,15 @@ function changesOf(oldJson: string, newJson: string): AuditEntry['changes'] {
 
 /**
  * Seeds the missing data sets from `seed` (the asset files, already checked), then builds the assets from the DB.
- * Throws AssetLoadError when a saved row no longer passes the schema (nothing is changed then).
+ * GEN-179: a saved row that no longer passes the schema (a deploy changed it) is left as it is and its set runs on
+ * the asset file until a valid save; the log and the admin list name it. Only a set with no usable file still throws.
  */
-export function openGameData(db: Db, seed: RawDataSets, options: { backupDir: string; now: Clock; assetsDir: string }): GameDataStore {
-  const { backupDir, now, assetsDir } = options;
+export function openGameData(
+  db: Db,
+  seed: RawDataSets,
+  options: { backupDir: string; now: Clock; assetsDir: string; log?: (line: string) => void },
+): GameDataStore {
+  const { backupDir, now, assetsDir, log = (line) => console.warn(line) } = options;
   db.transaction((tx) => {
     for (const name of DATA_SETS) {
       if (seed[name] === undefined) continue;
@@ -125,7 +132,23 @@ export function openGameData(db: Db, seed: RawDataSets, options: { backupDir: st
   const rawOf = (map: ReturnType<typeof rows>): RawDataSets =>
     Object.fromEntries([...map].filter(([name]) => isDataSetName(name)).map(([name, r]) => [name, JSON.parse(r.json) as unknown]));
 
-  let current = buildGameAssets(rawOf(rows()));
+  const fallbacks = new Map<DataSetName, NonNullable<DataSetSummary['fallback']>>();
+  /** The DB, with the asset file for each set that fell back. */
+  const effective = (map: ReturnType<typeof rows>): RawDataSets => ({ ...rawOf(map), ...Object.fromEntries([...fallbacks.keys()].map((n) => [n, seed[n]])) });
+
+  function startAssets(): GameAssets {
+    for (;;) {
+      try {
+        return buildGameAssets(effective(rows()));
+      } catch (error) {
+        // No set to blame, no file to use, or the file already failed: refuse to start as before.
+        if (!(error instanceof AssetLoadError) || !error.set || fallbacks.has(error.set) || seed[error.set] === undefined) throw error;
+        fallbacks.set(error.set, { message: error.message, fields: { ...error.fields } });
+        log(`[game-data] ${error.message}; using ${DATA_SET_FILES[error.set]} for ${error.set} until a valid save in /admin (DB row unchanged)`);
+      }
+    }
+  }
+  let current = startAssets();
 
   const lastEdit = (name: DataSetName) =>
     db
@@ -137,7 +160,15 @@ export function openGameData(db: Db, seed: RawDataSets, options: { backupDir: st
 
   const summaryOf = (name: DataSetName, row: { json: string; updatedAt: number }): DataSetSummary => {
     const value = JSON.parse(row.json) as unknown;
-    return { name, file: DATA_SET_FILES[name], records: Array.isArray(value) ? value.length : 0, updatedAt: row.updatedAt, canUndo: lastEdit(name) !== undefined };
+    const fallback = fallbacks.get(name);
+    return {
+      name,
+      file: DATA_SET_FILES[name],
+      records: Array.isArray(value) ? value.length : 0,
+      updatedAt: row.updatedAt,
+      canUndo: lastEdit(name) !== undefined,
+      ...(fallback ? { fallback } : {}),
+    };
   };
 
   /** Checks `value` for `name` against every other set, backs up the old value, writes, logs. */
@@ -145,7 +176,7 @@ export function openGameData(db: Db, seed: RawDataSets, options: { backupDir: st
   function check(map: ReturnType<typeof rows>, name: DataSetName, value: unknown): { ok: true; next: GameAssets } | Exclude<SaveOutcome, { ok: true }> {
     if (!map.has(name)) return { ok: false, reason: 'not_found' };
     try {
-      return { ok: true, next: buildGameAssets({ ...rawOf(map), [name]: value }) };
+      return { ok: true, next: buildGameAssets({ ...effective(map), [name]: value }) };
     } catch (error) {
       if (error instanceof AssetLoadError) return { ok: false, reason: 'invalid', message: error.message, fields: { ...error.fields } };
       throw error;
@@ -170,6 +201,7 @@ export function openGameData(db: Db, seed: RawDataSets, options: { backupDir: st
       tx.insert(gameDataAudit).values({ name, action, oldJson: old.json, newJson: json, backupFile, at }).run();
     });
     current = next;
+    fallbacks.delete(name);
     return { ok: true };
   }
 

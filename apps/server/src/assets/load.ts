@@ -42,10 +42,13 @@ export type RawDataSets = Partial<Record<DataSetName, unknown>>;
 export class AssetLoadError extends Error {
   /** Field path → its first problem ("[1].periods[0]" → "Invalid option ..."), for the admin editor (GEN-147). */
   readonly fields: Readonly<Record<string, string>>;
-  constructor(message: string, fields: Record<string, string> = {}) {
+  /** GEN-179: the data set at fault, when the problem is in one set. */
+  readonly set: DataSetName | undefined;
+  constructor(message: string, fields: Record<string, string> = {}, set?: DataSetName) {
     super(message);
     this.name = 'AssetLoadError';
     this.fields = fields;
+    this.set = set;
   }
 }
 
@@ -86,7 +89,7 @@ function parseSet<T extends DataSetName>(raw: unknown, set: T, where: string): u
     const fields: Record<string, string> = {};
     for (const issue of parsed.error.issues.slice(0, 20)) fields[fieldPath(issue.path) || '(root)'] ??= issue.message;
     const shown = Object.entries(fields).slice(0, 5).map(([field, message]) => `field ${field}: ${message}`);
-    throw new AssetLoadError(`${where} does not match the ${set === 'Server_Lines' ? 'server lines' : set} schema: ${shown.join('; ')}`, fields);
+    throw new AssetLoadError(`${where} does not match the ${set === 'Server_Lines' ? 'server lines' : set} schema: ${shown.join('; ')}`, fields, set);
   }
   return parsed.data;
 }
@@ -132,7 +135,7 @@ export function buildGameAssets(raw: RawDataSets, where: (set: DataSetName) => s
   if (!karma.ok) {
     throw new AssetLoadError(`${where('System_Rules')} has unusable "${KARMA_TIERS_CATEGORY}" rows (field mechanics): ${karma.problems.join('; ')}`, {
       mechanics: karma.problems.join('; '),
-    });
+    }, 'System_Rules');
   }
   if (raw.Server_Lines === undefined) throw new AssetLoadError(`${where('Server_Lines')} is missing`, { '(root)': 'ไม่มีข้อมูล' });
   const serverLines = parseSet(raw.Server_Lines, 'Server_Lines', where('Server_Lines')) as ServerLineRecord[];
