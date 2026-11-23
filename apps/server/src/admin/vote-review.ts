@@ -12,10 +12,10 @@ import { getGameScenario } from '../scenario/store.ts';
 
 type CorrectionRow = typeof responseCorrection.$inferSelect;
 
-const sceneOf = (row: RoomEntryRow, meta: EntryMeta): ReviewScene =>
+export const sceneOf = (row: RoomEntryRow, meta: EntryMeta): ReviewScene =>
   row.kind === 'npc' ? (meta.npc?.kind === 'reaction' ? 'npc-reaction' : 'npc-dialogue') : row.kind === 'feed' ? 'feed' : 'narration';
 
-const correctionView = (c: CorrectionRow): AdminCorrection => ({
+export const correctionView = (c: CorrectionRow): AdminCorrection => ({
   id: c.id,
   gameId: c.gameId,
   seq: c.entryId,
@@ -28,7 +28,7 @@ const correctionView = (c: CorrectionRow): AdminCorrection => ({
   createdAt: new Date(c.createdAt).toISOString(),
 });
 
-function npcOf(db: DbOrTx, row: RoomEntryRow, meta: EntryMeta): { id: string; name: string } | null {
+export function npcOf(db: DbOrTx, row: RoomEntryRow, meta: EntryMeta): { id: string; name: string } | null {
   if (row.kind !== 'npc' || !meta.npc) return null;
   const id = meta.npc.id;
   return { id, name: getGameScenario(db, row.gameId)?.npcs.find((n) => n.id === id)?.name ?? id };
@@ -71,7 +71,7 @@ export function downvotedEntries(db: DbOrTx): AdminDownvoteEntry[] {
 }
 
 /** Each member's real names (lobby name, character name), in join order: index n → `{{PLAYER_n+1}}` in the export. */
-function memberNames(db: DbOrTx, gameId: string): string[][] {
+export function memberNames(db: DbOrTx, gameId: string): string[][] {
   return db
     .select({ name: member.name, character: character.name })
     .from(member)

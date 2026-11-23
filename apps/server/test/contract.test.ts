@@ -251,6 +251,16 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'GET /api/admin/style-flags', { token: adminToken });
     await hit(call, 'GET /api/admin/style-settings', { token: adminToken });
     await hit(call, 'PUT /api/admin/style-settings', { token: adminToken, body: { rewrite: false } });
+    // GEN-151: the NPC example library.
+    await hit(call, 'PUT /api/game/entries/:seq/vote', { token: t.a.token, path: `/api/game/entries/${votable!.seq}/vote`, body: { vote: 'up' } });
+    const npcLibrary = await hit(call, 'GET /api/admin/npc-library', { token: adminToken });
+    const someNpc = (npcLibrary.body as { npcChoices: { id: string }[] }).npcChoices[0]!.id;
+    const withExample = await hit(call, 'POST /api/admin/npc-library', { token: adminToken, body: { from: 'vote', gameId: tableGame, seq: votable!.seq, npcId: someNpc, scene: 'narration' } });
+    await hit(call, 'POST /api/admin/npc-library', { token: adminToken, body: { from: 'vote', gameId: tableGame, seq: 99_999, npcId: someNpc, scene: 'narration' } });
+    await hit(call, 'POST /api/admin/npc-library', { token: adminToken, body: { from: 'nope' } });
+    const exampleId = (withExample.body as { npcs: { examples: { id: number }[] }[] }).npcs[0]!.examples[0]!.id;
+    await hit(call, 'DELETE /api/admin/npc-library/:id', { token: adminToken, path: `/api/admin/npc-library/${exampleId}` });
+    await hit(call, 'DELETE /api/admin/npc-library/:id', { token: adminToken, path: `/api/admin/npc-library/${exampleId}` });
     await hit(call, 'POST /api/admin/logout', { token: adminToken });
     await hit(call, 'POST /api/logout', { token: p1.token });
     await hit(call, 'DELETE /api/game', { token: gm, body: { confirmName: 'เกมสัญญา 2' } });

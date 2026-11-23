@@ -80,6 +80,10 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/admin/style-flags': { method: 'GET', path: '/api/admin/style-flags' },
     'GET /api/admin/style-settings': { method: 'GET', path: '/api/admin/style-settings' },
     'PUT /api/admin/style-settings': { method: 'PUT', path: '/api/admin/style-settings', body: { rewrite: true } },
+    // GEN-151: the NPC example library; a player's session is 403 (checked below).
+    'GET /api/admin/npc-library': { method: 'GET', path: '/api/admin/npc-library' },
+    'POST /api/admin/npc-library': { method: 'POST', path: '/api/admin/npc-library', body: { from: 'correction', correctionId: 1 } },
+    'DELETE /api/admin/npc-library/:id': { method: 'DELETE', path: '/api/admin/npc-library/1' },
     // GEN-055: the player's own skills, held items and library discoveries (no condition or progress).
     'GET /api/game/inventory': { method: 'GET', path: '/api/game/inventory' },
     // GEN-058: the Human GM console. Players get 403 (scanned for karma like every other answer).
@@ -124,6 +128,9 @@ const ADMIN_DATA_ROUTES = [
   'GET /api/admin/style-flags',
   'GET /api/admin/style-settings',
   'PUT /api/admin/style-settings',
+  'GET /api/admin/npc-library',
+  'POST /api/admin/npc-library',
+  'DELETE /api/admin/npc-library/:id',
 ];
 
 /** The join name the fixture gave each seat (A is "นก" in both table kinds). */

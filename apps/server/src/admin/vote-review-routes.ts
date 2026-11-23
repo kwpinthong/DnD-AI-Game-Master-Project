@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Clock } from '../auth/join.ts';
 import { sendError } from '../auth/routes.ts';
 import type { Db } from '../db/client.ts';
+import { addNpcExample } from './npc-library.ts';
 import { correctionsJsonl, downvotedEntries, saveCorrection } from './vote-review.ts';
 
 /** GEN-168: the 👎 review of the server owner; every route needs the admin token (`refuse` answers 403). */
@@ -25,6 +26,8 @@ export function registerVoteReviewRoutes(app: FastifyInstance, db: Db, refuse: (
     }
     const correction = saveCorrection(db, { ...parsed.data, edited: parsed.data.edited.normalize('NFC') }, now());
     if (!correction) return sendError(reply, 404, { code: 'response_not_found', message: 'ไม่พบข้อความของ AI GM นี้' });
+    // GEN-151 / Q-337: a pair sent to the library enters it at once (a message with no NPC waits there for one).
+    if (correction.libraryCandidate) addNpcExample(db, { from: 'correction', correctionId: correction.id }, now());
     // The audit line: ids only, never the text.
     log(`[admin] correction ${correction.id} saved for game ${correction.gameId} entry ${correction.seq}${correction.libraryCandidate ? ' (library candidate)' : ''}`);
     const body: AdminCorrectionResponse = { correction };

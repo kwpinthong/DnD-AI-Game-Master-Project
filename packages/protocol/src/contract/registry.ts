@@ -136,6 +136,8 @@ export const CONTRACT_SCHEMAS = {
   StyleFlagsResponse: p.StyleFlagsResponse,
   StyleSettingsRequest: p.StyleSettingsRequest,
   StyleSettingsResponse: p.StyleSettingsResponse,
+  NpcLibraryResponse: p.NpcLibraryResponse,
+  NpcExampleAddRequest: p.NpcExampleAddRequest,
 } as const;
 export type ContractSchemaName = keyof typeof CONTRACT_SCHEMAS;
 
@@ -298,6 +300,11 @@ export const CONTRACT: readonly ContractItem[] = [
   http('GET', '/api/admin/style-flags', null, 'StyleFlagsResponse', ready('GEN-169', 'admin', ['vote-review'], 'จำนวนธงตรวจสำนวนต่อ NPC (id + alias ไม่ใช่ชื่อจริง) ต่อเหตุผล ไม่มีข้อความ; `npc: null` = บรรยาย')),
   http('GET', '/api/admin/style-settings', null, 'StyleSettingsResponse', ready('GEN-169', 'admin', ['vote-review'])),
   http('PUT', '/api/admin/style-settings', 'StyleSettingsRequest', 'StyleSettingsResponse', ready('GEN-169', 'admin', ['vote-review'], '`rewrite` = กฎ block ให้ AI เขียนใหม่ 1 ครั้ง (ค่าเริ่ม false = แค่ติดธง); GEN-177 `defaultTone` = โทนของเกมใหม่ที่ไม่ได้เลือก (บันทึกลง `tone` ของชุดข้อมูล Voice มี backup / audit / undo)')),
+
+  // --- GEN-151: NPC example library (server owner, on the Learning library page, Q-322) ---
+  http('GET', '/api/admin/npc-library', null, 'NpcLibraryResponse', ready('GEN-151', 'admin', ['learning-library'], 'ตัวอย่างต่อ NPC (token เท่านั้น) + ข้อความที่ได้ 👍 + คู่ "แก้เป็น" ที่ติดธงแต่ยังไม่มี NPC')),
+  http('POST', '/api/admin/npc-library', 'NpcExampleAddRequest', 'NpcLibraryResponse', ready('GEN-151', 'admin', ['learning-library'], 'เพิ่มตัวอย่างจากข้อความที่ได้ 👍 (+ NPC + ชนิดฉาก) หรือจากคู่ "แก้เป็น" (ใช้ฉบับแก้); ชื่อจริงแทนด้วย token ก่อนเก็บ; ซ้ำ = ไม่เพิ่ม; ไม่มีข้อความ / ไม่มี 👍 / NPC ไม่รู้จัก = 404 `response_not_found`; dialogue prompt ใส่ ≤ 3 ต่อ NPC')),
+  http('DELETE', '/api/admin/npc-library/:id', null, 'NpcLibraryResponse', ready('GEN-151', 'admin', ['learning-library'], 'ลบตัวอย่าง มีผลกับ prompt ถัดไป; ไม่มี = 404 `response_not_found`')),
 
   // --- player style (player code, Q-167) ---
   http('POST', '/api/style', 'PlayerStyleRequest', 'PlayerStyleResponse', pending('GEN-082', 'any', ['my-style'])),

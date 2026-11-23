@@ -606,4 +606,31 @@ export const CONTRACT_FIXTURES: Fixtures = {
   ],
   StyleSettingsRequest: [{ rewrite: true }, { defaultTone: 'C' }, {}],
   StyleSettingsResponse: [{ settings: { rewrite: false, defaultTone: 'A' } }],
+  // GEN-151: the NPC example library
+  NpcLibraryResponse: [
+    {
+      npcs: [
+        {
+          npcId: 'npc-noa',
+          npcName: 'โนอา',
+          examples: [
+            { id: 1, npcId: 'npc-noa', scene: 'npc-dialogue', text: 'ข้ายังไม่ไว้ใจ {{p:player}} หรอก', source: 'correction', gameId: 'g-1', seq: 41, createdAt: '2026-11-23T09:30:00.000Z' },
+            { id: 2, npcId: 'npc-noa', scene: 'npc-reaction', text: '{{n:npc-noa}} ยักไหล่', source: 'vote', gameId: 'g-1', seq: 47, createdAt: '2026-11-23T09:40:00.000Z' },
+          ],
+        },
+      ],
+      upvoted: [
+        { gameId: 'g-1', gameName: 'คืนจันทราโลหิต', seq: 48, scene: 'npc-dialogue', npc: { id: 'npc-noa', name: 'โนอา' }, at: { day: 2, phase: 'SOLARION', turn: 2 }, text: 'เจ้าหนูนี่กล้าดีนะ', up: 2, inLibrary: false },
+        { gameId: 'g-1', gameName: 'คืนจันทราโลหิต', seq: 47, scene: 'npc-reaction', npc: { id: 'npc-noa', name: 'โนอา' }, at: { day: 2, phase: 'SOLARION', turn: 1 }, text: 'โนอายักไหล่', up: 1, inLibrary: true },
+      ],
+      candidates: [{ ...correction, id: 2, seq: 44, original: 'ฝนตกหนัก', edited: 'ฝนตกพรำ ๆ ทั่วลานน้ำพุ', npc: null, scene: 'narration', reasons: [] }],
+      npcChoices: [{ id: 'npc-noa', name: 'โนอา' }, { id: 'npc-mira', name: 'มีรา' }],
+    },
+    { npcs: [], upvoted: [], candidates: [], npcChoices: [] },
+  ],
+  NpcExampleAddRequest: [
+    { from: 'vote', gameId: 'g-1', seq: 48, npcId: 'npc-noa', scene: 'npc-dialogue' },
+    { from: 'correction', correctionId: 2, npcId: 'npc-mira' },
+    { from: 'correction', correctionId: 1 },
+  ],
 };

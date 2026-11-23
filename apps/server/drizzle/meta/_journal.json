@@ -288,6 +288,13 @@
       "when": 1795419592126,
       "tag": "0040_game_tone",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1795419700363,
+      "tag": "0041_npc_example",
+      "breakpoints": true
     }
   ]
 }
