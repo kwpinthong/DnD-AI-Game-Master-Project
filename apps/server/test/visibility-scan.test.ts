@@ -106,6 +106,9 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'POST /api/memory/sources': { method: 'POST', path: '/api/memory/sources', body: { playerCode: 'pc-scan' } },
     // GEN-080: the lore + feedback extract; a player's session is 403.
     'POST /api/admin/learning/games/:gameId/extract': { method: 'POST', path: '/api/admin/learning/games/any-game/extract' },
+    // ISK-001: the game list + close; a player's session is 401 (no admin token), nothing closed.
+    'GET /api/admin/games': { method: 'GET', path: '/api/admin/games' },
+    'POST /api/admin/games/:id/close': { method: 'POST', path: '/api/admin/games/any-game/close', body: { confirmName: 'x' } },
     // GEN-084: the Learning library; a player's session is 403 (checked below).
     'GET /api/admin/learning': { method: 'GET', path: '/api/admin/learning' },
     'DELETE /api/admin/learning/:id': { method: 'DELETE', path: '/api/admin/learning/1' },

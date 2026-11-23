@@ -24,6 +24,7 @@ import { createCharacter, getCharacter, updateCharacter, type CharacterOutcome }
 import { createCodeChecker } from './create-code.ts';
 import { chooseLoot, getLoot, LOOT_AI_FAILED, rollLoot, type LootOutcome } from './loot.ts';
 import { getOrigin, narrateOrigins } from './origin.ts';
+import { closureOf } from '../admin/games.ts';
 import {
   createGame,
   gameView,
@@ -193,7 +194,8 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
   app.get('/api/game', async (request, reply) => {
     const me = caller(request, reply);
     if (!me) return reply;
-    return reply.send(gameView(db, me.gameId, me));
+    // ISK-001: the lobby polls this; a closed game says so.
+    return reply.send({ ...gameView(db, me.gameId, me), closed: closureOf(db, me.gameId) });
   });
 
   app.patch('/api/game', async (request, reply) => {

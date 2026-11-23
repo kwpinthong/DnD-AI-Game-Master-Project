@@ -9,6 +9,7 @@ import type { GameAssets } from '../assets/load.ts';
 import type { WeatherService } from '../weather/service.ts';
 import type { PhaseResolver } from './resolver.ts';
 import { createRoomService, type RoomService } from './service.ts';
+import { closureOf } from '../admin/games.ts';
 
 export interface RoomOptions {
   resolver: PhaseResolver;
@@ -26,13 +27,14 @@ export interface RoomOptions {
 }
 
 /** Close codes (4000-4999 are the application's own). */
-const CLOSE: Record<RoomErrorCode, number> = { bad_message: 4000, unauthorized: 4001, no_character: 4003, game_not_started: 4009 };
+const CLOSE: Record<RoomErrorCode, number> = { bad_message: 4000, unauthorized: 4001, no_character: 4003, game_not_started: 4009, game_closed: 4010 };
 
 const ERROR_MESSAGE: Record<RoomErrorCode, string> = {
   bad_message: 'ข้อความไม่ถูกต้อง เชื่อมต่อใหม่อีกครั้ง',
   unauthorized: 'ยังไม่ได้เข้าเกม หรือ session หมดอายุ',
   no_character: 'ต้องสร้างตัวละครก่อนเข้าห้องเล่น',
   game_not_started: 'เกมยังไม่เริ่ม รอเจ้าของเกมกดเริ่มในห้องรอ',
+  game_closed: 'เกมนี้ถูกผู้ดูแลปิดแล้ว ส่งคำสั่งไม่ได้',
 };
 
 /** Why `me` cannot enter the room yet; null = they can. The Human GM enters without a character. */
@@ -88,6 +90,12 @@ export function registerRoomRoutes(app: FastifyInstance, db: Db, now: Clock, opt
           clearTimeout(helloTimer);
           const found = memberRowForToken(db, message.token, now);
           if (!found) return refuse('unauthorized');
+          // ISK-001: a game closed in the lobby / setup has no room: say so, then end the socket.
+          const closure = closureOf(db, found.gameId);
+          if (closure && !closure.hasSummary) {
+            reply({ type: 'game_closed', ...closure });
+            return socket.close(CLOSE.game_closed);
+          }
           const refusal = entryRefusal(db, found);
           if (refusal) return refuse(refusal);
           me = found;
@@ -96,6 +104,8 @@ export function registerRoomRoutes(app: FastifyInstance, db: Db, now: Clock, opt
         }
 
         if (!me) return refuse('unauthorized');
+        // ISK-001: every command of a closed game is refused and changes nothing; the socket stays to show the end.
+        if (closureOf(db, me.gameId)) return reply({ type: 'error', code: 'game_closed', message: ERROR_MESSAGE.game_closed });
         if (message.type === 'retry') return room.retry(socket);
         if (message.type === 'whisper') return reply(room.whisper(socket, message));
         if (message.type === 'move') return reply(room.move(socket, message));

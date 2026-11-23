@@ -339,6 +339,30 @@ describe('ISK-001 admin game list + close', { timeout: 120_000 }, () => {
     expect(await rowOf(token, gameId)).toMatchObject({ phase: 'ended', endedReason: 'closed', day: 4, period: 'EOSORIA' });
   });
 
+  it('C9: with a Human GM the late turn never waits in the console and the room shows no GM status', async () => {
+    const t = await startedTable(server!, true, { gameName: 'มีจีเอ็ม' });
+    const gameId = gameIdOf(t.a);
+    savePhaseState(server!.orm, gameId, { ...ensurePhaseState(server!.orm, gameId, CLOCK), day: 4, phase: 'EOSORIA', turn: 1 }, CLOCK);
+    const release = deferred();
+    turnGate = { promise: release.promise, called: deferred() };
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    for (const c of clients) await c.waitFor(isReady);
+    for (const [i, c] of clients.entries()) c.action(`ทำสิ่งที่ ${i}`, 'public');
+    await turnGate.called.promise;
+
+    expect((await close(await admin(), gameId, { confirmName: 'มีจีเอ็ม' })).status).toBe(200);
+    const entries = entryCount(gameId);
+    release.resolve();
+    await pause(300);
+    expect(entryCount(gameId)).toBe(entries);
+    const gmConsole = await call('GET', '/api/game/gm/console', { token: t.gm!.token });
+    expect(gmConsole.status, JSON.stringify(gmConsole.body)).toBe(200);
+    expect((gmConsole.body as { pending?: unknown }).pending).toBeNull();
+    const a = await enter(t.a);
+    await a.waitFor(isClosedEvent);
+    expect(a.messages.filter(isRoom).at(-1)!.gmStatus).toBeNull();
+  });
+
   it('C9: the ending being written when the game is closed: its late result is dropped, the game is closed', async () => {
     const { t, gameId } = await playingGame('ฉากจบ', { day: 12, phase: 'NOCTHERION', turn: 2 });
     const release = deferred();
