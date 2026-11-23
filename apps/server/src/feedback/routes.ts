@@ -3,7 +3,7 @@ import { restorePhaseState } from '@isekai/rules';
 import { and, count, desc, eq, gt, type SQL } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { memberRowForToken, type Clock } from '../auth/join.ts';
-import { bearerToken, sendError } from '../auth/routes.ts';
+import { bearerToken, noSession, sendError } from '../auth/routes.ts';
 import type { Db } from '../db/client.ts';
 import { feedback, feedbackAudit, gamePhase } from '../db/schema.ts';
 
@@ -51,7 +51,7 @@ export function registerFeedbackRoutes(app: FastifyInstance, db: Db, now: Clock)
   app.post('/api/feedback', async (request, reply) => {
     const token = bearerToken(request.headers.authorization);
     const me = token ? memberRowForToken(db, token, now) : undefined;
-    if (!me) return sendError(reply, 401, UNAUTHORIZED);
+    if (!me) return sendError(reply, 401, noSession(request.headers.authorization));
     const parsed = FeedbackInput.safeParse(request.body ?? {});
     if (!parsed.success) return sendError(reply, 400, inputError(parsed.error.issues));
 

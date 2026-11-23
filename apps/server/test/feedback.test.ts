@@ -89,9 +89,10 @@ describe('ISK-010 Report & Feedback', { timeout: 60_000 }, () => {
 
   it('C2: no session (or an unknown token) is 401 and nothing is stored', async () => {
     await boot();
-    for (const res of [await send(undefined, BUG), await send('not-a-token', BUG)]) {
+    // ISK-021: an unknown token is session_expired, no token stays unauthorized.
+    for (const [res, code] of [[await send(undefined, BUG), 'unauthorized'], [await send('not-a-token', BUG), 'session_expired']] as const) {
       expect(res.status).toBe(401);
-      expect(errorOf(res)).toBe('unauthorized');
+      expect(errorOf(res)).toBe(code);
     }
     expect(rows()).toEqual([]);
   });

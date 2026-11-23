@@ -2,7 +2,7 @@ import { GM_CONSOLE_PATH, type GmAdjustResponse, type GmInsertEventResponse, typ
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { GameAssets } from '../assets/load.ts';
 import { memberRowForToken, type Clock } from '../auth/join.ts';
-import { bearerToken, sendError } from '../auth/routes.ts';
+import { bearerToken, noSession, sendError } from '../auth/routes.ts';
 import type { Db } from '../db/client.ts';
 import type { MemberRow } from '../game/service.ts';
 import type { RoomService } from '../room/service.ts';
@@ -19,7 +19,7 @@ export function registerGmConsoleRoutes(app: FastifyInstance, db: Db, now: Clock
     const token = bearerToken(request.headers.authorization);
     const me = token ? memberRowForToken(db, token, now) : undefined;
     if (!me) {
-      void sendError(reply, 401, { code: 'unauthorized', message: 'ยังไม่ได้เข้าเกม หรือ session หมดอายุ' });
+      void sendError(reply, 401, noSession(request.headers.authorization));
       return undefined;
     }
     if (me.role !== 'gm') {

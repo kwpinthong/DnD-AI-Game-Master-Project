@@ -10,6 +10,7 @@ const MINUTE = 60_000;
 /** 5 wrong PINs in a row within 10 minutes lock the name for 10 minutes (C4). */
 export const LOCKOUT = { maxFailures: 5, windowMs: 10 * MINUTE, lockMs: 10 * MINUTE } as const;
 export const SESSION_TTL_MS = 30 * 24 * 60 * MINUTE;
+const SESSION_RENEW_MS = 60 * MINUTE;
 
 export type Clock = () => number;
 
@@ -141,11 +142,17 @@ export function memberRowForToken(db: Db, token: string, now: Clock): MemberRow 
     .where(eq(session.tokenHash, tokenHash))
     .get();
   if (!row) return undefined;
-  if (now() >= row.expiresAt) {
+  const t = now();
+  if (t >= row.expiresAt) {
     db.delete(session).where(eq(session.tokenHash, tokenHash)).run();
     return undefined;
   }
-  return row.member.kickedAt === null ? row.member : undefined;
+  if (row.member.kickedAt !== null) return undefined;
+  // ISK-021: sliding 30 days from the last use, written at most once an hour per session.
+  if (t + SESSION_TTL_MS - row.expiresAt >= SESSION_RENEW_MS) {
+    db.update(session).set({ expiresAt: t + SESSION_TTL_MS }).where(eq(session.tokenHash, tokenHash)).run();
+  }
+  return row.member;
 }
 
 export function endSession(db: Db, token: string) {

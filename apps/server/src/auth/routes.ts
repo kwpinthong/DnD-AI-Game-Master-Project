@@ -74,7 +74,7 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, now: Clock) {
   app.get('/api/me', async (request, reply) => {
     const token = bearerToken(request.headers.authorization);
     const found = token ? memberForToken(db, token, now) : undefined;
-    if (!found) return sendError(reply, 401, { code: 'unauthorized', message: 'ยังไม่ได้เข้าเกม หรือ session หมดอายุ' });
+    if (!found) return sendError(reply, 401, noSession(request.headers.authorization));
     const body: MeResponse = { member: found };
     return reply.send(body);
   });
@@ -87,6 +87,13 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, now: Clock) {
 }
 
 export const GAME_STARTED_JOIN = 'เกมนี้เริ่มไปแล้ว รับคนเพิ่มไม่ได้';
+
+/** ISK-021: the 401 of a player route: a sent token the server no longer knows = `session_expired`, no token = `unauthorized`. */
+export function noSession(authorization: string | undefined): ApiError {
+  return bearerToken(authorization)
+    ? { code: 'session_expired', message: 'session หมดอายุ เข้าเกมใหม่ด้วยชื่อและ PIN เดิม' }
+    : { code: 'unauthorized', message: 'ยังไม่ได้เข้าเกม หรือ session หมดอายุ' };
+}
 
 export function bearerToken(header: string | undefined): string | undefined {
   return /^Bearer (\S+)$/.exec(header ?? '')?.[1];

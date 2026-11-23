@@ -408,6 +408,7 @@ export const CONTRACT_FIXTURES: Fixtures = {
     { code: 'invalid_input', message: 'กรอกไม่ครบ', fields: { pin: 'PIN ต้องเป็นตัวเลข 4-6 หลัก' } },
     { code: 'locked', message: 'ล็อกชั่วคราว ลองใหม่เวลา 14:32', retryAt: '2026-11-22T07:32:00.000Z' },
     { code: 'cannot_start', message: 'ยังเริ่มไม่ได้', reasons: ['ยังไม่สร้างตัวละคร: ต้น'] },
+    { code: 'session_expired', message: 'session หมดอายุ เข้าเกมใหม่ด้วยชื่อและ PIN เดิม' },
   ],
   JoinRequest: [{ inviteCode: 'K7Q-2MX', name: 'นก', pin: '1234' }],
   JoinResponse: [{ token: 't0k3n', expiresAt: '2026-12-22T00:00:00.000Z', created: true, member }],
