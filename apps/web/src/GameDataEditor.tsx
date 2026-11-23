@@ -10,6 +10,7 @@ import {
   undoGameDataSet,
   type AdminResult,
 } from './admin-api.ts';
+import { FORM_SETS, GameDataForm } from './GameDataForm.tsx';
 
 /**
  * GEN-147: the server owner's game data editor at <web>/admin. Plain on purpose: a list of the data sets, one
@@ -18,6 +19,16 @@ import {
  */
 
 const pretty = (value: unknown) => JSON.stringify(value, null, 2);
+
+/** The JSON text as a list of records, or undefined when it is not one (then only the raw JSON box is shown). */
+function recordsOf(text: string): Record<string, unknown>[] | undefined {
+  try {
+    const value = JSON.parse(text) as unknown;
+    return Array.isArray(value) && value.every((r) => typeof r === 'object' && r !== null && !Array.isArray(r)) ? (value as Record<string, unknown>[]) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 const when = (iso: string) => new Date(iso).toLocaleString('th-TH', { hour12: false });
 
 type Problem = { message: string; fields?: Record<string, string> };
@@ -120,6 +131,16 @@ export function GameDataEditor({ apiBaseUrl, token, onForbidden }: { apiBaseUrl:
     URL.revokeObjectURL(url);
   }
 
+  // GEN-172: NPC_Schedule and NPC get a record / field form over the same JSON text (the raw JSON stays one click away).
+  const formSet = selected && FORM_SETS[selected.name];
+  const formRows = formSet ? recordsOf(text) : undefined;
+  const jsonBox = selected && (
+    <label>
+      JSON ของ {selected.name}
+      <textarea value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} rows={24} />
+    </label>
+  );
+
   return (
     <div className="gdata">
       <p className="lib__owner">
@@ -160,10 +181,21 @@ export function GameDataEditor({ apiBaseUrl, token, onForbidden }: { apiBaseUrl:
           <h3>
             {selected.name} <small>({selected.file}, แก้ล่าสุด {when(selected.updatedAt)})</small>
           </h3>
-          <label>
-            JSON ของ {selected.name}
-            <textarea value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} rows={24} />
-          </label>
+          {formSet ? (
+            <>
+              {formRows ? (
+                <GameDataForm set={formSet} rows={formRows} problems={problem?.fields ?? {}} onChange={(rows) => setText(pretty(rows))} />
+              ) : (
+                <p>JSON ดิบอ่านเป็นรายการ record ไม่ได้ แก้ JSON ให้ถูกก่อนจึงจะใช้แบบฟอร์มได้</p>
+              )}
+              <details>
+                <summary>แก้เป็น JSON ดิบ</summary>
+                {jsonBox}
+              </details>
+            </>
+          ) : (
+            jsonBox
+          )}
           <div className="gdata__actions">
             <button type="button" disabled={busy} onClick={save}>
               บันทึก

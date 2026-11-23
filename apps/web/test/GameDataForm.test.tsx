@@ -140,9 +140,9 @@ describe('record / field form for NPC_Schedule and NPC (GEN-172)', () => {
     fakeServer();
     await open('NPC_Schedule');
     const form = screen.getByRole('region', { name: 'แก้ NPC_Schedule' });
-    for (const el of within(form).getAllByRole('textbox')) expect(el.getAttribute('aria-label') ?? el.closest('label')?.textContent, el.outerHTML).toBeTruthy();
-    for (const el of [...within(form).getAllByRole('checkbox'), ...within(form).getAllByRole('button')]) {
-      expect((el.closest('label')?.textContent ?? el.textContent ?? '').trim() || el.getAttribute('aria-label'), el.outerHTML).toBeTruthy();
+    const nameOf = (el: HTMLElement) => ((el as HTMLInputElement).labels?.[0]?.textContent ?? el.textContent ?? '').trim() || el.getAttribute('aria-label');
+    for (const el of [...within(form).getAllByRole('textbox'), ...within(form).getAllByRole('checkbox'), ...within(form).getAllByRole('button')]) {
+      expect(nameOf(el), el.outerHTML).toBeTruthy();
     }
     const css = readFileSync(join(__dirname, '../src/library.css'), 'utf8').replace(/\r\n/g, '\n');
     const block = css.slice(css.indexOf('/* GEN-172'), css.indexOf('.lib {'));
