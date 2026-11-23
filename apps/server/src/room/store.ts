@@ -110,6 +110,8 @@ export interface EntryMeta {
   readonly changes?: readonly TurnChange[];
   readonly finale?: true;
   /** GEN-110: an `npc` entry's speaker (scenario NPC id; the viewer's name / ref come at read time) and kind. */
+  /** GEN-129: a `player` entry's actor (member id; the viewer's alias / name comes at read time). */
+  readonly actor?: string;
   readonly npc?: { readonly id: string; readonly kind: 'dialogue' | 'reaction'; readonly private?: true };
 }
 

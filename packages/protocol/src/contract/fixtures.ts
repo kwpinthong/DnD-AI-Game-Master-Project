@@ -115,6 +115,8 @@ const entries: In<typeof p.RoomEntry>[] = [
   { seq: 18, kind: 'npc', ...AT, place: FOUNTAIN_ZONED, text: 'ถ้าเจ้าอยากรู้เรื่องนาฬิกา ก็นั่งลงก่อนสิ', npc: { ref: 'n-ref-lucia', name: 'ลูเซีย', grade: 'F', kind: 'dialogue' } },
   { seq: 19, kind: 'npc', ...AT, place: FOUNTAIN_ZONED, text: 'เด็กขอทานเงยหน้ามองแล้วรีบถอยไปชิดกำแพง', npc: { ref: 'n-ref-noah', name: 'โนอา', grade: 'F', kind: 'reaction' } },
   { seq: 20, kind: 'npc', ...AT, place: null, text: 'ข้าเห็นว่าเจ้าไม่ได้มาที่นี่เพื่อน้ำพุเท่านั้น', npc: { ref: 'n-ref-lucia', name: 'ลูเซีย', kind: 'dialogue', private: true } },
+  // GEN-129: another player's public action; the actor is the alias (Social Title) until the viewer knows the name
+  { seq: 21, kind: 'player', ...AT, place: FOUNTAIN_ZONED, text: 'โยนเหรียญลงในหมวกของคุณ แล้วเดินจากไป', actor: { name: 'ผู้มาเยือนเสื้อคลุมแดง' } },
 ];
 
 const you: In<typeof p.RoomYou> = {

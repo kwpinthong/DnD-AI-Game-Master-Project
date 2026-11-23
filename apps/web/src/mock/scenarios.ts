@@ -443,11 +443,11 @@ export const SCENARIOS: readonly MockScenario[] = [
   {
     id: 'chat-colours',
     title: 'สีของแชต (เทียบ mockup)',
-    note: 'มี badge ได้เหรียญ และปุ่มโหวต; กล่องผู้เล่นอื่น (PlayerBubble) ไม่มี entry kind ใน contract จึงอยู่ที่ /dev/chat-colours',
+    note: 'มี badge ได้เหรียญ ปุ่มโหวต และกล่องผู้เล่นอื่น (entry kind `player`, GEN-129)',
     session: 'player',
     screens: ['play-feed', 'play-changes'],
     http: {},
-    room: room(BASE_ROOM, [], [...START_ENTRIES, { seq: 21, kind: 'changes', day: BASE_ROOM.day, phase: BASE_ROOM.phase, turn: BASE_ROOM.turn, place: null, text: 'ลิน', changes: [{ stat: 'coins', delta: 1, reason: 'ได้ทิป' }] }]),
+    room: room(BASE_ROOM, [], [...START_ENTRIES, { seq: 22, kind: 'changes', day: BASE_ROOM.day, phase: BASE_ROOM.phase, turn: BASE_ROOM.turn, place: null, text: 'ลิน', changes: [{ stat: 'coins', delta: 1, reason: 'ได้ทิป' }] }]),
   },
   {
     id: 'library-empty',

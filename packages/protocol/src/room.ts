@@ -201,8 +201,10 @@ export type RoomState = z.infer<typeof RoomState>;
  * `narration`: private GM text for one player. `place` null = the whole town (feed) or none (narration).
  * `whisper`: one ally to another (GEN-067); `place` null, `whisper` says who to whom.
  * `omen`: an Astral Spirit's one-sentence omen to you (GEN-070, Q-193); `place` null, the sender is not named.
+ * `player` (GEN-129): another player's PUBLIC action at `place`, `text` = what they did, `actor.name` = the Social Title
+ * (alias) until you know them, their real name after (GEN-117). Never sent for a Secret action or to the actor.
  */
-export const RoomEntryKind = z.enum(['feed', 'narration', 'whisper', 'omen', 'hit', 'changes', 'npc']);
+export const RoomEntryKind = z.enum(['feed', 'narration', 'whisper', 'omen', 'hit', 'changes', 'npc', 'player']);
 export type RoomEntryKind = z.infer<typeof RoomEntryKind>;
 
 /**
@@ -271,6 +273,8 @@ export const RoomEntry = z.strictObject({
   changes: z.array(TurnChange).optional(),
   /** `npc` entries (GEN-110): who says `text` (avatar + name + grade for the chat UI) and what kind of line it is. */
   npc: NpcLineView.optional(),
+  /** `player` entries (GEN-129): who did `text`, as this viewer may know them (alias until the name is learned; the Human GM sees the name). */
+  actor: z.strictObject({ name: z.string() }).optional(),
   /**
    * GEN-107: this player's own vote on an AI-written entry (`isVotableEntry`): null = not voted. Absent on
    * every other entry and for the Human GM, so "has the key" = "show the buttons". Others' votes are never sent.

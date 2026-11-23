@@ -2,7 +2,7 @@ import { FALLBACK_NARRATION_LABEL, PHASES, type EntryVote, type RoomEntry, type 
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { hitChangeText } from '../../screen-models.ts';
 import { VoteButtons, playText } from '../../ui/index.ts';
-import { FeedDivider, NarrationLine, NpcBubble, OwnBubble, ResultBadge, RollBadge } from './Bubbles.tsx';
+import { FeedDivider, NarrationLine, NpcBubble, OwnBubble, PlayerBubble, ResultBadge, RollBadge } from './Bubbles.tsx';
 import { changeBadges, dividerText, entryLook, shownVote } from './chat-model.ts';
 
 const t = playText;
@@ -145,6 +145,8 @@ function entryView(e: RoomEntry, look: ReturnType<typeof entryLook>, vote: (entr
           {vote(e)}
         </NpcBubble>
       );
+    case 'player-action':
+      return <PlayerBubble alias={e.actor!.name} text={e.text} />;
     case 'npc-reaction':
       return (
         <NarrationLine text={e.text}>

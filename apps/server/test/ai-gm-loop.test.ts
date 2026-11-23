@@ -525,7 +525,7 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(provider.requests.filter(isNarration)).toEqual([]);
     for (const c of clients) {
       // GEN-114: the player's own `changes` log is the server's, never a narration.
-      const entries = turnEntries(c, 1, 'EOSORIA', 1).filter((e) => e.kind !== 'changes');
+      const entries = turnEntries(c, 1, 'EOSORIA', 1).filter((e) => e.kind !== 'changes' && e.kind !== 'player');
       expect(entries.length).toBeGreaterThan(0);
       for (const e of entries) expect(e.fallback).toBe(true);
       // Q-221: no one-off "ระบบ: ..." narration any more.

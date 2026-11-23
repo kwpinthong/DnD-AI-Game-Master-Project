@@ -427,7 +427,14 @@ export function createRoomService(
           const at = { day: current.day, phase: current.phase, turn: current.turn };
           // GEN-114: what each player's own values were before this turn's effects.
           const s0 = snapshotsOf(tx, assets, gameId, current, current.order);
-          const rows =(resolution.entries ?? []).map((entry) => {
+          // GEN-129: each Public action, as it was typed, for the others at its place (never the actor; a Secret one gives none).
+          const doers = actions.filter((a) => a.visibility === 'public' && a.locationId !== null);
+          const seen = doers.map((a) => {
+            const recipients = recipientsOf(tx, gameId, current, { kind: 'feed', locationId: a.locationId, actorMemberId: a.memberId, text: a.text, except: [a.memberId] });
+            return { row: insertEntry(tx, gameId, { kind: 'player', at, locationId: a.locationId, text: a.text, meta: { actor: a.memberId } }, [...recipients], t), recipients };
+          });
+          const rows = [...seen, ...(resolution.entries ?? [])].map((entry) => {
+            if ('row' in entry) return entry;
             const recipients = recipientsOf(tx, gameId, current, entry);
             const locationId = entry.kind === 'narration' ? null : entry.locationId;
             if (entry.kind === 'feed' && entry.locationId !== null && entry.actorMemberId === null) placeAudience.set(entry.locationId, new Set([...(placeAudience.get(entry.locationId) ?? []), ...recipients]));
