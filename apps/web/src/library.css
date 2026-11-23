@@ -62,6 +62,69 @@
   font-size: var(--text-xs);
 }
 
+/* GEN-172: the record / field form of NPC_Schedule and NPC. */
+.gdata__form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.gdata__record {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: var(--line-w) solid var(--ornament);
+  border-radius: var(--radius-sm);
+  min-width: 0;
+}
+
+.gdata__field {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.gdata__field input,
+.gdata__field select,
+.gdata__field textarea {
+  min-height: 44px;
+  box-sizing: border-box;
+  width: 100%;
+  font: inherit;
+  background: var(--panel);
+  color: var(--text);
+  border: var(--line-w) solid var(--line-input);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+}
+
+.gdata__field .gdata__check input {
+  width: auto;
+  min-height: 0;
+}
+
+.gdata__field[aria-invalid='true'],
+.gdata__field [aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.gdata__checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.gdata__check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  min-width: 44px;
+}
+
 .lib {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
