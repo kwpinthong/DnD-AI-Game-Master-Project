@@ -4,6 +4,8 @@ import { loadAiConfig } from '../src/ai/config.ts';
 import type { AiCallRequest } from '../src/ai/provider.ts';
 import { createMockProvider, type MockProvider } from '../src/ai/providers/mock.ts';
 import { hashPin } from '../src/auth/pin.ts';
+import { loadConfig } from '../src/config.ts';
+import { extractDue } from '../src/learning/extract.ts';
 import { ensurePhaseState, insertEntry, recordAction, savePhaseState } from '../src/room/store.ts';
 import { getGameScenario } from '../src/scenario/store.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
@@ -290,5 +292,54 @@ describe('GEN-080 learning extract (lore + feedback_note)', { timeout: 120_000 }
     await rate(t, t.b, 8);
     await vi.waitFor(() => expect(entries(gameId).length).toBe(3));
     expect(extractCalls()).toHaveLength(1);
+  });
+
+  it('Q-363: a failed extract shows "failed" to the game owner on the end page, who retries it there; others get 403', async () => {
+    await boot(true);
+    answer = () => GOOD;
+    const { t, gameId } = await seeded();
+    const status = (token: string) => t.call('GET', '/api/game/learning', { token });
+    const retry = (token: string) => t.call('POST', '/api/game/learning/extract', { token });
+    expect(await status(t.a.token)).toMatchObject({ status: 200, body: { status: 'pending' } });
+    fail = true;
+    expect((await extract(t, gameId)).status).toBe(200);
+    expect(await status(t.a.token)).toMatchObject({ status: 200, body: { status: 'failed' } });
+    // Not the owner (B is a player of the game): 403, nothing runs.
+    expect((await status(t.b.token)).status).toBe(403);
+    expect((await retry(t.b.token)).status).toBe(403);
+    expect(extractCalls()).toHaveLength(1);
+    fail = false;
+    expect(await retry(t.a.token)).toMatchObject({ status: 200, body: { status: 'done' } });
+    expect(entries(gameId).filter((r) => r.type === 'lore')).toHaveLength(2);
+    expect(await status(t.a.token)).toMatchObject({ status: 200, body: { status: 'done' } });
+  });
+
+  it('Q-363: before the end the owner gets 409 and no call', async () => {
+    await boot(true);
+    const { t } = await seeded(false);
+    expect((await t.call('GET', '/api/game/learning', { token: t.a.token })).status).toBe(409);
+    expect((await t.call('POST', '/api/game/learning/extract', { token: t.a.token })).status).toBe(409);
+    expect(extractCalls()).toHaveLength(0);
+  });
+
+  it('Q-364: an ended game not extracted is due N hours after it ended; extracted, failed or not ended is not', async () => {
+    await boot(true);
+    const due = await seeded();
+    const done = await seeded();
+    const failed = await seeded();
+    const playing = await seeded(false);
+    server!.db.prepare("insert into learning_extract (game_id, status, error, updated_at) values (?, 'done', null, 0), (?, 'failed', 'timeout', 0)").run(done.gameId, failed.gameId);
+    const HOUR = 3_600_000;
+    expect(extractDue(server!.orm, CLOCK + 23 * HOUR, 24 * HOUR)).toEqual([]);
+    expect(extractDue(server!.orm, CLOCK + 24 * HOUR, 24 * HOUR)).toEqual([due.gameId]);
+    expect(extractDue(server!.orm, CLOCK + 24 * HOUR, 24 * HOUR)).not.toContain(playing.gameId);
+  });
+
+  it('Q-364: LEARNING_AUTO_EXTRACT_HOURS: default 24, 0 = off, anything else not a number stops the start', () => {
+    const base = { DB_PATH: 'x.sqlite' };
+    expect(loadConfig(base).learningAutoExtractMs).toBe(24 * 3_600_000);
+    expect(loadConfig({ ...base, LEARNING_AUTO_EXTRACT_HOURS: '2' }).learningAutoExtractMs).toBe(2 * 3_600_000);
+    expect(loadConfig({ ...base, LEARNING_AUTO_EXTRACT_HOURS: '0' }).learningAutoExtractMs).toBeUndefined();
+    expect(() => loadConfig({ ...base, LEARNING_AUTO_EXTRACT_HOURS: 'soon' })).toThrow(/LEARNING_AUTO_EXTRACT_HOURS/);
   });
 });

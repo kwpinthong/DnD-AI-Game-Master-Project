@@ -232,4 +232,38 @@ describe('GEN-091 end page', () => {
     expect(screen.queryByRole('region', { name: 'ให้คะแนนเกม' })).toBeNull();
     expect(calls).toEqual([]);
   });
+
+  it('Q-363: a failed learning extract shows "สกัดไม่สำเร็จ" to the game owner with a retry; done hides it, a 403 shows nothing', async () => {
+    const learning: { status: number; body: unknown } = { status: 200, body: { status: 'failed' } };
+    const calls: { method: string; path: string }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const path = new URL(String(input)).pathname;
+        const method = init?.method ?? 'GET';
+        calls.push({ method, path });
+        if (path === '/api/game/rating') return Response.json({ rating: NOT_RATED });
+        if (path === '/api/game/learning/extract') return Response.json({ status: 'done' });
+        return Response.json(learning.body, { status: learning.status });
+      }),
+    );
+    openPage();
+    const box = within(await screen.findByRole('region', { name: 'ความรู้จากเกมนี้' }));
+    expect(box.getByText('สกัดไม่สำเร็จ')).toBeTruthy();
+    fireEvent.click(box.getByRole('button', { name: 'ลองสกัดอีกครั้ง' }));
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'ความรู้จากเกมนี้' })).toBeNull());
+    expect(calls.filter((c) => c.path.startsWith('/api/game/learning'))).toEqual([
+      { method: 'GET', path: '/api/game/learning' },
+      { method: 'POST', path: '/api/game/learning/extract' },
+    ]);
+    cleanup();
+
+    learning.status = 403;
+    learning.body = { code: 'forbidden', message: 'เฉพาะเจ้าของเกม' };
+    openPage();
+    await screen.findByRole('region', { name: 'ให้คะแนนเกม' });
+    await waitFor(() => expect(calls.filter((c) => c.path === '/api/game/learning')).toHaveLength(2));
+    expect(screen.queryByRole('region', { name: 'ความรู้จากเกมนี้' })).toBeNull();
+    expect(screen.queryByText('สกัดไม่สำเร็จ')).toBeNull();
+  });
 });
