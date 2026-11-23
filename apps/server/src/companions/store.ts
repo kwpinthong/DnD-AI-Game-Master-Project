@@ -108,7 +108,7 @@ function upsertBond(db: DbOrTx, memberId: string, npcId: string, set: Partial<Om
 /** The name `ctx`'s player sees, and whether it is the real one (Q-103 / Q-219: grades B and S hide it). */
 function displayName(ctx: NpcContext, bond: BondRow | undefined): { name: string; nameRevealed: boolean } {
   if (bond?.evolvedGrade) return { name: ctx.sheet ? ctx.sheet.evolvedName(bond.evolvedAlignment) : ctx.npc.name, nameRevealed: true };
-  // GEN-121: every grade shows its alias until this player knows it (talked to it, B +9, S met / awakened); a companion
+  // GEN-121: every grade shows its alias until this player knows it (F / A name heard, B +9, S met / awakened); a companion
   // saved before this rule counts as known.
   const shown = (bond?.nameRevealed ?? false) || bond?.companionSeq != null;
   if (!ctx.sheet) return { name: shown ? ctx.npc.name : ctx.npc.alias, nameRevealed: shown };
@@ -255,13 +255,24 @@ export function changeNpcAffinity(db: DbOrTx, assets: GameAssets, memberId: stri
   return db.transaction((tx) => {
     observeKarma(tx, memberId, at.day);
     const threshold = revealAt(ctx);
-    // GEN-121: grade B learns the name at its affinity; grade S only when met / awakened (not by affinity); F / A at the first dealing.
-    const revealsNow = !(before?.nameRevealed ?? false) && (threshold === null ? ctx.baseGrade !== 'S' : change.after >= threshold);
+    // GEN-121: grade B learns the name at its affinity; grade S only when met / awakened; F / A by name or introduction (GEN-170, `meetNpc`).
+    const revealsNow = !(before?.nameRevealed ?? false) && threshold !== null && change.after >= threshold;
     upsertBond(tx, memberId, npcId, { affinity: change.after, ...(revealsNow ? { nameRevealed: true } : {}) }, at.now);
     const granted = revealsNow ? give(tx, memberId, npcId, segmentsAt(ctx, 'reveal').flatMap((s) => s.rewards), at.now) : [];
     const evolved = tryEvolve(tx, ctx, at);
     return { ...change, nameRevealed: displayName(ctx, bondOf(tx, memberId, npcId)).nameRevealed, granted, evolved };
   });
+}
+
+/**
+ * GEN-170 (Q-320 B): this player heard a grade F / A NPC's real name (they said it, or it introduced itself), so they
+ * know it from now on, with its reveal rewards. Grades B and S keep their own rules. Idempotent.
+ */
+export function meetNpc(db: DbOrTx, assets: GameAssets, memberId: string, npcId: string, now: number): void {
+  const ctx = contextFor(db, assets, memberId, npcId);
+  if (!ctx || ctx.baseGrade === 'B' || ctx.baseGrade === 'S' || bondOf(db, memberId, npcId)?.nameRevealed) return;
+  upsertBond(db, memberId, npcId, { nameRevealed: true }, now);
+  give(db, memberId, npcId, segmentsAt(ctx, 'reveal').flatMap((s) => s.rewards), now);
 }
 
 const flagConditions = (ctx: NpcContext) =>

@@ -65,6 +65,7 @@ import {
   type TurnAction,
 } from './context.ts';
 import { createStageTimer, type StageTimer } from './timing.ts';
+import { introduceNpcs } from './npc-intro.ts';
 import { capTotal, cleanNpcLines, lingerAfter, lingerNow, lingersOf, npcAnswers, npcLineLimits, npcPrompt, npcsPresentAt, saveLingers } from './npc-lines.ts';
 import { npcFarewellFor } from './server-lines.ts';
 import { GM_OUTPUT, GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
@@ -428,6 +429,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     }
     // GEN-117 (Q-292): who learned whose real name this turn, before any text is rendered. Idempotent, so a replay after a restart is safe.
     introduce(db, world, order, start, lookedAt, now());
+    introduceNpcs(db, assets, world, order, proposal.actions, start, hereAt, now());
     const audiences = narrationAudiences(world, resolved.log, textOf, start, events.active, evidenceFor, npcsFor, (m) => karmaBand(karmaOf(m)), (id) => targetNpcs.get(id) ?? null, (m) => lookedAt.get(m) ?? new Set());
     const journalWait = writing.get(gameId)?.journals;
     if (journalWait) await timer.time('journal_wait', () => journalWait);

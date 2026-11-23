@@ -989,7 +989,8 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       server!.db.prepare('update character set karma = -60 where member_id = ?').run(t.b.memberId);
       server!.db.prepare('insert into npc_bond (member_id, npc_id, affinity, name_revealed, updated_at) values (?, ?, 8, 0, 0)').run(t.a.memberId, 'amnesiac');
       const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
-      await playTurn(clients, ['ทักลูเซีย', 'ขู่ลูเซีย', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+      // GEN-170: by her look, not her name (saying it would make both know her).
+      await playTurn(clients, ['ทักหญิงสาวผู้พกนาฬิกา', 'ขู่หญิงสาวผู้พกนาฬิกา', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
 
       const [refA, refB] = [refOf(t.a), refOf(t.b)];
       const place = provider.requests.filter(isNarration).map((r) => contextOf<NarrationContext>(r)).find((c) => 'place' in c.audience && c.audience.place === 'fountain')!;

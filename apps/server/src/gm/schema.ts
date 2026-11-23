@@ -81,6 +81,11 @@ export const GmAction = z.object({
    * `targetPlayer`. Only the actor's narration may then describe how they look. Empty = looks at nobody.
    */
   looksAt: z.array(z.string()).max(3).default([]),
+  /**
+   * GEN-170 (Q-320 B): NPC ids at the actor's place that say their own name in this action's scene. They introduce
+   * themselves to the action's hearers: everyone at the place when Public, the actor only when Secret.
+   */
+  introducedNpcs: z.array(z.string()).max(3).default([]),
   witnessNpcIds: z.array(z.string()).max(6).default([]),
   repDeltaIfCaught: Zero,
   onSuccess: Effects,
