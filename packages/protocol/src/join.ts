@@ -4,11 +4,13 @@ import { z } from 'zod';
 export const NAME_MAX_LENGTH = 32;
 
 /**
- * How a typed player name is stored and shown: NFKC, trimmed, runs of whitespace folded to one
- * space. Uniqueness inside a game uses `nameKey` on top of this (case-insensitive).
+ * How a typed player name is stored and shown: NFC (not NFKC, which splits sara am ำ U+0E33 into
+ * U+0E4D U+0E32; GEN-106), trimmed, runs of whitespace folded to one space. A name typed with the
+ * split form is joined back so it is the same name and key. Uniqueness inside a game uses `nameKey`
+ * on top of this (case-insensitive).
  */
 export function normalizePlayerName(raw: string): string {
-  return raw.normalize('NFKC').trim().replace(/\s+/gu, ' ');
+  return raw.normalize('NFC').replace(/ํา/gu, 'ำ').trim().replace(/\s+/gu, ' ');
 }
 
 /** Key that decides "same player" inside one game: the normalised name, lower-cased. */

@@ -72,9 +72,9 @@ describe('migration character_nfc (GEN-094 C2)', () => {
       before[1],
     ]);
     expect(String(after[0]!.name)).toContain('ำ');
-    // Player names (member) are a separate rule and stay as they were.
+    // Player names (member) are joined by the later name_nfc migration (GEN-106), also run here.
     expect(sqlite.prepare('select name, name_key from member order by id').all()).toEqual([
-      { name: nfkc('คำแก้ว'), name_key: nfkc('คำแก้ว') },
+      { name: 'คำแก้ว', name_key: 'คำแก้ว' },
       { name: 'ลิน', name_key: 'ลิน' },
     ]);
   });
