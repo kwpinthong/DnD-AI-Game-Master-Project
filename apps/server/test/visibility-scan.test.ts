@@ -104,6 +104,10 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'POST /api/style/delete': { method: 'POST', path: '/api/style/delete', body: { playerCode: 'pc-scan' } },
     // GEN-083: the create form's source games by player code (unknown here: 403).
     'POST /api/memory/sources': { method: 'POST', path: '/api/memory/sources', body: { playerCode: 'pc-scan' } },
+    // ISK-010: a player's report (their own row back), and the owner's list / status change (a player's session is 403).
+    'POST /api/feedback': { method: 'POST', path: '/api/feedback', body: { type: 'bug', text: 'ปุ่มค้าง', page: 'play' } },
+    'GET /api/admin/feedback': { method: 'GET', path: '/api/admin/feedback' },
+    'PATCH /api/admin/feedback/:id': { method: 'PATCH', path: '/api/admin/feedback/1', body: { status: 'done' } },
     // GEN-080: the lore + feedback extract; a player's session is 403.
     'POST /api/admin/learning/games/:gameId/extract': { method: 'POST', path: '/api/admin/learning/games/any-game/extract' },
     // GEN-084: the Learning library; a player's session is 403 (checked below).
@@ -170,6 +174,8 @@ const ADMIN_DATA_ROUTES = [
   'POST /api/admin/style-review/voice/:version/restore',
   'GET /api/admin/learning',
   'DELETE /api/admin/learning/:id',
+  'GET /api/admin/feedback',
+  'PATCH /api/admin/feedback/:id',
   'DELETE /api/admin/learning/games/:gameId',
 ];
 

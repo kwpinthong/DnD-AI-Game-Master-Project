@@ -183,3 +183,5 @@ export * from './schema-style-eval.ts';
 export * from './schema-learning.ts';
 // GEN-149: chat with an NPC outside the turn, own file for the same reason.
 export * from './schema-npc-chat.ts';
+// ISK-010: players' bug reports / ideas and the owner's status changes, own file for the same reason.
+export * from './schema-feedback.ts';

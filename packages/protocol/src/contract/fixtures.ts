@@ -20,6 +20,17 @@ const FOUNTAIN_ZONED = { ...FOUNTAIN, zone: { id: 'central', name: 'โซนใ
 const CHURCH = { id: 'church', name: 'โบสถ์' };
 
 const member = { id: ME, gameId: GAME_ID, name: 'นก' };
+const feedbackRow: In<typeof p.FeedbackRow> = {
+  id: 7,
+  gameId: GAME_ID,
+  memberId: ME,
+  type: 'bug',
+  text: 'ปุ่มส่งค้าง',
+  context: { day: 3, period: 'SOLARION', turn: 2, page: 'play', userAgent: 'Mozilla/5.0' },
+  status: 'new',
+  createdAt: '2026-11-23T10:00:00.000Z',
+  updatedAt: '2026-11-23T10:00:00.000Z',
+};
 
 const gameView: In<typeof p.GameView> = {
   id: GAME_ID,
@@ -796,4 +807,9 @@ export const CONTRACT_FIXTURES: Fixtures = {
     { reply: 'คึกคักสิ พ่อค้าจากแดนเหนือเพิ่งมาถึง', suggestion: null, status: { perPeriod: 5, left: 4 } },
     { reply: 'ของดีแบบนี้ไม่ได้ให้กันง่ายๆ หรอกนะ', suggestion: 'ลองต่อรองซื้อดาบเป็น action ของเทิร์นนี้', status: { perPeriod: 5, left: 0 } },
   ],
+  // ISK-010: Report & Feedback
+  FeedbackInput: [{ type: 'bug', text: 'ปุ่มส่งค้าง', page: 'play', userAgent: 'Mozilla/5.0' }, { type: 'idea', text: 'อยากให้มีแผนที่', page: 'lobby' }],
+  FeedbackRow: [feedbackRow, { ...feedbackRow, id: 8, type: 'idea', text: '<b>ไม่ใช่ HTML</b>', context: { day: null, period: null, turn: null, page: 'lobby', userAgent: '' }, status: 'done' }],
+  AdminFeedbackResponse: [{ feedback: [feedbackRow] }, { feedback: [] }],
+  AdminFeedbackStatusRequest: [{ status: 'reviewing' }, { status: 'done' }],
 };
