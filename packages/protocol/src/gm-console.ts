@@ -74,6 +74,8 @@ export const GmPendingTurn = z.strictObject({
   results: z.array(GmPendingResult),
   /** GEN-059 (Q-205): this is the game's ending (narration only; results cannot be edited). */
   finale: z.boolean().optional(),
+  /** GEN-186: the scene of a period that just opened (narration only; results is empty). */
+  scene: z.boolean().optional(),
   /** The rolls behind the held turn, in resolve order (Q-229). */
   checks: z.array(GmCheckView).optional(),
 });

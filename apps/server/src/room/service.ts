@@ -161,6 +161,8 @@ export interface HeldTurn {
   readonly resolution: PhaseResolution;
   /** GEN-059 (Q-205): the game's ending (entries only); approving publishes it instead of a turn. */
   readonly finale?: boolean;
+  /** GEN-186: the scene of a period that just opened (`at` = its turn 1, entries only); approving publishes it, then the turn goes on. */
+  readonly scene?: boolean;
 }
 
 const AWAITING_GM_PLAYER_MESSAGE = 'ผลของเทิร์นนี้รอ GM ตรวจและอนุมัติก่อน แล้วจะส่งให้ทุกคน';
@@ -600,20 +602,40 @@ export function createRoomService(
       const weatherNow = await weatherFor(gameId, ensurePhaseState(db, gameId, now()));
       const entries = await resolver.scene!({ gameId, at, weather: weatherNow, signal: shutdown.signal });
       if (stopped || entries.length === 0) return;
-      const rows = db.transaction((tx) => {
-        const t = now();
-        const state = ensurePhaseState(tx, gameId, t);
-        return entries.map((entry) => {
-          const recipients = recipientsOf(tx, gameId, state, entry);
-          const locationId = entry.kind === 'narration' ? null : entry.locationId;
-          return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text }, [...recipients], t), recipients };
-        });
-      });
-      deliver(gameId, rows);
+      // GEN-186: with a Human GM the scene waits in the console like a turn (the announcement is already out).
+      if (hasHumanGm(gameId)) {
+        held.set(gameId, { at, state: ensurePhaseState(db, gameId, now()), actions: [], resolution: { entries }, scene: true });
+        broadcastRoom(gameId);
+        return;
+      }
+      publishScene(gameId, at, { entries });
     })()
       .catch((error) => log(`[room] game=${gameId} scene failed: ${error instanceof Error ? error.name : 'unknown error'}`))
       .finally(() => scenes.delete(gameId));
     scenes.set(gameId, task);
+  }
+
+  /** Stores and sends a period's scene under its turn 1, unless the game has moved past that turn; false = the transaction failed. */
+  function publishScene(gameId: string, at: TurnPoint, resolution: PhaseResolution): boolean {
+    const publish = () => db.transaction((tx) => {
+      const t = now();
+      const state = ensurePhaseState(tx, gameId, t);
+      if (state.day !== at.day || state.phase !== at.phase || state.turn !== at.turn) return [];
+      const out = (resolution.entries ?? []).map((entry) => {
+        const recipients = recipientsOf(tx, gameId, state, entry);
+        const locationId = entry.kind === 'narration' ? null : entry.locationId;
+        return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text }, [...recipients], t), recipients };
+      });
+      resolution.apply?.(tx);
+      return out;
+    });
+    try {
+      deliver(gameId, publish());
+      return true;
+    } catch (error) {
+      log(`[room] scene publish failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
+      return false;
+    }
   }
 
   /**
@@ -730,6 +752,11 @@ export function createRoomService(
         const periodWeather = await weatherFor(gameId, state);
         // GEN-145: the period's scene goes out before the results of its first turn.
         await scenes.get(gameId);
+        // GEN-186: a scene held for the Human GM goes first; approving it starts this turn again.
+        if (held.has(gameId)) {
+          broadcastRoom(gameId);
+          return;
+        }
 
         const at = { day: state.day, phase: state.phase, turn: state.turn };
         let resolution: PhaseResolution;
@@ -837,6 +864,16 @@ export function createRoomService(
       held.delete(gameId);
       const resolution = edit(turn);
       if (turn.finale) return publishFinale(gameId, resolution.entries ?? []);
+      if (turn.scene) {
+        // A failed publish puts the scene back in the console for another approve.
+        if (!publishScene(gameId, turn.at, resolution)) {
+          held.set(gameId, turn);
+          return false;
+        }
+        broadcastRoom(gameId);
+        startResolving(gameId);
+        return true;
+      }
       if (!publishTurn(gameId, { ...turn, resolution })) return false;
       // The after-turn work and the new period's weather (GEN-068), then the next turn if it closes at once.
       startAfter(gameId, resolution.after);
