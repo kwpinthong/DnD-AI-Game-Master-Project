@@ -116,8 +116,10 @@ export function PlayRoom({
   const you = room?.you;
   const isPlayer = you?.role === 'player';
   const hits = entries.filter((e) => e.kind === 'hit').length;
-  // Your own numbers and who is around change with the turn, a move, a lock or a hit: load them again then.
-  const refreshKey = room && isPlayer ? [room.day, room.phase, room.turn, room.status, you?.place?.id ?? '', you?.lock?.code ?? '', hits, moves, companionTick].join('|') : null;
+  // GEN-155: your own `changes` entry (GEN-114) is the server saying your values / items moved, room snapshot or not.
+  const changed = entries.filter((e) => e.kind === 'changes').length;
+  // Your own numbers and who is around change with the turn, a move, a lock, a hit or a change log: load them again then.
+  const refreshKey = room && isPlayer ? [room.day, room.phase, room.turn, room.status, you?.place?.id ?? '', you?.lock?.code ?? '', hits, changed, moves, companionTick].join('|') : null;
   const data = usePlayData(apiBaseUrl, token, refreshKey, onSessionLost);
 
   // Q-267: a hit acknowledged on this device stays acknowledged after a reload.

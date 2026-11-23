@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CONTRACT_FIXTURES } from '@isekai/protocol/contract';
 import { App } from '../src/App.tsx';
+import { COMPACT_QUERY } from '../src/play/chat/useCompact.ts';
 import { roomSocketUrl } from '../src/room-api.ts';
 import { TOKEN_KEY } from '../src/session.ts';
 
@@ -414,6 +415,44 @@ describe('GEN-055 skills and items (web)', () => {
     socket.receive(roomState({ turn: 2 }));
     await waitFor(() => expect(within(panel).queryByText('Silver Rosary of Hearth')).toBeNull());
     expect(within(panel).queryByText(/เบาะแสที่ค้นพบ/)).toBeNull();
+  });
+});
+
+describe('GEN-155 the bag reloads when your own turn log says an item moved', () => {
+  const prism = { id: 'i-9', name: 'Prism of Truth', rank: 'B', alignment: 'Neutral', category: 'Accessory', triggerType: 'Active', dailyLimit: 3, description: 'เผยความจริง' };
+  const changes = (seq: number, change: NonNullable<RoomEntry['changes']>[number]): RoomServerMessage => ({ type: 'entry', entry: { ...entry(seq, 'changes', 'นก'), changes: [change] } });
+
+  async function open(held: { items: (typeof prism)[] }) {
+    loggedIn(gameView(), { 'GET /api/game/inventory': () => Response.json({ inventory: { skills: [], items: held.items, discoveries: [] } }) });
+    render(<App apiBaseUrl="" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'เข้าห้องเล่น' }));
+    const socket = await waitFor(() => FakeSocket.all.at(-1)!);
+    socket.open();
+    socket.receive(roomState());
+    return socket;
+  }
+
+  it('C1 (desktop): an item lost in the turn leaves the open bag tab at once, without switching tabs', async () => {
+    const held = { items: [prism] };
+    const socket = await open(held);
+    tab('กระเป๋า');
+    const panel = await screen.findByRole('region', { name: 'ความสามารถและของ' });
+    await within(panel).findByText('Prism of Truth');
+    held.items = [];
+    socket.receive(changes(7, { stat: 'item_lost', name: 'Prism of Truth', reason: 'ใช้ไอเทม' }));
+    await waitFor(() => expect(within(panel).queryByText('Prism of Truth')).toBeNull());
+  });
+
+  it('C2 (phone sheet): an item gained shows in the open bag sheet at once', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === COMPACT_QUERY, addEventListener() {}, removeEventListener() {} }));
+    const held = { items: [] as (typeof prism)[] };
+    const socket = await open(held);
+    fireEvent.click(await screen.findByRole('button', { name: 'กระเป๋า' }));
+    const sheet = await screen.findByRole('dialog');
+    await within(sheet).findByText('ยังไม่มีของติดตัว');
+    held.items = [prism];
+    socket.receive(changes(8, { stat: 'item_gained', name: 'Prism of Truth', reason: 'ได้จาก NPC' }));
+    expect(await within(sheet).findByText('Prism of Truth')).toBeTruthy();
   });
 });
 
