@@ -237,7 +237,12 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       const value = opts.sanitize ? opts.sanitize(result.value) : result.value;
       const errors = opts.check(value);
       if (errors.length === 0) return { value, fallback: null };
-      log(`[gm] game=${opts.gameId} purpose=${purpose} refused: ${[...new Set(errors.map((e) => e.code))].join(', ')}`);
+      // GEN-163: an unknown_ref message starts with the ref (an opaque id or token, never prompt text).
+      const unknown = errors.filter((e) => e.code === 'unknown_ref').map((e) => `${e.message.split(' ')[0]} at ${e.path}`);
+      log(
+        `[gm] game=${opts.gameId} purpose=${purpose} stage=${i === 0 ? 'first' : 'repair'} refused: ${[...new Set(errors.map((e) => e.code))].join(', ')}` +
+          (unknown.length > 0 ? ` unknown_ref=[${unknown.join('; ')}]` : ''),
+      );
       messages = [
         ...first,
         { role: 'assistant' as const, text: JSON.stringify(value) },
