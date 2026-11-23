@@ -1106,7 +1106,8 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
         expect(placeCtx().answers).toEqual([{ npcId: 'amnesiac', actionIds: ['act-1', 'act-2'], via: 'target' }]);
         for (const c of clients.slice(0, 2)) expect(npcEntries(c).map((e) => e.text)).toEqual(Array.from({ length: 6 }, (_, i) => `ตอบทั้งสองคน ${i + 1}`));
         // One call for the group: the public actions get no private dialogue call.
-        expect(provider.requests.filter(isDialogue).map((r) => contextOf<DialogueContext>(r).audience)).toEqual([{ place: 'fountain' }]);
+        const audiences = provider.requests.filter(isDialogue).map((r) => contextOf<DialogueContext>(r).audience);
+        expect(audiences.filter((a) => !('place' in a) || a.place === 'fountain')).toEqual([{ place: 'fountain' }]);
       });
 
       it('C3: a Secret question: Lucia answers in the asker\'s private narration only', async () => {

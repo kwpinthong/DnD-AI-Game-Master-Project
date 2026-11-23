@@ -58,6 +58,7 @@ describe('Mock GM [mock:badnarration]', () => {
     place: { id: 'inn', name: 'โรงเตี๊ยม' },
     cast: [{ ref: 'r1', looks: 'หญิงผ้าคลุมเทา', title: '', self: true, karmaBand: 0 }],
     npcs: [],
+    answers: [],
     privateLines: false,
     beats: [{ actionId: 'act-1', kind: 'own_action', actor: 'r1', text, result: 'success', target: null, targetNpc: null, moved: null, items: [] }],
     journal: null,

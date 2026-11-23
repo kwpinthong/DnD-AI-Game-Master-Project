@@ -335,6 +335,11 @@ export interface NarrationContext {
    * because someone was talking to it.
    */
   npcs: { id: string; alias: string; grade: string; here: boolean; lingering: boolean; persona: string | null; bonds: { player: string; affinity: number; met: boolean }[] }[];
+  /**
+   * GEN-143: the NPCs here who answer beats (asked, talked to, requested): `via` target = the beat aims at it (targetNpc),
+   * partner = no target, and it is who the place was talking to last turn (GEN-144). Its own lines are the answer.
+   */
+  answers: { npcId: string; actionIds: string[]; via: 'target' | 'partner' }[];
   /** GEN-110: private NPC lines (`npcLines` of a player narration) are kept only when this is true: the reader's own action is Secret. */
   privateLines: boolean;
   /** In the server's order; write one or more segments for each, in the same order. */
@@ -416,6 +421,8 @@ const NARRATOR_TEXT = [
   'ห้ามใส่บทพูดของ NPC ลงใน segments (มีขั้นตอนแยกเขียนให้ทีหลัง) เล่าแค่ผลของ beats',
   // GEN-144
   'npcs ที่ lingering เป็น true = ยังอยู่ต่อเพราะกำลังคุยกับผู้เล่นอยู่ (เลยเวลาที่ปกติต้องไปแล้ว) เล่าได้ว่ายังอยู่ตรงนั้น',
+  // GEN-143
+  'answers = NPC ที่จะตอบ beat ที่ถาม / คุย / ขอ (actionIds) ด้วยบทพูดของตัวเองในขั้นบทพูด: ใน segments ของ beat นั้นเล่าแค่ท่าทาง สีหน้า บรรยากาศ ห้ามสรุปคำตอบหรือเล่าเนื้อหาที่ NPC ตอบแทน NPC',
 ].join('\n');
 
 /** GEN-116: the second stage. Same rules as GEN-110 had inside the narration; the narration is given so the lines follow it. */
@@ -424,6 +431,8 @@ const DIALOGUE_TEXT = [
   'npcLines = บทพูดของ NPC ที่อยู่ที่นี่ตอนนี้ (npcs ที่ here เป็น true ของ context เท่านั้น npcId ต้องตรง) ตอบ [] ได้เสมอ ไม่ต้องพูดทุกเทิร์น จำนวนสูงสุดอยู่ใน limits',
   '- audience place (ทุกคนอ่านร่วมกัน): kind dialogue = NPC พูดเรื่องที่ beat นั้นทำ / พูดกับผู้ทำ ไม่เกิน limits.dialoguePerNpc บรรทัดของ NPC เดียว (NPC ที่ beat เล็งถึงด้วย targetNpc) / kind reaction = NPC คนอื่นที่อยู่ที่นั่นตอบสนองคนละ 1 บรรทัด ไม่เกิน limits.reactionNpcs คน',
   '- audience player (อ่านคนเดียว): ใส่ npcLines ได้เฉพาะเมื่อ privateLines เป็น true (action ของผู้อ่านเป็นการกระทำลับ) เป็นสิ่งที่ NPC พูดกับผู้อ่านคนเดียว ไม่เกิน limits.privatePerPlayer บรรทัด นอกนั้นตอบ [] เสมอ (บทพูดต่อหน้าทุกคนอยู่ใน audience place แล้ว ห้ามซ้ำ)',
+  // GEN-143
+  '- answers: NPC แต่ละตัวใน answers ต้องเป็นผู้ตอบหลัก (kind dialogue อย่างน้อย 1 บรรทัด) ตอบสิ่งที่ beat ใน actionIds ถาม / ขอจริง ๆ (บทเล่าไม่ได้ตอบแทนไว้) / via partner = คู่สนทนาเดิม ตอบเมื่อ action นั้นพูด / ถามโดยไม่ระบุว่าใคร / หลายคนถาม NPC เดียวกัน = วงสนทนาเดียว ตอบรวมกันชุดเดียว ไม่เกิน limits.dialoguePerNpc × จำนวน actionIds',
   '- ช่วงสำคัญ (beat มี targetNpc, ผู้เล่นเจอ NPC ครั้งแรก = bonds met เป็น false, หรือมี beat kind event) ให้พูดมากขึ้น เทิร์นธรรมดาพูดน้อย 0-2 บรรทัด',
   '- แต่ละบรรทัดสั้น ไม่เกิน 120 ตัวอักษร เป็นภาษาไทย พูดตาม persona ของ NPC นั้น และท่าทีต่อผู้เล่นตาม bonds (affinity สูง = เป็นมิตร ต่ำ = ระแวง), karmaBand (-2 โหดร้าย .. +2 ใจบุญ) และ looks / title ของผู้เล่น (NPC รู้จักผู้เล่นแค่รูปลักษณ์กับฉายา ห้ามเรียกชื่อจริง)',
   '- ห้ามเฉลยความลับ ชื่อจริง หรือกรรมเป็นตัวเลข ห้ามพูดถึงสิ่งที่ไม่อยู่ใน beats / ห้ามเล่าเรื่องของ action ลับให้คนอื่นรู้ ใช้ {{p:ref}} / {{n:id}} แทนชื่อ ห้ามใส่ HP / กรรม / เกรด',

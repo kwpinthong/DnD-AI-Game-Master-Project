@@ -45,6 +45,7 @@ describe('Q-152 real-name check by whole word', () => {
       place: { id: 'inn', name: 'โรงเตี๊ยม' },
       cast: [{ ref: 'r1', looks: 'หญิงผ้าคลุมเทา', title: '', self: true, karmaBand: 0 }],
       npcs: [],
+      answers: [],
       privateLines: false,
       beats: [{ actionId: 'act-1', kind: 'own_action', actor: 'r1', text: 'เดิน', result: 'success', target: null, targetNpc: null, moved: null, items: [] }],
       journal: null,
