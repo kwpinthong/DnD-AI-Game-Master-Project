@@ -1124,7 +1124,9 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
         const { clients } = await atFountain();
         await playTurn(clients, ['ถามหญิงสาวเรื่องนาฬิกา', 'ถามหญิงสาวเรื่องเดียวกัน', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
 
-        expect(placeCtx().answers).toEqual([{ npcId: 'amnesiac', actionIds: ['act-1', 'act-2'], via: 'target' }]);
+        // actionIds follow the proposal's action order, which is not meaningful here.
+        const answers = placeCtx().answers.map((a) => ({ ...a, actionIds: [...a.actionIds].sort() }));
+        expect(answers).toEqual([{ npcId: 'amnesiac', actionIds: ['act-1', 'act-2'], via: 'target' }]);
         for (const c of clients.slice(0, 2)) expect(npcEntries(c).map((e) => e.text)).toEqual(Array.from({ length: 6 }, (_, i) => `ตอบทั้งสองคน ${i + 1}`));
         // One call for the group: the public actions get no private dialogue call.
         const audiences = provider.requests.filter(isDialogue).map((r) => contextOf<DialogueContext>(r).audience);
