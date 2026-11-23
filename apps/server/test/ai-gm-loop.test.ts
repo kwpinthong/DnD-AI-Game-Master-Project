@@ -2,7 +2,7 @@ import { GmConsoleResponse, type RoomEntry, type RoomServerMessage, type RoomSta
 import { approveHeldTurn } from './gm-console-client.ts';
 import type { Period, Turn } from '@isekai/rules';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { loadAiConfig } from '../src/ai/config.ts';
+import { DEFAULT_PRICES, loadAiConfig } from '../src/ai/config.ts';
 import type { AiCallRequest, AiCallResult, AiProvider } from '../src/ai/provider.ts';
 import { cannedGmAnswer, contextOf, mockNpcLines, mockTurnProposal } from '../src/gm/mock-gm.ts';
 import { mockReply } from '../src/ai/providers/mock.ts';
@@ -1513,6 +1513,134 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
         }
         expect(logs.some((l) => l.includes('purpose=npc_dialogue') && l.includes('budget_reached'))).toBe(true);
         expect(server!.db.prepare("select count(*) as n from ai_usage where purpose = 'npc_dialogue'").get()).toEqual({ n: 0 });
+      });
+    });
+
+    describe('GEN-128 the dialogue stage: a budget reserve, a restart, the Human GM console', () => {
+      const dialogueRequests = () => provider.requests.filter(isDialogue);
+      const usage = (inputTokens: number) => ({ inputTokens, cachedInputTokens: 0, cacheWriteTokens: 0, outputTokens: 0 });
+
+      it('C1: the budget is near the ceiling: what is left is kept for the next result stage, so the dialogue stage asks nothing and the next turn still resolves with the AI', async () => {
+        // One result stage = one adjudicate of 1000 input tokens (narrations free); a dialogue call costs the same. Ceiling = 1.5 result stages.
+        const stage = DEFAULT_PRICES[loadAiConfig({ AI_PROVIDER: 'mock' }).model]!.inputPerM * 1000;
+        await boot({ AI_GAME_MONTHLY_USD: String((stage * 1.5) / 1_000_000) }, async (req, n) => {
+          if (isTurn(req)) {
+            const r = await noRoll(req, n);
+            return r && r.ok ? { ...r, usage: usage(1000) } : r;
+          }
+          return mockReply.ok(await cannedGmAnswer(req), usage(isDialogue(req) ? 1000 : 0));
+        });
+        const { clients } = await atFountain();
+        await playTurn(clients, ['ทักลูเซีย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+
+        expect(dialogueRequests()).toEqual([]);
+        expect(logs.some((l) => l.includes('purpose=npc_dialogue') && l.includes('budget_reached'))).toBe(true);
+        // The reserve is not the ceiling: no ceiling notice, nobody sees the budget status.
+        expect(logs.some((l) => l.includes('ceiling reached'))).toBe(false);
+        for (const c of clients) expect(c.lastRoom()).toMatchObject({ gmStatus: null });
+
+        // The next result stage had its money: turn 2 resolves with the AI's own narration.
+        await playTurn(clients, ['ทักลูเซียอีกครั้ง', 'เดินรอบน้ำพุ', 'ล้างแก้วต่อ'], { day: 1, phase: 'HESPERION', turn: 1 });
+        expect(turnRows()).toEqual([expect.objectContaining({ turn: 1, status: 'applied' }), expect.objectContaining({ turn: 2, status: 'applied' })]);
+        for (const e of turnEntries(clients[0]!, 1, 'SOLARION', 2).filter((x) => x.kind === 'narration' || x.kind === 'feed')) expect(e.fallback).toBeFalsy();
+      });
+
+      describe('C2: a restart in the middle of the dialogue stage', () => {
+        /** The dialogue calls hang until the server shuts down. */
+        const hangDialogue: Handler = (req, n) =>
+          isDialogue(req) ? new Promise<AiCallResult>((resolve) => req.signal?.addEventListener('abort', () => resolve(mockReply.fail('timeout')), { once: true })) : noRoll(req, n);
+        async function restart(handler: Handler = noRoll) {
+          await Promise.all(sockets.splice(0).map((s) => s.close()));
+          await server!.close();
+          await boot({}, handler);
+        }
+
+        it('the lines of that turn are redone on the first join after the restart, under their own turn, once', async () => {
+          await boot({}, hangDialogue);
+          const { t, clients } = await atFountain();
+          for (const [i, c] of clients.entries()) await send(c, ['ทักลูเซีย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'][i]!);
+          for (const c of clients) await c.waitFor(at(1, 'SOLARION', 2));
+          await expect.poll(() => dialogueRequests().length, { timeout: 5_000 }).toBeGreaterThan(0);
+          await restart();
+
+          let again = [await enter(t.a), await enter(t.b), await enter(t.c)];
+          await until(() => npcEntries(again[0]!).length > 0);
+          const lines = npcEntries(again[0]!);
+          expect(lines.length).toBeGreaterThan(0);
+          for (const e of lines) expect(e).toMatchObject({ day: 1, phase: 'SOLARION', turn: 1, place: { id: 'fountain' } });
+          expect(npcEntries(again[1]!).map((e) => e.text)).toEqual(lines.map((e) => e.text));
+          expect(npcEntries(again[2]!).filter((e) => e.place?.id === 'fountain')).toEqual([]);
+          const asked = dialogueRequests().map((r) => contextOf<DialogueContext>(r));
+          expect(asked.every((c) => c.turn.day === 1 && c.turn.phase === 'SOLARION' && c.turn.turn === 1)).toBe(true);
+          expectNoNamesInPrompts();
+
+          // Done once: another restart and join asks nothing and shows the same lines once.
+          await pause(50);
+          await restart();
+          again = [await enter(t.a), await enter(t.b), await enter(t.c)];
+          await pause(150);
+          expect(dialogueRequests()).toEqual([]);
+          expect(npcEntries(again[0]!).map((e) => e.text)).toEqual(lines.map((e) => e.text));
+        });
+      });
+
+      describe('C3: a Human GM game', () => {
+        const gmView = async (t: Table) => GmConsoleResponse.parse((await t.call('GET', '/api/game/gm/console', { token: t.gm!.token })).body);
+
+        it('the dialogue follows the narration the GM edited, waits in the console, and players read the lines the GM edited', async () => {
+          await boot({}, noRoll);
+          const t = await startedTable(server!, true);
+          move(t.a, 'fountain');
+          move(t.b, 'fountain');
+          jumpTo(t, { day: 1, phase: 'SOLARION', turn: 1 });
+          const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+          for (const [i, c] of clients.entries()) await send(c, ['ทักลูเซีย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'][i]!);
+
+          // The held turn: the GM rewrites the fountain's narration, then approves.
+          await expect.poll(async () => (await gmView(t)).pending?.entries.length ?? 0, { timeout: 5_000 }).toBeGreaterThan(0);
+          const turn = (await gmView(t)).pending!;
+          expect(turn.dialogue).toBeUndefined();
+          const fountain = turn.entries.find((e) => e.kind === 'feed' && e.locationId === 'fountain')!;
+          const narration = 'ลูเซียหันมาสบตา น้ำพุส่องประกายใต้แดดเที่ยง';
+          const edit = await t.call('POST', '/api/game/gm/turn/edit', { token: t.gm!.token, body: { reason: 'ให้เข้ากับเรื่อง', narrations: [{ index: fountain.index, text: narration }] } });
+          expect(edit.status, JSON.stringify(edit.body)).toBe(200);
+          expect(dialogueRequests()).toEqual([]);
+          expect((await t.call('POST', '/api/game/gm/turn/approve', { token: t.gm!.token })).status).toBe(200);
+          for (const c of clients) await c.waitFor(at(1, 'SOLARION', 2));
+
+          // The dialogue is asked from the GM's text, and its lines wait in the console.
+          await expect.poll(async () => (await gmView(t)).pending?.dialogue ?? false, { timeout: 5_000 }).toBe(true);
+          const place = dialogueRequests().map((r) => contextOf<DialogueContext>(r)).find((c) => 'place' in c.audience && c.audience.place === 'fountain')!;
+          expect(place.narration).toEqual([narration]);
+          const held = (await gmView(t)).pending!;
+          expect(held).toMatchObject({ dialogue: true, at: { day: 1, phase: 'SOLARION', turn: 1 }, results: [] });
+          expect(held.entries.length).toBeGreaterThan(0);
+          await pause(50);
+          for (const c of clients) expect(npcEntries(c)).toEqual([]);
+
+          // A line has no HP / Stamina / Karma; the GM rewrites one line and approves.
+          const stats = await t.call('POST', '/api/game/gm/turn/edit', { token: t.gm!.token, body: { reason: 'ลอง', results: [{ memberId: t.a.memberId, hp: 1 }] } });
+          expect(stats.status).toBe(400);
+          const line = held.entries.find((e) => e.locationId === 'fountain')!;
+          const said = 'ข้าจำเจ้าได้ เจ้าคนที่มาเมื่อวาน';
+          const lineEdit = await t.call('POST', '/api/game/gm/turn/edit', { token: t.gm!.token, body: { reason: 'น้ำเสียงลูเซีย', narrations: [{ index: line.index, text: said }] } });
+          expect(lineEdit.status, JSON.stringify(lineEdit.body)).toBe(200);
+          expect((await t.call('POST', '/api/game/gm/turn/approve', { token: t.gm!.token })).status).toBe(200);
+
+          await until(() => npcEntries(clients[0]!).length > 0);
+          for (const c of clients.slice(0, 2)) {
+            const lines = npcEntries(c);
+            expect(lines.map((e) => e.text)).toContain(said);
+            for (const e of lines) expect(e).toMatchObject({ day: 1, phase: 'SOLARION', turn: 1 });
+          }
+          expect(npcEntries(clients[2]!).filter((e) => e.place?.id === 'fountain')).toEqual([]);
+
+          // The game goes on: turn 2 is held as a turn of its own.
+          for (const [i, c] of clients.entries()) await send(c, ['ทักลูเซียอีกครั้ง', 'เดินรอบน้ำพุ', 'ล้างแก้วต่อ'][i]!);
+          const next = await approveHeldTurn(t.call, t.gm!.token);
+          expect(next).toMatchObject({ at: { day: 1, phase: 'SOLARION', turn: 2 } });
+          expect(next.dialogue).toBeUndefined();
+        });
       });
     });
   });
