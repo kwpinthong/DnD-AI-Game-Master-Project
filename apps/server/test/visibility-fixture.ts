@@ -64,10 +64,10 @@ export interface Table {
  * A started online game with three players A (ลิน), B (ดาริน), C (เมฆา), each with a character.
  * `humanGm`: the creator is the GM and A, B, C join; otherwise A creates the game.
  */
-export async function startedTable(server: RunningServer, humanGm: boolean): Promise<Table> {
+export async function startedTable(server: RunningServer, humanGm: boolean, extra: Record<string, unknown> = {}): Promise<Table> {
   const call = caller(server);
   const created = await call('POST', '/api/games', {
-    body: { createCode: CREATE_CODE, gameName: 'เมืองก่อนอุกกาบาต', mode: 'online', humanGm, name: humanGm ? 'จีเอ็ม' : 'นก', pin: '1234' },
+    body: { createCode: CREATE_CODE, gameName: 'เมืองก่อนอุกกาบาต', mode: 'online', humanGm, name: humanGm ? 'จีเอ็ม' : 'นก', pin: '1234', ...extra },
   });
   expect(created.status, JSON.stringify(created.body)).toBe(200);
   const game = CreateGameResponse.parse(created.body);
