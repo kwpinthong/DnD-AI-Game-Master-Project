@@ -11,6 +11,7 @@ import {
   type AdminResult,
 } from './admin-api.ts';
 import { FORM_SETS, GameDataForm } from './GameDataForm.tsx';
+import { VoiceForm, voiceOf } from './VoiceForm.tsx';
 
 /**
  * GEN-147: the server owner's game data editor at <web>/admin. Plain on purpose: a list of the data sets, one
@@ -20,15 +21,28 @@ import { FORM_SETS, GameDataForm } from './GameDataForm.tsx';
 
 const pretty = (value: unknown) => JSON.stringify(value, null, 2);
 
-/** The JSON text as a list of records, or undefined when it is not one (then only the raw JSON box is shown). */
-function recordsOf(text: string): Record<string, unknown>[] | undefined {
+function parsed(text: string): unknown {
   try {
-    const value = JSON.parse(text) as unknown;
-    return Array.isArray(value) && value.every((r) => typeof r === 'object' && r !== null && !Array.isArray(r)) ? (value as Record<string, unknown>[]) : undefined;
+    return JSON.parse(text) as unknown;
   } catch {
     return undefined;
   }
 }
+
+/** The JSON text as a list of records, or undefined when it is not one (then only the raw JSON box is shown). */
+function recordsOf(text: string): Record<string, unknown>[] | undefined {
+  const value = parsed(text);
+  return Array.isArray(value) && value.every((r) => typeof r === 'object' && r !== null && !Array.isArray(r)) ? (value as Record<string, unknown>[]) : undefined;
+}
+
+/** GEN-192: names of the counts an object set sends instead of rows. */
+const PART_LABELS: Readonly<Record<string, string>> = { forbidden: 'กฎ', npcs: 'NPC' };
+const countOf = (s: GameDataSetSummary) =>
+  s.parts
+    ? Object.entries(s.parts)
+        .map(([k, n]) => `${PART_LABELS[k] ?? k} ${n}`)
+        .join(' · ')
+    : `${s.records} แถว`;
 const when = (iso: string) => new Date(iso).toLocaleString('th-TH', { hour12: false });
 
 type Problem = { message: string; fields?: Record<string, string> };
@@ -132,8 +146,11 @@ export function GameDataEditor({ apiBaseUrl, token, onForbidden }: { apiBaseUrl:
   }
 
   // GEN-172: NPC_Schedule and NPC get a record / field form over the same JSON text (the raw JSON stays one click away).
+  // GEN-192: Voice (one object) gets its own form the same way.
+  const isVoice = selected?.name === 'Voice';
   const formSet = selected && FORM_SETS[selected.name];
   const formRows = formSet ? recordsOf(text) : undefined;
+  const voice = isVoice ? voiceOf(parsed(text)) : undefined;
   const jsonBox = selected && (
     <label>
       JSON ของ {selected.name}
@@ -156,7 +173,7 @@ export function GameDataEditor({ apiBaseUrl, token, onForbidden }: { apiBaseUrl:
         <nav className="gdata__sets" aria-label="ชุดข้อมูลเกม">
           {sets.map((s) => (
             <button key={s.name} type="button" aria-pressed={selected?.name === s.name} onClick={() => void open(s.name)}>
-              {s.name} ({s.records} แถว)
+              {s.name} ({countOf(s)})
             </button>
           ))}
         </nav>
@@ -197,10 +214,14 @@ export function GameDataEditor({ apiBaseUrl, token, onForbidden }: { apiBaseUrl:
           <h3>
             {selected.name} <small>({selected.file}, แก้ล่าสุด {when(selected.updatedAt)})</small>
           </h3>
-          {formSet ? (
+          {formSet || isVoice ? (
             <>
-              {formRows ? (
+              {formSet && formRows ? (
                 <GameDataForm set={formSet} rows={formRows} problems={problem?.fields ?? {}} onChange={(rows) => setText(pretty(rows))} />
+              ) : voice ? (
+                <VoiceForm value={voice} problems={problem?.fields ?? {}} onChange={(v) => setText(pretty(v))} />
+              ) : isVoice ? (
+                <p>JSON ดิบอ่านเป็นชุด Voice ไม่ได้ แก้ JSON ให้ถูกก่อนจึงจะใช้แบบฟอร์มได้</p>
               ) : (
                 <p>JSON ดิบอ่านเป็นรายการ record ไม่ได้ แก้ JSON ให้ถูกก่อนจึงจะใช้แบบฟอร์มได้</p>
               )}

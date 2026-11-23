@@ -331,6 +331,31 @@ const gameDataSummary: In<typeof p.GameDataSetSummary> = {
   updatedAt: '2026-11-22T12:00:00.000Z',
   canUndo: true,
 };
+/** GEN-192: Voice is one object; the list counts its rules and NPC profiles. */
+const voiceSummary: In<typeof p.GameDataSetSummary> = { name: 'Voice', file: 'voice.json', records: 0, parts: { forbidden: 2, npcs: 1 }, updatedAt: '2026-11-23T12:00:00.000Z', canUndo: false };
+const voiceValue = {
+  version: 1,
+  tone: 'A',
+  guide: { voice: 'ผู้เล่าเรื่องที่ยืนข้างผู้เล่น', register: 'ภาษาเขียนกลาง', length: 'ประโยคสั้น', use: ['กริยาตรง'] },
+  forbidden: [
+    { id: 'dai_tham_kan', match: { type: 'regex', value: '(ได้)?ทำการ' }, scope: 'all', severity: 'block', fix: 'ตัด ทำการ ใช้กริยาตรง' },
+    { id: 'pronoun_repeat', match: { type: 'density', words: ['เขา', 'เธอ'], max: 1, perSentences: 2 }, scope: 'narration', severity: 'flag', fix: 'ละประธาน' },
+  ],
+  pairs: [{ bad: 'เขาได้ทำการเปิดประตูออก', good: 'เขาผลักประตูเปิด' }],
+  npcs: {
+    beggar: {
+      register: 'child_polite',
+      self: ['ผม'],
+      you: { default: 'พี่', wary: 'ท่าน' },
+      particles: ['ครับ', 'นะครับ'],
+      catchphrases: ['ไม่เป็นไรครับ ผมชินแล้ว'],
+      never: ['คำหยาบ'],
+      neverWords: ['ค่ะ', 'เจ้า'],
+      note: 'ติดอ่างตอนตื่นเต้น',
+      forms: { ss_good: { register: 'archaic_divine', self: ['เรา'] } },
+    },
+  },
+};
 
 const learningEntries: In<typeof p.LearningEntryView>[] = [
   {
@@ -561,8 +586,13 @@ export const CONTRACT_FIXTURES: Fixtures = {
       failures: [],
     },
   ],
-  GameDataListResponse: [{ sets: [gameDataSummary, { ...gameDataSummary, name: 'NPC', file: 'npc.json', records: 12, canUndo: false }] }],
-  GameDataSetResponse: [{ set: gameDataSummary, value: [scheduleRow] }],
+  GameDataListResponse: [
+    { sets: [gameDataSummary, { ...gameDataSummary, name: 'NPC', file: 'npc.json', records: 12, canUndo: false }, voiceSummary] },
+  ],
+  GameDataSetResponse: [
+    { set: gameDataSummary, value: [scheduleRow] },
+    { set: voiceSummary, value: voiceValue },
+  ],
   GameDataSaveRequest: [{ value: [scheduleRow] }],
   GameDataAuditResponse: [
     {

@@ -477,6 +477,15 @@ export const SCENARIOS: readonly MockScenario[] = [
     room: room(BASE_ROOM, [], [...START_ENTRIES, { seq: 22, kind: 'changes', day: BASE_ROOM.day, phase: BASE_ROOM.phase, turn: BASE_ROOM.turn, place: null, text: 'ลิน', changes: [{ stat: 'coins', delta: 1, reason: 'ได้ทิป' }] }]),
   },
   {
+    id: 'game-data-voice',
+    title: 'ชุด Voice (แบบฟอร์ม)',
+    note: 'กดชุด Voice: คำต้องห้าม + โปรไฟล์พูด NPC (GEN-192)',
+    session: 'guest',
+    screens: ['game-data'],
+    http: { 'GET /api/admin/game-data/:name': ok(F.GameDataSetResponse[1]) },
+    room: room(BASE_ROOM),
+  },
+  {
     id: 'library-empty',
     title: 'library ว่าง',
     note: 'ยังไม่มีเกมที่ให้ความรู้',

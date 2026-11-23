@@ -69,18 +69,17 @@ export const FORM_SETS: Readonly<Record<string, FormSet>> = {
   },
 };
 
-const asList = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
-const parseList = (text: string) => text.split(',').map((s) => s.trim()).filter(Boolean);
+export const asList = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
+const parseList = (text: string, sep = ',') => text.split(sep).map((s) => s.trim()).filter(Boolean);
 
-/** The server's problems for field `key` of row `i` ("[1].periods[0]" → row 1, periods). */
-function problemOf(fields: Readonly<Record<string, string>>, i: number, key: string): string | undefined {
-  const at = `[${i}].${key}`;
+/** The server's problems at `at` and below it ("[1].periods" takes "[1].periods[0]"). */
+export function problemAt(fields: Readonly<Record<string, string>>, at: string): string | undefined {
   const found = Object.entries(fields).filter(([path]) => path === at || path.startsWith(`${at}[`) || path.startsWith(`${at}.`));
   return found.length > 0 ? found.map(([path, message]) => `${path}: ${message}`).join('; ') : undefined;
 }
 
 /** A comma list typed as text: the draft keeps what is typed ("a, "), the row gets the parsed list. */
-function ListInput({ value, onChange, ...input }: { value: string[]; onChange: (v: string[]) => void } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
+export function ListInput({ value, onChange, ...input }: { value: string[]; onChange: (v: string[]) => void } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
   const [draft, setDraft] = useState(value.join(', '));
   useEffect(() => {
     if (JSON.stringify(parseList(draft)) !== JSON.stringify(value)) setDraft(value.join(', '));
@@ -92,6 +91,25 @@ function ListInput({ value, onChange, ...input }: { value: string[]; onChange: (
       onChange={(e) => {
         setDraft(e.target.value);
         onChange(parseList(e.target.value));
+      }}
+    />
+  );
+}
+
+/** GEN-192: a list one item per line (items that may hold a comma, e.g. catchphrases). */
+export function LinesInput({ value, onChange, ...input }: { value: string[]; onChange: (v: string[]) => void; id: string }) {
+  const [draft, setDraft] = useState(value.join('\n'));
+  useEffect(() => {
+    if (JSON.stringify(parseList(draft, '\n')) !== JSON.stringify(value)) setDraft(value.join('\n'));
+  }, [value]);
+  return (
+    <textarea
+      {...input}
+      rows={2}
+      value={draft}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        onChange(parseList(e.target.value, '\n'));
       }}
     />
   );
@@ -163,7 +181,7 @@ export function GameDataForm({ set, rows, problems, onChange }: { set: FormSet; 
             แถว {i + 1}: {set.title(row)}
           </legend>
           {set.fields.map((field) => (
-            <FieldInput key={field.key} field={field} row={row} id={`${id}-${i}-${field.key}`} problem={problemOf(problems, i, field.key)} onChange={(v) => edit(i, field.key, v)} />
+            <FieldInput key={field.key} field={field} row={row} id={`${id}-${i}-${field.key}`} problem={problemAt(problems, `[${i}].${field.key}`)} onChange={(v) => edit(i, field.key, v)} />
           ))}
           <button type="button" onClick={() => onChange(rows.filter((_, j) => j !== i))}>
             ลบแถว {i + 1}

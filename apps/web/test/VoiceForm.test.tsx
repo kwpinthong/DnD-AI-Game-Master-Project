@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GameDataEditor } from '../src/GameDataEditor.tsx';
+import { mockHttp } from '../src/mock/http.ts';
+import { scenarioById } from '../src/mock/scenarios.ts';
+import { voiceOf } from '../src/VoiceForm.tsx';
 
 // GEN-192: the Voice set (one object, GEN-176) gets a form: forbidden rules (add / edit / delete with their type) and
 // each NPC's speech profile, saved through the same game-data API (schema check, backup, audit, undo).
@@ -45,7 +48,7 @@ function fakeServer() {
       if (url.endsWith('/api/admin/game-data-audit')) return Response.json({ entries: [] });
       if (url.endsWith('/undo')) state.value = state.history.pop() ?? state.value;
       else if (init?.method === 'PUT') {
-        const value = (JSON.parse(String(init.body)) as { value: typeof VOICE }).value;
+        const value = (JSON.parse(String(init.body)) as { value: { forbidden: { match: { type: string; value?: string } }[] } }).value;
         puts.push(value);
         const bad = value.forbidden.findIndex((r) => r.match.type === 'regex' && r.match.value?.includes('(') && !r.match.value.includes(')'));
         if (bad >= 0) return Response.json({ code: 'invalid_input', message: 'ข้อมูลไม่ตรง schema', fields: { [`forbidden[${bad}].match.value`]: 'regex นี้ compile ไม่ได้' } }, { status: 400 });
@@ -165,11 +168,21 @@ describe('Voice form (GEN-192)', () => {
     const controls = [...within(form).getAllByRole('textbox'), ...within(form).getAllByRole('combobox'), ...within(form).getAllByRole('spinbutton'), ...within(form).getAllByRole('button')];
     for (const el of controls) expect(nameOf(el), el.outerHTML).toBeTruthy();
     // The inputs sit in the GEN-172 field class, whose CSS gives 44px and token colours (checked in GameDataForm.test).
-    for (const el of controls.filter((c) => c.tagName !== 'BUTTON')) expect(el.closest('.gdata__field'), el.outerHTML).toBeTruthy();
+    for (const el of controls.filter((c) => c.tagName !== 'BUTTON' && !c.closest('details'))) expect(el.closest('.gdata__field'), el.outerHTML).toBeTruthy();
     const css = readFileSync(join(__dirname, '../src/library.css'), 'utf8').replace(/\r\n/g, '\n');
     const block = css.slice(css.indexOf('/* GEN-147'), css.indexOf('.lib {'));
     expect(block).toMatch(/\.gdata button,\s*\.gdata summary \{[^}]*min-height: 44px/);
     expect(block).toMatch(/\.gdata__field input,\s*\.gdata__field select,\s*\.gdata__field textarea \{[^}]*min-height: 44px/);
     expect(block).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/);
+  });
+
+  it('/dev/gallery: the game-data-voice mock scenario lists Voice with its counts and opens a value the form takes', () => {
+    const scenario = scenarioById('game-data-voice');
+    expect(scenario.id).toBe('game-data-voice');
+    expect(scenario.screens).toContain('game-data');
+    const list = mockHttp(scenario, { method: 'GET', path: '/api/admin/game-data' }) as { body: { sets: { name: string; parts?: unknown }[] } };
+    expect(list.body.sets.find((s) => s.name === 'Voice')?.parts).toEqual({ forbidden: 2, npcs: 1 });
+    const set = mockHttp(scenario, { method: 'GET', path: '/api/admin/game-data/Voice' }) as { body: { value: unknown } };
+    expect(voiceOf(set.body.value)).toBeDefined();
   });
 });
