@@ -76,6 +76,8 @@ export const GmPendingTurn = z.strictObject({
   finale: z.boolean().optional(),
   /** GEN-186: the scene of a period that just opened (narration only; results is empty). */
   scene: z.boolean().optional(),
+  /** GEN-128: the NPC lines of a turn already published (`at` = that turn), written from its approved narration (text only; results is empty). */
+  dialogue: z.boolean().optional(),
   /** The rolls behind the held turn, in resolve order (Q-229). */
   checks: z.array(GmCheckView).optional(),
 });

@@ -1,8 +1,10 @@
 import type { GmFallbackCause } from '@isekai/protocol';
 import { PERIODS, type Period, type Turn } from '@isekai/rules';
-import { and, asc, desc, eq, inArray, isNull, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lte } from 'drizzle-orm';
+import type { PromptBlock } from '../ai/provider.ts';
 import type { DbOrTx } from '../db/client.ts';
 import { gmConstraint, gmJournal, gmMemory, gmTurn, roomEntry, roomEntryRecipient } from '../db/schema.ts';
+import type { DialogueContext } from './context.ts';
 import type { GmNarration, GmTurnProposal } from './schema.ts';
 
 /** Rows of the AI GM turn loop (GEN-057). GM-only data: nothing here is sent to a player. */
@@ -57,6 +59,37 @@ export function saveNarration(db: DbOrTx, gameId: string, at: TurnAt, key: strin
 
 export function markApplied(db: DbOrTx, gameId: string, at: TurnAt, now: number): void {
   db.update(gmTurn).set({ status: 'applied', updatedAt: now }).where(turnKey(gameId, at)).run();
+}
+
+// --- GEN-128: the dialogue calls of a published turn, kept until their lines are stored ---
+
+/** One audience's dialogue call: all it needs to be asked again after a restart. */
+export interface DialogueJob {
+  key: string;
+  system: PromptBlock[];
+  context: DialogueContext;
+  forbidden: string[];
+}
+
+export function saveDialogueJobs(db: DbOrTx, gameId: string, at: TurnAt, jobs: readonly DialogueJob[], now: number): void {
+  db.update(gmTurn).set({ dialogue: jobs.length > 0 ? JSON.stringify(jobs) : null, updatedAt: now }).where(turnKey(gameId, at)).run();
+}
+
+export function dialogueJobDone(db: DbOrTx, gameId: string, at: TurnAt, key: string, now: number): void {
+  const row = db.select({ dialogue: gmTurn.dialogue }).from(gmTurn).where(turnKey(gameId, at)).get();
+  if (!row?.dialogue) return;
+  saveDialogueJobs(db, gameId, at, (JSON.parse(row.dialogue) as DialogueJob[]).filter((j) => j.key !== key), now);
+}
+
+/** The turns of a game with dialogue calls left, oldest first. */
+export function dialogueJobsLeft(db: DbOrTx, gameId: string): { at: TurnAt; jobs: DialogueJob[] }[] {
+  return db
+    .select()
+    .from(gmTurn)
+    .where(and(eq(gmTurn.gameId, gameId), isNotNull(gmTurn.dialogue)))
+    .all()
+    .map((r) => ({ at: { day: r.day, phase: r.phase, turn: r.turn === 2 ? 2 : 1 } as TurnAt, jobs: JSON.parse(r.dialogue!) as DialogueJob[] }))
+    .sort((a, b) => a.at.day - b.at.day || PERIODS.indexOf(a.at.phase) - PERIODS.indexOf(b.at.phase) || a.at.turn - b.at.turn);
 }
 
 // --- Constraint Lock (C4) ---

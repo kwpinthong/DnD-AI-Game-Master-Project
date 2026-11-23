@@ -1,0 +1,1 @@
+ALTER TABLE `gm_turn` ADD `dialogue` text;

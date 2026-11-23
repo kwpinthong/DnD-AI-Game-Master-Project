@@ -234,6 +234,14 @@ const gmSceneTurn: In<typeof p.GmPendingTurn> = {
   checks: [],
   scene: true,
 };
+/** GEN-128: the held NPC lines of a published turn (text only). */
+const gmDialogueTurn: In<typeof p.GmPendingTurn> = {
+  at: { day: 1, phase: 'SOLARION', turn: 1 },
+  entries: [{ index: 0, kind: 'feed', memberId: null, locationId: 'fountain', text: 'ข้าจำเจ้าได้ เจ้าคนที่มาเมื่อวาน', edited: false }],
+  results: [],
+  checks: [],
+  dialogue: true,
+};
 const gmOverride = {
   id: 1,
   gmMemberId: 'm-gm',
@@ -503,7 +511,7 @@ export const CONTRACT_FIXTURES: Fixtures = {
     },
   ],
   GmTurnEditRequest: [{ reason: 'ปรับถ้อยคำ', narrations: [{ index: 0, text: 'คุณเห็นนักบวช…' }], results: [{ memberId: ME, hp: 20 }] }],
-  GmPendingTurn: [gmPendingTurn, gmFinaleTurn, gmSceneTurn],
+  GmPendingTurn: [gmPendingTurn, gmFinaleTurn, gmSceneTurn, gmDialogueTurn],
   GmApproveResponse: [{ approved: AT }],
   GmAdjustRequest: [{ field: 'hp', memberId: ME, value: 25, reason: 'แก้ผล' }, { field: 'affinity', memberId: ME, npcId: 'merchant', value: 30, reason: 'แก้ผล' }],
   GmAdjustResponse: [{ override: gmOverride }],

@@ -65,6 +65,8 @@ export interface AiTrigger<T> {
   /** Extra attempts for this call; default AI_MAX_RETRIES. Narration uses 1 (Q-177: retry once, then the template). */
   maxRetries?: number;
   signal?: AbortSignal;
+  /** GEN-128: refuse (`budget_reached`, detail `reserve`, no ceiling notice) unless this much stays under the ceiling after the spend so far. */
+  reserveUsdMicros?: number;
 }
 
 /** `usage` (GEN-115): the tokens of the successful attempt; optional so a test double need not give it. */
@@ -166,6 +168,7 @@ export function createAiService(deps: AiServiceDeps): AiService {
         const at = now();
         const spent = usage.spentThisMonth(trigger.gameId, at);
         if (spent >= ceilingUsdMicros) return { ok: false, error: budgetReached(trigger.gameId, spent, at) };
+        if (spent + (trigger.reserveUsdMicros ?? 0) >= ceilingUsdMicros) return { ok: false, error: new AiServiceError('budget_reached', budgetMessage(), 'owner_gm', 'reserve') };
 
         let result: AiCallResult;
         try {

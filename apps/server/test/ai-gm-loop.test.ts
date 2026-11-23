@@ -1539,10 +1539,10 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
         expect(logs.some((l) => l.includes('ceiling reached'))).toBe(false);
         for (const c of clients) expect(c.lastRoom()).toMatchObject({ gmStatus: null });
 
-        // The next result stage had its money: turn 2 resolves with the AI's own narration.
+        // The next result stage had its money: the AI adjudicates turn 2 and it applies (spent by the dialogue, it would be stuck).
         await playTurn(clients, ['ทักลูเซียอีกครั้ง', 'เดินรอบน้ำพุ', 'ล้างแก้วต่อ'], { day: 1, phase: 'HESPERION', turn: 1 });
+        expect(provider.requests.filter(isTurn).map((r) => r.purpose)).toEqual(['gm_adjudicate', 'gm_adjudicate']);
         expect(turnRows()).toEqual([expect.objectContaining({ turn: 1, status: 'applied' }), expect.objectContaining({ turn: 2, status: 'applied' })]);
-        for (const e of turnEntries(clients[0]!, 1, 'SOLARION', 2).filter((x) => x.kind === 'narration' || x.kind === 'feed')) expect(e.fallback).toBeFalsy();
       });
 
       describe('C2: a restart in the middle of the dialogue stage', () => {
@@ -1611,7 +1611,8 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
           // The dialogue is asked from the GM's text, and its lines wait in the console.
           await expect.poll(async () => (await gmView(t)).pending?.dialogue ?? false, { timeout: 5_000 }).toBe(true);
           const place = dialogueRequests().map((r) => contextOf<DialogueContext>(r)).find((c) => 'place' in c.audience && c.audience.place === 'fountain')!;
-          expect(place.narration).toEqual([narration]);
+          // Q-045: the NPC's real name the GM wrote goes back to its token.
+          expect(place.narration).toEqual([narration.replace('ลูเซีย', '{{n:amnesiac}}')]);
           const held = (await gmView(t)).pending!;
           expect(held).toMatchObject({ dialogue: true, at: { day: 1, phase: 'SOLARION', turn: 1 }, results: [] });
           expect(held.entries.length).toBeGreaterThan(0);
@@ -1823,7 +1824,17 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
         for (const [i, c] of clients.entries()) await send(c, ['ยืนมองน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างแก้ว'][i]!);
         await approveHeldTurn(t.call, t.gm!.token);
         for (const c of clients) await c.waitFor(at(1, 'HESPERION', 1));
-        await expect.poll(async () => (await gmView(t)).pending?.entries.length ?? 0, { timeout: 5_000 }).toBe(2);
+        // GEN-128: the NPC lines of the approved turn reach the console first; the GM approves them as they are.
+        await expect
+          .poll(
+            async () => {
+              const pending = (await gmView(t)).pending;
+              if (pending?.dialogue) await t.call('POST', '/api/game/gm/turn/approve', { token: t.gm!.token });
+              return pending?.scene ? pending.entries.length : 0;
+            },
+            { timeout: 5_000 },
+          )
+          .toBe(2);
         return { t, clients };
       }
 
