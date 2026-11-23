@@ -25,6 +25,8 @@ export interface DataSetSummary {
   name: DataSetName;
   file: string;
   records: number;
+  /** GEN-192: Voice is one object, so the list shows its rule and NPC profile counts instead. */
+  parts?: Record<string, number>;
   updatedAt: number;
   canUndo: boolean;
   /** GEN-179: the DB row fails the schema, so the server runs on the asset file until a valid save. */
@@ -162,10 +164,15 @@ export function openGameData(
   const summaryOf = (name: DataSetName, row: { json: string; updatedAt: number }): DataSetSummary => {
     const value = JSON.parse(row.json) as unknown;
     const fallback = fallbacks.get(name);
+    const voice = name === 'Voice' && value && typeof value === 'object' ? (value as { forbidden?: unknown; npcs?: unknown }) : undefined;
     return {
       name,
       file: DATA_SET_FILES[name],
       records: Array.isArray(value) ? value.length : 0,
+      // A stale row (GEN-179) may miss a key: count what is there.
+      ...(voice
+        ? { parts: { forbidden: Array.isArray(voice.forbidden) ? voice.forbidden.length : 0, npcs: voice.npcs && typeof voice.npcs === 'object' ? Object.keys(voice.npcs).length : 0 } }
+        : {}),
       updatedAt: row.updatedAt,
       canUndo: lastEdit(name) !== undefined,
       ...(fallback ? { fallback } : {}),

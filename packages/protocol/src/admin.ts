@@ -83,6 +83,8 @@ export const GameDataSetSummary = z.strictObject({
   /** The asset file it was seeded from and an export writes it to. */
   file: z.string(),
   records: z.number().int(),
+  /** GEN-192: the sizes inside a set that is one object (Voice: `forbidden` rules, `npcs` profiles); none for a list. */
+  parts: z.record(z.string(), z.number().int()).optional(),
   updatedAt: z.string(),
   /** There is an edit an undo can take back. */
   canUndo: z.boolean(),

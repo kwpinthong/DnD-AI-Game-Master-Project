@@ -327,6 +327,50 @@ describe('game data in the DB + admin editor (GEN-147)', { timeout: 120_000 }, (
     else expect(live[0]!.extra).toMatchObject({ admin_note: 'แก้จาก admin' });
   });
 
+  describe('GEN-192: the Voice form edits through the same API', () => {
+    type Voice = { forbidden: { match: { type: string; value?: string } }[]; npcs: Record<string, { self: string[]; forms?: Record<string, unknown> }> };
+
+    it('C1: the list counts the Voice rules and NPC profiles (not 0 rows); list sets have no parts', async () => {
+      await boot();
+      const token = await adminToken();
+      const file = readFile('Voice') as Voice;
+      const list = GameDataListResponse.parse((await call('GET', '/api/admin/game-data', { token })).body);
+      expect(list.sets.find((s) => s.name === 'Voice')!.parts).toEqual({ forbidden: file.forbidden.length, npcs: Object.keys(file.npcs).length });
+      expect(list.sets.find((s) => s.name === 'NPC')!.parts).toBeUndefined();
+      expect((await getSet(token, 'Voice')).set.parts).toEqual({ forbidden: file.forbidden.length, npcs: Object.keys(file.npcs).length });
+    });
+
+    it('C2: a pronoun edit of one NPC profile is saved with a backup and an audit row; its SS forms stay', async () => {
+      await boot();
+      const token = await adminToken();
+      const voice = (await getSet(token, 'Voice')).value as Voice;
+      const edited = { ...voice, npcs: { ...voice.npcs, beggar: { ...voice.npcs.beggar!, self: ['หนู'] } } };
+      const res = await save(token, 'Voice', edited);
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect(server!.assets.voice.npcs.beggar!.self).toEqual(['หนู']);
+      expect(server!.assets.voice.npcs.beggar!.forms).toEqual(loadGameAssets().voice.npcs.beggar!.forms);
+      expect(((await getSet(token, 'Voice')).value as Voice).npcs.beggar!.forms).toEqual(voice.npcs.beggar!.forms);
+      const entries = await audit(token);
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({ name: 'Voice', action: 'edit' });
+      expect(backups()).toHaveLength(1);
+    });
+
+    it('C3: a regex that does not compile is refused at its field; nothing is saved', async () => {
+      await boot();
+      const token = await adminToken();
+      const voice = (await getSet(token, 'Voice')).value as Voice;
+      const i = voice.forbidden.findIndex((r) => r.match.type === 'regex');
+      const broken = { ...voice, forbidden: voice.forbidden.map((r, j) => (j === i ? { ...r, match: { type: 'regex', value: '(ทำการ' } } : r)) };
+      const res = await save(token, 'Voice', broken);
+      expect(res.status).toBe(400);
+      const error = ApiError.parse(res.body);
+      expect(error.code === 'invalid_input' ? Object.keys(error.fields) : []).toEqual([`forbidden[${i}].match.value`]);
+      expect((await getSet(token, 'Voice')).value).toEqual(voice);
+      expect(await audit(token)).toEqual([]);
+    });
+  });
+
   describe('GEN-179: a DB set that a new schema no longer accepts falls back to its asset file', () => {
     const npcRow = () => (server!.db.prepare("select json from game_data_set where name = 'NPC'").get() as { json: string }).json;
     /** Simulates a deploy whose schema change rejects the saved NPC edit: [0].grade is not a rank any more. */
