@@ -78,7 +78,7 @@ import { npcFarewellFor } from './server-lines.ts';
 import { periodScenes } from './scene.ts';
 import { GM_OUTPUT, GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
 import { gateStyle, styleIssues, type StyleScope } from './style-check.ts';
-import { gameTone, toneBlock } from './tone.ts';
+import { gameTone, styleBlock, toneBlock } from './tone.ts';
 import {
   activeConstraints,
   addConstraint,
@@ -522,8 +522,9 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     // GEN-115: the narrations do not depend on each other, so they run together: the wait is the slowest one, not the sum.
     // GEN-177: the game's tone right after the fixed rules, in the stable (cached) start of every narration / dialogue call.
     const tone = toneBlock(assets.voice, gameTone(db, gameId));
-    const narratorSystem = [NARRATOR_BLOCK, tone];
-    const dialogueSystem = [DIALOGUE_BLOCK, tone];
+    // GEN-195: the Voice's forbidden phrases + bad → good pairs, cached right after the tone.
+    const narratorSystem = [NARRATOR_BLOCK, tone, styleBlock(assets.voice, 'narration')];
+    const dialogueSystem = [DIALOGUE_BLOCK, tone, styleBlock(assets.voice, 'dialogue')];
     const narrations = await timer.time('narrate', () => Promise.all(audiences.map(async (audience): Promise<{ key: string; ctx: NarrationContext; out: StoredNarration; forbidden: string[]; readers: string[] }> => {
       const ctx: NarrationContext = {
         kind: 'gm_narration',

@@ -40,13 +40,15 @@ export function estimateTokens(text: string): number {
   return other + Math.ceil(ascii / 4);
 }
 
-/** ADR §6.2 hard caps per call. */
+/** GEN-195: the most the Voice style block (gm/tone.ts styleBlock) may add to every narration / dialogue call. */
+export const STYLE_BLOCK_TOKENS = 1_000;
+/** ADR §6.2 hard caps per call. GEN-195: the narration / dialogue caps grow by the style block, so it never stops a turn. */
 export const CONTEXT_BUDGET = {
   gm_adjudicate: 20_000,
-  narrate_player: 6_000,
-  narrate_place: 5_000,
+  narrate_player: 6_000 + STYLE_BLOCK_TOKENS,
+  narrate_place: 5_000 + STYLE_BLOCK_TOKENS,
   /** GEN-116: the narration context without the journal, plus the narration. */
-  npc_dialogue: 6_000,
+  npc_dialogue: 6_000 + STYLE_BLOCK_TOKENS,
   summarize_day: 14_000,
   summarize_journal: 6_000,
   /** GEN-059: the ending (every event outcome + one entry per player). */
