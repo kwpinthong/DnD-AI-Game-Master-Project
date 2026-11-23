@@ -1,14 +1,16 @@
 import type { NpcDialogueLevel } from '@isekai/protocol';
-import type { Period, Weather } from '@isekai/rules';
+import { restorePhaseState, type Period, type Weather } from '@isekai/rules';
 import type { GameAssets } from '../assets/load.ts';
 import { sheetNpcFor } from '../companions/sheet.ts';
+import { seatedKarmas } from '../crossplayer/phase.ts';
 import { eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
-import { npcLinger } from '../db/schema.ts';
+import { gamePhase, npcLinger } from '../db/schema.ts';
 import { npcsAt } from '../travel/rules.ts';
 import { npcBondsOf } from '../visibility/store.ts';
+import { weatherAt } from '../weather/service.ts';
 import { containsName } from './check.ts';
-import { npcToken, TOKEN_PATTERN, withinTokens, type Beat, type GmWorld, type NarrationContext } from './context.ts';
+import { loadWorld, npcToken, TOKEN_PATTERN, withinTokens, type Beat, type GmWorld, type NarrationContext } from './context.ts';
 import type { GmNpcLine } from './schema.ts';
 
 /**
@@ -74,6 +76,44 @@ export function npcsPresentAt(world: GmWorld, assets: GameAssets, placeId: strin
       return placed.length > 0 ? placeName !== undefined && placed.includes(placeName) : n.locationId === placeId;
     });
   });
+}
+
+/** GEN-175: the place of an NPC that `npcsPresentAt` has at none of the scenario places now (no player is ever there). */
+export const NPC_AWAY = '';
+
+/**
+ * GEN-175: one place per NPC for the rules engine and the turn context, by the same rule as `npcsPresentAt` (the first
+ * place it has the NPC at), else `NPC_AWAY`. shortcut: karma rows for any of `now.karmas` count for every actor (as the
+ * narration's place feed does); upgrade to a per-actor check if karma-split schedules show in play.
+ */
+export function npcPlacesNow(world: GmWorld, assets: GameAssets, now: PresenceNow): Map<string, string> {
+  const out = new Map(world.npcs.map((n) => [n.id, NPC_AWAY]));
+  for (const p of world.places) for (const n of npcsPresentAt(world, assets, p.id, now)) if (out.get(n.id) === NPC_AWAY) out.set(n.id, p.id);
+  return out;
+}
+
+/**
+ * GEN-175: who lingers now and who says goodbye (`lingerNow` of what the last turn left), with the schedule read for
+ * `base` (every seated player's karma). The turn and the chips between turns both read it, so they agree.
+ */
+export function lingersNow(db: DbOrTx, world: GmWorld, assets: GameAssets, base: Omit<PresenceNow, 'lingering'>): { last: Linger[]; lingering: Linger[]; farewells: Linger[] } {
+  const last = lingersOf(db, world.gameId);
+  return { last, ...lingerNow(last, (npcId, placeId) => npcsPresentAt(world, assets, placeId, base).some((n) => n.id === npcId)) };
+}
+
+/**
+ * GEN-175: the NPCs at `placeId` now between turns, as a viewer with `karma` sees them (the chips, saving a companion):
+ * the period and weather of the game's clock and the lingering of the next turn. Before the clock exists (the room never
+ * opened), the scenario place.
+ */
+export function npcsHereNow(db: DbOrTx, assets: GameAssets, gameId: string, placeId: string, karma: number): GmWorld['npcs'] {
+  const world = loadWorld(db, gameId, assets);
+  const row = db.select({ state: gamePhase.state }).from(gamePhase).where(eq(gamePhase.gameId, gameId)).get();
+  if (!row) return world.npcs.filter((n) => n.locationId === placeId);
+  const clock = restorePhaseState(JSON.parse(row.state));
+  const base = { phase: clock.phase, weather: weatherAt(db, gameId, clock)?.weather ?? null, karmas: seatedKarmas(db, gameId) };
+  const { lingering } = lingersNow(db, world, assets, base);
+  return npcsPresentAt(world, assets, placeId, { ...base, karmas: [karma], lingering });
 }
 
 // --- GEN-144: the conversation partner stays a little ---

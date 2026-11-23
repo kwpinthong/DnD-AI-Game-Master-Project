@@ -165,6 +165,7 @@ export interface TurnContext {
   resting: string[];
   players: PlayerContext[];
   places: { id: string; name: string; safety: string; tags: string[] }[];
+  /** `place`: where the NPC is now (GEN-175: NPC_Schedule + linger); '' = at none of the places (cannot be targeted). */
   npcs: { id: string; alias: string; rank: string; place: string; curses: string[] }[];
   /** Every verb / target tag the game data has (GEN-064). */
   tagVocabulary: string[];
@@ -248,7 +249,8 @@ export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnConte
     resting: input.resting.map(ref),
     players,
     places: world.places,
-    npcs: world.npcs.map((n) => ({ id: n.id, alias: n.alias, rank: n.rank, place: n.locationId, curses: (state.npcs[n.id]?.statuses ?? []).filter((st) => st.origin === 'curse').map((st) => st.label) })),
+    // GEN-175: where the rules have the NPC now (schedule + linger), so a target the AI picks from this list is accepted.
+    npcs: world.npcs.map((n) => ({ id: n.id, alias: n.alias, rank: n.rank, place: state.npcs[n.id]?.locationId ?? n.locationId, curses: (state.npcs[n.id]?.statuses ?? []).filter((st) => st.origin === 'curse').map((st) => st.label) })),
     tagVocabulary: [...input.vocabulary],
     // GEN-111: the drift outcome describes what comes after (e.g. "วันที่ 7 และ 10"); an active event hands the AI only what it
     // happens now, so the narration cannot run ahead of the day.
