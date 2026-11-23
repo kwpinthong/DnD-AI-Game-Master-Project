@@ -258,6 +258,7 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'POST /api/admin/corrections', { token: adminToken, body: { gameId: tableGame, seq: 99_999, edited: 'x' } });
     await hit(call, 'POST /api/admin/corrections', { token: adminToken, body: { gameId: tableGame, seq: votable!.seq, edited: ' ' } });
     await hit(call, 'GET /api/admin/corrections-export', { token: adminToken });
+    await hit(call, 'GET /api/admin/vote-snapshots-export', { token: adminToken });
     // GEN-169: the style checker's counts and settings.
     await hit(call, 'GET /api/admin/style-flags', { token: adminToken });
     await hit(call, 'GET /api/admin/style-settings', { token: adminToken });

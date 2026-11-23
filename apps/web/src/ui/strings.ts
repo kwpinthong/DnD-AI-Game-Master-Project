@@ -185,6 +185,8 @@ export const reviewText = {
   pairs: (n: number) => `ฉบับแก้ที่บันทึกไว้ ${n}`,
   export: 'ส่งออก JSONL',
   download: (n: number) => `ดาวน์โหลด corrections.jsonl (${n} คู่ ชื่อผู้เล่นแทนด้วย token)`,
+  exportVotes: 'ส่งออกโหวตของเกมที่ลบแล้ว',
+  downloadVotes: (n: number) => `ดาวน์โหลด vote-snapshots.jsonl (${n} ข้อความ ชื่อผู้เล่นแทนด้วย token)`,
   loadFailed: 'โหลดรายการไม่ได้',
 } as const;
 

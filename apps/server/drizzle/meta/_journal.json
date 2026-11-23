@@ -351,6 +351,13 @@
       "when": 1795429432419,
       "tag": "0049_game_learning_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1795444732726,
+      "tag": "0050_vote_snapshot",
+      "breakpoints": true
     }
   ]
 }

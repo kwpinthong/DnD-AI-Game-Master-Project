@@ -215,7 +215,7 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
   app.delete('/api/game', async (request, reply) => {
     const me = caller(request, reply);
     if (!me) return reply;
-    const outcome = deleteGame(db, me, (request.body as { confirmName?: unknown } | null | undefined)?.confirmName);
+    const outcome = deleteGame(db, me, (request.body as { confirmName?: unknown } | null | undefined)?.confirmName, now());
     if (outcome === 'forbidden') return sendError(reply, 403, { code: 'forbidden', message: 'เฉพาะเจ้าของเกมทำได้' });
     if (outcome === 'confirm_required') return sendError(reply, 400, { code: 'invalid_input', message: 'พิมพ์ชื่อเกมเพื่อยืนยันการลบ', fields: { confirmName: 'พิมพ์ชื่อเกมให้ตรง' } });
     return reply.code(204).send();

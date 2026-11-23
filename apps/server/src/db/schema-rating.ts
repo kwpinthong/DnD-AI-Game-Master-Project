@@ -95,6 +95,25 @@ export const responseCorrection = sqliteTable(
 );
 
 /**
+ * GEN-189: what a deleted game's 👍/👎 said, kept for fine-tuning. Written just before the game is deleted (its
+ * response_vote rows cascade): one row per voted AI message, `text` with players' names as `{{PLAYER_n}}` (no real
+ * or lobby name is stored), the counts and verdict out of `players` as GEN-126 counts them. No foreign keys.
+ */
+export const voteSnapshot = sqliteTable('vote_snapshot', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  gameId: text('game_id').notNull(),
+  entryId: integer('entry_id').notNull(),
+  scene: text('scene', { enum: ['feed', 'narration', 'npc-dialogue', 'npc-reaction'] }).notNull(),
+  npcName: text('npc_name'),
+  text: text('text').notNull(),
+  up: integer('up').notNull(),
+  down: integer('down').notNull(),
+  players: integer('players').notNull(),
+  verdict: text('verdict', { enum: ['good', 'avoid', 'none'] }).notNull(),
+  createdAt: integer('created_at').notNull(),
+});
+
+/**
  * GEN-151: the NPC example library. A 👍 message or a "แก้เป็น" pair's edited text given to one NPC, with a scene
  * kind. `text` holds tokens only (`{{n:id}}`, `{{p:player}}`). No foreign keys: an example outlives its game.
  * `correction_id`: the pair it came from (source `correction`).

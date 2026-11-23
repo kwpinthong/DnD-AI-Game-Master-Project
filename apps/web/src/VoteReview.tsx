@@ -1,6 +1,6 @@
 import { VOTE_REASON_LABEL, VoteReason, type AdminDownvoteEntry, type AdminDownvotesResponse } from '@isekai/protocol';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { fetchCorrectionsExport, fetchDownvotes, postCorrection, type AdminResult } from './admin-api.ts';
+import { fetchCorrectionsExport, fetchDownvotes, fetchVoteSnapshotsExport, postCorrection, type AdminResult } from './admin-api.ts';
 import { Button } from './ui/Button.tsx';
 import { EmptyState, ErrorState, Skeleton } from './ui/parts.tsx';
 import { reviewText as t } from './ui/strings.ts';
@@ -57,6 +57,7 @@ export function VoteReview({ apiBaseUrl, token, onForbidden }: Props) {
   const [editing, setEditing] = useState<string | null>(null);
   const [saved, setSaved] = useState<ReadonlySet<string>>(new Set());
   const [exported, setExported] = useState<{ jsonl: string; count: number } | null>(null);
+  const [votesExported, setVotesExported] = useState<{ jsonl: string; count: number } | null>(null);
 
   /** Returns the data, or null after handling a 403 / an error. */
   const take = useCallback(
@@ -101,6 +102,11 @@ export function VoteReview({ apiBaseUrl, token, onForbidden }: Props) {
     if (data) setExported({ jsonl: data.jsonl, count: data.count });
   }
 
+  async function exportVotes() {
+    const data = take(await fetchVoteSnapshotsExport(apiBaseUrl, token));
+    if (data) setVotesExported({ jsonl: data.jsonl, count: data.count });
+  }
+
   return (
     <div className="vote-review">
       <div className="vote-review__tools">
@@ -130,6 +136,12 @@ export function VoteReview({ apiBaseUrl, token, onForbidden }: Props) {
         {exported && (
           <a download="corrections.jsonl" href={`data:application/x-ndjson;charset=utf-8,${encodeURIComponent(exported.jsonl)}`}>
             {t.download(exported.count)}
+          </a>
+        )}
+        <Button onClick={() => void exportVotes()}>{t.exportVotes}</Button>
+        {votesExported && (
+          <a download="vote-snapshots.jsonl" href={`data:application/x-ndjson;charset=utf-8,${encodeURIComponent(votesExported.jsonl)}`}>
+            {t.downloadVotes(votesExported.count)}
           </a>
         )}
       </div>
