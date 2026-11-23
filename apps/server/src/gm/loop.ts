@@ -65,7 +65,8 @@ import {
   type TurnAction,
 } from './context.ts';
 import { createStageTimer, type StageTimer } from './timing.ts';
-import { capTotal, cleanNpcLines, npcLineLimits, npcPrompt, npcsPresentAt } from './npc-lines.ts';
+import { capTotal, cleanNpcLines, lingerAfter, lingerNow, lingersOf, npcLineLimits, npcPrompt, npcsPresentAt, saveLingers } from './npc-lines.ts';
+import { npcFarewellFor } from './server-lines.ts';
 import { GM_OUTPUT, GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
 import {
   activeConstraints,
@@ -376,12 +377,39 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         : [];
     // GEN-110: the NPCs the schedule puts at a place now, and each player's standing with them.
     const karmaOf = (memberId: string) => state.players[memberId]?.karma ?? 0;
+    const presence = (karmas: number[]) => ({ phase: at.phase, weather: input.weather?.weather ?? null, karmas });
+    // GEN-144: who the last turn left talking stays at that place a little longer; who has to go says goodbye.
+    const { lingering, farewells } = lingerNow(lingersOf(db, gameId), (npcId, placeId) =>
+      npcsPresentAt(world, assets, placeId, presence(Object.keys(state.players).map(karmaOf))).some((n) => n.id === npcId),
+    );
+    const lingeringIds = new Set(lingering.map((l) => l.npcId));
+    const hereAt = (placeId: string, members: string[]) => npcsPresentAt(world, assets, placeId, { ...presence(members.map(karmaOf)), lingering });
     const npcsFor = (placeId: string, members: string[]) => {
-      const here = npcsPresentAt(world, assets, placeId, { phase: at.phase, weather: input.weather?.weather ?? null, karmas: members.map(karmaOf) });
-      const hereIds = new Set(here.map((n) => n.id));
+      const hereIds = new Set(hereAt(placeId, members).map((n) => n.id));
       // Tokens may still name the NPCs of the scenario place (as before); only the scheduled ones speak.
-      return npcPrompt(db, assets, world, world.npcs.filter((n) => hereIds.has(n.id) || n.locationId === placeId), hereIds, members);
+      return npcPrompt(db, assets, world, world.npcs.filter((n) => hereIds.has(n.id) || n.locationId === placeId), hereIds, members, lingeringIds);
     };
+    // The NPCs acted on this turn where they were: they linger next turn if the schedule moves them.
+    const talkedTo = proposal.actions.flatMap((a) => {
+      const member = world.byRef.get(a.actor)?.memberId;
+      const placeId = member === undefined ? undefined : start.get(member);
+      if (a.targetNpc === null || member === undefined || placeId === undefined) return [];
+      return hereAt(placeId, [member]).some((n) => n.id === a.targetNpc) ? [{ npcId: a.targetNpc, placeId }] : [];
+    });
+    // shortcut: a turn where everyone rests returns before this and leaves the state as it was (counts one turn late); upgrade if that shows in play.
+    const nextLingers = lingerAfter(lingering, talkedTo);
+    // One goodbye per reader at the place, in the name that reader may see (GEN-121).
+    const farewellEntries = farewells.flatMap((f): ResolutionEntry[] => {
+      const npc = world.npcs.find((n) => n.id === f.npcId);
+      if (!npc) return [];
+      const byText = new Map<string, string[]>();
+      for (const [memberId, loc] of start) {
+        if (loc !== f.placeId || !world.players.has(memberId)) continue;
+        const text = npcFarewellFor(db, assets, memberId, npc);
+        byText.set(text, [...(byText.get(text) ?? []), memberId]);
+      }
+      return [...byText].map(([text, only]) => ({ kind: 'feed', locationId: f.placeId, actorMemberId: null, text, only }));
+    });
     const secretBy = new Set(order.filter((a) => a.visibility === 'secret').map((a) => a.memberId));
     const targetNpcs = new Map(proposal.actions.map((a) => [a.actionId, a.targetNpc]));
     const lookedAt = new Map<string, Set<string>>();
@@ -453,7 +481,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     });
 
     // 6: what the room publishes and applies. GEN-116: the result and narration only; the NPC lines are the second stage below.
-    const entries: ResolutionEntry[] = narrations.flatMap(({ ctx, out, readers }): ResolutionEntry[] => {
+    const entries: ResolutionEntry[] = [...farewellEntries, ...narrations.flatMap(({ ctx, out, readers }): ResolutionEntry[] => {
       const reader = 'player' in ctx.audience ? world.byRef.get(ctx.audience.player)!.memberId : null;
       const render = (who: string | null, shared: boolean) => out.segments.map((s) => renderTokens(db, world, s.text, who, shared)).join('\n');
       const fallback = out.fallback ? { fallback: out.fallback } : {};
@@ -473,7 +501,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         { ...feed, text, except: [...own.values()].flat() },
         ...[...own].map(([t, only]): ResolutionEntry => ({ ...feed, text: t, only })),
       ];
-    });
+    })];
 
     // GEN-116: the second stage, run by the room after the entries above are out and not waited for. One call per
     // audience that has someone to speak; each audience's lines are published as soon as its call is done.
@@ -579,6 +607,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           const success = SUCCEEDED.has(results.get(a.actionId) ?? '');
           recordStrategyParticipation(tx, gameId, { memberId, strategyId: a.strategy.id, role: a.strategy.role, success, day: at.day }, now());
         }
+        saveLingers(tx, gameId, nextLingers);
         markApplied(tx, gameId, at, now());
       },
       after: (afterSignal) => summarizeFinishedDays(gameId, afterSignal),

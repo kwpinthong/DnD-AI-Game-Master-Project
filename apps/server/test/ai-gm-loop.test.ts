@@ -1016,21 +1016,21 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       const gameId = gameIdOf(t);
       move(t.a, 'fountain');
       move(t.b, 'fountain');
-      jumpTo(t, { day: 1, phase: 'SOLARION', turn: 2 });
-      // The schedule has Noah at the fountain at SOLARION, at the clinic whenever it rains (HESPERION and NOCTHERION here).
-      const weather = server!.db.prepare("insert or replace into period_weather (game_id, day, phase, weather, disaster, source, created_at) values (?, 1, ?, ?, 0, 'ai', 0)");
-      for (const [phase, w] of [['SOLARION', 'Clear'], ['HESPERION', 'Rain'], ['NOCTHERION', 'Rain']] as const) weather.run(gameId, phase, w);
+      jumpTo(t, { day: 1, phase: 'HESPERION', turn: 2 });
+      // The schedule has Noah at the fountain at HESPERION, at the clinic whenever it rains (that night and the next morning here).
+      const weather = server!.db.prepare("insert or replace into period_weather (game_id, day, phase, weather, disaster, source, created_at) values (?, ?, ?, ?, 0, 'ai', 0)");
+      for (const [day, phase, w] of [[1, 'HESPERION', 'Clear'], [1, 'NOCTHERION', 'Rain'], [2, 'EOSORIA', 'Rain']] as const) weather.run(gameId, day, phase, w);
       let clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
-      const noahAt = (phase: Period, turn: Turn) =>
+      const noahAt = (day: number, phase: Period, turn: Turn) =>
         provider.requests
           .filter(isNarration)
           .map((r) => contextOf<NarrationContext>(r))
-          .find((c) => 'place' in c.audience && c.audience.place === 'fountain' && c.turn.phase === phase && c.turn.turn === turn)
+          .find((c) => 'place' in c.audience && c.audience.place === 'fountain' && c.turn.day === day && c.turn.phase === phase && c.turn.turn === turn)
           ?.npcs.find((n) => n.id === 'beggar');
 
-      // The last turn of SOLARION: A talks to him.
-      await playTurn(clients, ['ถามเด็กขอทานเรื่องเมือง', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 1 });
-      expect(noahAt('SOLARION', 2)).toMatchObject({ here: true, lingering: false });
+      // The last turn of HESPERION: A talks to him.
+      await playTurn(clients, ['ถามเด็กขอทานเรื่องเมือง', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'NOCTHERION', turn: 1 });
+      expect(noahAt(1, 'HESPERION', 2)).toMatchObject({ here: true, lingering: false });
 
       // C7: a restart in between; the count goes on from the database.
       await Promise.all(sockets.splice(0).map((s) => s.close()));
@@ -1038,23 +1038,23 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       await boot({}, aimed);
       clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
 
-      // C1 + C4: HESPERION turn 1, rain, yet he is still at the fountain; B, who did not talk to him before, talks to him now.
-      await playTurn(clients, ['ยืนฟัง', 'ถามเด็กขอทานต่อ', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 2 });
-      expect(noahAt('HESPERION', 1)).toMatchObject({ here: true, lingering: true });
+      // C1 + C4: NOCTHERION turn 1, rain, yet he is still at the fountain; B, who did not talk to him before, talks to him now.
+      await playTurn(clients, ['ยืนฟัง', 'ถามเด็กขอทานต่อ', 'ล้างแก้ว'], { day: 1, phase: 'NOCTHERION', turn: 2 });
+      expect(noahAt(1, 'NOCTHERION', 1)).toMatchObject({ here: true, lingering: true });
       // C2: talked to again, so a 2nd turn past his schedule.
-      await playTurn(clients, ['ยืนเฉย', 'ถามเด็กขอทานอีก', 'ล้างแก้ว'], { day: 1, phase: 'NOCTHERION', turn: 1 });
-      expect(noahAt('HESPERION', 2)).toMatchObject({ here: true, lingering: true });
+      await playTurn(clients, ['ยืนเฉย', 'ถามเด็กขอทานอีก', 'ล้างแก้ว'], { day: 2, phase: 'EOSORIA', turn: 1 });
+      expect(noahAt(1, 'NOCTHERION', 2)).toMatchObject({ here: true, lingering: true });
       // The 3rd turn: gone, with one farewell for each player at the fountain (in the name each may see), none for C at the inn.
-      await playTurn(clients, ['ยืนเฉย', 'ยืนเฉย', 'ล้างแก้ว'], { day: 1, phase: 'NOCTHERION', turn: 2 });
-      expect(noahAt('NOCTHERION', 1)?.here ?? false).toBe(false);
-      const farewells = (c: RoomClient, turn: Turn = 1) => turnEntries(c, 1, 'NOCTHERION', turn).filter((e) => e.kind === 'feed' && e.text.includes('"'));
+      await playTurn(clients, ['ยืนเฉย', 'ยืนเฉย', 'ล้างแก้ว'], { day: 2, phase: 'EOSORIA', turn: 2 });
+      expect(noahAt(2, 'EOSORIA', 1)?.here ?? false).toBe(false);
+      const farewells = (c: RoomClient, turn: Turn = 1) => turnEntries(c, 2, 'EOSORIA', turn).filter((e) => e.kind === 'feed' && e.text.includes('"'));
       for (const c of clients.slice(0, 2)) {
         expect(farewells(c)).toHaveLength(1);
         expect(farewells(c)[0]!.text).not.toContain('โนอา');
       }
       expect(farewells(clients[2]!)).toEqual([]);
       // Said once: the next turn has no farewell.
-      await playTurn(clients, ['ยืนเฉย', 'ยืนเฉย', 'ล้างแก้ว'], { day: 2, phase: 'EOSORIA', turn: 1 });
+      await playTurn(clients, ['ยืนเฉย', 'ยืนเฉย', 'ล้างแก้ว'], { day: 2, phase: 'SOLARION', turn: 1 });
       expect(farewells(clients[0]!, 2)).toEqual([]);
     });
 

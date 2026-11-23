@@ -331,9 +331,10 @@ export interface NarrationContext {
   /**
    * The NPCs of the place (tokens may name any of them). `here`: at the place now by NPC_Schedule + period + weather (GEN-110), or with no schedule row now at its scenario place (GEN-137):
    * only these may speak (`npcLines`). `persona`: the sheet's personality (only when `here`), names as tokens;
-   * `bonds`: each cast player's affinity (-/+) and whether they have met.
+   * `bonds`: each cast player's affinity (-/+) and whether they have met. `lingering` (GEN-144): here past its schedule
+   * because someone was talking to it.
    */
-  npcs: { id: string; alias: string; grade: string; here: boolean; persona: string | null; bonds: { player: string; affinity: number; met: boolean }[] }[];
+  npcs: { id: string; alias: string; grade: string; here: boolean; lingering: boolean; persona: string | null; bonds: { player: string; affinity: number; met: boolean }[] }[];
   /** GEN-110: private NPC lines (`npcLines` of a player narration) are kept only when this is true: the reader's own action is Secret. */
   privateLines: boolean;
   /** In the server's order; write one or more segments for each, in the same order. */
@@ -413,6 +414,8 @@ const NARRATOR_TEXT = [
   'cast ที่ looks ว่าง = ผู้อ่านไม่ได้มองคนนั้น ห้ามบรรยายรูปร่างหน้าตา ผม ผิว เสื้อผ้า ของเขาเด็ดขาด บอกได้แค่ว่ามีคนอยู่และทำอะไร (เรียกด้วย token) / บรรยายรูปลักษณ์ได้เฉพาะ cast ที่ looks มีค่า และตามผลของ beat',
   // GEN-116: บทพูด NPC เป็นขั้นตอนที่สองแยกต่างหาก (DIALOGUE_TEXT) ที่นี่เล่าเฉพาะ segments ไม่ต้องเขียนบทพูด NPC
   'ห้ามใส่บทพูดของ NPC ลงใน segments (มีขั้นตอนแยกเขียนให้ทีหลัง) เล่าแค่ผลของ beats',
+  // GEN-144
+  'npcs ที่ lingering เป็น true = ยังอยู่ต่อเพราะกำลังคุยกับผู้เล่นอยู่ (เลยเวลาที่ปกติต้องไปแล้ว) เล่าได้ว่ายังอยู่ตรงนั้น',
 ].join('\n');
 
 /** GEN-116: the second stage. Same rules as GEN-110 had inside the narration; the narration is given so the lines follow it. */

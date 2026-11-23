@@ -253,6 +253,13 @@
       "when": 1795360000000,
       "tag": "0035_name_nfc",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1795407990514,
+      "tag": "0036_npc_linger",
+      "breakpoints": true
     }
   ]
 }
