@@ -38,6 +38,7 @@ const dataOf = (a: GameAssets) => ({
   day10Strategies: a.day10Strategies,
   karmaTiers: a.karmaTiers,
   serverLines: a.serverLines,
+  voice: a.voice,
 });
 
 const ASSET_KEY: Record<DataSetName, keyof ReturnType<typeof dataOf>> = {
@@ -51,6 +52,7 @@ const ASSET_KEY: Record<DataSetName, keyof ReturnType<typeof dataOf>> = {
   NPC_Schedule: 'npcSchedule',
   Day10_Strategies: 'day10Strategies',
   Server_Lines: 'serverLines',
+  Voice: 'voice',
 };
 
 describe('game data in the DB + admin editor (GEN-147)', { timeout: 120_000 }, () => {
@@ -159,7 +161,9 @@ describe('game data in the DB + admin editor (GEN-147)', { timeout: 120_000 }, (
       const set = await getSet(token, name);
       expect(set.value, name).toEqual(readFile(name));
       expect(set.set.file).toBe(DATA_SET_FILES[name]);
-      expect(set.set.records).toBe((readFile(name) as unknown[]).length);
+      // GEN-176: Voice is one object, not a list of records.
+      const file = readFile(name);
+      expect(set.set.records).toBe(Array.isArray(file) ? file.length : 0);
       expect(set.set.canUndo).toBe(false);
     }
     expect(dataOf(server!.assets)).toEqual(dataOf(loadGameAssets()));
@@ -303,6 +307,13 @@ describe('game data in the DB + admin editor (GEN-147)', { timeout: 120_000 }, (
   it.each([...DATA_SETS])('C9: %s is editable through the server and takes effect', async (name) => {
     await boot();
     const token = await adminToken();
+    if (name === 'Voice') {
+      const voice = (await getSet(token, name)).value as { guide: Record<string, unknown> };
+      const editedVoice = { ...voice, guide: { ...voice.guide, voice: 'ผู้เล่าเรื่อง (แก้จาก admin)' } };
+      expect((await save(token, name, editedVoice)).status).toBe(200);
+      expect(server!.assets.voice.guide.voice).toBe('ผู้เล่าเรื่อง (แก้จาก admin)');
+      return;
+    }
     const value = (await getSet(token, name)).value as Record<string, unknown>[];
     const edited =
       name === 'Server_Lines'
