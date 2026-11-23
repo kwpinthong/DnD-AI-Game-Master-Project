@@ -1,12 +1,12 @@
-import { CLOSE_REASON_MAX, type AdminGameRow } from '@isekai/protocol';
-import { restorePhaseState, type PhaseState } from '@isekai/rules';
-import { eq, sum } from 'drizzle-orm';
+import { CLOSE_REASON_MAX, type AdminGameRow, type AdminMemberRow } from '@isekai/protocol';
+import { restorePhaseState, type PhaseState, type Rng } from '@isekai/rules';
+import { and, asc, eq, sql, sum } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { aiUsage } from '../db/schema-ai.ts';
-import { game, gameClose, gamePhase } from '../db/schema.ts';
+import { adminGameAudit, character, game, gameClose, gamePhase, member } from '../db/schema.ts';
 import { getEnding, markNarrated } from '../finale/store.ts';
-import { playerCount } from '../game/service.ts';
-import { savePhaseState } from '../room/store.ts';
+import { blockMember, playerCount, renewGameInviteCode } from '../game/service.ts';
+import { savePhaseState, withoutKicked } from '../room/store.ts';
 
 /**
  * ISK-001: the server owner's list of every game and the early close. A closed game is a `game_close` row; a game
@@ -80,6 +80,65 @@ export function gameRow(db: Db, gameId: string): AdminGameRow | null {
   const micros = db.select({ micros: sum(aiUsage.costUsdMicros).mapWith(Number) }).from(aiUsage).where(eq(aiUsage.gameId, gameId)).get()?.micros ?? 0;
   const { sortAt: _s, ...row } = rowOf(db, g, micros);
   return row;
+}
+
+/** ISK-018: ended for the kick / new code = the same rule as a second close. */
+const hasEnded = (db: DbOrTx, gameId: string) => closureOf(db, gameId) !== null || endedOnItsOwn(db, gameId, phaseOf(db, gameId)?.state);
+const gameExists = (db: DbOrTx, gameId: string) => db.select({ id: game.id }).from(game).where(eq(game.id, gameId)).get() !== undefined;
+
+/** ISK-018: every member of a game, kicked ones too, join order; null = no such game. `ready` waits for ISK-017. */
+export function gameMembers(db: Db, gameId: string): AdminMemberRow[] | null {
+  if (!gameExists(db, gameId)) return null;
+  return db
+    .select({ id: member.id, name: member.name, role: member.role, kickedAt: member.kickedAt, characterOf: character.memberId })
+    .from(member)
+    .leftJoin(character, eq(character.memberId, member.id))
+    .where(eq(member.gameId, gameId))
+    .orderBy(asc(member.createdAt), sql`"member".rowid`)
+    .all()
+    .map((m) => ({ id: m.id, name: m.name, role: m.role, hasCharacter: m.characterOf !== null, ready: false, kickedAt: m.kickedAt === null ? null : new Date(m.kickedAt).toISOString() }));
+}
+
+export type KickOutcome =
+  | { kind: 'game_not_found' }
+  | { kind: 'member_not_found' }
+  | { kind: 'already_kicked' }
+  | { kind: 'already_ended' }
+  | { kind: 'kicked'; turnClosed: boolean };
+
+/**
+ * ISK-018: the server owner kicks a member in any phase but ended (one transaction, one audit row). Like the owner's
+ * kick: sessions go, the name is blocked. In play the seat goes too, so a turn waiting only for them closes.
+ */
+export function kickFromGame(db: Db, gameId: string, memberId: string, now: number, rng: Rng): KickOutcome {
+  return db.transaction((tx): KickOutcome => {
+    if (!gameExists(tx, gameId)) return { kind: 'game_not_found' };
+    if (hasEnded(tx, gameId)) return { kind: 'already_ended' };
+    const target = tx.select({ kickedAt: member.kickedAt }).from(member).where(and(eq(member.id, memberId), eq(member.gameId, gameId))).get();
+    if (!target) return { kind: 'member_not_found' };
+    if (target.kickedAt !== null) return { kind: 'already_kicked' };
+    blockMember(tx, memberId, now);
+    tx.insert(adminGameAudit).values({ action: 'kick', gameId, memberId, at: now }).run();
+    // A turn being resolved keeps the seat until it is published (the room drops it then).
+    const state = phaseOf(tx, gameId)?.state;
+    if (state?.status !== 'collecting') return { kind: 'kicked', turnClosed: false };
+    const next = withoutKicked(tx, gameId, state, rng);
+    if (next !== state) savePhaseState(tx, gameId, next, now);
+    return { kind: 'kicked', turnClosed: next.status === 'resolving' };
+  });
+}
+
+export type InviteCodeOutcome = { kind: 'game_not_found' } | { kind: 'already_ended' } | { kind: 'renewed'; inviteCode: string };
+
+/** ISK-018: a new invite code (the old one stops at once; members in the game stay). The audit row never holds the code. */
+export function renewInviteCodeOf(db: Db, gameId: string, now: number): InviteCodeOutcome {
+  return db.transaction((tx): InviteCodeOutcome => {
+    if (!gameExists(tx, gameId)) return { kind: 'game_not_found' };
+    if (hasEnded(tx, gameId)) return { kind: 'already_ended' };
+    const inviteCode = renewGameInviteCode(tx, gameId);
+    tx.insert(adminGameAudit).values({ action: 'invite_code', gameId, memberId: null, at: now }).run();
+    return { kind: 'renewed', inviteCode };
+  });
 }
 
 export type CloseOutcome =

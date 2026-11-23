@@ -74,13 +74,19 @@ import {
   recordAction,
   savePhaseState,
   syncCharacterStats,
+  withoutKicked,
   type RoomEntryRow,
 } from './store.ts';
 
-/** What the room needs of a socket: send text, and nothing else. */
+/** What the room needs of a socket: send text, and close it (a kicked member's, ISK-018). */
 export interface RoomSocket {
   send(data: string): void;
+  close(code: number): void;
 }
+
+/** ISK-018: a kicked member's socket ends like a refused session (`unauthorized`, the same close code as routes.ts). */
+const KICKED_MESSAGE = 'ผู้ดูแลเชิญคุณออกจากเกมนี้แล้ว';
+const KICKED_CLOSE = 4001;
 
 const LOCK_MESSAGE: Record<RoomLockCode, string> = {
   not_a_player: 'GM ไม่มีตัวละคร จึงส่ง action ไม่ได้',
@@ -153,6 +159,11 @@ export interface RoomService {
   publish(gameId: string, rows: readonly { row: RoomEntryRow; recipients: ReadonlySet<string> }[]): void;
   /** ISK-001: the server owner closed the game (already stored): drop what waits for it and tell every open socket. */
   closed(gameId: string, event: { reason: string | null; hasSummary: boolean }): void;
+  /**
+   * ISK-018: the server owner kicked `memberId` (already stored): their open sockets get `unauthorized` and close
+   * (like an ended session); `turnClosed` = the kick closed the turn, so it is resolved now.
+   */
+  kicked(gameId: string, memberId: string, turnClosed: boolean): void;
   /** Shutdown: forgets every socket (their close events no longer touch the database), then waits for running resolves. */
   stop(): Promise<void>;
 }
@@ -512,14 +523,15 @@ export function createRoomService(
           applyLocationLog(tx, step.log, t);
           // GEN-070: carried to the clinic (half the coins), or dead for good (no place any more).
           applyCrisisLog(tx, assets, gameId, step.log, t);
-          savePhaseState(tx, gameId, step.state, t);
+          // ISK-018: a player kicked while this turn was resolved has no seat in the next one.
+          const next = withoutKicked(tx, gameId, step.state, rng);
+          savePhaseState(tx, gameId, next, t);
           syncCharacterStats(tx, step.state, t);
           // GEN-055: karma per day / period for the unlock rules, then the skills that unlock now.
           settleTurnProgress(tx, assets, gameId, current, t);
           // GEN-066: trips to another zone arrive, rift visitors go back (after the feed's witnesses were taken).
           completeTravel(tx, gameId, t);
           // The timeline follows each turn (GEN-053, GEN-096): events starting on the next turn become active for it.
-          const next = step.state;
           // GEN-114: the player's own log of the turn: numbers from the server's before / after, reasons from the engine's log.
           const s2 = snapshotsOf(tx, assets, gameId, next, current.order);
           const hits = new Map<string, readonly HitChange[]>((resolution.hits ?? []).map((h) => [h.memberId, h.hit.changes]));
@@ -981,6 +993,19 @@ export function createRoomService(
       stuck.delete(gameId);
       for (const socket of rooms.get(gameId)?.keys() ?? []) send(socket, { type: 'game_closed', ...event });
       broadcastRoom(gameId);
+    },
+
+    kicked(gameId, memberId, turnClosed) {
+      const sockets = rooms.get(gameId);
+      for (const [socket, me] of [...(sockets ?? [])]) {
+        if (me.id !== memberId) continue;
+        sockets!.delete(socket);
+        send(socket, { type: 'error', code: 'unauthorized', message: KICKED_MESSAGE });
+        socket.close(KICKED_CLOSE);
+      }
+      if (sockets?.size === 0) rooms.delete(gameId);
+      else if (sockets) broadcastRoom(gameId);
+      if (turnClosed) wakeTurn(gameId);
     },
 
     wake(gameId) {

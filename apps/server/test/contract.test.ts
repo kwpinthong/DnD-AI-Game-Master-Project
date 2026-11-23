@@ -222,6 +222,14 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     // open sockets get `game_closed`; the end page below is the same.
     const ownerToken = ((await call('POST', '/api/admin/session', { body: { code: ADMIN_CODE } })).body as { token: string }).token;
     await hit(call, 'GET /api/admin/games', { token: ownerToken });
+    // ISK-018: the members, a new invite code, and the kick (C leaves; a second kick / unknown game are refused).
+    await hit(call, 'GET /api/admin/games/:id/members', { token: ownerToken, path: `/api/admin/games/${tableGame}/members` });
+    await hit(call, 'GET /api/admin/games/:id/members', { token: ownerToken, path: '/api/admin/games/nope/members' });
+    await hit(call, 'POST /api/admin/games/:id/invite-code', { token: ownerToken, path: `/api/admin/games/${tableGame}/invite-code` });
+    const kickPath = `/api/admin/games/${tableGame}/members/${t.c.memberId}/kick`;
+    await hit(call, 'POST /api/admin/games/:id/members/:memberId/kick', { token: ownerToken, path: kickPath });
+    await hit(call, 'POST /api/admin/games/:id/members/:memberId/kick', { token: ownerToken, path: kickPath });
+    await hit(call, 'POST /api/admin/games/:id/members/:memberId/kick', { token: ownerToken, path: `/api/admin/games/nope/members/${t.c.memberId}/kick` });
     const tableName = (server!.db.prepare('select name from game where id = ?').get(tableGame) as { name: string }).name;
     const closePath = `/api/admin/games/${tableGame}/close`;
     await hit(call, 'POST /api/admin/games/:id/close', { token: ownerToken, path: closePath, body: { confirmName: 'ชื่อผิด' } });

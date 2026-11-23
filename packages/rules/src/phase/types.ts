@@ -167,7 +167,9 @@ export interface PlayerResult {
 
 export type PhaseEvent =
   | { readonly type: 'submit'; readonly playerId: string; readonly action: PlayerAction }
-  | { readonly type: 'resolved'; readonly results: Readonly<Record<string, PlayerResult>> };
+  | { readonly type: 'resolved'; readonly results: Readonly<Record<string, PlayerResult>> }
+  /** ISK-018: the player was kicked; their seat and draft go, and a collecting turn closes if nobody else is waited for. */
+  | { readonly type: 'leave'; readonly playerId: string };
 
 /** Why a player sleeps through a turn. Q-046: the feed labels these turns "ระหว่างคุณหลับ". */
 export type SleepReason = 'exhausted' | 'night_rest';

@@ -163,6 +163,8 @@ export const ApiError = z.discriminatedUnion('code', [
   z.object({ code: z.literal('reason_too_long'), message: z.string() }),
   /** 409 (ISK-001): the game already ended (or was closed); nothing changed. */
   z.object({ code: z.literal('already_ended'), message: z.string() }),
+  /** 409 (ISK-018): the server owner kicked this member before; nothing changed. */
+  z.object({ code: z.literal('already_kicked'), message: z.string() }),
   /** 409 (ISK-001): the server owner closed this game; nothing changes any more. */
   z.object({ code: z.literal('game_closed'), message: z.string() }),
   /** 404 (ISK-001): the game was closed before it was played, so it has no end page. */

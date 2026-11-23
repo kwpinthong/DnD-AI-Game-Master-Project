@@ -199,6 +199,8 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
       syncExamples(db, gameId, now());
       buildStyles(db, gameId, now());
     },
+    // ISK-018: the one hook after an admin kick. ISK-017's "re-check the lobby start" belongs here too.
+    onMemberKicked: (gameId, memberId, turnClosed) => room.kicked(gameId, memberId, turnClosed),
     ...(config.adminCodeHash ? { adminCodeHash: config.adminCodeHash } : {}),
   });
   registerInventoryRoutes(app, db, now, assets);

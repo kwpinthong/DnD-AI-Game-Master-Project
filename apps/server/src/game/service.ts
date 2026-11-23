@@ -212,14 +212,27 @@ function asOwner(db: Db, actor: MemberRow, change: (tx: Tx, row: GameRow) => Own
   });
 }
 
+/** A new invite code for the game (the old one stops working at once); returns it. */
+export function renewGameInviteCode(tx: Db | Tx, gameId: string): string {
+  return withFreshInviteCode((inviteCode) => {
+    tx.update(game).set({ inviteCode }).where(eq(game.id, gameId)).run();
+    return inviteCode;
+  });
+}
+
 export function renewInviteCode(db: Db, actor: MemberRow): OwnerActionOutcome {
   return asOwner(db, actor, (tx, row) => {
-    withFreshInviteCode((inviteCode) => tx.update(game).set({ inviteCode }).where(eq(game.id, row.id)).run());
+    renewGameInviteCode(tx, row.id);
     return undefined;
   });
 }
 
 /** Kicked = blocked: sessions are deleted and the row stays so the name + PIN cannot rejoin. */
+export function blockMember(tx: Db | Tx, memberId: string, at: number): void {
+  tx.update(member).set({ kickedAt: at }).where(eq(member.id, memberId)).run();
+  tx.delete(session).where(eq(session.memberId, memberId)).run();
+}
+
 export function kickMember(db: Db, actor: MemberRow, targetId: string, now: Clock): OwnerActionOutcome {
   return asOwner(db, actor, (tx, row) => {
     if (row.startedAt !== null) return { kind: 'game_started' };
@@ -230,8 +243,7 @@ export function kickMember(db: Db, actor: MemberRow, targetId: string, now: Cloc
       .where(and(eq(member.id, targetId), eq(member.gameId, row.id), isNull(member.kickedAt)))
       .get();
     if (!target) return { kind: 'member_not_found' };
-    tx.update(member).set({ kickedAt: now() }).where(eq(member.id, target.id)).run();
-    tx.delete(session).where(eq(session.memberId, target.id)).run();
+    blockMember(tx, target.id, now());
     return undefined;
   });
 }
