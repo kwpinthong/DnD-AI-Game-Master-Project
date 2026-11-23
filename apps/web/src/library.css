@@ -325,3 +325,74 @@
   min-height: 44px;
   max-width: 100%;
 }
+
+/* ISK-002: the เกม tab (every game) and its close dialog. */
+.agames {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.agames th,
+.agames td {
+  padding: var(--space-2);
+  text-align: start;
+  border-bottom: var(--line-w) solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.agames button {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.close-dialog__field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.close-dialog :is(input, textarea) {
+  min-height: 44px;
+  max-width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  background: var(--panel);
+  color: var(--text);
+  border: var(--line-w) solid var(--line-input);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+}
+
+.close-dialog__count {
+  justify-self: end;
+  color: var(--muted);
+}
+
+/* 390 px: each game is a card, its cells label themselves (no sideways scroll). */
+@media (max-width: 767px) {
+  .agames thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .agames tr {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-3) 0;
+    border-bottom: var(--line-w) solid var(--ornament);
+  }
+
+  .agames th,
+  .agames td {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+
+  .agames td[data-label]::before {
+    content: attr(data-label) ": ";
+    color: var(--muted);
+  }
+}

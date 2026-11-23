@@ -9,7 +9,7 @@ import { CONTRACT_FIXTURES as F, CONTRACT_SCREENS, type ScreenId } from '@isekai
  */
 
 /** What the mock room server can do, from a script step or a gallery button. */
-export type MockOp = 'nextTurn' | 'hit' | 'othersSubmit' | 'closeTurn' | 'drop';
+export type MockOp = 'nextTurn' | 'hit' | 'othersSubmit' | 'closeTurn' | 'drop' | 'closeGame';
 /** One scripted room event, `afterMs` after the first `hello` (the steps play in order). */
 export interface MockStep {
   afterMs: number;
@@ -175,6 +175,20 @@ const LATE_NPC_ENTRIES: readonly RoomEntry[] = (() => {
     { ...ENTRIES.find((e) => e.kind === 'npc' && !e.npc?.private)!, seq: 31, day: first.day, phase: first.phase, turn: first.turn, myVote: null },
   ];
 })();
+
+// --- ISK-002: the admin game list, and games the server owner closed ---
+const ADMIN_ROW = F.AdminGameRow[0]!;
+/** Every status the เกม tab words (C1), one row each, plus one already closed. */
+const ADMIN_GAMES = {
+  games: [
+    { ...ADMIN_ROW, id: 'g-lobby', name: 'ห้องรอวันหยุด', phase: 'lobby', day: null, period: null, playerCount: 2, lastActionAt: null, aiUsd: 0 },
+    { ...ADMIN_ROW, id: 'g-setup', name: 'ตั้งตัวละครกันอยู่', phase: 'setup', day: null, period: null, aiUsd: 0.03 },
+    ADMIN_ROW,
+    { ...ADMIN_ROW, id: 'g-end', name: 'คืนจันทราโลหิต', phase: 'ended', endedReason: 'finale', day: 12, period: 'NOCTHERION', aiUsd: 1.8 },
+    { ...ADMIN_ROW, id: 'g-closed', name: 'ทดลองระบบ', phase: 'ended', endedReason: 'closed', day: 2, period: 'SOLARION', aiUsd: 0.1 },
+  ],
+};
+const CLOSED_LOG = F.GameLogResponse.find((l) => l.game.closedEarly)!;
 
 const ALL_SCREENS =CONTRACT_SCREENS.map((s) => s.id);
 const room = (state: RoomState, script: readonly MockStep[] = [], entries: readonly RoomEntry[] = START_ENTRIES) => ({ state, entries, script });
@@ -511,6 +525,74 @@ export const SCENARIOS: readonly MockScenario[] = [
     screens: ['learning-library'],
     http: { 'GET /api/admin/learning': { fail: 'network' } },
     room: room(BASE_ROOM),
+  },
+  // ISK-002 C1-C3: the admin เกม tab
+  {
+    id: 'admin-games',
+    title: 'รายการเกมทุกสถานะ',
+    note: 'รอเริ่ม / กำลังเตรียมตัว / กำลังเล่น / จบแล้ว / ปิดโดยผู้ดูแล; [ปิดเกม] เฉพาะที่ยังไม่จบ กดแล้วพิมพ์ชื่อเกมเพื่อยืนยัน',
+    session: 'guest',
+    screens: ['admin-games'],
+    http: { 'GET /api/admin/games': ok(ADMIN_GAMES) },
+    room: room(BASE_ROOM),
+  },
+  { id: 'admin-games-loading', title: 'รายการเกมกำลังโหลด', note: 'คำตอบไม่มาเลย', session: 'guest', screens: ['admin-games'], http: { 'GET /api/admin/games': { pending: true } }, room: room(BASE_ROOM) },
+  { id: 'admin-games-error', title: 'รายการเกมโหลดไม่ได้', note: 'ติดต่อ server ไม่ได้ มีปุ่มลองใหม่', session: 'guest', screens: ['admin-games'], http: { 'GET /api/admin/games': { fail: 'network' } }, room: room(BASE_ROOM) },
+  { id: 'admin-games-empty', title: 'ยังไม่มีเกม', note: 'server ยังไม่มีเกมเลย', session: 'guest', screens: ['admin-games'], http: { 'GET /api/admin/games': ok(F.AdminGamesResponse[1]) }, room: room(BASE_ROOM) },
+  {
+    id: 'admin-close-error',
+    title: 'ปิดเกมไม่สำเร็จ',
+    note: 'กดยืนยันแล้ว server ตอบ 409 (มีคนปิดไปก่อน): กล่องยังเปิดอยู่พร้อมข้อความ',
+    session: 'guest',
+    screens: ['admin-games'],
+    http: { 'GET /api/admin/games': ok(ADMIN_GAMES), 'POST /api/admin/games/:id/close': { status: 409, body: { code: 'already_ended', message: 'เกมนี้จบหรือถูกปิดไปแล้ว' } } },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'admin-close-pending',
+    title: 'กำลังปิดเกม',
+    note: 'กดยืนยันแล้วคำตอบยังไม่มา: ปุ่มหมุนและกดซ้ำไม่ได้',
+    session: 'guest',
+    screens: ['admin-games'],
+    http: { 'GET /api/admin/games': ok(ADMIN_GAMES), 'POST /api/admin/games/:id/close': { pending: true } },
+    room: room(BASE_ROOM),
+  },
+  // ISK-002 C4-C7: the players' side of a close
+  {
+    id: 'closed-play',
+    title: 'ผู้ดูแลปิดเกมระหว่างเล่น',
+    note: 'game_closed มาหลังเปิดห้อง 1.5 วิ: ป้ายปิดไม่ได้ + เหตุผล + [ไปหน้าสรุป] (กดปุ่ม "ผู้ดูแลปิดเกม" ซ้ำได้)',
+    session: 'player',
+    screens: ['play-lock'],
+    http: {},
+    room: room(BASE_ROOM, [{ afterMs: 1500, op: 'closeGame' }]),
+  },
+  {
+    id: 'closed-lobby',
+    title: 'ผู้ดูแลปิดเกมตอนรอเริ่ม',
+    note: 'ไม่มีเหตุผล ไม่มีหน้าสรุป: [กลับหน้าแรก]',
+    session: 'player',
+    screens: ['lobby'],
+    http: { 'GET /api/game': ok({ ...LOBBY_GAME, closed: { reason: null, hasSummary: false } }) },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'closed-reopen',
+    title: 'เปิดเกมที่ถูกปิดไปแล้ว',
+    note: 'พลาด event ไปแล้วเปิดหน้าใหม่: ป้ายเดิม [ไปหน้าสรุป] พาไปหน้าจบเกมแบบปิดก่อนกำหนด',
+    session: 'player',
+    screens: ['lobby'],
+    http: { 'GET /api/game': ok({ ...STARTED_GAME, closed: { reason: 'ทดสอบระบบ', hasSummary: true } }), 'GET /api/game/log': ok(CLOSED_LOG), 'GET /api/game/rating': ok(F.GameRatingResponse[1]) },
+    room: room(endedRoom),
+  },
+  {
+    id: 'ended-closed',
+    title: 'จบเกม ปิดก่อนกำหนด',
+    note: 'ป้าย "ปิดก่อนกำหนด" + เหตุผลแทนฉากจบ ชะตา (กรรม) และความลับเหมือนจบปกติ; รายการเกมขึ้น "ปิดโดยผู้ดูแล"',
+    session: 'player',
+    screens: ['ending', 'home'],
+    http: { 'GET /api/game/log': ok(CLOSED_LOG), 'GET /api/game/rating': ok(F.GameRatingResponse[1]) },
+    room: room(endedRoom),
   },
 ];
 

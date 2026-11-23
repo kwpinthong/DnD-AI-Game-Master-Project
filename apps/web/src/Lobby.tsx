@@ -1,6 +1,8 @@
 import { formatInviteCode, type GameMember, type GameView } from '@isekai/protocol';
 import { useEffect, useRef, useState } from 'react';
 import { CharacterScreen } from './CharacterScreen.tsx';
+import { GameClosedModal, type GameClosure } from './GameClosed.tsx';
+import { GameSummaryPage } from './GameHistory.tsx';
 import { deleteGameCall, gameCall, type GameAction } from './game-api.ts';
 import { NpcDialoguePicker } from './NpcDialoguePicker.tsx';
 import { npcDialogueText, toneText } from './ui/strings.ts';
@@ -87,6 +89,7 @@ export function Lobby({
   onSessionLost,
   onPlayingChange,
   onGameList,
+  onLeave,
   pollMs = 3000,
 }: {
   apiBaseUrl: string;
@@ -97,6 +100,8 @@ export function Lobby({
   onPlayingChange?: (playing: boolean) => void;
   /** Q-265: Play's own way to the game list. */
   onGameList?: () => void;
+  /** ISK-002: out of a closed game, to the home page's game list. */
+  onLeave?: () => void;
   pollMs?: number;
 }) {
   const [game, setGame] = useState<GameView | undefined>(initial);
@@ -109,13 +114,19 @@ export function Lobby({
   /** The play room, after the start. */
   const [roomOpen, setRoomOpen] = useState(false);
   const [originOpen, setOriginOpen] = useState(false);
+  /** ISK-002: the play room's socket said the server owner closed the game. */
+  const [closedEvent, setClosedEvent] = useState<GameClosure | null>(null);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   /** Counts the owner / reload calls, so a poll answer that left before one of them is dropped. */
   const actions = useRef(0);
+  // Q-387 A: outside the play room the close comes from GET /api/game (`closed`), inside it from the socket.
+  const closed = closedEvent ?? game?.closed ?? null;
+  const playing = roomOpen && !closed;
 
   useEffect(() => {
-    onPlayingChange?.(roomOpen);
+    onPlayingChange?.(playing);
     return () => onPlayingChange?.(false);
-  }, [roomOpen]);
+  }, [playing]);
 
   async function run(action: GameAction) {
     actions.current++;
@@ -143,9 +154,10 @@ export function Lobby({
     // Loaded once per token; later loads come from the poll, [ รีเฟรช ] and the owner actions.
   }, [apiBaseUrl, token]);
 
-  const waiting = game?.status === 'lobby';
+  // The lobby and the setup pages (character, loot) keep asking, so a start or a close shows without a reload.
+  const asking = Boolean(game) && !roomOpen && !closed;
   useEffect(() => {
-    if (!waiting) return;
+    if (!asking) return;
     let stopped = false;
     const timer = setInterval(() => {
       // A hidden tab does not ask; it catches up on the next tick after it shows again.
@@ -162,7 +174,7 @@ export function Lobby({
       stopped = true;
       clearInterval(timer);
     };
-  }, [apiBaseUrl, token, waiting, pollMs]);
+  }, [apiBaseUrl, token, asking, pollMs]);
 
   function enterRoom(of: GameView) {
     setCharacterOpen(false);
@@ -179,6 +191,12 @@ export function Lobby({
     lastStatus.current = status;
     if (was === 'lobby' && status === 'started' && characterOpen && game) enterRoom(game);
   }, [status]);
+
+  // ISK-002: a closed game shows only the modal (nothing behind it can be used), then its end page or home.
+  if (closed) {
+    if (summaryOpen) return <GameSummaryPage apiBaseUrl={apiBaseUrl} token={token} onBack={() => onLeave?.()} />;
+    return <GameClosedModal closed={closed} onSummary={() => setSummaryOpen(true)} onHome={() => onLeave?.()} />;
+  }
 
   if (characterOpen) {
     return (
@@ -226,6 +244,7 @@ export function Lobby({
             setRoomOpen(false);
             setCharacterOpen(true);
           }}
+          onClosed={setClosedEvent}
         />
       </>
     );

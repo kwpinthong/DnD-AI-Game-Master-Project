@@ -1,4 +1,7 @@
 import {
+  type AdminCloseGameRequest,
+  AdminGameRow,
+  AdminGamesResponse,
   AdminCorrectionResponse,
   AdminCorrectionsExportResponse,
   AdminDownvotesResponse,
@@ -51,6 +54,8 @@ async function call<T>(baseUrl: string, path: string, init: RequestInit, schema:
   const error = ApiError.safeParse(json);
   const message = error.success ? error.data.message : UNREACHABLE;
   if (res.status === 403 && error.success && error.data.code === 'forbidden') return { kind: 'forbidden', message };
+  // ISK-001's game routes answer a missing / expired admin token with 401.
+  if (res.status === 401 && error.success && error.data.code === 'unauthorized') return { kind: 'forbidden', message };
   return error.success && error.data.code === 'invalid_input' ? { kind: 'error', message, fields: error.data.fields } : { kind: 'error', message };
 }
 
@@ -188,6 +193,16 @@ export function decideStyleProposal(baseUrl: string, token: string, id: number, 
 
 export function restoreVoiceVersion(baseUrl: string, token: string, version: number) {
   return call(baseUrl, `/api/admin/style-review/voice/${version}/restore`, { method: 'POST', headers: auth(token) }, StyleReviewResponse);
+}
+
+/** ISK-001/002: every game, in the server's order. */
+export function fetchAdminGames(baseUrl: string, token: string) {
+  return call(baseUrl, '/api/admin/games', { headers: auth(token) }, AdminGamesResponse);
+}
+
+/** ISK-001/002: closes a game early; answers the game's row after the close. */
+export function closeAdminGame(baseUrl: string, token: string, id: string, body: AdminCloseGameRequest) {
+  return call(baseUrl, `/api/admin/games/${encodeURIComponent(id)}/close`, { method: 'POST', headers: { ...auth(token), 'content-type': 'application/json' }, body: JSON.stringify(body) }, AdminGameRow);
 }
 
 export async function postAdminLogout(baseUrl: string, token: string): Promise<void> {

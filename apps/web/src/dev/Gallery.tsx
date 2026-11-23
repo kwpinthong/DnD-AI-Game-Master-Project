@@ -18,6 +18,7 @@ const SIMULATE: { op: MockOp; label: string }[] = [
   { op: 'othersSubmit', label: 'คนอื่นส่ง action' },
   { op: 'hit', label: 'โดนผลจากคนอื่น' },
   { op: 'drop', label: 'หลุดแล้วต่อใหม่' },
+  { op: 'closeGame', label: 'ผู้ดูแลปิดเกม' },
 ];
 
 /** The simulate buttons of one mock room. */

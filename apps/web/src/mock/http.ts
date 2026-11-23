@@ -48,6 +48,17 @@ function rulingVoteReply(scenario: MockScenario, request: MockRequest): MockRepl
   return ok({ rating: { ...base.rating, myVotes: vote ? { ...others, [ref]: vote } : others } });
 }
 
+const CLOSE_GAME = 'POST /api/admin/games/:id/close';
+
+/** ISK-002: a close answers with the closed game's row from the scenario's list (or the default fixture list). */
+function closeGameReply(scenario: MockScenario, request: MockRequest): MockReply {
+  const shown = scenario.http['GET /api/admin/games'];
+  const list = (shown && 'status' in shown ? shown.body : CONTRACT_FIXTURES.AdminGamesResponse[0]) as (typeof CONTRACT_FIXTURES.AdminGamesResponse)[number];
+  const id = decodeURIComponent(request.path.split('/').at(-2)!);
+  const game = list.games.find((g) => g.id === id) ?? CONTRACT_FIXTURES.AdminGameRow[0]!;
+  return ok({ ...game, phase: 'ended', endedReason: 'closed' });
+}
+
 function invalidInput(issues: readonly { path: readonly PropertyKey[]; message: string }[]): MockReply {
   const fields: Record<string, string> = {};
   for (const issue of issues) {
@@ -74,6 +85,7 @@ export function mockHttp(scenario: MockScenario, request: MockRequest, elapsedMs
   }
   if (reply) return reply;
   if (routeKey(route) === RULING_VOTE) return rulingVoteReply(scenario, request);
+  if (routeKey(route) === CLOSE_GAME) return closeGameReply(scenario, request);
   if (route.response === null) return { status: 204, body: null };
   return ok(CONTRACT_FIXTURES[route.response][0]);
 }

@@ -1,6 +1,8 @@
 import type { ScreenId } from '@isekai/protocol/contract';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { AdminDashboard } from '../AdminDashboard.tsx';
+import { AdminGames } from '../AdminGames.tsx';
+import { GameClosedModal, type GameClosure } from '../GameClosed.tsx';
 import { App } from '../App.tsx';
 import { CharacterScreen } from '../CharacterScreen.tsx';
 import { CreateGameForm } from '../CreateGameForm.tsx';
@@ -34,9 +36,20 @@ export interface ScreenView {
 }
 
 const noop = () => {};
-const playRoom = ({ baseUrl, token }: FrameContext) => (
-  <PlayRoom apiBaseUrl={baseUrl} token={token} onBack={noop} onGameList={noop} onNeedCharacter={noop} onSessionLost={noop} />
-);
+
+/** ISK-002: in the app the lobby shows the close; here the frame does, kept inside it (`gallery-inline`). */
+function PlayFrame({ baseUrl, token }: FrameContext) {
+  const [closed, setClosed] = useState<GameClosure | null>(null);
+  if (closed) {
+    return (
+      <div className="gallery-inline">
+        <GameClosedModal closed={closed} onSummary={noop} onHome={noop} />
+      </div>
+    );
+  }
+  return <PlayRoom apiBaseUrl={baseUrl} token={token} onBack={noop} onGameList={noop} onNeedCharacter={noop} onSessionLost={noop} onClosed={setClosed} />;
+}
+const playRoom = (ctx: FrameContext) => <PlayFrame {...ctx} />;
 const PLAY: ScreenView = { page: 'PlayRoom', socket: true, render: playRoom };
 /** The end page (GEN-091): the reveal and the rating are two parts of the same page. */
 const END: ScreenView = {
@@ -60,7 +73,16 @@ export const SCREEN_VIEWS: Record<ScreenId, ScreenView> = {
     socket: false,
     render: ({ baseUrl, token }) => <ScenarioEditor apiBaseUrl={baseUrl} token={token} onClose={noop} onSessionLost={noop} />,
   },
-  lobby: { page: 'Lobby', socket: false, render: ({ baseUrl, token }) => <Lobby apiBaseUrl={baseUrl} token={token} onSessionLost={noop} /> },
+  lobby: {
+    page: 'Lobby',
+    socket: false,
+    // `gallery-inline` keeps a closed game's modal (ISK-002) inside the frame
+    render: ({ baseUrl, token }) => (
+      <div className="gallery-inline">
+        <Lobby apiBaseUrl={baseUrl} token={token} onSessionLost={noop} />
+      </div>
+    ),
+  },
   character: {
     page: 'CharacterScreen',
     socket: false,
@@ -127,6 +149,16 @@ export const SCREEN_VIEWS: Record<ScreenId, ScreenView> = {
     render: ({ baseUrl }) => (
       <div className="preview">
         <VoteReview apiBaseUrl={baseUrl} token={MOCK_ADMIN_TOKEN} onForbidden={noop} />
+      </div>
+    ),
+  },
+  // ISK-002: the close dialog stays inside the frame (`gallery-inline`).
+  'admin-games': {
+    page: 'AdminGames',
+    socket: false,
+    render: ({ baseUrl }) => (
+      <div className="preview gallery-inline">
+        <AdminGames apiBaseUrl={baseUrl} token={MOCK_ADMIN_TOKEN} onForbidden={noop} />
       </div>
     ),
   },

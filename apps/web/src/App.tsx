@@ -142,6 +142,10 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
             onSessionLost={sessionLost}
             onPlayingChange={setPlaying}
             onGameList={() => setShowHistory(true)}
+            onLeave={() => {
+              leave();
+              setShowHistory(true);
+            }}
           />
         </section>
       )}
