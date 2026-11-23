@@ -88,7 +88,9 @@ function HeldTurn({
   const [error, setError] = useState<string | null>(null);
   // Q-215: the held finale is told apart from an ordinary turn by its own label; only narration can change.
   const finale = pending.finale === true;
-  const label = finale ? gmText.heldFinale : gmText.heldTurn;
+  // GEN-186: the held period scene is text only, like the finale.
+  const scene = pending.scene === true;
+  const label = finale ? gmText.heldFinale : scene ? gmText.heldScene : gmText.heldTurn;
 
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -105,8 +107,8 @@ function HeldTurn({
       <h3 className="gm-panel__title gm-held__title">
         {label}: วันที่ {pending.at.day} · {PHASE_LABEL[pending.at.phase]} · เทิร์น {pending.at.turn}/2
       </h3>
-      <p className="gm-held__note">{finale ? gmText.finaleNote : gmText.heldNote}</p>
-      {pending.checks ? (
+      <p className="gm-held__note">{finale ? gmText.finaleNote : scene ? gmText.sceneNote : gmText.heldNote}</p>
+      {scene ? null : pending.checks ? (
         <ol className="gm-checks" aria-label={gmText.checks}>
           {pending.checks.map((c, i) => (
             <Check key={i} check={c} who={nameOf(c.memberId)} />
