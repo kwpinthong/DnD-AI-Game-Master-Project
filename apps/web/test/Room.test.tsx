@@ -254,9 +254,6 @@ describe('GEN-056 play room (web)', () => {
     fireEvent.change(actionText(), { target: { value: '   ' } });
     fireEvent.click(screen.getByRole('button', { name: 'ส่ง action' }));
     expect(screen.getByRole('alert').textContent).toBe('พิมพ์ action ก่อนส่ง');
-    fireEvent.change(actionText(), { target: { value: 'ก'.repeat(1001) } });
-    fireEvent.click(screen.getByRole('button', { name: 'ส่ง action' }));
-    expect(screen.getByRole('alert').textContent).toMatch(/ไม่เกิน 1000/);
     expect(socket.sent.length).toBe(sentBefore);
 
     fireEvent.change(actionText(), { target: { value: 'เดินไปตลาด' } });
@@ -270,6 +267,22 @@ describe('GEN-056 play room (web)', () => {
     expect(note.textContent).toContain('ส่ง action ได้อีกครั้ง: EOSORIA เทิร์น 2');
     expect(actionText().disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'ส่ง action' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('ISK-012 C10: a text_too_long refusal from the server (an old client) shows at the action box and the Whisper box', async () => {
+    const socket = await enterRoom();
+    socket.receive(roomState({}, { allies: [{ ref: 'ref-darin', name: 'ดาริน' }] }));
+    fireEvent.change(actionText(), { target: { value: 'เดินไปตลาด' } });
+    fireEvent.click(screen.getByRole('button', { name: 'ส่ง action' }));
+    socket.receive({ type: 'action_rejected', code: 'text_too_long', message: 'action ยาวได้ไม่เกิน 200 ตัวอักษร' });
+    expect(within(screen.getByRole('form', { name: 'ส่ง action' })).getByRole('alert').textContent).toMatch(/ไม่เกิน 200/);
+
+    tab('คนรอบตัว');
+    const form = screen.getByRole('form', { name: 'ส่ง Whisper' });
+    fireEvent.change(within(form).getByLabelText('ข้อความ Whisper'), { target: { value: 'คืนนี้เจอกัน' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'ส่ง Whisper' }));
+    socket.receive({ type: 'whisper_rejected', code: 'text_too_long', message: 'Whisper ยาวได้ไม่เกิน 200 ตัวอักษร' });
+    expect(within(form).getByRole('alert').textContent).toMatch(/ไม่เกิน 200/);
   });
 
   it('C6: after a drop it reconnects with the last seq it has and shows no entry twice', async () => {

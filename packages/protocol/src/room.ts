@@ -12,8 +12,8 @@ import { AstralView, HitView, PlaceActionId, PlaceActionView, RollView, RoomOmen
  */
 export const ROOM_PATH = '/api/game/room';
 
-/** Longest action, in Unicode code points after normalisation (Thai marks count). */
-export const ACTION_MAX_LENGTH = 1000;
+/** ISK-012: longest action or Whisper a player types, in Unicode code points after normalisation (Thai marks count). */
+export const PLAYER_TEXT_MAX = 200;
 
 /** How long the server waits for `hello` before it closes the socket. */
 export const ROOM_HELLO_TIMEOUT_MS = 10_000;
@@ -27,14 +27,17 @@ export type ActionVisibility = z.infer<typeof ActionVisibility>;
  */
 export const normalizeActionText = (raw: string) => raw.normalize('NFC').trim();
 
-export type ActionTextProblem = { code: 'empty' | 'too_long'; message: string } | null;
+/** How long a player's text counts against `PLAYER_TEXT_MAX`: code points after `normalizeActionText`. */
+export const playerTextLength = (raw: string) => [...normalizeActionText(raw)].length;
+
+export type ActionTextProblem = { code: 'empty' | 'text_too_long'; message: string } | null;
 
 /** The text check the server makes (C5); the web runs it too so the player sees the reason before sending. */
 export function actionTextProblem(raw: string): ActionTextProblem {
-  const text = normalizeActionText(raw);
-  if (text.length === 0) return { code: 'empty', message: 'พิมพ์ action ก่อนส่ง' };
-  if ([...text].length > ACTION_MAX_LENGTH) {
-    return { code: 'too_long', message: `action ยาวได้ไม่เกิน ${ACTION_MAX_LENGTH} ตัวอักษร` };
+  const length = playerTextLength(raw);
+  if (length === 0) return { code: 'empty', message: 'พิมพ์ action ก่อนส่ง' };
+  if (length > PLAYER_TEXT_MAX) {
+    return { code: 'text_too_long', message: `action ยาวได้ไม่เกิน ${PLAYER_TEXT_MAX} ตัวอักษร` };
   }
   return null;
 }
@@ -311,7 +314,8 @@ export const RoomReady = z.strictObject({ type: z.literal('ready'), lastSeq: z.n
 
 export const RoomActionCode = z.enum([
   'empty',
-  'too_long',
+  /** ISK-012: over `PLAYER_TEXT_MAX`. */
+  'text_too_long',
   'invalid_action',
   'not_a_player',
   'exhausted',
@@ -368,7 +372,7 @@ export const RoomActionRejected = z.strictObject({ type: z.literal('action_rejec
  * Whisper cannot probe who exists). `unconscious`: the sender is at HP 0, the same lock as an action (Q-136).
  * `astral_spirit`: the dead speak only through the omen (GEN-070).
  */
-export const RoomWhisperCode = z.enum(['empty', 'too_long', 'not_a_player', 'not_allowed', 'game_ended', 'unconscious', 'astral_spirit']);
+export const RoomWhisperCode = z.enum(['empty', 'text_too_long', 'not_a_player', 'not_allowed', 'game_ended', 'unconscious', 'astral_spirit']);
 export type RoomWhisperCode = z.infer<typeof RoomWhisperCode>;
 export const RoomWhisperAccepted = z.strictObject({ type: z.literal('whisper_accepted') });
 export const RoomWhisperRejected = z.strictObject({ type: z.literal('whisper_rejected'), code: RoomWhisperCode, message: z.string() });

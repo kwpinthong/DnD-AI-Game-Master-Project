@@ -22,7 +22,7 @@ import { CLOCK, CREATE_CODE, DARIN, LIN, MEKHA, startedTable, type Table } from 
 const ADMIN_CODE = 'เจ้าของเซิร์ฟเวอร์-ทดสอบ-199';
 const PLAYER_CODE = 'nok-code-2026';
 const LOBBY = 'ล็อบบี้เจ้าของเกม';
-const LONG_TEXT = 'แอบเดินไปหลังโรงเตี๊ยมแล้วค่อย ๆ เปิดประตูเก็บของ '.repeat(5);
+const LONG_TEXT = 'แอบเดินไปหลังโรงเตี๊ยมแล้วค่อย ๆ เปิดประตูเก็บของ '.repeat(3); // > REFUSAL_TEXT (100), ≤ PLAYER_TEXT_MAX (ISK-012)
 
 type Handler = (req: AiCallRequest) => AiCallResult | undefined;
 

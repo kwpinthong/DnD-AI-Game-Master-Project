@@ -1,5 +1,5 @@
 import {
-  ACTION_MAX_LENGTH,
+  PLAYER_TEXT_MAX,
   ActionVisibility,
   OMEN_MAX_LENGTH,
   actionTextProblem,
@@ -95,7 +95,7 @@ const LOCK_MESSAGE: Record<RoomLockCode, string> = {
 
 const WHISPER_MESSAGE: Record<RoomWhisperCode, string> = {
   empty: 'พิมพ์ข้อความก่อนส่ง Whisper',
-  too_long: `Whisper ยาวได้ไม่เกิน ${ACTION_MAX_LENGTH} ตัวอักษร`,
+  text_too_long: `Whisper ยาวได้ไม่เกิน ${PLAYER_TEXT_MAX} ตัวอักษร`,
   not_a_player: 'GM ไม่มีตัวละคร จึงส่ง Whisper ไม่ได้',
   not_allowed: 'ส่ง Whisper ถึงคนนี้ไม่ได้ ต้องเป็นพันธมิตรที่สนิทกันพอก่อน',
   game_ended: 'เกมจบแล้ว ส่ง Whisper ไม่ได้',
@@ -1053,7 +1053,7 @@ export function createRoomService(
       if (!me || me.role === 'gm') return rejectWhisper('not_a_player');
       const text = normalizeActionText(input.text);
       if (text.length === 0) return rejectWhisper('empty');
-      if ([...text].length > ACTION_MAX_LENGTH) return rejectWhisper('too_long');
+      if ([...text].length > PLAYER_TEXT_MAX) return rejectWhisper('text_too_long');
 
       const published = db.transaction((tx) => {
         const t = now();

@@ -242,7 +242,7 @@ describe('GEN-067 karma words, Title Mask, Whisper, Hidden Evidence', { timeout:
     bond(t.a, t.b, 15);
     const roomA = await enter(t.a);
     expect(await whisperReply(roomA, refOf(t.b), '   ')).toMatchObject({ type: 'whisper_rejected', code: 'empty' });
-    expect(await whisperReply(roomA, refOf(t.b), 'ก'.repeat(1001))).toMatchObject({ type: 'whisper_rejected', code: 'too_long' });
+    expect(await whisperReply(roomA, refOf(t.b), 'ก'.repeat(201))).toMatchObject({ type: 'whisper_rejected', code: 'text_too_long' });
     const roomGm = await enter(t.gm!);
     expect(await whisperReply(roomGm, refOf(t.b), WHISPER)).toMatchObject({ type: 'whisper_rejected', code: 'not_a_player' });
   });
