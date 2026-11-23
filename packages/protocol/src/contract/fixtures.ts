@@ -103,7 +103,7 @@ const turnChanges: In<typeof p.TurnChange>[] = [
   { stat: 'conduct', from: 'เป็นกลาง', to: 'ใจดี', reason: 'การกระทำของคุณ' },
   { stat: 'status_gained', name: 'ง่วงซึม', reason: 'อดนอน' },
 ];
-const narration: In<typeof p.RoomEntry> = { seq: 12, kind: 'narration', ...AT, place: null, text: 'คุณสังเกตว่านักบวชแจกขนมปังเฉพาะบ้านที่มีเด็ก', roll, myVote: 'down' };
+const narration: In<typeof p.RoomEntry> = { seq: 12, kind: 'narration', ...AT, place: null, text: 'คุณสังเกตว่านักบวชแจกขนมปังเฉพาะบ้านที่มีเด็ก', roll, myVote: 'down', myReasons: ['too_long'] };
 const entries: In<typeof p.RoomEntry>[] = [
   // GEN-107: myVote null / 'up' / 'down' = the three button states (none / pressed ถูกใจ / pressed ไม่ถูกใจ)
   { seq: 10, kind: 'feed', ...AT, place: FOUNTAIN_ZONED, text: 'ชายผมแดงตะโกนขายยาสมุนไพรเสียงดัง', myVote: null },
@@ -291,6 +291,18 @@ const origin: In<typeof p.OriginView> = {
   narration: 'คุณลืมตาขึ้นท่ามกลางกองจานสกปรก…',
 } as const;
 
+const correction: In<typeof p.AdminCorrection> = {
+  id: 1,
+  gameId: 'g-1',
+  seq: 41,
+  original: 'ข้าไม่ไว้ใจเจ้าหรอกนะ เจ้าหนู',
+  edited: 'ข้ายังไม่ไว้ใจเจ้า',
+  npc: 'โนอา',
+  scene: 'npc-dialogue',
+  reasons: ['out_of_character'],
+  libraryCandidate: true,
+  createdAt: '2026-11-23T09:30:00.000Z',
+};
 const rating: In<typeof p.GameRatingView> = { mine: { score: 9, comment: 'สนุกมาก' }, myVotes: { '2-HESPERION-1-7': 'up' }, canVote: true, average: 8.6, raters: 3, members: 4, eligible: true, blocker: null };
 const learningSource = { sourceGameId: 'g-old', sourceGameName: 'คืนจันทราโลหิต', sourceScore: 8.6, status: 'active', createdAt: 1_795_200_000_000 } as const;
 const scheduleRow = { npc: 'โนอา', location: 'น้ำพุกลางเมือง', periods: ['SOLARION', 'HESPERION'], weathers: [], condition: '', note: 'ช่วงบ่าย-ค่ำ' };
@@ -425,8 +437,8 @@ export const CONTRACT_FIXTURES: Fixtures = {
   InventoryEntry: [inventoryEntry],
   GameLogResponse: [gameLog, { ...gameLog, game: { ...gameLog.game, status: 'ended', endReason: 'finale' }, reveal }],
   GameRevealPlayer: [revealPlayer],
-  ResponseVoteRequest: [{ vote: 'up' }, { vote: 'down' }, { vote: null }],
-  ResponseVoteResponse: [{ seq: 11, myVote: 'up' }, { seq: 12, myVote: null }],
+  ResponseVoteRequest: [{ vote: 'up' }, { vote: 'down' }, { vote: null }, { vote: 'down', reasons: ['translation', 'too_long'] }],
+  ResponseVoteResponse: [{ seq: 11, myVote: 'up' }, { seq: 12, myVote: null }, { seq: 12, myVote: 'down', myReasons: ['translation'] }],
   GameRatingRequest: [{ score: 9, comment: 'สนุกมาก' }, { score: 7 }],
   GameRatingResponse: [
     { rating },
@@ -553,4 +565,23 @@ export const CONTRACT_FIXTURES: Fixtures = {
   ],
   PlayerStyleRequest: [{ playerCode: 'nok-2026' }, { playerCode: 'nok-2026', optOut: true }],
   PlayerStyleResponse: [{ style: { verbs: [{ verb: 'OBSERVE', count: 14 }, { verb: 'PERSUADE', count: 6 }], summary: 'ชอบสังเกตก่อนลงมือ' }, optOut: false }, { style: null, optOut: false }],
+  // GEN-168: the server owner's 👎 review
+  AdminDownvotesResponse: [
+    {
+      entries: [
+        { gameId: 'g-1', gameName: 'คืนจันทราโลหิต', seq: 41, scene: 'npc-dialogue', npc: { id: 'npc-noa', name: 'โนอา' }, at: { day: 2, phase: 'SOLARION', turn: 1 }, text: 'ข้าไม่ไว้ใจเจ้าหรอกนะ เจ้าหนู', down: 3, reasons: { out_of_character: 2, translation: 1 }, corrections: [correction] },
+        { gameId: 'g-1', gameName: 'คืนจันทราโลหิต', seq: 44, scene: 'narration', npc: null, at: { day: 2, phase: 'HESPERION', turn: 2 }, text: 'ฝนตกหนักจนมองไม่เห็นอะไรเลยแม้แต่ปลายจมูกของตัวเองที่ยื่นออกไป', down: 1, reasons: { too_long: 1 }, corrections: [] },
+      ],
+    },
+    { entries: [] },
+  ],
+  AdminCorrectionRequest: [{ gameId: 'g-1', seq: 41, edited: 'ข้ายังไม่ไว้ใจเจ้า', toLibrary: true }, { gameId: 'g-1', seq: 44, edited: 'ฝนตกหนักจนมองแทบไม่เห็นทาง' }],
+  AdminCorrectionResponse: [{ correction }],
+  AdminCorrectionsExportResponse: [
+    {
+      exportedAt: '2026-11-23T10:00:00.000Z',
+      count: 1,
+      jsonl: '{"npc":"โนอา","scene":"npc-dialogue","reasons":["out_of_character"],"original":"ข้าไม่ไว้ใจ {{PLAYER_1}} หรอกนะ","edited":"ข้ายังไม่ไว้ใจ {{PLAYER_1}}","libraryCandidate":true}\n',
+    },
+  ],
 };

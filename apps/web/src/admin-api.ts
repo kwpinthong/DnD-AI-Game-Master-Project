@@ -1,4 +1,8 @@
 import {
+  AdminCorrectionResponse,
+  AdminCorrectionsExportResponse,
+  AdminDownvotesResponse,
+  type AdminCorrectionRequest,
   AdminSessionResponse,
   AiUsageGameResponse,
   AiUsageOverviewResponse,
@@ -101,6 +105,19 @@ export function deleteLearningEntry(baseUrl: string, token: string, id: string) 
 
 export function deleteLearningGame(baseUrl: string, token: string, gameId: string) {
   return call(baseUrl, `/api/admin/learning/games/${encodeURIComponent(gameId)}`, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } }, LearningLibraryResponse);
+}
+
+/** GEN-168: the 👎 review (server owner only). */
+export function fetchDownvotes(baseUrl: string, token: string) {
+  return call(baseUrl, '/api/admin/downvotes', { headers: auth(token) }, AdminDownvotesResponse);
+}
+
+export function postCorrection(baseUrl: string, token: string, body: AdminCorrectionRequest) {
+  return call(baseUrl, '/api/admin/corrections', { method: 'POST', headers: { ...auth(token), 'content-type': 'application/json' }, body: JSON.stringify(body) }, AdminCorrectionResponse);
+}
+
+export function fetchCorrectionsExport(baseUrl: string, token: string) {
+  return call(baseUrl, '/api/admin/corrections-export', { headers: auth(token) }, AdminCorrectionsExportResponse);
 }
 
 export async function postAdminLogout(baseUrl: string, token: string): Promise<void> {

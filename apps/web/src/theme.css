@@ -187,6 +187,31 @@ button[aria-busy='true'] {
   color: var(--danger);
 }
 
+/* GEN-168: the 👎 reason chips: a line of their own under the buttons (never over the chat), 28px to look at,
+   44px to tap (the ::after reaches 8px past each side). */
+.vote-reasons {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  justify-content: inherit;
+  /* ≥ 16px apart so the 8px tap margins of two chips do not overlap */
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.vote-reason {
+  position: relative;
+  min-height: 28px;
+  padding: 2px var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.vote-reason::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
 /* ---------- Form fields ---------- */
 /* Q-201: label sits on its own line with a gap below, so it no longer touches its input. */
 label {

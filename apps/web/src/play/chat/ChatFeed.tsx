@@ -1,4 +1,4 @@
-import { FALLBACK_NARRATION_LABEL, PHASES, type EntryVote, type RoomEntry, type RoomState } from '@isekai/protocol';
+import { FALLBACK_NARRATION_LABEL, PHASES, type EntryVote, type RoomEntry, type RoomState, type VoteReason } from '@isekai/protocol';
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { hitChangeText } from '../../screen-models.ts';
 import { VoteButtons, playText } from '../../ui/index.ts';
@@ -12,6 +12,9 @@ export interface FeedVoting {
   local: ReadonlyMap<number, EntryVote | null>;
   busy: ReadonlySet<number>;
   onVote: (entry: RoomEntry, next: EntryVote | null) => void;
+  /** GEN-168: the 👎 reasons changed this session (the entry's `myReasons` is the base); leave out = no chips. */
+  reasons?: ReadonlyMap<number, readonly VoteReason[]>;
+  onReasons?: (entry: RoomEntry, next: VoteReason[]) => void;
 }
 
 export interface ChatFeedProps {
@@ -52,7 +55,16 @@ export function ChatFeed({ entries, day, placeId, placeName, astral, acknowledge
 
   const vote = (entry: RoomEntry) => {
     if (!voting || entry.myVote === undefined) return null;
-    return <VoteButtons value={shownVote(entry, voting.local) ?? null} disabled={voting.busy.has(entry.seq)} onVote={(next) => voting.onVote(entry, next)} />;
+    const onReasons = voting.onReasons;
+    return (
+      <VoteButtons
+        value={shownVote(entry, voting.local) ?? null}
+        disabled={voting.busy.has(entry.seq)}
+        onVote={(next) => voting.onVote(entry, next)}
+        reasons={voting.reasons?.get(entry.seq) ?? entry.myReasons ?? []}
+        {...(onReasons ? { onReasons: (next: VoteReason[]) => onReasons(entry, next) } : {})}
+      />
+    );
   };
 
   let before = '';

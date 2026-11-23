@@ -1,4 +1,4 @@
-import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { game, member } from './schema.ts';
 
 /**
@@ -62,6 +62,34 @@ export const responseVote = sqliteTable(
     sourceRef: text('source_ref').notNull(),
     vote: text('vote', { enum: ['up', 'down'] }).notNull(),
     updatedAt: integer('updated_at').notNull(),
+    /** GEN-168: JSON array of `VoteReason`, only with `down` ('[]' otherwise and on every vote older than the column). */
+    reasons: text('reasons').notNull().default('[]'),
   },
   (t) => [primaryKey({ columns: [t.gameId, t.memberId, t.sourceRef] })],
+);
+
+/**
+ * GEN-168: the server owner's "แก้เป็น" pairs: an AI message as the game kept it and the version it should have
+ * been. Append-only (each save is a new row, never changed), so the table is also the audit of the edits. No
+ * foreign keys and a snapshot of the text / NPC / scene: a pair outlives its game for fine-tuning.
+ * `library_candidate`: marked for the NPC example library, which GEN-151 builds.
+ */
+export const responseCorrection = sqliteTable(
+  'response_correction',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    gameId: text('game_id').notNull(),
+    entryId: integer('entry_id').notNull(),
+    original: text('original').notNull(),
+    edited: text('edited').notNull(),
+    npcName: text('npc_name'),
+    scene: text('scene', { enum: ['feed', 'narration', 'npc-dialogue', 'npc-reaction'] }).notNull(),
+    /** JSON array of `VoteReason`. */
+    reasons: text('reasons').notNull().default('[]'),
+    /** JSON array of the game's players' real names when saved, so the export can swap them for tokens later. */
+    playerNames: text('player_names').notNull().default('[]'),
+    libraryCandidate: integer('library_candidate', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('response_correction_entry').on(t.gameId, t.entryId)],
 );

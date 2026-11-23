@@ -35,3 +35,6 @@ export * from './view-models.ts';
 
 // GEN-065: the start scenario (origin) and its private narration, own file for the same reason.
 export * from './origin.ts';
+
+// GEN-168: the server owner's review of 👎 messages + "แก้เป็น" pairs, own file for the same reason.
+export * from './vote-review.ts';

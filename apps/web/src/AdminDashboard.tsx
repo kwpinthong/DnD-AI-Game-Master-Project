@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { fetchGameUsage, fetchUsageOverview, postAdminLogout, postAdminSession } from './admin-api.ts';
 import { GameDataEditor } from './GameDataEditor.tsx';
 import { LearningLibrary } from './LearningLibrary.tsx';
+import { VoteReview } from './VoteReview.tsx';
 import { libraryText } from './ui/strings.ts';
 
 /**
@@ -83,7 +84,7 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
     return token ? { state: 'dashboard', token } : { state: 'login' };
   });
 
-  const [page, setPage] = useState<'usage' | 'library' | 'data'>('usage');
+  const [page, setPage] = useState<'usage' | 'library' | 'data' | 'votes'>('usage');
 
   function signedIn(token: string) {
     saveAdminToken(token);
@@ -104,7 +105,7 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
         <>
           {/* GEN-091: both pages sit behind the same admin code (Q-168). */}
           <nav className="admin__nav" aria-label="ผู้ดูแล">
-            {(['usage', 'library', 'data'] as const).map((p) => (
+            {(['usage', 'library', 'data', 'votes'] as const).map((p) => (
               <button key={p} type="button" aria-pressed={page === p} onClick={() => setPage(p)}>
                 {libraryText.adminNav[p]}
               </button>
@@ -124,6 +125,11 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
             <section aria-label={libraryText.title}>
               <h2>{libraryText.title}</h2>
               <LearningLibrary apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
+            </section>
+          ) : page === 'votes' ? (
+            <section aria-label={libraryText.adminNav.votes}>
+              <h2>{libraryText.adminNav.votes}</h2>
+              <VoteReview apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
             </section>
           ) : (
             <section aria-label={libraryText.adminNav.data}>

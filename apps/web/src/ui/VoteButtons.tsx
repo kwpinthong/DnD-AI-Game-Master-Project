@@ -1,4 +1,4 @@
-import type { EntryVote } from '@isekai/protocol';
+import { VOTE_REASON_LABEL, VoteReason, type EntryVote } from '@isekai/protocol';
 import { voteText } from './strings.ts';
 
 export interface VoteButtonsProps {
@@ -10,13 +10,16 @@ export interface VoteButtonsProps {
   disabled?: boolean;
   /** The group's name for a screen reader (default: the AI message one). */
   label?: string;
+  /** GEN-168: the 👎 reasons picked so far; with `onReasons`, the chips show while the vote is 👎. */
+  reasons?: readonly VoteReason[];
+  onReasons?: (next: VoteReason[]) => void;
 }
 
 /**
  * ถูกใจ / ไม่ถูกใจ under a message the AI GM wrote (GEN-107). Render it only for a player and only when the
  * entry has `myVote` (the server leaves it out for the Human GM and for text that is not the AI's).
  */
-export function VoteButtons({ value, onVote, disabled = false, label = voteText.group }: VoteButtonsProps) {
+export function VoteButtons({ value, onVote, disabled = false, label = voteText.group, reasons = [], onReasons }: VoteButtonsProps) {
   const button = (vote: EntryVote) => (
     <button
       type="button"
@@ -32,6 +35,18 @@ export function VoteButtons({ value, onVote, disabled = false, label = voteText.
     <div className="vote-buttons" role="group" aria-label={label}>
       {button('up')}
       {button('down')}
+      {value === 'down' && onReasons && (
+        <div className="vote-reasons" role="group" aria-label={voteText.reasons}>
+          {VoteReason.options.map((r) => {
+            const on = reasons.includes(r);
+            return (
+              <button key={r} type="button" className="vote-reason" aria-pressed={on} onClick={() => onReasons(on ? reasons.filter((x) => x !== r) : [...reasons, r])}>
+                {VOTE_REASON_LABEL[r]}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

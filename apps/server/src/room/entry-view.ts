@@ -10,7 +10,7 @@ import { ASTRAL_PLANE, namesVisibleTo, npcBondsOf } from '../visibility/store.ts
 import type { GameAssets } from '../assets/load.ts';
 import { placeMap, placeOfPresence, zoneView } from '../travel/rules.ts';
 import type { EntryMeta, RoomEntryRow } from './store.ts';
-import { myVoteOf } from './vote.ts';
+import { myVoteFields } from './vote.ts';
 
 /** A scenario place as players see it (id + name + its zone when it is a Location row); null for no place (an Astral Spirit has none, GEN-070). */
 export function placeViewOf(db: DbOrTx, gameId: string, locationId: string | null, assets: GameAssets): PlaceView | null {
@@ -80,6 +80,6 @@ export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string;
     // Q-177: players learn only that it is the template, never why.
     ...(row.fallback !== null ? { fallback: true as const } : {}),
     // GEN-107: only a player sees the buttons, and only on what the AI GM wrote.
-    ...(viewer.role === 'player' && isVotableEntry(row) ? { myVote: myVoteOf(db, row.gameId, viewer.id, row.id) } : {}),
+    ...(viewer.role === 'player' && isVotableEntry(row) ? myVoteFields(db, row.gameId, viewer.id, row.id) : {}),
   };
 }

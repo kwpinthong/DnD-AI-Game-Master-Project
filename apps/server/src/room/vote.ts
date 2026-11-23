@@ -1,4 +1,4 @@
-import { isVotableEntry, type EntryVote, type GmVoteEntry, type GmVotesResponse } from '@isekai/protocol';
+import { isVotableEntry, VoteReason, type EntryVote, type GmVoteEntry, type GmVotesResponse } from '@isekai/protocol';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
 import { responseVote, roomEntry, roomEntryRecipient } from '../db/schema.ts';
@@ -7,13 +7,15 @@ import { activeMembers, type MemberRow } from '../game/service.ts';
 /** The learning id of an entry's response (the same `sourceRef` idea as GEN-078's rulings). */
 export const entryRef = (seq: number) => `entry-${seq}`;
 
-/** The member's vote on one entry; null = none. */
-export function myVoteOf(db: DbOrTx, gameId: string, memberId: string, seq: number): EntryVote | null {
-  return db
-    .select({ vote: responseVote.vote })
+/** The member's vote (null = none) as `RoomEntry` / `ResponseVoteResponse` carry it; GEN-168: `myReasons` only with `down`. */
+export function myVoteFields(db: DbOrTx, gameId: string, memberId: string, seq: number): { myVote: EntryVote | null; myReasons?: VoteReason[] } {
+  const row = db
+    .select({ vote: responseVote.vote, reasons: responseVote.reasons })
     .from(responseVote)
     .where(and(eq(responseVote.gameId, gameId), eq(responseVote.memberId, memberId), eq(responseVote.sourceRef, entryRef(seq))))
-    .get()?.vote ?? null;
+    .get();
+  if (!row) return { myVote: null };
+  return row.vote === 'down' ? { myVote: 'down', myReasons: JSON.parse(row.reasons) as VoteReason[] } : { myVote: row.vote };
 }
 
 /**
@@ -51,7 +53,7 @@ export type VoteResult = 'ok' | 'not_found' | 'forbidden';
  * player, or the entry was not sent to them (a private message of someone else). `not_found`: no such entry
  * in this game, or it is not AI-written (a whisper, an omen, a server template).
  */
-export function setVote(db: DbOrTx, me: MemberRow, seq: number, vote: EntryVote | null, now: number): VoteResult {
+export function setVote(db: DbOrTx, me: MemberRow, seq: number, vote: EntryVote | null, now: number, reasons: readonly VoteReason[] = []): VoteResult {
   const entry = db.select().from(roomEntry).where(and(eq(roomEntry.id, seq), eq(roomEntry.gameId, me.gameId))).get();
   if (!entry) return 'not_found';
   const received = db
@@ -65,9 +67,11 @@ export function setVote(db: DbOrTx, me: MemberRow, seq: number, vote: EntryVote 
   if (vote === null) {
     db.delete(responseVote).where(and(eq(responseVote.gameId, me.gameId), eq(responseVote.memberId, me.id), eq(responseVote.sourceRef, ref))).run();
   } else {
+    // C2: a 👍 never keeps the reasons of an earlier 👎; one reason once, in the order the list has them.
+    const kept = JSON.stringify(vote === 'down' ? VoteReason.options.filter((r) => reasons.includes(r)) : []);
     db.insert(responseVote)
-      .values({ gameId: me.gameId, memberId: me.id, sourceRef: ref, vote, updatedAt: now })
-      .onConflictDoUpdate({ target: [responseVote.gameId, responseVote.memberId, responseVote.sourceRef], set: { vote, updatedAt: now } })
+      .values({ gameId: me.gameId, memberId: me.id, sourceRef: ref, vote, updatedAt: now, reasons: kept })
+      .onConflictDoUpdate({ target: [responseVote.gameId, responseVote.memberId, responseVote.sourceRef], set: { vote, updatedAt: now, reasons: kept } })
       .run();
   }
   return 'ok';

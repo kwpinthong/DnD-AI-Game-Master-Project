@@ -36,6 +36,7 @@ export const CONTRACT_SCREENS = [
   { id: 'ai-usage', title: '8. AI usage (ผู้ดูแล)' },
   { id: 'my-style', title: '9. สไตล์ของฉัน' },
   { id: 'game-data', title: '10. ข้อมูลเกม (ผู้ดูแล)' },
+  { id: 'vote-review', title: '11. ข้อความที่ถูก 👎 + แก้เป็น (ผู้ดูแล)' },
 ] as const;
 export type ScreenId = (typeof CONTRACT_SCREENS)[number]['id'];
 
@@ -128,6 +129,10 @@ export const CONTRACT_SCHEMAS = {
   LearningLibraryResponse: p.LearningLibraryResponse,
   PlayerStyleRequest: p.PlayerStyleRequest,
   PlayerStyleResponse: p.PlayerStyleResponse,
+  AdminDownvotesResponse: p.AdminDownvotesResponse,
+  AdminCorrectionRequest: p.AdminCorrectionRequest,
+  AdminCorrectionResponse: p.AdminCorrectionResponse,
+  AdminCorrectionsExportResponse: p.AdminCorrectionsExportResponse,
 } as const;
 export type ContractSchemaName = keyof typeof CONTRACT_SCHEMAS;
 
@@ -267,8 +272,8 @@ export const CONTRACT: readonly ContractItem[] = [
   http('PUT', '/api/game/rating/votes/:sourceRef', 'ResponseVoteRequest', 'GameRatingResponse', ready('GEN-171', 'player', ['ending-rating'], '👍/👎 action → ผล ด้วย `sourceRef` (ADR GEN-077) แบบ GEN-107, `vote: null` = ยกเลิก; เก็บใน response_vote เป็น `ruling-${sourceRef}` (Q-325); เห็นแค่ `myVotes` ของตัวเอง ไม่มียอดรวม; GM คน / ไม่ใช่สมาชิก 403; ก่อนจบ 409; ref ที่หน้าสรุปไม่เปิด = 404 `ruling_not_found`')),
 
   // --- server owner ---
-  http('POST', '/api/admin/session', 'AdminSessionRequest', 'AdminSessionResponse', ready('GEN-061', 'any', ['ai-usage', 'learning-library', 'game-data'])),
-  http('POST', '/api/admin/logout', null, null, ready('GEN-061', 'admin', ['ai-usage', 'learning-library', 'game-data'])),
+  http('POST', '/api/admin/session', 'AdminSessionRequest', 'AdminSessionResponse', ready('GEN-061', 'any', ['ai-usage', 'learning-library', 'game-data', 'vote-review'])),
+  http('POST', '/api/admin/logout', null, null, ready('GEN-061', 'admin', ['ai-usage', 'learning-library', 'game-data', 'vote-review'])),
   http('GET', '/api/admin/game-data', null, 'GameDataListResponse', ready('GEN-147', 'admin', ['game-data'])),
   http('GET', '/api/admin/game-data/:name', null, 'GameDataSetResponse', ready('GEN-147', 'admin', ['game-data'], 'ไม่มีชุดนี้ = 404 `data_set_not_found`')),
   http('PUT', '/api/admin/game-data/:name', 'GameDataSaveRequest', 'GameDataSetResponse', ready('GEN-147', 'admin', ['game-data'], 'ตรวจด้วย schema เดียวกับ loader; ผิด = 400 `invalid_input` + `fields` ค่าเดิมไม่เปลี่ยน; backup ก่อนแก้ + audit 1 แถว; มีผลกับเกมใหม่และเทิร์นถัดไป')),
@@ -281,6 +286,11 @@ export const CONTRACT: readonly ContractItem[] = [
   http('GET', '/api/admin/learning', null, 'LearningLibraryResponse', pending('GEN-084', 'admin', ['learning-library'], 'ชนิด entry ตาม ADR ของ GEN-077')),
   http('DELETE', '/api/admin/learning/:id', null, 'LearningLibraryResponse', pending('GEN-084', 'admin', ['learning-library'])),
   http('DELETE', '/api/admin/learning/games/:gameId', null, 'LearningLibraryResponse', pending('GEN-084', 'admin', ['learning-library'])),
+
+  // --- GEN-168: review of 👎 messages (server owner) ---
+  http('GET', '/api/admin/downvotes', null, 'AdminDownvotesResponse', ready('GEN-168', 'admin', ['vote-review'], 'ข้อความ AI ที่มี 👎 ทุกเกม พร้อม NPC / เหตุผล (นับ) / คู่ "แก้เป็น" ที่บันทึกไว้')),
+  http('POST', '/api/admin/corrections', 'AdminCorrectionRequest', 'AdminCorrectionResponse', ready('GEN-168', 'admin', ['vote-review'], 'เก็บคู่ข้อความเดิม → ฉบับแก้ (+ NPC, ฉาก, เหตุผล) แบบเพิ่มอย่างเดียว + log 1 บรรทัด; ข้อความในเกมไม่เปลี่ยน; `toLibrary` = แค่ติดธงผู้สมัครคลังตัวอย่าง NPC (คลังเป็นของ GEN-151); ไม่มีข้อความ = 404 `response_not_found`')),
+  http('GET', '/api/admin/corrections-export', null, 'AdminCorrectionsExportResponse', ready('GEN-168', 'admin', ['vote-review'], 'JSONL ทุกคู่ ชื่อจริงของผู้เล่นแทนด้วย `{{PLAYER_n}}`')),
 
   // --- player style (player code, Q-167) ---
   http('POST', '/api/style', 'PlayerStyleRequest', 'PlayerStyleResponse', pending('GEN-082', 'any', ['my-style'])),

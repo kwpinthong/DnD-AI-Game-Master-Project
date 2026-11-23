@@ -72,6 +72,10 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/admin/game-data/:name/asset-file': { method: 'GET', path: '/api/admin/game-data/NPC/asset-file' },
     'GET /api/admin/game-data-audit': { method: 'GET', path: '/api/admin/game-data-audit' },
     'GET /api/admin/game-data-export': { method: 'GET', path: '/api/admin/game-data-export' },
+    // GEN-168: the 👎 review; a player's session is 403 (checked below).
+    'GET /api/admin/downvotes': { method: 'GET', path: '/api/admin/downvotes' },
+    'POST /api/admin/corrections': { method: 'POST', path: '/api/admin/corrections', body: { gameId: 'g', seq: 1, edited: 'x' } },
+    'GET /api/admin/corrections-export': { method: 'GET', path: '/api/admin/corrections-export' },
     // GEN-055: the player's own skills, held items and library discoveries (no condition or progress).
     'GET /api/game/inventory': { method: 'GET', path: '/api/game/inventory' },
     // GEN-058: the Human GM console. Players get 403 (scanned for karma like every other answer).
@@ -110,6 +114,9 @@ const ADMIN_DATA_ROUTES = [
   'GET /api/admin/game-data/:name/asset-file',
   'GET /api/admin/game-data-audit',
   'GET /api/admin/game-data-export',
+  'GET /api/admin/downvotes',
+  'POST /api/admin/corrections',
+  'GET /api/admin/corrections-export',
 ];
 
 /** The join name the fixture gave each seat (A is "นก" in both table kinds). */
