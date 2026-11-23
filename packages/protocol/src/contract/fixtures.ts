@@ -366,7 +366,7 @@ export const CONTRACT_FIXTURES: Fixtures = {
   JoinStyleFields: [{ playerCode: 'nok-2026', noStyle: false }],
   MeResponse: [{ member }],
   CreateGameRequest: [{ createCode: 'ลับเฉพาะ', gameName: 'เมืองก่อนอุกกาบาต', mode: 'online', humanGm: false, npcDialogue: 'low', tone: 'B', name: 'นก', pin: '1234' },
-    { createCode: 'ลับเฉพาะ', gameName: 'เมืองก่อนอุกกาบาต', mode: 'single', humanGm: false, name: 'นก', pin: '1234', playerCode: 'nok-2026', memory: { enabled: true, sourceGameIds: ['g-old'] } },
+    { createCode: 'ลับเฉพาะ', gameName: 'เมืองก่อนอุกกาบาต', mode: 'single', humanGm: false, name: 'นก', pin: '1234', playerCode: 'nok-2026', noStyle: true, memory: { enabled: true, sourceGameIds: ['g-old'] } },
   ],
   CreateGameResponse: [{ token: 't0k3n', expiresAt: '2026-12-22T00:00:00.000Z', member, game: gameView }],
   GameMemorySetting: [{ enabled: true, sourceGameIds: ['g-old'] }, { enabled: false }],

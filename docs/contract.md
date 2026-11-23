@@ -36,7 +36,7 @@ endpoint / socket event 97 รายการ: ready 97, pending 0 · field ท�
 | 1. Join | `GET /api/me` | - → `MeResponse` | ทุกคน | ready | GEN-024 |  |
 | 1. Join | `POST /api/join` | `JoinRequest` → `JoinResponse` | ทุกคน | ready | GEN-024 | GEN-082: body ยังรับ `JoinStyleFields` (`playerCode` ไม่บังคับ ≤ 64, `noStyle`) ได้ด้วย; server เก็บแค่ HMAC ของรหัส |
 | 1. Join | `PUT /api/style/opt-out` | `PlayerStyleRequest` → `PlayerStyleResponse` | ทุกคน | ready | GEN-082 | "ไม่ให้เก็บสไตล์ฉัน" ของรหัสนั้นทุกเกม (`optOut` จำเป็น); เกมที่จบหลังจากนี้ไม่สร้างสไตล์ใหม่ และ AI ไม่ได้สไตล์นี้ |
-| 2. สร้างเกม | `POST /api/games` | `CreateGameRequest` → `CreateGameResponse` | ทุกคน | ready | GEN-025 | GEN-083: `memory` (ไม่ส่ง = ปิด) เปิดต้องมี `playerCode` และเกมต้นทาง 1-3 เกมจาก /api/memory/sources ของรหัสนั้น ไม่ตรง = 400 `fields.memory` |
+| 2. สร้างเกม | `POST /api/games` | `CreateGameRequest` → `CreateGameResponse` | ทุกคน | ready | GEN-025 | GEN-083: `memory` (ไม่ส่ง = ปิด) เปิดต้องมี `playerCode` และเกมต้นทาง 1-3 เกมจาก /api/memory/sources ของรหัสนั้น ไม่ตรง = 400 `fields.memory`; GEN-201: `noStyle` (ไม่ส่ง = เก็บ) เหมือน /api/join |
 | 2. สร้างเกม | `POST /api/memory/sources` | `MemorySourcesRequest` → `MemorySourcesResponse` | ทุกคน | ready | GEN-083 | เกมที่จบแล้วที่รหัสนั้นเป็นสมาชิก (ไม่มีเกณฑ์คะแนน) ใหม่ก่อน; รหัสผู้เล่นอยู่ใน body เท่านั้น ไม่ใส่ใน URL / header (Q-276); รหัสที่ไม่เคยใช้ = 403 (ผิด 5 ครั้ง / 10 นาที ต่อ IP = 429) |
 | 2b. แก้ scenario | `GET /api/game/scenario` | - → `GameScenarioResponse` | GM คน | ready | GEN-046 |  |
 | 2b. แก้ scenario | `PUT /api/game/scenario` | `Scenario` → `GameScenarioResponse` | GM คน | ready | GEN-046 |  |

@@ -111,8 +111,8 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
     }
     // GEN-177: no tone picked = the server default (the Voice data set, set at /admin).
     const created = await createGame(db, parsed.data, now, options.assets.voice.tone, sources);
-    // GEN-082: the creator's code links their style like a join does.
-    if (playerCode !== '') saveJoinStyle(db, { id: created.member.id, gameId: created.member.gameId }, { playerCode, noStyle: false }, now());
+    // GEN-082 / GEN-201: the creator's code and opt-out tick link their style like a join does.
+    saveJoinStyle(db, { id: created.member.id, gameId: created.member.gameId }, { playerCode, noStyle: parsed.data.noStyle ?? false }, now());
     const body: CreateGameResponse = {
       token: created.token,
       expiresAt: new Date(created.expiresAt).toISOString(),

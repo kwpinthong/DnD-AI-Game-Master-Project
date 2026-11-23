@@ -220,7 +220,7 @@ export const CONTRACT: readonly ContractItem[] = [
   http('GET', '/api/me', null, 'MeResponse', ready('GEN-024', 'any', ['home', 'join'])),
   http('POST', '/api/join', 'JoinRequest', 'JoinResponse', ready('GEN-024', 'any', ['join'], 'GEN-082: body ยังรับ `JoinStyleFields` (`playerCode` ไม่บังคับ ≤ 64, `noStyle`) ได้ด้วย; server เก็บแค่ HMAC ของรหัส')),
   http('POST', '/api/logout', null, null, ready('GEN-024', 'any', ['home'])),
-  http('POST', '/api/games', 'CreateGameRequest', 'CreateGameResponse', ready('GEN-025', 'any', ['create-game'], 'GEN-083: `memory` (ไม่ส่ง = ปิด) เปิดต้องมี `playerCode` และเกมต้นทาง 1-3 เกมจาก /api/memory/sources ของรหัสนั้น ไม่ตรง = 400 `fields.memory`')),
+  http('POST', '/api/games', 'CreateGameRequest', 'CreateGameResponse', ready('GEN-025', 'any', ['create-game'], 'GEN-083: `memory` (ไม่ส่ง = ปิด) เปิดต้องมี `playerCode` และเกมต้นทาง 1-3 เกมจาก /api/memory/sources ของรหัสนั้น ไม่ตรง = 400 `fields.memory`; GEN-201: `noStyle` (ไม่ส่ง = เก็บ) เหมือน /api/join')),
   http('POST', '/api/memory/sources', 'MemorySourcesRequest', 'MemorySourcesResponse', ready('GEN-083', 'any', ['create-game'], 'เกมที่จบแล้วที่รหัสนั้นเป็นสมาชิก (ไม่มีเกณฑ์คะแนน) ใหม่ก่อน; รหัสผู้เล่นอยู่ใน body เท่านั้น ไม่ใส่ใน URL / header (Q-276); รหัสที่ไม่เคยใช้ = 403 (ผิด 5 ครั้ง / 10 นาที ต่อ IP = 429)')),
   http('GET', '/api/game', null, 'GameView', ready('GEN-025', 'player', ['lobby', 'play-top-bar'], 'GEN-083: `memory` สถานะความทรงจำ (เปิด + ชื่อเกมต้นทาง)')),
   http('PATCH', '/api/game', 'UpdateGameRequest', 'GameView', ready('GEN-025', 'player', ['lobby'], 'เจ้าของเท่านั้น ก่อนเริ่ม (หลังเริ่ม = 409 `game_started` รวมถึง `memory`); `memory` ตรวจกับรหัสผู้เล่นที่เจ้าของใช้ตอนสร้าง')),
