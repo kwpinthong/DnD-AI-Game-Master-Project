@@ -116,6 +116,7 @@ export const CONTRACT_SCHEMAS = {
   GmInsertEventResponse: p.GmInsertEventResponse,
   GmLogResponse: p.GmLogResponse,
   GmVotesResponse: p.GmVotesResponse,
+  GmSettings: p.GmSettings,
   AdminSessionRequest: p.AdminSessionRequest,
   AdminSessionResponse: p.AdminSessionResponse,
   AiUsageOverviewResponse: p.AiUsageOverviewResponse,
@@ -277,6 +278,7 @@ export const CONTRACT: readonly ContractItem[] = [
   http('POST', '/api/game/gm/adjust', 'GmAdjustRequest', 'GmAdjustResponse', ready('GEN-058', 'gm', ['gm-console'])),
   http('POST', '/api/game/gm/events', 'GmInsertEventRequest', 'GmInsertEventResponse', ready('GEN-058', 'gm', ['gm-console'])),
   http('GET', '/api/game/gm/log', null, 'GmLogResponse', ready('GEN-058', 'gm', ['gm-console'])),
+  http('PUT', '/api/game/gm/settings', 'GmSettings', 'GmSettings', ready('GEN-198', 'gm', ['gm-console'], 'สวิตช์ "อนุมัติบทพูดอัตโนมัติ" ต่อเกม (ค่าเริ่มปิด, อ่านค่าได้ที่ `GmConsoleResponse.autoApproveLines`): เปิดแล้วบทพูด NPC ของเทิร์นออกทันทีไม่เข้า console ผลเทิร์นยังรอ GM อนุมัติตามเดิม; ผู้เล่น 403')),
   http('GET', '/api/game/gm/votes', null, 'GmVotesResponse', ready('GEN-126', 'gm', ['gm-console', 'learning-library'], 'ถูกใจ / ไม่ถูกใจ ต่อข้อความ AI ที่มีคนโหวต (นับเฉพาะผู้เล่นตอนนี้); `good` (Q-286) = 👍 > ครึ่งของผู้เล่นทั้งหมด (ไม่โหวต = 👎, เสมอไม่ผ่าน); `avoid` (Q-287) = 👎 จริง > ครึ่งของผู้เล่นทั้งหมด (ไม่โหวตไม่นับ); ผู้เล่น 403 (เห็นแค่ `RoomEntry.myVote` ของตัวเอง)')),
 
   // --- rate the AI GM while playing (GEN-107) ---

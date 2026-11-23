@@ -1,0 +1,1 @@
+ALTER TABLE `game` ADD `auto_approve_lines` integer DEFAULT false NOT NULL;

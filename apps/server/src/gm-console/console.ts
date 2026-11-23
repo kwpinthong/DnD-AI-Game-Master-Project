@@ -1,6 +1,7 @@
 import {
   GmAdjustRequest,
   GmInsertEventRequest,
+  GmSettings,
   GmTurnEditRequest,
   PHASES,
   SCENARIO_DAYS,
@@ -21,7 +22,7 @@ import { and, asc, eq, isNotNull, ne } from 'drizzle-orm';
 import type { z } from 'zod';
 import type { GameAssets } from '../assets/load.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
-import { character, gmOverride, member, npcBond, phaseAction, roomEntry, roomEntryRecipient } from '../db/schema.ts';
+import { character, game, gmOverride, member, npcBond, phaseAction, roomEntry, roomEntryRecipient } from '../db/schema.ts';
 import type { MemberRow } from '../game/service.ts';
 import type { PhaseResolution } from '../room/resolver.ts';
 import type { HeldTurn, RoomService } from '../room/service.ts';
@@ -257,6 +258,7 @@ export function consoleView(db: Db, room: RoomService, assets: GameAssets, gm: M
     pending: turn ? pendingView(db, gm.gameId, turn) : null,
     fallbacks: fallbacksOf(db, gm.gameId),
     npcs: gmNpcCurses(db, gm.gameId, new Map((getGameScenario(db, gm.gameId)?.npcs ?? []).map((n) => [n.id, n.name]))),
+    autoApproveLines: autoApproveLinesOf(db, gm.gameId),
   };
 }
 
@@ -459,4 +461,17 @@ export function insertEvent(db: Db, gm: MemberRow, input: unknown, now: number):
     return result.code === 'invalid' ? invalid(Object.fromEntries(result.errors.map((e) => [e.path, e.message]))) : notAllowed('เกมนี้ไม่มี scenario');
   }
   return ok(timelineEvents(db, gm.gameId).find((e) => e.id === event.id)!);
+}
+
+// --- GEN-198: the per-game switches ---
+
+function autoApproveLinesOf(db: DbOrTx, gameId: string): boolean {
+  return db.select({ on: game.autoApproveLines }).from(game).where(eq(game.id, gameId)).get()?.on === true;
+}
+
+export function saveSettings(db: Db, gm: MemberRow, input: unknown): ConsoleResult<GmSettings> {
+  const parsed = GmSettings.safeParse(input ?? {});
+  if (!parsed.success) return invalid(fieldsOf(parsed.error));
+  db.update(game).set({ autoApproveLines: parsed.data.autoApproveLines }).where(eq(game.id, gm.gameId)).run();
+  return ok({ autoApproveLines: autoApproveLinesOf(db, gm.gameId) });
 }
