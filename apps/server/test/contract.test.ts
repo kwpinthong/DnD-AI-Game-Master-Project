@@ -185,6 +185,9 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'POST /api/game/gm/turn/approve', { token: tgm });
     await Promise.race([a, b, c].map((x) => x.waitFor((m) => m.type === 'entry' && m.entry.kind === 'npc')));
     await hit(call, 'GET /api/game/gm/log', { token: tgm });
+    // GEN-198: the switch back and forth (it stays off for the rest of this walk).
+    await hit(call, 'PUT /api/game/gm/settings', { token: tgm, body: { autoApproveLines: true } });
+    await hit(call, 'PUT /api/game/gm/settings', { token: tgm, body: { autoApproveLines: false } });
     await hit(call, 'GET /api/game/gm/votes', { token: tgm });
     await hit(call, 'GET /api/game/gm/votes', { token: t.a.token });
     const playLog = GameLogResponse.parse((await hit(call, 'GET /api/game/log', { token: t.a.token })).body);

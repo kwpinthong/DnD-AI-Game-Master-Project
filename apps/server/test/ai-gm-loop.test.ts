@@ -1664,6 +1664,63 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
           expect(next.dialogue).toBeUndefined();
         });
       });
+
+      describe('GEN-198: the per-game switch "อนุมัติบทพูดอัตโนมัติ" of a Human GM game', () => {
+        const gmView = async (t: Table) => GmConsoleResponse.parse((await t.call('GET', '/api/game/gm/console', { token: t.gm!.token })).body);
+        const setAuto = (t: Table, on: boolean) => t.call('PUT', '/api/game/gm/settings', { token: t.gm!.token, body: { autoApproveLines: on } });
+        async function heldFirstTurn() {
+          await boot({}, noRoll);
+          const t = await startedTable(server!, true);
+          move(t.a, 'fountain');
+          move(t.b, 'fountain');
+          jumpTo(t, { day: 1, phase: 'SOLARION', turn: 1 });
+          const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+          return { t, clients };
+        }
+
+        it('C1: off (the default): the console says so, and the NPC lines still wait in the console after the turn is approved', async () => {
+          const { t, clients } = await heldFirstTurn();
+          expect((await gmView(t)).autoApproveLines).toBe(false);
+          for (const [i, c] of clients.entries()) await send(c, ['ทักลูเซีย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'][i]!);
+          const turn = await approveHeldTurn(t.call, t.gm!.token);
+          expect(turn.dialogue).toBeUndefined();
+          for (const c of clients) await c.waitFor(at(1, 'SOLARION', 2));
+          await expect.poll(async () => (await gmView(t)).pending?.dialogue ?? false, { timeout: 5_000 }).toBe(true);
+          for (const c of clients) expect(npcEntries(c)).toEqual([]);
+        });
+
+        it('C2: on: the turn result still waits for the GM, the NPC lines go out at once and never reach the console', async () => {
+          const { t, clients } = await heldFirstTurn();
+          const res = await setAuto(t, true);
+          expect(res.status, JSON.stringify(res.body)).toBe(200);
+          expect(res.body).toEqual({ autoApproveLines: true });
+          expect((await gmView(t)).autoApproveLines).toBe(true);
+          // Only the GM changes it.
+          expect((await t.call('PUT', '/api/game/gm/settings', { token: t.a.token, body: { autoApproveLines: false } })).status).toBe(403);
+          expect((await t.call('PUT', '/api/game/gm/settings', { token: t.gm!.token, body: { autoApproveLines: 'yes' } })).status).toBe(400);
+
+          for (const [i, c] of clients.entries()) await send(c, ['ทักลูเซีย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'][i]!);
+          // The turn's result is held as before.
+          await expect.poll(async () => (await gmView(t)).pending?.entries.length ?? 0, { timeout: 5_000 }).toBeGreaterThan(0);
+          await pause(50);
+          for (const c of clients) expect(c.lastRoom()).toMatchObject({ turn: 1 });
+          expect((await t.call('POST', '/api/game/gm/turn/approve', { token: t.gm!.token })).status).toBe(200);
+          for (const c of clients) await c.waitFor(at(1, 'SOLARION', 2));
+
+          // The lines reach the players without a second approval, under their own turn, and the console holds nothing.
+          await until(() => npcEntries(clients[0]!).length > 0);
+          for (const e of npcEntries(clients[0]!)) expect(e).toMatchObject({ day: 1, phase: 'SOLARION', turn: 1 });
+          expect(npcEntries(clients[2]!).filter((e) => e.place?.id === 'fountain')).toEqual([]);
+          await pause(50);
+          expect((await gmView(t)).pending).toBeNull();
+
+          // The next turn is held as a turn of its own.
+          for (const [i, c] of clients.entries()) await send(c, ['ทักลูเซียอีกครั้ง', 'เดินรอบน้ำพุ', 'ล้างแก้วต่อ'][i]!);
+          const next = await approveHeldTurn(t.call, t.gm!.token);
+          expect(next).toMatchObject({ at: { day: 1, phase: 'SOLARION', turn: 2 } });
+          expect(next.dialogue).toBeUndefined();
+        });
+      });
     });
   });
 
