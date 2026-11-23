@@ -1210,7 +1210,9 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       });
 
       it('C7: asked while the schedule has him elsewhere (Noah at the clinic in the rain): no line of his, no error', async () => {
-        await boot({}, asking('เด็กขอทาน', 'beggar', () => [{ npcId: 'beggar', kind: 'dialogue', text: 'ข้าไม่ได้อยู่ตรงนี้' }]));
+        const ask = asking('เด็กขอทาน', 'beggar', () => [{ npcId: 'beggar', kind: 'dialogue', text: 'ข้าไม่ได้อยู่ตรงนี้' }]);
+        // GEN-175: the rules refuse a target the schedule has elsewhere (npc_not_present); the repair (the Mock GM's own) aims at nobody.
+        await boot({}, (req, n) => (req.purpose === 'gm_repair' ? undefined : ask(req, n)));
         const t = await startedTable(server!, false);
         move(t.a, 'fountain');
         move(t.b, 'fountain');
@@ -1220,6 +1222,7 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
         await playTurn(clients, ['ถามเด็กขอทานเรื่องเมือง', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'EOSORIA', turn: 2 });
 
         expect(turnRows()).toEqual([expect.objectContaining({ status: 'applied' })]);
+        expect(lastUserText(provider.requests.find((r) => r.purpose === 'gm_repair')!)).toContain('npc_not_present');
         expect(placeCtx().npcs.find((n) => n.id === 'beggar')?.here).toBe(false);
         expect(placeCtx().answers).toEqual([]);
         for (const c of clients) expect(JSON.stringify(c.entries())).not.toContain('ข้าไม่ได้อยู่ตรงนี้');

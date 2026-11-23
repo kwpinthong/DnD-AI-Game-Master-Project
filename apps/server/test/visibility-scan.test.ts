@@ -245,7 +245,8 @@ describe('C6: no player-facing payload carries karma (GEN-050)', { timeout: 120_
     seedSecrets(t);
     const sNpcs = defaultScenario().npcs.filter((n) => n.rank === 'S');
     expect(sNpcs.map((n) => n.name).sort()).toEqual(['น็อกทิส', 'ออเรเลีย', 'แอสทรา'].sort());
-    for (const [i, npc] of sNpcs.entries()) moveCharacter(server.orm, [t.a, t.b, t.c][i]!.memberId, npc.locationId, CLOCK);
+    // GEN-175: the chips follow NPC_Schedule; Astra's row keeps her at the Astral Rift at every period.
+    for (const [i, npc] of sNpcs.entries()) moveCharacter(server.orm, [t.a, t.b, t.c][i]!.memberId, npc.id === 'horizon-watcher' ? 'astral-rift' : npc.locationId, CLOCK);
 
     const leaks: string[] = [];
     for (const [i, seat] of [t.a, t.b, t.c].entries()) {

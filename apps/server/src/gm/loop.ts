@@ -17,7 +17,7 @@ import type { AiPurpose, PromptBlock } from '../ai/provider.ts';
 import type { GameAssets } from '../assets/load.ts';
 import { tagVocabulary } from '../assets/tags.ts';
 import type { Clock } from '../auth/join.ts';
-import { applyPhaseActions, crisesOf, crossPlayerState } from '../crossplayer/phase.ts';
+import { applyPhaseActions, crisesOf, crossPlayerState, seatedKarmas } from '../crossplayer/phase.ts';
 import { outdoorLocationIds, tagContexts, weatherTagging, type TaggingOptions } from '../crossplayer/tags.ts';
 import { eq } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db/client.ts';
@@ -65,7 +65,7 @@ import {
   type TurnAction,
 } from './context.ts';
 import { createStageTimer, type StageTimer } from './timing.ts';
-import { capTotal, cleanNpcLines, lingerAfter, lingerNow, lingersOf, npcAnswers, npcLineLimits, npcPrompt, npcsPresentAt, saveLingers } from './npc-lines.ts';
+import { capTotal, cleanNpcLines, lingerAfter, lingersNow, npcAnswers, npcLineLimits, npcPlacesNow, npcPrompt, npcsPresentAt, saveLingers } from './npc-lines.ts';
 import { npcFarewellFor } from './server-lines.ts';
 import { GM_OUTPUT, GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
 import {
@@ -254,7 +254,13 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     const world = loadWorld(db, gameId, assets);
     const drowsy = new Set(input.state.order.filter((id) => input.state.players[id] && isDrowsy(input.state.players[id]!, input.state.day)));
     const crises = crisesOf(input.state);
-    const state = crossPlayerState(db, gameId, drowsy, assets, crises);
+    // GEN-110 / GEN-137: the NPCs the schedule puts at a place now; GEN-144: who the last turn left talking stays at that
+    // place a little longer, who has to go says goodbye. GEN-175: the rules and the turn context place NPCs by the same rule.
+    const presence = (karmas: number[]) => ({ phase: at.phase, weather: input.weather?.weather ?? null, karmas });
+    const everyone = presence(seatedKarmas(db, gameId));
+    const { last: lastTurn, lingering, farewells } = lingersNow(db, world, assets, everyone);
+    const npcPlaces = npcPlacesNow(world, assets, { ...everyone, lingering });
+    const state = crossPlayerState(db, gameId, drowsy, assets, crises, npcPlaces);
     const tagging: TaggingOptions = weatherTagging(assets, at.day, at.phase, input.weather ?? null);
     const tags = tagContexts(db, gameId, state, tagging);
     // GEN-068: the same weather input as the turn's apply (`applyPhaseActions`), so the results the engine gets
@@ -379,16 +385,9 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
             items: [],
           }))
         : [];
-    // GEN-110: the NPCs the schedule puts at a place now, and each player's standing with them.
     const karmaOf = (memberId: string) => state.players[memberId]?.karma ?? 0;
-    const presence = (karmas: number[]) => ({ phase: at.phase, weather: input.weather?.weather ?? null, karmas });
-    // GEN-144: who the last turn left talking stays at that place a little longer; who has to go says goodbye.
-    const lastTurn = lingersOf(db, gameId);
     // GEN-143: who a place was talking to last turn answers an action there that names nobody.
     const partnerAt = (placeId: string) => lastTurn.find((l) => l.talked && l.placeId === placeId)?.npcId ?? null;
-    const { lingering, farewells } = lingerNow(lastTurn, (npcId, placeId) =>
-      npcsPresentAt(world, assets, placeId, presence(Object.keys(state.players).map(karmaOf))).some((n) => n.id === npcId),
-    );
     const lingeringIds = new Set(lingering.map((l) => l.npcId));
     const hereAt = (placeId: string, members: string[]) => npcsPresentAt(world, assets, placeId, { ...presence(members.map(karmaOf)), lingering });
     const npcsFor = (placeId: string, members: string[]) => {
@@ -594,7 +593,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       causes: actionCausesOf(resolved.log.outcomes, nameOf),
       checks,
       apply: (tx) => {
-        const applied = applyPhaseActions(tx, gameId, actions, new ReplayRng(rolls), now(), tagging, drowsy, crises);
+        const applied = applyPhaseActions(tx, gameId, actions, new ReplayRng(rolls), now(), tagging, drowsy, crises, npcPlaces);
         if (!applied.ok) throw new Error('the stored turn no longer applies');
         // GEN-055: the unlock progress of every action (verb tags, karma) and the library's INVESTIGATE reveal.
         recordTurnProgress(tx, assets, gameId, applied.log, { day: at.day, period: at.phase, now: now() }, investigators);

@@ -20,6 +20,7 @@ import type { GameAssets } from '../assets/load.ts';
 import type { DbOrTx } from '../db/client.ts';
 import { character, karmaDay, member, npcActivity, npcBond, npcFlag, npcRef, npcReward } from '../db/schema.ts';
 import type { MemberRow } from '../game/service.ts';
+import { npcsHereNow } from '../gm/npc-lines.ts';
 import { getGameScenario, updateGameScenario } from '../scenario/store.ts';
 import { presenceOf } from '../visibility/store.ts';
 import { sheetNpcFor, type NpcRewardRef, type RewardSegment, type SheetNpc } from './sheet.ts';
@@ -362,9 +363,11 @@ function npcIdForRef(db: DbOrTx, gameId: string, ref: string): string | undefine
     .get()?.npcId;
 }
 
-/** The NPCs at `locationId` as `memberId` sees them (GET /api/game/surroundings). */
+const karmaNow = (db: DbOrTx, memberId: string) => db.select({ karma: character.karma }).from(character).where(eq(character.memberId, memberId)).get()?.karma ?? 0;
+
+/** The NPCs at `locationId` now as `memberId` sees them (GET /api/game/surroundings); GEN-175: the turn's "here" rule. */
 export function npcViewsAt(db: DbOrTx, assets: GameAssets, memberId: string, gameId: string, locationId: string): NpcView[] {
-  const here = (getGameScenario(db, gameId)?.npcs ?? []).filter((n) => n.locationId === locationId);
+  const here = npcsHereNow(db, assets, gameId, locationId, karmaNow(db, memberId));
   const refs = npcRefs(db, gameId, here.map((n) => n.id));
   return here.map((n) => {
     const ctx = contextFor(db, assets, memberId, n.id)!;
@@ -482,8 +485,8 @@ export function saveCompanion(db: DbOrTx, assets: GameAssets, me: MemberRow, ref
   const here = presenceOf(db, me.id);
   if (!here) return { kind: 'not_placed' };
   const npcId = npcIdForRef(db, me.gameId, ref);
-  const npc = npcId ? getGameScenario(db, me.gameId)?.npcs.find((n) => n.id === npcId) : undefined;
-  if (!npcId || !npc || npc.locationId !== here.locationId) return { kind: 'npc_not_found', message: 'ไม่พบ NPC คนนี้ในที่ที่คุณอยู่' };
+  const npc = npcId ? npcsHereNow(db, assets, me.gameId, here.locationId, karmaNow(db, me.id)).find((n) => n.id === npcId) : undefined;
+  if (!npcId || !npc) return { kind: 'npc_not_found', message: 'ไม่พบ NPC คนนี้ในที่ที่คุณอยู่' };
   const saved = savedBonds(db, me.id);
   if (saved.some((b) => b.npcId === npcId)) return { kind: 'already_companion' };
   const ctx = contextFor(db, assets, me.id, npcId)!;
