@@ -174,6 +174,8 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     for (const x of [a, b, c]) await x.waitFor((m) => m.type === 'room' && m.turn === 2 && m.status === 'collecting');
     await a.waitFor((m) => m.type === 'entry' && m.entry.kind === 'narration');
     await hit(call, 'GET /api/game/gm/log', { token: tgm });
+    await hit(call, 'GET /api/game/gm/votes', { token: tgm });
+    await hit(call, 'GET /api/game/gm/votes', { token: t.a.token });
     const playLog = GameLogResponse.parse((await hit(call, 'GET /api/game/log', { token: t.a.token })).body);
     await hit(call, 'GET /api/game/log', { token: tgm });
     // GEN-107: a vote on an AI-written entry, then the refusals (a GM, an unknown id)

@@ -471,6 +471,16 @@ export const CONTRACT_FIXTURES: Fixtures = {
   GmInsertEventRequest: [{ day: 6, phase: 'EOSORIA', title: 'ไฟไหม้ตลาด', reason: 'เพิ่มแรงกดดัน' }],
   GmInsertEventResponse: [{ event: { ...gmTimelineEvent, id: 'ev-gm-1', day: 6, title: 'ไฟไหม้ตลาด' } }],
   GmLogResponse: [{ overrides: [gmOverride] }],
+  GmVotesResponse: [
+    {
+      players: 3,
+      entries: [
+        { seq: 11, kind: 'feed', at: AT, text: 'ระฆังดังทั่วเมือง', up: 2, down: 0, good: true, avoid: false },
+        { seq: 12, kind: 'narration', at: AT, text: 'คุณเห็นนักบวช…', up: 0, down: 2, good: false, avoid: true },
+      ],
+    },
+    { players: 2, entries: [] },
+  ],
   AdminSessionRequest: [{ code: 'รหัสผู้ดูแล' }],
   AdminSessionResponse: [{ token: 'adm1n', expiresAt: '2026-11-22T13:00:00.000Z' }],
   AiUsageOverviewResponse: [
