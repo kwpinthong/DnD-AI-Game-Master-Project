@@ -87,33 +87,34 @@ describe('game data snapshot per turn (GEN-174)', { timeout: 120_000 }, () => {
     return clients;
   }
 
-  /** Everyone acts; resolves when the next turn is collecting for everyone. */
-  async function playTurn(clients: RoomClient[], turn: number) {
+  /** Everyone acts; resolves when the turn after it (`next`: phase + turn) is collecting for everyone. */
+  async function playTurn(clients: RoomClient[], next: [string, number]) {
     for (const c of clients) {
       const from = c.messages.length;
       c.action('มองไปรอบๆ', 'public');
       expect(await c.waitFor((m) => m.type === 'action_accepted' || m.type === 'action_rejected', from)).toEqual({ type: 'action_accepted' });
     }
-    for (const c of clients) await c.waitFor((m: RoomServerMessage) => m.type === 'room' && m.status === 'collecting' && m.turn === turn + 1);
+    for (const c of clients) await c.waitFor((m: RoomServerMessage) => m.type === 'room' && m.status === 'collecting' && m.phase === next[0] && m.turn === next[1]);
   }
 
   const noaHere = (r: AiCallRequest) => contextOf<NarrationContext | DialogueContext>(r).npcs.some((n) => n.id === NOA && n.here);
   const narrations = (from: number, to = requests.length) => requests.slice(from, to).filter((r) => r.purpose === 'narrate_place' || r.purpose === 'narrate_player');
-  const dialogues = (turn: number) => requests.filter((r) => r.purpose === 'npc_dialogue' && r.turn === turn);
+  /** The background NPC dialogue calls of EOSORIA turn `turn` (day 1). */
+  const dialogues = (turn: number) => requests.filter((r) => r.purpose === 'npc_dialogue' && contextOf<DialogueContext>(r).turn.turn === turn);
 
   it('C1 / C2: an NPC_Schedule edit saved while a turn resolves is not seen by that turn (narration nor dialogue); the next turn sees it', async () => {
     const t = await startedTable(server!, false);
     const clients = await enter(t);
     duringAdjudicate = noaToInn;
     const turn1 = requests.length;
-    await playTurn(clients, 1);
+    await playTurn(clients, ['EOSORIA', 2]);
     expect(duringAdjudicate).toBeUndefined();
     const turn1Narrations = narrations(turn1);
     expect(turn1Narrations.length).toBeGreaterThan(0);
     expect(turn1Narrations.filter(noaHere)).toEqual([]);
 
     const turn2 = requests.length;
-    await playTurn(clients, 2);
+    await playTurn(clients, ['SOLARION', 1]);
     expect(narrations(turn2).some(noaHere)).toBe(true);
     // The old turn's background dialogue read the old snapshot too: nobody was at the inn for it.
     await expect.poll(() => dialogues(2).length, { timeout: 5_000 }).toBeGreaterThan(0);
@@ -125,7 +126,7 @@ describe('game data snapshot per turn (GEN-174)', { timeout: 120_000 }, () => {
     const t = await startedTable(server!, false);
     const clients = await enter(t);
     const from = requests.length;
-    await playTurn(clients, 1);
+    await playTurn(clients, ['EOSORIA', 2]);
     expect(narrations(from).some(noaHere)).toBe(true);
   });
 

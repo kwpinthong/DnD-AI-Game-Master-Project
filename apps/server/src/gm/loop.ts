@@ -14,6 +14,7 @@ import {
 import type { z } from 'zod';
 import type { AiService, AiServiceError } from '../ai/core/service.ts';
 import type { AiPurpose, PromptBlock } from '../ai/provider.ts';
+import { pinAssets } from '../assets/game-data.ts';
 import type { GameAssets } from '../assets/load.ts';
 import { tagVocabulary } from '../assets/tags.ts';
 import type { Clock } from '../auth/join.ts';
@@ -759,8 +760,16 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
 
   return {
     async resolve(input) {
+      // GEN-174: one game data snapshot for the whole turn, its apply and its background stages included.
+      const pin = pinAssets(assets);
       try {
-        return await resolveTurn(input);
+        const r = await pin(() => resolveTurn(input));
+        return {
+          ...r,
+          ...(r.apply ? { apply: (tx: Parameters<typeof r.apply>[0]) => pin(() => r.apply!(tx)) } : {}),
+          ...(r.dialogue ? { dialogue: (publish: Parameters<typeof r.dialogue>[0]) => pin(() => r.dialogue!(publish)) } : {}),
+          ...(r.after ? { after: (signal?: AbortSignal) => pin(() => r.after!(signal)) } : {}),
+        };
       } catch (error) {
         if (error instanceof StuckError) return { stuck: error.stuck };
         throw error;
@@ -768,13 +777,13 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     },
     async finale({ gameId, signal }) {
       try {
-        return await tellFinale(gameId, signal);
+        return await pinAssets(assets)(() => tellFinale(gameId, signal));
       } catch (error) {
         if (error instanceof StuckError) return { stuck: error.stuck };
         throw error;
       }
     },
-    catchUp: ({ gameId, signal }) => summarizeFinishedDays(gameId, signal),
+    catchUp: ({ gameId, signal }) => pinAssets(assets)(() => summarizeFinishedDays(gameId, signal)),
   };
 }
 
