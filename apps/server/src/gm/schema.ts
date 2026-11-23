@@ -11,6 +11,13 @@ import { EventOutcomeProposal } from '../timeline/trigger.ts';
 
 const Severity = z.enum(SEVERITIES).nullable();
 const Int = z.number().int();
+/**
+ * GEN-158: fields whose usual value is 0 / null / [] / false carry it as a default, so the AI may leave them out
+ * (the service sends the input-side JSON schema) and writes about half the tokens. A value given is checked as before.
+ */
+const Zero = Int.default(0);
+const NoSeverity = Severity.default(null);
+const NoText = z.string().nullable().default(null);
 
 const StatusRequest = z.object({
   label: z.string().max(30),
@@ -20,16 +27,18 @@ const StatusRequest = z.object({
   visible: z.boolean(),
 });
 
-const Effects = z.object({
-  repDelta: Int,
-  karmaDelta: Int,
-  affinity: z.array(z.object({ npcId: z.string(), delta: Int })).max(3),
-  damage: Severity,
-  selfDamage: Severity,
-  heal: Severity,
-  addStatus: z.array(StatusRequest).max(2),
-  removeStatus: z.array(z.string()).max(2),
-});
+const Effects = z
+  .object({
+    repDelta: Zero,
+    karmaDelta: Zero,
+    affinity: z.array(z.object({ npcId: z.string(), delta: Int })).max(3).default([]),
+    damage: NoSeverity,
+    selfDamage: NoSeverity,
+    heal: NoSeverity,
+    addStatus: z.array(StatusRequest).max(2).default([]),
+    removeStatus: z.array(z.string()).max(2).default([]),
+  })
+  .prefault({});
 export type GmEffects = z.infer<typeof Effects>;
 
 const Modifier = z.union([
@@ -40,8 +49,8 @@ const Modifier = z.union([
   z.object({ source: z.literal('affinity'), ref: z.string() }),
 ]);
 
-const PlayerEffects = z.object({ damage: Severity, heal: Severity, takeItem: z.string().nullable(), giveItem: z.string().nullable() });
-const GearRef = z.object({ ref: z.string(), value: Int }).nullable();
+const PlayerEffects = z.object({ damage: NoSeverity, heal: NoSeverity, takeItem: NoText, giveItem: NoText }).prefault({});
+const GearRef = z.object({ ref: z.string(), value: Int }).nullable().default(null);
 
 export const GmAction = z.object({
   /** Must be the id the server gave, in the server's order. */
@@ -49,13 +58,13 @@ export const GmAction = z.object({
   /** The actor's player ref (the `ref` of {{p:ref}}). */
   actor: z.string(),
   kind: z.enum(ACTION_KINDS),
-  tags: z.array(z.enum(ACTION_TAGS)).max(2),
-  opposed: z.boolean(),
+  tags: z.array(z.enum(ACTION_TAGS)).max(2).default([]),
+  opposed: z.boolean().default(false),
   staminaCost: Int,
   check: z.union([z.object({ type: z.literal('dc'), dc: Int }), z.object({ type: z.literal('pvp') }), z.object({ type: z.literal('none') })]),
-  modifiers: z.array(Modifier).max(6),
+  modifiers: z.array(Modifier).max(6).default([]),
   /** Scenario NPC id, or null. */
-  targetNpc: z.string().nullable(),
+  targetNpc: NoText,
   targetPlayer: z
     .object({
       player: z.string(),
@@ -65,27 +74,30 @@ export const GmAction = z.object({
       onSuccess: PlayerEffects,
       onFail: PlayerEffects,
     })
-    .nullable(),
+    .nullable()
+    .default(null),
   /**
    * GEN-117 (Q-292): player refs this action really looks at (มอง / สังเกต / คุย, or a direct pair action) beyond
    * `targetPlayer`. Only the actor's narration may then describe how they look. Empty = looks at nobody.
    */
   looksAt: z.array(z.string()).max(3).default([]),
-  witnessNpcIds: z.array(z.string()).max(6),
-  repDeltaIfCaught: Int,
+  witnessNpcIds: z.array(z.string()).max(6).default([]),
+  repDeltaIfCaught: Zero,
   onSuccess: Effects,
   onFail: Effects,
   /** GEN-064: tags from the game data only. */
-  tagging: z.object({
-    verbTags: z.array(z.string()).max(4),
-    targetTags: z.array(z.string()).max(4),
-    activate: z.array(z.object({ ref: z.string(), stamina: Int.nullable() })).max(3),
-  }),
+  tagging: z
+    .object({
+      verbTags: z.array(z.string()).max(4).default([]),
+      targetTags: z.array(z.string()).max(4).default([]),
+      activate: z.array(z.object({ ref: z.string(), stamina: Int.nullable() })).max(3).default([]),
+    })
+    .prefault({}),
   /** Scenario location id the actor goes to when the action succeeds; null = stays. */
-  moveTo: z.string().nullable(),
+  moveTo: NoText,
   awareness: z.enum(['watch', 'asleep', 'normal']),
   /** INVESTIGATE: a success finds Hidden Evidence left at the place today (GEN-067, Q-135). */
-  investigate: z.boolean(),
+  investigate: z.boolean().default(false),
   /**
    * Q-180, applied to the actor only when this action succeeds: unlock-condition flags the AI judged happened
    * (names from the rules' flag list, e.g. protected_others) ...
@@ -117,19 +129,21 @@ export type GmAction = z.infer<typeof GmAction>;
 export const GmTurnProposal = z.object({
   actions: z.array(GmAction).max(6),
   /** Constraint Lock (C4): stays until released with a reason. */
-  constraints: z.object({
-    add: z.array(z.object({ player: z.string(), text: z.string().min(1).max(200), reason: z.string().max(300) })).max(6),
-    release: z.array(z.object({ id: Int, reason: z.string().max(300) })).max(6),
-  }),
-  eventOutcomes: EventOutcomeProposal.shape.eventOutcomes,
+  constraints: z
+    .object({
+      add: z.array(z.object({ player: z.string(), text: z.string().min(1).max(200), reason: z.string().max(300) })).max(6).default([]),
+      release: z.array(z.object({ id: Int, reason: z.string().max(300) })).max(6).default([]),
+    })
+    .prefault({}),
+  eventOutcomes: EventOutcomeProposal.shape.eventOutcomes.default([]),
   /**
    * GEN-059, only while the day 12 finale event is active: the ending path the players completed this turn
    * (Good: the miracle veil, Evil: absorbing the meteor, Neutral: cancelling it with Astra and Serena); null =
    * none this turn. The server decides who survives from it when the game ends.
    */
-  endingPath: z.enum(['good', 'evil', 'neutral']).nullable(),
+  endingPath: z.enum(['good', 'evil', 'neutral']).nullable().default(null),
   /** Notes for the GM's own memory of today. */
-  remember: z.array(z.string().min(1).max(200)).max(5),
+  remember: z.array(z.string().min(1).max(200)).max(5).default([]),
 });
 export type GmTurnProposal = z.infer<typeof GmTurnProposal>;
 

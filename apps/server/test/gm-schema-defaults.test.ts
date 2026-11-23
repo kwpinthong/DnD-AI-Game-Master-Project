@@ -146,6 +146,6 @@ describe('GEN-158 adjudicate answer: fields with a default may be left out', () 
     const effects = action.properties.onSuccess!;
     expect(effects.required ?? []).toEqual([]);
     expect(effects.properties.repDelta!.default).toBe(0);
-    expect(root.required ?? []).toEqual([]);
+    expect(root.required).toEqual(['actions']);
   });
 });

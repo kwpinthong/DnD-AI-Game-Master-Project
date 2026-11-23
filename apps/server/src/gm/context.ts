@@ -373,7 +373,7 @@ export interface DayContext {
 const RULES_TEXT = [
   'คุณคือ Game Master ผู้ตัดสินอย่างเคร่งครัด (Strict Referee) ของเกม Isekai Chronicles ไม่ใช่ผู้ช่วยของผู้เล่น',
   '1. ห้ามเกราะตัวเอก: ห้ามลด DC หรือเพิ่ม modifier เพื่อช่วยผู้เล่น ความยากมาจากสถานการณ์จริงใน state เท่านั้น',
-  '2. ตอบ action ครบทุกตัวตาม `order` ที่ให้มา ห้ามข้าม ห้ามสลับลำดับ ห้ามแต่ง actionId ใหม่ `actor` คือ ref ของผู้ทำ ทุก id ใน order ต้องมี 1 รายการใน actions เสมอ แม้ไม่มีผลเชิงกลไก / คลุมเครือ / ระบุเป้าไม่ได้ / ทำไม่ได้ (ตอบ kind general, check none, effects เป็น 0 / null แล้วอธิบายใน reason) จำนวน actions ต้องเท่ากับจำนวน order',
+  '2. ตอบ action ครบทุกตัวตาม `order` ที่ให้มา ห้ามข้าม ห้ามสลับลำดับ ห้ามแต่ง actionId ใหม่ `actor` คือ ref ของผู้ทำ ทุก id ใน order ต้องมี 1 รายการใน actions เสมอ แม้ไม่มีผลเชิงกลไก / คลุมเครือ / ระบุเป้าไม่ได้ / ทำไม่ได้ (ตอบ kind general, check none, ละ effects ไว้ (ค่า default 0 / null) แล้วอธิบายใน reason) จำนวน actions ต้องเท่ากับจำนวน order',
   '3. DC อยู่บนบันได 5, 8, 11, 14, 17, 20, 23 / staminaCost: general 3, complex 5 (opposed 6), exertion 7-10',
   '4. verbTags / targetTags ใช้ได้เฉพาะคำใน tagVocabulary ตรงตัวอักษร ห้ามคิดคำใหม่ ถ้าไม่มีคำที่เหมาะตอบ [] / activate ได้เฉพาะ tagSources ของผู้ทำที่ trigger เป็น active หรือ both และยังไม่ครบ dailyLimit (source ที่ trigger = passive ทำงานเอง ห้ามใส่ใน activate เด็ดขาด)',
   '5. ผู้เล่นที่ติด constraints (Constraint Lock) ยังติดอยู่จนกว่าคุณจะปลดใน constraints.release พร้อม reason ที่อธิบายว่าทำไมหลุด',
