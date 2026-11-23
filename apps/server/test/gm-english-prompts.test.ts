@@ -20,7 +20,7 @@ import { AVOID_LEAD, LEARNING_HEADS, LEARNING_LEAD } from '../src/learning/memor
 import { EXAMPLES_HEAD } from '../src/gm/npc-examples.ts';
 import { SCENE_BLOCK } from '../src/gm/scene.ts';
 import { GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmScene, GmTurnProposal } from '../src/gm/schema.ts';
-import { toneBlock } from '../src/gm/tone.ts';
+import { styleBlock, toneBlock } from '../src/gm/tone.ts';
 import { eventContextBlock } from '../src/timeline/context.ts';
 import { EventOutcomeProposal } from '../src/timeline/trigger.ts';
 import { WEATHER_RULES } from '../src/weather/service.ts';
@@ -40,7 +40,15 @@ const thaiRatio = (text: string) => {
   return letters.length === 0 ? 0 : letters.filter((ch) => THAI.test(ch)).length / letters.length;
 };
 
-const englishVoice = { tones: { A: { name: 'Tone A', description: 'plain', samples: ['sample'] } } } as unknown as VoiceAsset;
+const englishVoice = {
+  tones: { A: { name: 'Tone A', description: 'plain', samples: ['sample'] } },
+  forbidden: [
+    { id: 'a', match: { type: 'regex', value: 'x+' }, scope: 'all', severity: 'block', fix: 'fix' },
+    { id: 'b', match: { type: 'density', words: ['he'], max: 1, perSentences: 2 }, scope: 'narration', severity: 'flag', fix: 'fix' },
+    { id: 'c', match: { type: 'literal', value: 'y' }, scope: 'all', severity: 'flag', fix: 'fix' },
+  ],
+  pairs: [{ bad: 'bad', good: 'good' }],
+} as unknown as VoiceAsset;
 
 const BLOCKS: Record<string, string> = {
   adjudicate: RULES_BLOCK.text,
@@ -56,6 +64,7 @@ const BLOCKS: Record<string, string> = {
   style_review: STYLE_REVIEW_INSTRUCTIONS,
   npc_examples: EXAMPLES_HEAD,
   tone: toneBlock(englishVoice, 'A').text,
+  style: styleBlock(englishVoice, 'narration').text,
   timeline: eventContextBlock({ day: 1, phase: 'EOSORIA', active: [], past: [], foreshadowing: [] }).text,
   learning: [LEARNING_LEAD, ...Object.values(LEARNING_HEADS), AVOID_LEAD].join('\n'),
   repair: REPAIR_INSTRUCTION,

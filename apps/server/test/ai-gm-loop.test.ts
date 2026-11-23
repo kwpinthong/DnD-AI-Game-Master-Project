@@ -1084,7 +1084,7 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       const fountainDialogue = () => provider.requests.filter(isDialogue).filter((r) => { const a = contextOf<DialogueContext>(r).audience; return 'place' in a && a.place === 'fountain'; });
       // C2: no library yet: the rules and the game's tone (GEN-177) only, as before.
       await playTurn(clients, ['ยืนมองน้ำพุ', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
-      expect(fountainDialogue().at(-1)!.system.map((b) => b.id)).toEqual(['dialogue-rules', 'tone']);
+      expect(fountainDialogue().at(-1)!.system.map((b) => b.id)).toEqual(['dialogue-rules', 'tone', 'style']);
 
       const add = server!.db.prepare("insert into npc_example (npc_id, npc_name, scene, text, source, game_id, entry_id, created_at) values ('amnesiac', 'x', 'npc-dialogue', ?, 'vote', 'g', ?, 0)");
       for (const i of [1, 2, 3, 4]) add.run(`นาฬิกาเรือนนี้หยุดเดินมานาน ${i}`, i);
