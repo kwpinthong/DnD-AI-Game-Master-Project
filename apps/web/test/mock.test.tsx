@@ -80,6 +80,19 @@ describe('C2 every scenario shows its state', () => {
     expect((within(form()).getByRole('button', { name: 'ส่ง action' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it('GEN-131 C1 normal: after sending an action the submitted counter never exceeds the players', () => {
+    const server = new MockRoomServer(scenarioById('normal'), { timeScale: 0.01 });
+    const sent: unknown[] = [];
+    const peer: MockPeer = { deliver: (m) => sent.push(m), drop: noop };
+    server.hello(peer, { type: 'hello', token: MOCK_TOKEN, afterSeq: 0 });
+    server.receive(peer, { type: 'action', text: 'เดินสำรวจน้ำพุ', visibility: 'public', rest: false, train: false });
+    server.stop();
+    const rooms = sent.filter((m): m is { type: 'room'; members: { role: string }[]; submittedCount: number } => (m as { type?: string }).type === 'room');
+    const last = rooms[rooms.length - 1]!;
+    expect(last.submittedCount).toBe(1);
+    expect(last.submittedCount).toBeLessThanOrEqual(last.members.filter((m) => m.role === 'player').length);
+  });
+
   it('waiting: your action is in and the others are still sending, then the turn closes', { timeout: 10_000 }, async () => {
     slowScripts();
     playRoom('waiting');
