@@ -638,7 +638,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     // audience that has someone to speak. GEN-128: the calls are stored first, so a restart asks again what is not done.
     const level = db.select({ level: game.npcDialogue }).from(game).where(eq(game.id, gameId)).get()?.level ?? 'normal';
     const limits = npcLineLimits(level);
-    const dialogue: DialogueStage = async (publish, published = entries) => {
+    const dialogue: DialogueStage = async (publish, published = entries, places) => {
       const jobs = narrations.flatMap(({ key, ctx, out, forbidden }, i): DialogueJob[] => {
         const reader = 'player' in ctx.audience ? world.byRef.get(ctx.audience.player)!.memberId : null;
         // Nobody here may speak, or a private narration of a public action (what is said in front of everyone is in the place feed once).
@@ -656,7 +656,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           log(`[gm] game=${gameId} purpose=npc_dialogue audience=${key} skipped: limit_exceeded`);
           return [];
         }
-        return [{ key, system, context, forbidden }];
+        const readers = reader === null ? places?.get(ctx.place.id) : undefined;
+        return [{ key, system, context, forbidden, ...(readers ? { readers: [...readers] } : {}) }];
       });
       saveDialogueJobs(db, gameId, at, jobs, now());
       await runDialogue(gameId, at, jobs, publish, signal);
@@ -950,7 +951,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         return {
           ...r,
           ...(r.apply ? { apply: (tx: Parameters<typeof r.apply>[0]) => pin(() => r.apply!(tx)) } : {}),
-          ...(r.dialogue ? { dialogue: ((publish, published) => pin(() => r.dialogue!(publish, published))) satisfies DialogueStage } : {}),
+          ...(r.dialogue ? { dialogue: ((publish, published, places) => pin(() => r.dialogue!(publish, published, places))) satisfies DialogueStage } : {}),
           ...(r.after ? { after: (signal?: AbortSignal) => pin(() => r.after!(signal)) } : {}),
         };
       } catch (error) {
@@ -970,7 +971,11 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     dialogueLeft: ({ gameId, signal }) =>
       dialogueJobsLeft(db, gameId)
         .filter(({ at }) => !running.has(runningKey(gameId, at)))
-        .map(({ at, jobs }) => ({ at, dialogue: (publish) => pinAssets(assets)(() => runDialogue(gameId, at, jobs, publish, signal)) })),
+        .map(({ at, jobs }) => ({
+          at,
+          dialogue: (publish) => pinAssets(assets)(() => runDialogue(gameId, at, jobs, publish, signal)),
+          places: new Map(jobs.flatMap((j) => (j.readers ? [[j.context.place.id, new Set(j.readers)] as const] : []))),
+        })),
     scene: (input) => pinAssets(assets)(() => periodScenes({ db, ai, assets, log }, input)),
   };
 }
