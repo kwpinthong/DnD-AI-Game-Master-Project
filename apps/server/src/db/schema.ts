@@ -173,3 +173,5 @@ export * from './schema-rating.ts';
 export * from './schema-game-data.ts';
 // GEN-178: the style review rounds and their proposed Voice rules, own file for the same reason.
 export * from './schema-style-review.ts';
+// GEN-167: the Thai style eval rounds, own file for the same reason.
+export * from './schema-style-eval.ts';

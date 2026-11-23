@@ -7,6 +7,7 @@ import { NpcLibrary } from './NpcLibrary.tsx';
 import { VoteReview } from './VoteReview.tsx';
 import { StylePanel } from './StylePanel.tsx';
 import { StyleReview } from './StyleReview.tsx';
+import { StyleEval } from './StyleEval.tsx';
 import { libraryText, npcLibraryText } from './ui/strings.ts';
 
 /**
@@ -138,6 +139,8 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
               <h2>{libraryText.adminNav.votes}</h2>
               <VoteReview apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
               <StylePanel apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
+              {/* GEN-167: the fixed eval set, previous round vs this round. */}
+              <StyleEval apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
             </section>
           ) : page === 'style' ? (
             <section aria-label={libraryText.adminNav.style}>
