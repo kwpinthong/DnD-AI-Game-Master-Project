@@ -33,6 +33,10 @@ describe('Q-152 real-name check by whole word', () => {
     expect(containsName('คุยกับลิน', '   ')).toBe(false);
   });
 
+  // GEN-106 (Q-228, C7): player names are now stored NFC, so a quoted ำ name matches whole.
+  it('a stored NFC name with ำ is still caught in narration', () => {
+    expect(containsName('เธอเรียกคำแก้วมาที่ประตู', 'คำแก้ว')).toBe(true);  });
+
   it('checkNarration flags a whole-word name and lets คลินิก through', () => {
     const ctx: NarrationContext = {
       kind: 'gm_narration',
