@@ -6,6 +6,7 @@ import { GameDataEditor } from '../src/GameDataEditor.tsx';
 
 const summary = (name: string, canUndo = false) => ({ name, file: `${name.toLowerCase()}.json`, records: 1, updatedAt: '2026-11-22T12:00:00.000Z', canUndo });
 const ROW = { npc: 'โนอา', location: 'น้ำพุกลางเมือง', periods: [], weathers: [], condition: '', note: '' };
+const FILE_ROW = { ...ROW, note: 'จากไฟล์ asset' };
 
 function fakeServer() {
   const state = { value: [ROW] as unknown, canUndo: false };
@@ -18,6 +19,9 @@ function fakeServer() {
     if (url.endsWith('/api/admin/game-data')) return Response.json({ sets: [summary('NPC'), summary('NPC_Schedule', state.canUndo)] });
     if (url.endsWith('/api/admin/game-data-audit')) return Response.json({ entries: [] });
     if (url.endsWith('/api/admin/game-data-export')) return Response.json({ exportedAt: '2026-11-22T12:00:00.000Z', files: { 'npc-schedule.json': state.value } });
+    if (url.endsWith('/api/admin/game-data/NPC_Schedule/asset-file')) {
+      return Response.json({ set: summary('NPC_Schedule', state.canUndo), value: [FILE_ROW], changes: [{ index: 0, old: ROW, new: FILE_ROW }] });
+    }
     if (url.endsWith('/api/admin/game-data/NPC_Schedule/undo')) {
       state.value = [ROW];
       state.canUndo = false;
@@ -85,6 +89,25 @@ describe('game data editor (GEN-147)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'ย้อนการแก้ล่าสุด (undo)' }));
     await waitFor(() => expect(JSON.parse(box.value)).toEqual([ROW]));
     expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/NPC_Schedule/undo'))).toBe(true);
+  });
+
+  it('GEN-173 C1 / C2: "นำเข้าจากไฟล์" shows the diff; cancel sends nothing, confirm saves the file value', async () => {
+    const calls = fakeServer();
+    const box = await openSchedule();
+    fireEvent.click(screen.getByRole('button', { name: 'นำเข้าจากไฟล์' }));
+    const diff = await screen.findByRole('region', { name: 'นำเข้า NPC_Schedule จากไฟล์' });
+    expect(within(diff).getByText(/1 แถวที่เปลี่ยน/)).toBeTruthy();
+    expect(within(diff).getByText(/จากไฟล์ asset/)).toBeTruthy();
+    fireEvent.click(within(diff).getByRole('button', { name: 'ยกเลิก' }));
+    expect(screen.queryByRole('region', { name: 'นำเข้า NPC_Schedule จากไฟล์' })).toBeNull();
+    expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(0);
+    expect(JSON.parse(box.value)).toEqual([ROW]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'นำเข้าจากไฟล์' }));
+    fireEvent.click(within(await screen.findByRole('region', { name: 'นำเข้า NPC_Schedule จากไฟล์' })).getByRole('button', { name: 'ยืนยันนำเข้า' }));
+    expect(await screen.findByText('นำเข้าจากไฟล์แล้ว')).toBeTruthy();
+    expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ value: [FILE_ROW] });
+    await waitFor(() => expect(JSON.parse(box.value)).toEqual([FILE_ROW]));
   });
 
   it('C8: the export button downloads the JSON of every set', async () => {

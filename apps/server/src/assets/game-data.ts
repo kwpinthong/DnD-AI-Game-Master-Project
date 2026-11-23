@@ -10,7 +10,7 @@
  * snapshot if that ever matters.
  */
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import type { Clock } from '../auth/join.ts';
@@ -40,6 +40,9 @@ export interface AuditEntry {
 
 export type SaveOutcome = { ok: true } | { ok: false; reason: 'not_found' } | { ok: false; reason: 'invalid'; message: string; fields: Record<string, string> };
 export type UndoOutcome = SaveOutcome | { ok: false; reason: 'nothing_to_undo' };
+export type ImportPreviewOutcome =
+  | { ok: true; summary: DataSetSummary; value: unknown; changes: AuditEntry['changes'] }
+  | Exclude<SaveOutcome, { ok: true }>;
 
 export interface GameDataStore {
   /** Always the latest saved data (see the file comment). */
@@ -47,6 +50,11 @@ export interface GameDataStore {
   list(): DataSetSummary[];
   get(name: DataSetName): { summary: DataSetSummary; value: unknown } | undefined;
   save(name: DataSetName, value: unknown): SaveOutcome;
+  /**
+   * GEN-173: the set's asset file as it is now, checked like a save, with its diff against the DB. Changes
+   * nothing; the admin confirms by saving `value` (backup + audit + undo as any edit).
+   */
+  importPreview(name: DataSetName): ImportPreviewOutcome;
   undo(name: DataSetName): UndoOutcome;
   audit(limit?: number): AuditEntry[];
   /** File name → JSON: write each to a folder and `loadGameAssets(folder)` loads it. */
@@ -81,8 +89,8 @@ function changesOf(oldJson: string, newJson: string): AuditEntry['changes'] {
  * Seeds the missing data sets from `seed` (the asset files, already checked), then builds the assets from the DB.
  * Throws AssetLoadError when a saved row no longer passes the schema (nothing is changed then).
  */
-export function openGameData(db: Db, seed: RawDataSets, options: { backupDir: string; now: Clock }): GameDataStore {
-  const { backupDir, now } = options;
+export function openGameData(db: Db, seed: RawDataSets, options: { backupDir: string; now: Clock; assetsDir: string }): GameDataStore {
+  const { backupDir, now, assetsDir } = options;
   db.transaction((tx) => {
     for (const name of DATA_SETS) {
       if (seed[name] === undefined) continue;
@@ -110,18 +118,23 @@ export function openGameData(db: Db, seed: RawDataSets, options: { backupDir: st
   };
 
   /** Checks `value` for `name` against every other set, backs up the old value, writes, logs. */
-  function apply(name: DataSetName, value: unknown, action: 'edit' | 'undo', undoes?: number): SaveOutcome {
-    const map = rows();
-    const old = map.get(name);
-    if (!old) return { ok: false, reason: 'not_found' };
-    const raw = { ...rawOf(map), [name]: value };
-    let next: GameAssets;
+  /** The assets with `value` for `name` and the DB for the rest, or why that is refused. */
+  function check(map: ReturnType<typeof rows>, name: DataSetName, value: unknown): { ok: true; next: GameAssets } | Exclude<SaveOutcome, { ok: true }> {
+    if (!map.has(name)) return { ok: false, reason: 'not_found' };
     try {
-      next = buildGameAssets(raw);
+      return { ok: true, next: buildGameAssets({ ...rawOf(map), [name]: value }) };
     } catch (error) {
       if (error instanceof AssetLoadError) return { ok: false, reason: 'invalid', message: error.message, fields: { ...error.fields } };
       throw error;
     }
+  }
+
+  function apply(name: DataSetName, value: unknown, action: 'edit' | 'undo', undoes?: number): SaveOutcome {
+    const map = rows();
+    const checked = check(map, name, value);
+    if (!checked.ok) return checked;
+    const old = map.get(name)!;
+    const { next } = checked;
     const at = now();
     const json = JSON.stringify(value);
     // The backup comes first: if it cannot be written, nothing is saved.
@@ -151,6 +164,22 @@ export function openGameData(db: Db, seed: RawDataSets, options: { backupDir: st
       return row ? { summary: summaryOf(name, row), value: JSON.parse(row.json) as unknown } : undefined;
     },
     save: (name, value) => apply(name, value, 'edit'),
+    importPreview(name) {
+      const file = join(assetsDir, DATA_SET_FILES[name]);
+      if (!existsSync(file)) return { ok: false, reason: 'not_found' };
+      let value: unknown;
+      try {
+        value = JSON.parse(readFileSync(file, 'utf8'));
+      } catch (error) {
+        const message = `ไฟล์ ${DATA_SET_FILES[name]} ไม่ใช่ JSON: ${error instanceof Error ? error.message : String(error)}`;
+        return { ok: false, reason: 'invalid', message, fields: { '(root)': message } };
+      }
+      const map = rows();
+      const checked = check(map, name, value);
+      if (!checked.ok) return checked;
+      const row = map.get(name)!;
+      return { ok: true, summary: summaryOf(name, row), value, changes: changesOf(row.json, JSON.stringify(value)) };
+    },
     undo(name) {
       const edit = lastEdit(name);
       if (!edit) return rows().has(name) ? { ok: false, reason: 'nothing_to_undo' } : { ok: false, reason: 'not_found' };

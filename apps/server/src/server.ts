@@ -95,7 +95,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   // GEN-147: the DB holds the game data; the files only seed a set it does not have yet (never overwrite an edit).
   let gameData: GameDataStore;
   try {
-    gameData = openGameData(db, seed, { backupDir: join(config.backup?.dir ?? join(dirname(dbPath), 'backups'), 'game-data'), now: options.now ?? Date.now });
+    gameData = openGameData(db, seed, { backupDir: join(config.backup?.dir ?? join(dirname(dbPath), 'backups'), 'game-data'), now: options.now ?? Date.now, assetsDir });
   } catch (error) {
     sqlite.close();
     throw error;

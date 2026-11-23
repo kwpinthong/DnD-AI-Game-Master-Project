@@ -113,6 +113,13 @@ export const GameDataAuditEntry = z.strictObject({
 });
 export type GameDataAuditEntry = z.infer<typeof GameDataAuditEntry>;
 
+/**
+ * GEN-173: 200 from GET /api/admin/game-data/:name/asset-file — the set's asset file now (after `pnpm assets:import`),
+ * already checked by the schemas, and its diff against the DB. Nothing is saved; the admin confirms with the PUT.
+ */
+export const GameDataImportPreviewResponse = z.strictObject({ set: GameDataSetSummary, value: z.unknown(), changes: GameDataAuditEntry.shape.changes });
+export type GameDataImportPreviewResponse = z.infer<typeof GameDataImportPreviewResponse>;
+
 /** 200 from GET /api/admin/game-data-audit: newest first. */
 export const GameDataAuditResponse = z.strictObject({ entries: z.array(GameDataAuditEntry) });
 export type GameDataAuditResponse = z.infer<typeof GameDataAuditResponse>;

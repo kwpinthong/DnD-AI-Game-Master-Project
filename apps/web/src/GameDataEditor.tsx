@@ -1,6 +1,7 @@
-import type { GameDataAuditEntry, GameDataSetSummary } from '@isekai/protocol';
+import type { GameDataAuditEntry, GameDataImportPreviewResponse, GameDataSetSummary } from '@isekai/protocol';
 import { useEffect, useRef, useState } from 'react';
 import {
+  fetchGameDataAssetFile,
   fetchGameDataAudit,
   fetchGameDataExport,
   fetchGameDataList,
@@ -21,6 +22,16 @@ const when = (iso: string) => new Date(iso).toLocaleString('th-TH', { hour12: fa
 
 type Problem = { message: string; fields?: Record<string, string> };
 
+function Changes({ changes }: { changes: GameDataAuditEntry['changes'] }) {
+  return changes.map((c) => (
+    <div key={c.index}>
+      <p>แถว {c.index + 1}</p>
+      <pre>เดิม: {pretty(c.old)}</pre>
+      <pre>ใหม่: {pretty(c.new)}</pre>
+    </div>
+  ));
+}
+
 export function GameDataEditor({ apiBaseUrl, token, onForbidden }: { apiBaseUrl: string; token: string; onForbidden: (message: string) => void }) {
   const [sets, setSets] = useState<GameDataSetSummary[]>();
   const [audit, setAudit] = useState<GameDataAuditEntry[]>([]);
@@ -29,6 +40,8 @@ export function GameDataEditor({ apiBaseUrl, token, onForbidden }: { apiBaseUrl:
   const [problem, setProblem] = useState<Problem>();
   const [status, setStatus] = useState<string>();
   const [busy, setBusy] = useState(false);
+  /** GEN-173: the asset file waiting for the admin's confirm. */
+  const [incoming, setIncoming] = useState<GameDataImportPreviewResponse>();
   const onForbiddenRef = useRef(onForbidden);
   onForbiddenRef.current = onForbidden;
 
@@ -56,6 +69,7 @@ export function GameDataEditor({ apiBaseUrl, token, onForbidden }: { apiBaseUrl:
     setBusy(true);
     setProblem(undefined);
     setStatus(undefined);
+    setIncoming(undefined);
     const shown = await work();
     setBusy(false);
     if (!shown) return;
@@ -79,6 +93,18 @@ export function GameDataEditor({ apiBaseUrl, token, onForbidden }: { apiBaseUrl:
     }
     void run(async () => take(await saveGameDataSet(apiBaseUrl, token, selected.name, value)), 'บันทึกแล้ว');
   }
+
+  async function previewImport() {
+    if (!selected) return;
+    setBusy(true);
+    setProblem(undefined);
+    setStatus(undefined);
+    setIncoming(take(await fetchGameDataAssetFile(apiBaseUrl, token, selected.name)));
+    setBusy(false);
+  }
+
+  const confirmImport = () =>
+    incoming && void run(async () => take(await saveGameDataSet(apiBaseUrl, token, incoming.set.name, incoming.value)), 'นำเข้าจากไฟล์แล้ว');
 
   const undo = () => selected && void run(async () => take(await undoGameDataSet(apiBaseUrl, token, selected.name)), 'ย้อนแล้ว');
 
@@ -145,6 +171,26 @@ export function GameDataEditor({ apiBaseUrl, token, onForbidden }: { apiBaseUrl:
             <button type="button" disabled={busy || !selected.canUndo} onClick={undo}>
               ย้อนการแก้ล่าสุด (undo)
             </button>
+            <button type="button" disabled={busy} onClick={() => void previewImport()}>
+              นำเข้าจากไฟล์
+            </button>
+          </div>
+        </section>
+      )}
+      {incoming && (
+        <section aria-label={`นำเข้า ${incoming.set.name} จากไฟล์`} className="gdata__editor gdata__audit">
+          <h3>
+            นำเข้า {incoming.set.name} จาก {incoming.set.file}: {incoming.changes.length} แถวที่เปลี่ยน
+          </h3>
+          <p>ยืนยันแล้วค่าใน DB จะเป็นตามไฟล์ (มี backup + ประวัติ และกด undo ย้อนได้)</p>
+          <Changes changes={incoming.changes} />
+          <div className="gdata__actions">
+            <button type="button" disabled={busy || incoming.changes.length === 0} onClick={confirmImport}>
+              ยืนยันนำเข้า
+            </button>
+            <button type="button" disabled={busy} onClick={() => setIncoming(undefined)}>
+              ยกเลิก
+            </button>
           </div>
         </section>
       )}
@@ -160,13 +206,7 @@ export function GameDataEditor({ apiBaseUrl, token, onForbidden }: { apiBaseUrl:
                   <summary>
                     {when(e.at)} · {e.name} · {e.action === 'edit' ? 'แก้' : 'ย้อน'} · {e.changes.length} แถวที่เปลี่ยน
                   </summary>
-                  {e.changes.map((c) => (
-                    <div key={c.index}>
-                      <p>แถว {c.index + 1}</p>
-                      <pre>เดิม: {pretty(c.old)}</pre>
-                      <pre>ใหม่: {pretty(c.new)}</pre>
-                    </div>
-                  ))}
+                  <Changes changes={e.changes} />
                   <p>backup: {e.backupFile}</p>
                 </details>
               </li>

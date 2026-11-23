@@ -5,6 +5,7 @@ import {
   ApiError,
   GameDataAuditResponse,
   GameDataExportResponse,
+  GameDataImportPreviewResponse,
   GameDataListResponse,
   GameDataSetResponse,
   LearningLibraryResponse,
@@ -61,6 +62,11 @@ export function saveGameDataSet(baseUrl: string, token: string, name: string, va
 
 export function undoGameDataSet(baseUrl: string, token: string, name: string) {
   return call(baseUrl, `/api/admin/game-data/${encodeURIComponent(name)}/undo`, { method: 'POST', headers: auth(token) }, GameDataSetResponse);
+}
+
+/** GEN-173: the set's asset file + its diff against the DB; nothing is saved (confirm = saveGameDataSet). */
+export function fetchGameDataAssetFile(baseUrl: string, token: string, name: string) {
+  return call(baseUrl, `/api/admin/game-data/${encodeURIComponent(name)}/asset-file`, { headers: auth(token) }, GameDataImportPreviewResponse);
 }
 
 export function fetchGameDataAudit(baseUrl: string, token: string) {
