@@ -48,8 +48,8 @@ describe('GEN-118 causes of the adjudicate repair', () => {
 
   it('C2 the rules text tells the AI both: every order id gets an entry even with no effect, and a passive source is never activated', () => {
     const rules = text(RULES_BLOCK.text);
-    expect(rules).toMatch(/แม้ไม่มีผลเชิงกลไก/);
+    expect(rules).toMatch(/even when it has no mechanical effect/);
     expect(rules).toMatch(/trigger = passive/);
-    expect(rules).toMatch(/สั้น/);
+    expect(rules).toMatch(/Keep it short/);
   });
 });

@@ -9,6 +9,7 @@ import type { StartScenarioRecord } from '../assets/model.ts';
 import { startPassiveSource } from '../assets/tags.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { character, characterLoot, characterOrigin, member, npcBond } from '../db/schema.ts';
+import { THAI_OUTPUT } from '../gm/language.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { PLACE_TAG } from '../travel/rules.ts';
 import { placeCharacter } from '../visibility/store.ts';
@@ -222,12 +223,13 @@ export function startPassivesInGame(db: DbOrTx, gameId: string, assets: GameAsse
 const NARRATION_MAX = 1500;
 export const OriginNarration = z.object({ narration: z.string().trim().min(1).max(NARRATION_MAX) });
 
-const RULES_PROMPT = [
-  'คุณคือ AI GM ของเกม Isekai Chronicles: ผู้เล่นคนหนึ่งเพิ่งข้ามมายังต่างโลก',
-  'เล่าเป็นภาษาไทยให้ผู้เล่นคนนี้อ่านคนเดียว ว่าทำไมและอย่างไรเขาจึงข้ามโลกมา โดยอิงบุคลิก skill และไอเท็มติดตัวของเขา',
-  'แล้วจบที่จุดเกิดของเขา (ตามที่ให้มา: เขาเป็นใครในโลกนี้ และลืมตาขึ้นที่ไหน) เล่าแบบบุรุษที่สอง 1-3 ย่อหน้า',
-  `ยาวไม่เกิน ${NARRATION_MAX} ตัวอักษร ห้ามใส่ตัวเลขค่าสถานะ (HP, Stamina, Coins, Karma, DC, โบนัส) ห้ามพูดถึงผู้เล่นคนอื่น`,
-  'ชื่อคนเป็น token เช่น {{p:id}} ให้ใช้ token นั้นตรง ๆ ห้ามเดาหรือแต่งชื่อจริง',
+export const RULES_PROMPT = [
+  'You are the AI GM of Isekai Chronicles: a player has just crossed over into another world',
+  'Tell this player alone, in Thai, why and how they crossed worlds, drawing on their personality, starting skill and item',
+  'and end at their spawn point (as given: who they are in this world and where they open their eyes). Second person (คุณ), 1-3 paragraphs',
+  `At most ${NARRATION_MAX} characters. No stat numbers (HP, Stamina, Coins, Karma, DC, bonuses), never mention other players`,
+  'Names of people are tokens such as {{p:id}}: use the token as it is, never guess or invent a real name',
+  THAI_OUTPUT,
 ].join('\n');
 
 /** Every member and character name of the game swapped for its member's token (Q-045). */
@@ -244,10 +246,10 @@ const recordOf = (assets: GameAssets, row: OriginRow) => (row.startScenario ? as
 function arrivalText(scenario: Scenario, assets: GameAssets, row: OriginRow): string {
   const record = recordOf(assets, row);
   return [
-    `จุดเกิด: ${record?.name ?? row.spawnPointId} ที่ ${placeName(scenario, row.locationId)}`,
-    record ? `ฉายาเริ่มต้น: ${record.initialTitle}` : '',
-    record && record.passiveText ? `สิ่งที่ติดตัวมาจากจุดเกิด: ${record.passiveText}` : '',
-    record && record.tags.length > 0 ? `แท็ก: ${record.tags.join(', ')}` : '',
+    `Spawn point: ${record?.name ?? row.spawnPointId} at ${placeName(scenario, row.locationId)}`,
+    record ? `Starting title: ${record.initialTitle}` : '',
+    record && record.passiveText ? `Carried from the spawn point: ${record.passiveText}` : '',
+    record && record.tags.length > 0 ? `Tags: ${record.tags.join(', ')}` : '',
   ]
     .filter((l) => l.length > 0)
     .join('\n');
@@ -278,15 +280,15 @@ function narrateOne(db: Db, ai: Pick<AiService, 'call'>, assets: GameAssets, mem
     const safe = (text: string) => tokenize(text, names);
 
     const lines = [
-      `ตัวละคร {{p:${memberId}}}`,
-      `บุคลิก:\n${safe(me.personality)}`,
-      chosen ? `skill ติดตัว: ${safe(chosen.skill.name)} — ${safe(chosen.skill.description)}` : 'skill ติดตัว: ไม่มี',
-      chosen ? `ไอเท็มติดตัว: ${safe(chosen.item.name)} — ${safe(chosen.item.description)}` : 'ไอเท็มติดตัว: ไม่มี',
+      `Character {{p:${memberId}}}`,
+      `Personality:\n${safe(me.personality)}`,
+      chosen ? `Starting skill: ${safe(chosen.skill.name)} — ${safe(chosen.skill.description)}` : 'Starting skill: none',
+      chosen ? `Starting item: ${safe(chosen.item.name)} — ${safe(chosen.item.description)}` : 'Starting item: none',
       safe(arrivalText(scenario, assets, row)),
     ];
     const system: PromptBlock[] = [
       { id: 'rules', text: RULES_PROMPT, cache: true },
-      { id: 'scenario', text: safe(`เมือง: ${scenario.town.name}\n${scenario.town.mood}`), cache: true },
+      { id: 'scenario', text: safe(`Town: ${scenario.town.name}\n${scenario.town.mood}`), cache: true },
     ];
     const result = await ai.call({
       gameId: row.gameId,

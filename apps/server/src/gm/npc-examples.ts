@@ -18,10 +18,10 @@ export const PLAYER_TOKEN = '{{p:player}}';
 export const EXAMPLES_PER_NPC = 3;
 const EXAMPLE_TOKENS = 100;
 
-const SCENE_WORD: Record<ReviewScene, string> = { feed: 'บรรยายฉาก', narration: 'บทเล่า', 'npc-dialogue': 'บทพูด', 'npc-reaction': 'ปฏิกิริยา' };
+const SCENE_WORD: Record<ReviewScene, string> = { feed: 'scene', narration: 'narration', 'npc-dialogue': 'dialogue', 'npc-reaction': 'reaction' };
 
-const HEAD =
-  'คลังตัวอย่างของ NPC ที่อยู่ที่นี่ (บทที่ผู้เล่นชอบ): ใช้เป็นแนวน้ำเสียงและบุคลิกเท่านั้น ห้ามคัดลอกคำต่อคำ ห้ามเล่าเรื่องในตัวอย่างซ้ำ / {{p:player}} = ผู้เล่นคนหนึ่ง ห้ามเขียน token นี้ในคำตอบ (ใช้ {{p:ref}} ของ cast)';
+export const EXAMPLES_HEAD =
+  'Examples of the NPCs here (lines players liked): use them only as a guide to voice and personality; never copy them word for word, never retell their events / {{p:player}} = some player: never write this token in the answer (use the cast\'s {{p:ref}})';
 
 /** `text` with every name swapped for its token (longest first), players' (and any player token) for `{{p:player}}`. */
 export function exampleTokens(text: string, npcs: readonly { id: string; names: readonly string[] }[], players: readonly string[]): string {
@@ -51,7 +51,7 @@ export function dialoguePrompt(db: DbOrTx, assets: GameAssets, world: GmWorld, n
   });
   const inBlock = new Set(shown.map((n) => n.id));
   return {
-    system: [DIALOGUE_BLOCK, { id: 'npc-examples', text: [HEAD, ...sections].join('\n\n'), cache: true }],
+    system: [DIALOGUE_BLOCK, { id: 'npc-examples', text: [EXAMPLES_HEAD, ...sections].join('\n\n'), cache: true }],
     npcs: npcs.map((n) => (inBlock.has(n.id) ? { ...n, persona: null } : n)),
   };
 }

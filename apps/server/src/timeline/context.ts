@@ -168,9 +168,9 @@ export function buildEventContext(
 /** The context as a prompt block (volatile, so not cached). */
 export function eventContextBlock(context: EventContext): PromptBlock {
   const text = [
-    `เหตุการณ์ตามเส้นเวลา วันที่ ${context.day} ช่วง ${context.phase}`,
-    'active = เหตุการณ์ที่เกิดในช่วงนี้ (ผู้เล่นแทรกแซงได้ ถ้าเปลี่ยนผลให้ตอบใน eventOutcomes), past = ผลของเหตุการณ์ที่ผ่านมาแล้ว',
-    'foreshadowing = ลางบอกเหตุของเหตุการณ์ที่กำลังจะมา ให้สอดแทรกในการบรรยายช่วงนี้ อย่าบอกตรง ๆ ว่าจะเกิดอะไร',
+    `Timeline events, day ${context.day}, period ${context.phase}`,
+    'active = events happening in this period (players may intervene; when the result changes, answer it in eventOutcomes), past = results of events already over',
+    'foreshadowing = omens of coming events: weave them into this period\'s narration, never say outright what will happen',
     JSON.stringify({ active: context.active, past: context.past, foreshadowing: context.foreshadowing }),
   ].join('\n');
   return { id: 'timeline', text, cache: false };

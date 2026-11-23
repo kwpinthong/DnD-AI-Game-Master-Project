@@ -48,7 +48,9 @@ import {
   JOURNAL_BUDGET,
   DIALOGUE_BLOCK,
   NARRATOR_BLOCK,
+  REPAIR_INSTRUCTION,
   RULES_BLOCK,
+  STYLE_REWRITE_INSTRUCTION,
   SUMMARY_BLOCK,
   TOKEN_PATTERN,
   buildTurnContext,
@@ -263,7 +265,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       messages = [
         ...first,
         { role: 'assistant' as const, text: JSON.stringify(value) },
-        { role: 'user' as const, text: JSON.stringify({ errors, instruction: 'แก้ทุกข้อแล้วตอบใหม่ทั้งก้อนในรูปแบบเดิม' }) },
+        { role: 'user' as const, text: JSON.stringify({ errors, instruction: REPAIR_INSTRUCTION }) },
       ];
     }
     if (opts.fallback) return useFallback('invalid');
@@ -311,7 +313,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           messages: [
             { role: 'user', text: JSON.stringify(opts.context) },
             { role: 'assistant', text: JSON.stringify(opts.answer) },
-            { role: 'user', text: JSON.stringify({ styleIssues: issues.map((i) => ({ rule: i.reason, fix: i.fix })), instruction: 'แก้สำนวนตาม fix แล้วตอบใหม่ทั้งก้อนในรูปแบบเดิม' }) },
+            { role: 'user', text: JSON.stringify({ styleIssues: issues.map((i) => ({ rule: i.reason, fix: i.fix })), instruction: STYLE_REWRITE_INSTRUCTION }) },
           ],
           output: opts.output,
           maxOutputTokens: opts.maxOutputTokens,

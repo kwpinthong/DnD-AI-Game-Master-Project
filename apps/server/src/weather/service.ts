@@ -49,7 +49,7 @@ export function currentWeather(db: DbOrTx, gameId: string): StoredWeather | null
 /** Loose on purpose: a value outside the list must reach `weatherProblem` and get its one repair. */
 const WeatherAnswer = z.object({ weather: z.string() });
 
-const RULES_TEXT = [
+export const WEATHER_RULES = [
   'You are the GM of a 12-day town game. Pick the weather of the period that just opened.',
   'Weathers: Clear (bright sun: Secret actions are harder), Rain (outdoor actions tire more, stealth is easier),',
   'Fog (low visibility, grade S NPCs are easier to meet), Dark Night (secret passages open, the Evil side is stronger),',
@@ -69,7 +69,7 @@ export function createWeatherService(db: Db, ai: AiService, now: () => number, l
         purpose,
         day,
         phase,
-        system: [{ id: 'weather_rules', text: RULES_TEXT, cache: true }],
+        system: [{ id: 'weather_rules', text: WEATHER_RULES, cache: true }],
         messages,
         output: { name: 'period_weather', schema: WeatherAnswer },
         maxOutputTokens: 64,

@@ -158,7 +158,7 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(turnRequests.map((r) => r.purpose)).toEqual(['gm_adjudicate']);
     const ctx = contextOf<TurnContext>(turnRequests[0]!);
     expect(ctx.order).toHaveLength(3);
-    expect(ctx.mustAnswer).toContain('3 รายการ'); // GEN-118
+    expect(ctx.mustAnswer).toContain('3 entries'); // GEN-118
     expect(ctx.tagVocabulary.length).toBeGreaterThan(0);
     const stored = JSON.parse((server!.db.prepare('select proposal from gm_turn').get() as { proposal: string }).proposal) as GmTurnProposal;
     expect(stored.actions.map((a) => a.tagging.verbTags.length)).toEqual([1, 1, 1]);
@@ -179,6 +179,27 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     // A and B are at the inn: both see each other's Public action in the place feed.
     expect(turnEntries(clients[0]!, 1, 'EOSORIA', 1).some((e) => e.kind === 'feed' && e.text.includes(texts[1]!))).toBe(true);
     expectNoNamesInPrompts();
+  });
+
+  it('GEN-164 C1 / C2 / C6: a turn\'s rule blocks are English, the typed Thai reaches the AI as typed, the narration stays Thai', async () => {
+    await boot({}, noRoll);
+    const t = await startedTable(server!, false);
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    const texts = ['สำรวจโรงเตี๊ยมหาเบาะแส แล้วนั่งพักสักครู่', 'ถามข่าวเจ้าของโรงเตี๊ยม', 'แอบค้นห้องเก็บของ'];
+    await playTurn(clients, texts, { day: 1, phase: 'EOSORIA', turn: 2 });
+
+    const ctx = contextOf<TurnContext>(provider.requests.find(isTurn)!);
+    expect(ctx.actions.map((a) => a.text).sort()).toEqual([...texts].sort());
+    const rules = provider.requests.flatMap((r) => r.system).filter((b) => /-rules$|^rules$/.test(b.id));
+    expect([...new Set(rules.map((b) => b.id))]).toEqual(expect.arrayContaining(['rules', 'narrator-rules']));
+    for (const b of rules) expect(b.text.split('คุณ').join(''), b.id).not.toMatch(/[฀-๿]/);
+    const letters = (s: string) => [...s].filter((ch) => /\p{L}/u.test(ch));
+    for (const c of clients) {
+      for (const e of turnEntries(c, 1, 'EOSORIA', 1).filter((x) => x.kind === 'narration')) {
+        const all = letters(e.text);
+        expect(all.filter((ch) => /[฀-๿]/.test(ch)).length / all.length).toBeGreaterThan(0.9);
+      }
+    }
   });
 
   it('GEN-115 C1: a resolved turn logs the time of each stage and the tokens, and no player text', async () => {
@@ -672,8 +693,8 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     // GEN-161 (Q-327) / GEN-180 (Q-342): 800 and then 1500 still hit max_tokens on real calls; the prompt caps the lengths.
     for (const r of journalReqs) {
       expect(r.maxOutputTokens).toBe(3_000);
-      expect(r.system.map((b) => b.text).join('\n')).toMatch(/journal[^/]*ไม่เกิน 300 ตัวอักษร/);
-      expect(r.system.map((b) => b.text).join('\n')).toMatch(/saga[^/]*ไม่เกิน 900 ตัวอักษร/);
+      expect(r.system.map((b) => b.text).join('\n')).toMatch(/journal[^/]*at most 300 characters/);
+      expect(r.system.map((b) => b.text).join('\n')).toMatch(/saga[^/]*at most 900 characters/);
     }
     const reqFor = (ref: string) => journalReqs.find((r) => contextOf<JournalContext>(r).player === ref)!;
     // Only what each player saw that day: A saw its own action (and nothing of B's Secret or C in the forest).
@@ -1239,7 +1260,7 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
 
         expect(placeCtx().answers).toEqual([{ npcId: 'amnesiac', actionIds: ['act-1'], via: 'target' }]);
         const narrator = provider.requests.find(isNarration)!.system.map((b) => b.text).join('\n');
-        expect(narrator).toContain('ห้ามสรุปคำตอบ');
+        expect(narrator).toContain('never sum up the answer');
         const lucia = npcEntries(clients[0]!).filter((e) => e.npc?.kind === 'dialogue' && e.npc.name === LUCIA);
         expect(lucia.length).toBeGreaterThanOrEqual(1);
 

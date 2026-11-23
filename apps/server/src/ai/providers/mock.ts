@@ -86,7 +86,9 @@ const cannedWeather = (n: number) => ({ weather: CANNED_WEATHER[(n - 1) % CANNED
 function cannedOrigin(req: AiCallRequest) {
   const prompt = req.messages.map((m) => m.text).join('\n');
   const token = /\{\{p:[^}]+\}\}/.exec(prompt)?.[0] ?? 'คุณ';
-  const arrival = /^จุดเกิด: (.*)$/m.exec(prompt)?.[1] ?? 'ที่ไหนสักแห่ง';
+  // GEN-164: the prompt line is English ("Spawn point: <record> at <place>"); the canned narration stays Thai.
+  const spawn = /^Spawn point: (.*) at (.*)$/m.exec(prompt);
+  const arrival = spawn ? `${spawn[1]} ที่ ${spawn[2]}` : 'ที่ไหนสักแห่ง';
   return { narration: `แสงสีขาวกลืน ${token} หายไปจากโลกเดิม เมื่อลืมตาขึ้นอีกครั้ง คุณคือ${arrival}` };
 }
 
