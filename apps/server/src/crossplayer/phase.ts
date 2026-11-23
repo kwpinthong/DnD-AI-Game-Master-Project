@@ -131,6 +131,8 @@ function seatedCharacters(db: DbOrTx, gameId: string) {
 
 /** GEN-175: the karma of every seated player (the players `crossPlayerState` has), for where the schedule puts NPCs. */
 export const seatedKarmas = (db: DbOrTx, gameId: string): number[] => seatedCharacters(db, gameId).map((r) => r.character.karma);
+/** GEN-184: each seated player's karma, by member id. */
+export const seatedKarmaByMember = (db: DbOrTx, gameId: string): Map<string, number> => new Map(seatedCharacters(db, gameId).map((r) => [r.character.memberId, r.character.karma]));
 
 /**
  * The game as the cross-player rules read it. Loot maps onto the state as GEN-048 describes: traits →
@@ -146,6 +148,8 @@ export function crossPlayerState(
   crises: ReadonlyMap<string, NonNullable<PlayerState['crisis']>> = new Map(),
   /** GEN-175: where each NPC is now (`npcPlacesNow`: schedule + linger); an NPC not in it is at its scenario place. */
   npcPlaces: ReadonlyMap<string, string> = new Map(),
+  /** GEN-184: member id → `npcPlacesNow` for that player's own karma; where it differs, that actor's presence check uses it. */
+  npcPlacesOf: ReadonlyMap<string, ReadonlyMap<string, string>> = new Map(),
 ): CrossPlayerState {
   const loot = new Map(chosenLootInGame(db, gameId).map((l) => [l.memberId, l.chosen]));
   const items = [...itemsInGame(db, gameId).values()];
@@ -219,7 +223,14 @@ export function crossPlayerState(
   const npcs: Record<string, NpcState> = {};
   for (const n of getGameScenario(db, gameId)?.npcs ?? []) {
     const statuses = curses.npcs.get(n.id);
-    npcs[n.id] = { id: n.id, grade: n.rank, hp: NPC_HP_MAX[n.rank], locationId: npcPlaces.get(n.id) ?? n.locationId, obsTrait: 0, damageReduction: 0, ...(statuses ? { statuses } : {}) };
+    const locationId = npcPlaces.get(n.id) ?? n.locationId;
+    const placeFor: Record<string, string> = {};
+    for (const [memberId, places] of npcPlacesOf) {
+      const at = places.get(n.id);
+      if (at !== undefined && at !== locationId) placeFor[memberId] = at;
+    }
+    const own = Object.keys(placeFor).length > 0 ? { placeFor } : {};
+    npcs[n.id] = { id: n.id, grade: n.rank, hp: NPC_HP_MAX[n.rank], locationId, ...own, obsTrait: 0, damageReduction: 0, ...(statuses ? { statuses } : {}) };
   }
   // GEN-069: a Public action at the fountain moves Reputation ×1.5.
   const publicRepScale = assets ? publicRepScaleOf(db, gameId, assets) : {};
@@ -269,9 +280,11 @@ export function applyPhaseActions(
   crises: ReadonlyMap<string, NonNullable<PlayerState['crisis']>> = new Map(),
   /** GEN-175: the turn's `npcPlacesNow`, the same the proposal was checked with. */
   npcPlaces: ReadonlyMap<string, string> = new Map(),
+  /** GEN-184: the turn's per-player places, the same the proposal was checked with. */
+  npcPlacesOf: ReadonlyMap<string, ReadonlyMap<string, string>> = new Map(),
 ): ApplyPhaseResult {
   return db.transaction((tx) => {
-    const state = crossPlayerState(tx, gameId, drowsy, tagging?.assets, crises, npcPlaces);
+    const state = crossPlayerState(tx, gameId, drowsy, tagging?.assets, crises, npcPlaces, npcPlacesOf);
     const tags = tagging === undefined ? undefined : tagContexts(tx, gameId, state, tagging);
     const current = tagging?.periodWeather;
     const weather = current ? { current, outdoorLocationIds: outdoorLocationIds(tx, gameId, tagging.assets) } : undefined;

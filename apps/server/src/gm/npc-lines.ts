@@ -83,8 +83,8 @@ export const NPC_AWAY = '';
 
 /**
  * GEN-175: one place per NPC for the rules engine and the turn context, by the same rule as `npcsPresentAt` (the first
- * place it has the NPC at), else `NPC_AWAY`. shortcut: karma rows for any of `now.karmas` count for every actor (as the
- * narration's place feed does); upgrade to a per-actor check if karma-split schedules show in play.
+ * place it has the NPC at), else `NPC_AWAY`. Karma rows for any of `now.karmas` count (the turn context and the place
+ * feed); GEN-184: the rules also call it with one actor's karma (`npcPlacesOf` in the loop) for that actor's presence check.
  */
 export function npcPlacesNow(world: GmWorld, assets: GameAssets, now: PresenceNow): Map<string, string> {
   const out = new Map(world.npcs.map((n) => [n.id, NPC_AWAY]));

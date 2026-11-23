@@ -37,7 +37,10 @@ export function validateProposal(state: ResolutionState, proposal: ResolutionPro
   };
 
   const { actor, npcs } = state;
-  const present = (npcId: string) => npcs[npcId]?.locationId === actor.locationId;
+  const present = (npcId: string) => {
+    const npc = npcs[npcId];
+    return npc !== undefined && (npc.placeFor?.[actor.id] ?? npc.locationId) === actor.locationId;
+  };
   const p = proposal as ResolutionProposal & Record<string, unknown>;
 
   if (actor.hp <= 0) fail('actor_unconscious', 'actor', 'An unconscious character (HP 0) cannot act');
