@@ -155,6 +155,12 @@ class TurnRng implements Rng {
 export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
   const { db, ai, assets, now, log } = deps;
   const vocabulary = tagVocabulary(assets);
+  /**
+   * GEN-157: the summaries still being written per game (they run in the background after the turn is published).
+   * The rule: the next adjudicate waits for `day` (its `memory.yesterday`), the next narrations for `journals`;
+   * neither promise rejects. A failed summary is simply missing and retried after the next turn (as before).
+   */
+  const writing = new Map<string, { day: Promise<void>; journals: Promise<void> }>();
 
   function stuckFrom(error: AiServiceError): ResolverStuck {
     if (error.code === 'budget_reached') return { code: 'budget_reached', message: BUDGET_PLAYER_MESSAGE, ownerMessage: error.message };
@@ -237,6 +243,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
   async function resolveTurn(input: ClosedPhase): Promise<PhaseResolution> {
     const { gameId, at, signal } = input;
     const timer = createStageTimer();
+    const memoryWait = writing.get(gameId)?.day;
+    if (memoryWait) await timer.time('memory_wait', () => memoryWait);
     const buildStart = performance.now();
     const world = loadWorld(db, gameId, assets);
     const drowsy = new Set(input.state.order.filter((id) => input.state.players[id] && isDrowsy(input.state.players[id]!, input.state.day)));
@@ -383,6 +391,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     // GEN-117 (Q-292): who learned whose real name this turn, before any text is rendered. Idempotent, so a replay after a restart is safe.
     introduce(db, world, order, start, lookedAt, now());
     const audiences = narrationAudiences(world, resolved.log, textOf, start, events.active, evidenceFor, npcsFor, (m) => karmaBand(karmaOf(m)), (id) => targetNpcs.get(id) ?? null, (m) => lookedAt.get(m) ?? new Set());
+    const journalWait = writing.get(gameId)?.journals;
+    if (journalWait) await timer.time('journal_wait', () => journalWait);
     // GEN-115: the narrations do not depend on each other, so they run together: the wait is the slowest one, not the sum.
     const narrations = await timer.time('narrate', () => Promise.all(audiences.map(async (audience): Promise<{ key: string; ctx: NarrationContext; out: StoredNarration; forbidden: string[]; readers: string[] }> => {
       const ctx: NarrationContext = {
@@ -570,66 +580,92 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         }
         markApplied(tx, gameId, at, now());
       },
-      after: () => summarizeFinishedDays(gameId, at),
+      after: (afterSignal) => summarizeFinishedDays(gameId, afterSignal),
     };
   }
 
   /**
    * Day summaries (C5) and each player's journal (Q-153) for every finished day that has none; a failure is
-   * retried after the next turn and never holds the game.
+   * retried after the next turn and never holds the game. GEN-157: the day chain and the journal chain run
+   * together (neither reads the other), each journal of a day at once; a run started while one is still going
+   * follows it, so a summary is never asked for twice.
    */
-  async function summarizeFinishedDays(gameId: string, at: TurnAt): Promise<void> {
-    const current = db.select({ state: gamePhase.state }).from(gamePhase).where(eq(gamePhase.gameId, gameId)).get()?.state;
-    const day = current ? (JSON.parse(current) as { day: number }).day : at.day;
-    for (let d = 1; d < day; d++) {
-      if (!(await summarizeDay(gameId, d))) return;
-      if (!(await summarizeJournals(gameId, d))) return;
-    }
+  function summarizeFinishedDays(gameId: string, signal?: AbortSignal): Promise<void> {
+    const before = writing.get(gameId);
+    // `one` → null: nothing was missing for that day; false: a call failed (later days wait for the next run).
+    const chain = (after: Promise<void> | undefined, stage: string, one: (d: number) => Promise<boolean | null>) =>
+      (async () => {
+        await after;
+        const current = db.select({ state: gamePhase.state }).from(gamePhase).where(eq(gamePhase.gameId, gameId)).get()?.state;
+        const day = current ? (JSON.parse(current) as { day: number }).day : 1;
+        const start = performance.now();
+        let asked = false;
+        for (let d = 1; d < day; d++) {
+          const done = await one(d);
+          asked ||= done !== null;
+          if (done === false) break;
+        }
+        if (asked) log(`[gm] game=${gameId} ${stage} timing total_ms=${Math.round(performance.now() - start)}`);
+      })().catch((error) => log(`[gm] game=${gameId} ${stage} failed: ${error instanceof Error ? error.name : 'unknown error'}`));
+    const entry = {
+      day: chain(before?.day, 'summarize_day', (d) => summarizeDay(gameId, d, signal)),
+      journals: chain(before?.journals, 'summarize_journal', (d) => summarizeJournals(gameId, d, signal)),
+    };
+    writing.set(gameId, entry);
+    return Promise.all([entry.day, entry.journals]).then(() => {
+      if (writing.get(gameId) === entry) writing.delete(gameId);
+    });
   }
 
-  /** One `summarize_journal` per player of the game for day `d`, from what reached that player only. */
-  async function summarizeJournals(gameId: string, d: number): Promise<boolean> {
+  /** One `summarize_journal` per player of the game for day `d` (all at once), from what reached that player only; null when none was missing. */
+  async function summarizeJournals(gameId: string, d: number, signal?: AbortSignal): Promise<boolean | null> {
     const world = loadWorld(db, gameId, assets);
-    for (const p of world.players.values()) {
-      if (hasJournal(db, p.memberId, d)) continue;
-      const seen: string[] = [];
-      let used = 0;
-      // Newest kept within the budget (the saga carries the rest).
-      for (const text of seenOnDay(db, gameId, p.memberId, d).map(world.tokenise).reverse()) {
-        const cost = estimateTokens(text);
-        if (used + cost > JOURNAL_SEEN_TOKENS) break;
-        used += cost;
-        seen.unshift(text);
-      }
-      const saga = latestJournalSaga(db, p.memberId, d);
-      const context: JournalContext = { kind: 'gm_journal', day: d, player: p.ref, saga: saga === null ? null : withinTokens(saga, JOURNAL_BUDGET.saga * 2), seen };
-      const system = [JOURNAL_BLOCK];
-      const messages = [{ role: 'user' as const, text: JSON.stringify(context) }];
-      if (requestTokens(system, messages) > CONTEXT_BUDGET.summarize_journal) {
-        log(`[gm] game=${gameId} summarize_journal day=${d} player=${p.ref} limit_exceeded`);
-        continue;
-      }
-      const result = await ai.call({
-        gameId,
-        purpose: 'summarize_journal',
-        day: d,
-        system,
-        messages,
-        output: { name: GM_OUTPUT.journal, schema: GmJournal },
-        maxOutputTokens: 800,
-      });
-      if (!result.ok) {
-        log(`[gm] game=${gameId} summarize_journal day=${d} player=${p.ref} failed: ${result.error.code}`);
-        return false;
-      }
-      saveJournal(db, gameId, p.memberId, d, result.value, now());
+    const missing = [...world.players.values()].filter((p) => !hasJournal(db, p.memberId, d));
+    if (missing.length === 0) return null;
+    const done = await Promise.all(missing.map((p) => summarizeJournal(gameId, world, p, d, signal)));
+    return done.every(Boolean);
+  }
+
+  /** One player's journal of day `d`; false when the call failed. */
+  async function summarizeJournal(gameId: string, world: GmWorld, p: { memberId: string; ref: string }, d: number, signal?: AbortSignal): Promise<boolean> {
+    const seen: string[] = [];
+    let used = 0;
+    // Newest kept within the budget (the saga carries the rest).
+    for (const text of seenOnDay(db, gameId, p.memberId, d).map(world.tokenise).reverse()) {
+      const cost = estimateTokens(text);
+      if (used + cost > JOURNAL_SEEN_TOKENS) break;
+      used += cost;
+      seen.unshift(text);
     }
+    const saga = latestJournalSaga(db, p.memberId, d);
+    const context: JournalContext = { kind: 'gm_journal', day: d, player: p.ref, saga: saga === null ? null : withinTokens(saga, JOURNAL_BUDGET.saga * 2), seen };
+    const system = [JOURNAL_BLOCK];
+    const messages = [{ role: 'user' as const, text: JSON.stringify(context) }];
+    if (requestTokens(system, messages) > CONTEXT_BUDGET.summarize_journal) {
+      log(`[gm] game=${gameId} summarize_journal day=${d} player=${p.ref} limit_exceeded`);
+      return true;
+    }
+    const result = await ai.call({
+      gameId,
+      purpose: 'summarize_journal',
+      day: d,
+      system,
+      messages,
+      output: { name: GM_OUTPUT.journal, schema: GmJournal },
+      maxOutputTokens: 800,
+      ...(signal ? { signal } : {}),
+    });
+    if (!result.ok) {
+      log(`[gm] game=${gameId} summarize_journal day=${d} player=${p.ref} failed: ${result.error.code}`);
+      return false;
+    }
+    saveJournal(db, gameId, p.memberId, d, result.value, now());
     return true;
   }
 
-  /** The GM's summary of day `d` when it has none; false when the call failed. */
-  async function summarizeDay(gameId: string, d: number): Promise<boolean> {
-    if (hasDaySummary(db, gameId, d)) return true;
+  /** The GM's summary of day `d` when it has none (null: nothing was missing); false when the call failed. */
+  async function summarizeDay(gameId: string, d: number, signal?: AbortSignal): Promise<boolean | null> {
+    if (hasDaySummary(db, gameId, d)) return null;
     const context: DayContext = { kind: 'gm_day', day: d, saga: latestSaga(db, gameId, d), log: dayLog(db, gameId, d) };
     const system = [SUMMARY_BLOCK];
     const messages = [{ role: 'user' as const, text: JSON.stringify(context) }];
@@ -645,6 +681,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       messages,
       output: { name: GM_OUTPUT.daySummary, schema: GmDaySummary },
       maxOutputTokens: 1_500,
+      ...(signal ? { signal } : {}),
     });
     if (!result.ok) {
       log(`[gm] game=${gameId} summarize_day day=${d} failed: ${result.error.code}`);
@@ -695,6 +732,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         throw error;
       }
     },
+    catchUp: ({ gameId, signal }) => summarizeFinishedDays(gameId, signal),
   };
 }
 

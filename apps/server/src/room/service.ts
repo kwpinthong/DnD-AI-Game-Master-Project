@@ -198,6 +198,9 @@ export function createRoomService(
   const rng = new CryptoRng();
   /** GEN-116: dialogue stages still running (the next turn does not wait for them), awaited on shutdown. */
   const dialogues = new Set<Promise<void>>();
+  /** GEN-157: after-turn work (the day summary) still running, awaited on shutdown; the games whose catch-up ran. */
+  const afters = new Set<Promise<void>>();
+  const caughtUp = new Set<string>();
   let stopped = false;
 
   function memberOf(socket: RoomSocket): MemberRow | undefined {
@@ -638,14 +641,13 @@ export function createRoomService(
     return true;
   }
 
-  /** Work after a published turn (the day summary); a failure is logged and never blocks the game. */
-  async function afterTurn(gameId: string, resolution: PhaseResolution): Promise<void> {
-    if (!resolution.after) return;
-    try {
-      await resolution.after();
-    } catch (error) {
-      log(`[room] after-turn work failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
-    }
+  /** GEN-157: work after a published turn (the day summary), in the background; a failure is logged and never blocks the game. */
+  function startAfter(gameId: string, run: ((signal: AbortSignal) => Promise<void>) | undefined): void {
+    if (!run || stopped) return;
+    const task: Promise<void> = run(shutdown.signal)
+      .catch((error) => log(`[room] after-turn work failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`))
+      .finally(() => afters.delete(task));
+    afters.add(task);
   }
 
   /**
@@ -699,7 +701,7 @@ export function createRoomService(
           return;
         }
         if (!publishTurn(gameId, turn)) return;
-        await afterTurn(gameId, resolution);
+        startAfter(gameId, resolution.after);
         openPeriodWeather(gameId);
         // Loop: the next phase may close at once (nobody able to act).
       }
@@ -750,6 +752,11 @@ export function createRoomService(
       broadcastRoom(me.gameId);
       const lastSeq = entriesFor(db, me.gameId, me.id, 0).at(-1)?.id ?? 0;
       send(socket, { type: 'ready', lastSeq: Math.max(lastSeq, afterSeq) });
+      // GEN-157: a summary a restart cut short is redone (before the turn below, so its prompt waits for it).
+      if (resolver.catchUp && !caughtUp.has(me.gameId)) {
+        caughtUp.add(me.gameId);
+        startAfter(me.gameId, (signal) => resolver.catchUp!({ gameId: me.gameId, signal }));
+      }
       // After a restart a phase can be left `resolving` with nobody working on it. A stuck turn waits for `retry`.
       if (state.status === 'resolving') wakeTurn(me.gameId);
       else if (isEnded(state)) wakeFinale(me.gameId);
@@ -768,10 +775,8 @@ export function createRoomService(
       if (turn.finale) return publishFinale(gameId, resolution.entries ?? []);
       if (!publishTurn(gameId, { ...turn, resolution })) return false;
       // The after-turn work and the new period's weather (GEN-068), then the next turn if it closes at once.
-      startResolving(gameId, async () => {
-        await afterTurn(gameId, resolution);
-        openPeriodWeather(gameId);
-      });
+      startAfter(gameId, resolution.after);
+      startResolving(gameId, async () => openPeriodWeather(gameId));
       return true;
     },
 
@@ -924,7 +929,8 @@ export function createRoomService(
       stopped = true;
       rooms.clear();
       shutdown.abort();
-      while (resolving.size > 0 || picking.size > 0 || finaling.size > 0 || dialogues.size > 0) await Promise.allSettled([...resolving.values(), ...picking, ...finaling.values(), ...dialogues]);
+      while (resolving.size > 0 || picking.size > 0 || finaling.size > 0 || dialogues.size > 0 || afters.size > 0)
+        await Promise.allSettled([...resolving.values(), ...picking, ...finaling.values(), ...dialogues, ...afters]);
     },
   };
 }
