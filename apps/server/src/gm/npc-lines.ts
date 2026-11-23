@@ -12,6 +12,7 @@ import { npcMemoriesOf } from './npc-memory.ts';
 import { weatherAt } from '../weather/service.ts';
 import { containsName } from './check.ts';
 import { loadWorld, npcToken, TOKEN_PATTERN, withinTokens, type Beat, type GmWorld, type NarrationContext } from './context.ts';
+import { forAi } from './language.ts';
 import type { GmNpcLine } from './schema.ts';
 
 /**
@@ -216,7 +217,7 @@ export function npcPrompt(db: DbOrTx, assets: GameAssets, world: GmWorld, npcs: 
   const bonds = new Map(members.map((m) => [m, new Map(npcBondsOf(db, m).map((b) => [b.npcId, b.affinity]))] as const));
   return npcs.map((n) => {
     const sheet = sheetNpcFor(assets, n);
-    const lore = here.has(n.id) ? (sheet?.record.lore ?? '') : '';
+    const lore = here.has(n.id) && sheet ? forAi(sheet.record.lore, sheet.record.loreEn) : '';
     const persona = lore.length === 0 ? null : withinTokens(npcRealNames(assets, n).reduce((t, name) => t.split(name).join(npcToken(n.id)), world.tokenise(lore)), PERSONA_TOKENS);
     return {
       id: n.id,

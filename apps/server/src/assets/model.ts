@@ -71,6 +71,11 @@ const Text = z.string();
 const Name = z.string().min(1, 'ต้องไม่ว่าง');
 /** Columns the sheet has that this schema does not know yet, kept as text so nothing is lost. */
 const Extra = z.record(z.string(), z.string()).optional();
+/**
+ * GEN-165: the English of a Thai field, for the AI only (`forAi`); players always get the Thai. Names, aliases and
+ * place names stay Thai inside it so the AI writes them right and the token swap finds them. Absent or blank = the Thai.
+ */
+const EnText = Text.optional();
 
 export const Duration = z.union([
   z.object({ unit: z.enum(['instant', 'passive', 'end_of_period']) }).strict(),
@@ -95,6 +100,7 @@ export const AbilityRecord = z
     name: Name,
     category: Text,
     description: Text,
+    descriptionEn: EnText,
     condition: Text,
     quote: Text,
     triggerType: z.enum(TRIGGER_TYPES),
@@ -120,6 +126,7 @@ export const ItemRecord = z
     nameEn: Name,
     buffType: Text,
     effect: Text,
+    effectEn: EnText,
     synergy: Text,
     description: Text,
     triggerType: z.enum(TRIGGER_TYPES),
@@ -150,6 +157,7 @@ export const NpcRecord = z
     aliases: z.array(Name),
     trueName: Text,
     lore: Text,
+    loreEn: EnText,
     unlockCondition: Text,
     rewards: Text,
     matchVerbTags: Tags,
@@ -296,6 +304,31 @@ export type Day10StrategyRecord = z.infer<typeof Day10StrategyRecord>;
 /** Does NPC alias `alias` name the same NPC as `ref` ("เลดี้เซเรน่า" matches "เลดี้เซเรน่า แห่งหอจดหมายเหตุ")? */
 export function aliasMatches(alias: string, ref: string): boolean {
   return alias === ref || alias.startsWith(`${ref} `);
+}
+
+/** GEN-165: per data set, the field that names a record and its English fields (the sheet has no columns for them). */
+const ENGLISH_FIELDS: Readonly<Record<string, { key: string; fields: readonly string[] }>> = {
+  NPC: { key: 'name', fields: ['loreEn'] },
+  Ability: { key: 'name', fields: ['descriptionEn'] },
+  Item: { key: 'nameEn', fields: ['effectEn'] },
+};
+export const ENGLISH_SETS = Object.keys(ENGLISH_FIELDS);
+
+/**
+ * GEN-165: `rows` with each English field a row lacks copied from the `from` row of the same name. A field the row
+ * has is never touched ("" too: the owner cleared it to use the Thai). Anything else comes back as it is.
+ */
+export function withEnglishDrafts(set: string, rows: unknown, from: unknown): unknown {
+  const spec = ENGLISH_FIELDS[set];
+  if (!spec || !Array.isArray(rows) || !Array.isArray(from)) return rows;
+  const isRow = (r: unknown): r is Record<string, unknown> => typeof r === 'object' && r !== null && !Array.isArray(r);
+  const source = new Map(from.filter(isRow).map((r) => [r[spec.key], r]));
+  return rows.map((row) => {
+    const old = isRow(row) ? source.get(row[spec.key]) : undefined;
+    if (!isRow(row) || !old) return row;
+    const missing = spec.fields.filter((f) => !(f in row) && typeof old[f] === 'string');
+    return missing.length === 0 ? row : { ...row, ...Object.fromEntries(missing.map((f) => [f, old[f]])) };
+  });
 }
 
 /** The stored schema of each tab's JSON file (an array of records). */

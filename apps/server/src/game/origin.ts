@@ -9,7 +9,7 @@ import type { StartScenarioRecord } from '../assets/model.ts';
 import { startPassiveSource } from '../assets/tags.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { character, characterLoot, characterOrigin, member, npcBond } from '../db/schema.ts';
-import { THAI_OUTPUT } from '../gm/language.ts';
+import { forAi, THAI_OUTPUT } from '../gm/language.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { PLACE_TAG } from '../travel/rules.ts';
 import { placeCharacter } from '../visibility/store.ts';
@@ -282,8 +282,8 @@ function narrateOne(db: Db, ai: Pick<AiService, 'call'>, assets: GameAssets, mem
     const lines = [
       `Character {{p:${memberId}}}`,
       `Personality:\n${safe(me.personality)}`,
-      chosen ? `Starting skill: ${safe(chosen.skill.name)} — ${safe(chosen.skill.description)}` : 'Starting skill: none',
-      chosen ? `Starting item: ${safe(chosen.item.name)} — ${safe(chosen.item.description)}` : 'Starting item: none',
+      chosen ? `Starting skill: ${safe(chosen.skill.name)} — ${safe(forAi(chosen.skill.description, assets.ability(chosen.skill.name)?.descriptionEn))}` : 'Starting skill: none',
+      chosen ? `Starting item: ${safe(chosen.item.name)} — ${safe(forAi(chosen.item.description, assets.item(chosen.item.name)?.effectEn))}` : 'Starting item: none',
       safe(arrivalText(scenario, assets, row)),
     ];
     const system: PromptBlock[] = [

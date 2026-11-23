@@ -3,7 +3,17 @@
  * affinity numbers and (GEN-067) the relationship number between players are GM-only. The C6 test runs
  * every HTTP route through `forbiddenKeysIn`, the C2 test every play-room socket frame.
  */
-export const PLAYER_FORBIDDEN_KEYS: ReadonlySet<string> = new Set(['karma', 'reputation', 'reputationScore', 'affinity', 'relationship']);
+export const PLAYER_FORBIDDEN_KEYS: ReadonlySet<string> = new Set([
+  'karma',
+  'reputation',
+  'reputationScore',
+  'affinity',
+  'relationship',
+  // GEN-165: the AI-only English of the game data; players read the Thai.
+  'loreEn',
+  'descriptionEn',
+  'effectEn',
+]);
 
 /** Dotted paths (`people.0.karma`) of every forbidden key anywhere in `payload`; empty = safe for a player. */
 export function forbiddenKeysIn(payload: unknown): string[] {

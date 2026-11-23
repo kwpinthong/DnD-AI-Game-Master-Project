@@ -12,6 +12,7 @@
     ],
     "trueName": "สาย Good: Seraphiel, Herald of Dawn (SS) / สาย Evil: Malakor, Blood Moon Incarnate (SS)",
     "lore": "เด็กหนุ่มผอมโซที่ไอเป็นเลือดอยู่หลังตรอกตลาด ถูกชาวเมืองรังเกียจและต้องคอยแบ่งอาหาร/Stamina ดูแล แต่แท้จริงแล้วในตัวเขามี \"ภาชนะแห่งจันทราและรุ่งอรุณ\" ที่ถูกผนึกไว้",
+    "loreEn": "A gaunt boy who coughs blood in the back alley of the market. The townsfolk loathe him, and he needs others to share food / Stamina to keep him alive. In truth, the sealed \"ภาชนะแห่งจันทราและรุ่งอรุณ\" lies within him.",
     "unlockCondition": "พัฒนาความสัมพันธ์ถึง +70 และมีค่ากรรม +70 ขึ้นไป (สาย Good) หรือต่ำกว่า -70 (สาย Evil) เพื่อวิวัฒนาการเป็น SS",
     "rewards": "สาย Good: ปลดล็อกสกิล The First Light (SS) + มอบไอเทม Chalice of the First Dawn (S) / สาย Evil: ปลดล็อกสกิล ORDO TENEBRIS (SS) + มอบไอเทม Grimoire of the Blood Moon (S)",
     "matchVerbTags": [
@@ -41,6 +42,7 @@
     ],
     "trueName": "Chronos-Zero, The Unbound Arbiter (SS)",
     "lore": "หญิงสาวพูดน้อยที่มักเดินเหม่อลอยขวางทางและทำของพังอยู่เสมอ ไม่ยินดียินร้ายต่อความดีหรือความชั่ว แต่ทุกครั้งที่เกิดเหตุร้าย เธอมักรอดชีวิตอย่างน่าประหลาด",
+    "loreEn": "A quiet young woman who drifts about absent-mindedly, gets in people's way and keeps breaking things. Good and evil leave her indifferent, yet whenever disaster strikes she strangely survives.",
     "unlockCondition": "พัฒนาความสัมพันธ์ถึง +70 และทำกิจกรรมร่วมกับลูเซียอย่างน้อย 1 เทิร์น ใน 3 ช่วงเวลาไม่ซ้ำกันต่อวัน ต่อเนื่อง 3 วันเต็มตั้งแต่วันที่ 4 เป็นต้นไป (พร้อมรักษาค่ากรรมอยู่ในช่วง -1 ถึง +1)",
     "rewards": "สาย Neutral: ปลดล็อกสกิล I AM UNTOUCHED (SS) + มอบไอเทม Pendulum of Zero (S)",
     "matchVerbTags": [
@@ -69,6 +71,7 @@
     ],
     "trueName": "ซิสเตอร์เอเลน่า (Elena)",
     "lore": "แม่ชีระดับล่างที่คอยดูแลสถานพยาบาล เธอแอบสงสัยว่าขนมปังที่นักบวชลัทธิแจกในวันที่ 1 มีส่วนผสมแปลก ๆ แต่ไม่มีอำนาจพอจะเปิดโปง",
+    "loreEn": "A low-ranking nun who tends the infirmary. She secretly suspects the bread the cult priests hand out on day 1 holds something strange, but she lacks the power to expose it.",
     "unlockCondition": "ความสัมพันธ์ถึง +9 เพื่อเปิดเผยชื่อจริง / ช่วยสืบเรื่องขนมปังสำเร็จเพื่อรับไอเทมเพิ่ม",
     "rewards": "ความสัมพันธ์ +9: มอบ Blessed Loaf of Dawn (B) และ Silver Rosary of Hearth (B) / ช่วยสืบเรื่องขนมปังสำเร็จ: มอบ Prism of Truth (B)",
     "matchVerbTags": [
@@ -97,6 +100,7 @@
     ],
     "trueName": "จ่าสิบเอกการ์เร็ต (Garrett)",
     "lore": "ทหารยามประตูเมืองที่ซื่อตรงแต่ถูกหัวหน้ากดขี่ เขาเห็นขบวนขนส่งกล่องไม้ต้องสงสัยเข้าออกโกดังลัทธิยามวิกาล",
+    "loreEn": "An honest town-gate guard bullied by his superior. He has seen suspicious convoys of wooden crates going in and out of the cult's warehouse late at night.",
     "unlockCondition": "ความสัมพันธ์ถึง +9 เพื่อเปิดเผยชื่อจริง / ช่วยจับกุมสายลับลัทธิเพื่อรับไอเทมระดับ A",
     "rewards": "ความสัมพันธ์ +9: ช่วยปลดล็อกสกิล Luminous Strike (B) และ Ward of Light (B) / ช่วยจับกุมสายลับลัทธิ: มอบ Mantle of the Martyr (A)",
     "matchVerbTags": [
@@ -125,6 +129,7 @@
     ],
     "trueName": "วิคเตอร์ (Victor)",
     "lore": "อดีตนักต้มตุ๋นและนายหน้าค้าข่าวเถื่อน รู้เส้นทางลับใต้ดินทั้งหมดของเมือง พร้อมขายข้อมูลให้ทุกคนที่กล้าจ่ายหรือกล้าทำเรื่องสกปรก",
+    "loreEn": "A former swindler and black-market information broker who knows every secret underground route in town. He sells what he knows to anyone who dares to pay or to do dirty work.",
     "unlockCondition": "ความสัมพันธ์ถึง +9 เพื่อเปิดเผยชื่อจริง / ช่วยใส่ร้ายทหารยามสำเร็จเพื่อรับไอเทมเพิ่ม",
     "rewards": "ความสัมพันธ์ +9: มอบ Shadow-Silk Lockpick (B) และ Mask of the Faceless (B) / ช่วยใส่ร้ายทหารยามสำเร็จ: มอบ Vial of Black Ash (B)",
     "matchVerbTags": [
@@ -153,6 +158,7 @@
     ],
     "trueName": "มาร์คัส (Marcus)",
     "lore": "พ่อค้าวัตถุโบราณที่ไม่สนใจการเมืองหรือศาสนา ยึดถือคติ \"ของแลกของอย่างเท่าเทียม\" รู้จักประวัติของอุกกาบาตและตำนานโบราณของโลกนี้",
+    "loreEn": "An antiques dealer who cares nothing for politics or religion and lives by \"a fair trade, item for item\". He knows the history of the meteor and the ancient legends of this world.",
     "unlockCondition": "ความสัมพันธ์ถึง +9 เพื่อเปิดเผยชื่อจริง / แลกเปลี่ยนของหายาก 2 ครั้งเพื่อรับไอเทมเพิ่ม",
     "rewards": "ความสัมพันธ์ +9: มอบ Scales of Fair Trade (B) และ Lead-Core Pocket Watch (B) / แลกเปลี่ยนของหายาก 2 ครั้ง: มอบ Cloak of Grey Dust (B)",
     "matchVerbTags": [
@@ -180,6 +186,7 @@
     ],
     "trueName": "ลอร์ดจูเลียน ผู้พิทักษ์พันธสัญญา (เกรด S)",
     "lore": "ชนชั้นสูงที่ปลอมตัวเข้ามาสืบคดีคนหายในเมือง (เหตุการณ์วันที่ 7) เขาแบกรับคำสาปเก่าแก่ของตระกูลและกำลังตามหาหลักฐานเอาผิดลัทธิ",
+    "loreEn": "A noble in disguise, come to investigate the town's missing people (the day 7 event). He carries an old curse of his family and is hunting for evidence against the cult.",
     "unlockCondition": "ช่วยปกป้องชาวบ้านในวันที่ 7 และเปิดโปงนักบวชชั้นสูงได้สำเร็จ เพื่ออัปเกรดเป็นเกรด S",
     "rewards": "เกรด A: มอบ Censer of Purging Flame (A) / เมื่อเลื่อนเป็นเกรด S: ปลดล็อกสกิล Sanctuary Aegis (S)",
     "matchVerbTags": [
@@ -207,6 +214,7 @@
     ],
     "trueName": "มัลคอล์ม ผู้ทรงศาสตราแห่งเงามืด (เกรด S)",
     "lore": "เบื้องหน้าคือนักบวชผู้ใจบุญที่แจกขนมปังในวันที่ 1 เบื้องหลังคือผู้บงการพิธีลักพาตัวและเตรียมอัญเชิญเทพมารจันทราโลหิตในวันที่ 10",
+    "loreEn": "In public, a kind priest who hands out bread on day 1. Behind the scenes, he masterminds the kidnapping rites and is preparing to summon เทพมารจันทราโลหิต on day 10.",
     "unlockCondition": "ร่วมมือในแผนลักพาตัววันที่ 7 และถวายเครื่องสังเวยสำเร็จ เพื่ออัปเกรดเป็นเกรด S",
     "rewards": "เกรด A: มอบ Ring of Whispering Hollow (A) และ Kris of Soul Thirst (A) / เมื่อเลื่อนเป็นเกรด S: ปลดล็อกสกิล Puppeteer’s Crown (S)",
     "matchVerbTags": [
@@ -234,6 +242,7 @@
     ],
     "trueName": "เซเรน่า ผู้หยั่งรู้วิถีดารา (เกรด S)",
     "lore": "นักวิชาการชนชั้นสูงที่ปิดตัวเงียบอยู่ในหอคอย ไม่ยุ่งเกี่ยวกับความขัดแย้งระหว่างโบสถ์กับลัทธิ แต่กำลังคำนวณวิถีโคจรของ \"อุกกาบาตหมูเด้ง\" ในวันที่ 12",
+    "loreEn": "A high-born scholar who keeps to herself in the tower, staying out of the conflict between the church and the cult. She is calculating the path of the \"อุกกาบาตหมูเด้ง\" due on day 12.",
     "unlockCondition": "นำข้อมูลภัยพิบัติวันที่ 5 และหลักฐานจากทั้ง 2 ฝ่ายมาให้วิเคราะห์โดยไม่เข้าข้างใคร เพื่ออัปเกรดเป็นเกรด S",
     "rewards": "เกรด A: มอบ Monocle of the Bystander (A) และ Unbound Iron Blade (A) / เมื่อเลื่อนเป็นเกรด S: ปลดล็อกสกิล Observer’s Transcendence (S)",
     "matchVerbTags": [
@@ -262,6 +271,7 @@
     ],
     "trueName": "ออเรเลีย (เกรด S)",
     "lore": "จิตวิญญาณศักดิ์สิทธิ์ที่หลับใหลอยู่ในแท่นบูชาแสงแรก ณ โบสถ์แห่งรุ่งอรุณ รอคอยผู้ที่มีจิตใจบริสุทธิ์มาปลุกให้ตื่นเพื่อต่อต้านความมืด",
+    "loreEn": "A holy spirit asleep in the แท่นบูชาแสงแรก at โบสถ์แห่งรุ่งอรุณ, waiting for someone pure of heart to wake her to stand against the darkness.",
     "unlockCondition": "มีค่ากรรม +50 ขึ้นไป และนำ Silver Rosary of Hearth หรือ Censer of Purging Flame ไปสวดภาวนาที่แท่นบูชาลับ",
     "rewards": "มอบสกิล Grace of Dawn (S) และช่วยสร้างเกราะป้องกันเมืองในภัยพิบัติวันที่ 5",
     "matchVerbTags": [
@@ -288,6 +298,7 @@
     ],
     "trueName": "น็อกทิส (เกรด S)",
     "lore": "เงาปีศาจโบราณที่สิงสถิตอยู่ในรอยแยกมิติใต้แท่นพิธีของลัทธิ กระหายความโกลาหลและความสิ้นหวังของมนุษย์",
+    "loreEn": "An ancient demonic shadow dwelling in the dimensional rift beneath the cult's ritual altar, thirsting for human chaos and despair.",
     "unlockCondition": "มีค่ากรรมต่ำกว่า -50 และทำพิธีสังเวยหรือใช้ Secret Action ทำลายความหวังของชาวเมืองครบ 3 ครั้ง",
     "rewards": "มอบสกิล Abyssal Miasma (S) และช่วยเปิดประตูมิติแทรกซึมและลักพาตัวเป้าหมายระดับสูงได้ทันที",
     "matchVerbTags": [
@@ -314,6 +325,7 @@
     ],
     "trueName": "แอสทรา (เกรด S)",
     "lore": "ตัวตนไร้รูปร่างที่ปรากฏกายเฉพาะบนหน้าผาหินริมทะเลและมิติพิศวงในคืนที่ไร้เมฆ ทำหน้าที่บันทึกจุดจบของโลกใบต่าง ๆ",
+    "loreEn": "A formless being that appears only on the sea cliffs and in มิติพิศวง on cloudless nights. It records the endings of worlds.",
     "unlockCondition": "ผ่าน 1% มิติพิศวงออกมาได้ หรือรักษาค่ากรรมให้อยู่ในช่วง -3 ถึง +3 จนถึงวันที่ 5",
     "rewards": "มอบสกิล Absolute Zero Law (S) และเผยวิธีรับมือและคำใบ้ลับในการเอาชีวิตรอดจากอุกกาบาตหมูเด้ง (วันที่ 12)",
     "matchVerbTags": [

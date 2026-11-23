@@ -12,7 +12,16 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { convertSheet, formatIssue } from './import.ts';
-import { ALL_TABS, OPTIONAL_TABS, TAB_FILES, type TabName } from './model.ts';
+import { ALL_TABS, OPTIONAL_TABS, TAB_FILES, withEnglishDrafts, type TabName } from './model.ts';
+
+/** The old file's JSON, or undefined when there is none or it is broken (then it is simply replaced, as before). */
+function parseOrUndefined(text: string | undefined): unknown {
+  try {
+    return text === undefined ? undefined : JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
 
 /** "Asset Isekai v1.0 (Nok working copy)". */
 export const DEFAULT_SHEET_ID = '1o3wUWJn6nKQmA9S1zKGcj9l6zIgtxlQmWgVPxAs_Q1M';
@@ -110,9 +119,11 @@ export async function runAssetImport(options: ImportOptions): Promise<ImportRepo
   for (const tab of result.importedTabs) {
     const file = TAB_FILES[tab];
     const target = join(options.outDir, file);
-    const content = `${JSON.stringify(result.files[tab], null, 2)}\n`;
     // Line endings ignored: a Windows checkout (core.autocrlf) holds the same file with CRLF.
-    if (existsSync(target) && readFileSync(target, 'utf8').replace(/\r\n/g, '\n') === content) continue;
+    const before = existsSync(target) ? readFileSync(target, 'utf8').replace(/\r\n/g, '\n') : undefined;
+    // GEN-165: the sheet has no English columns, so the file's English drafts are kept.
+    const content = `${JSON.stringify(withEnglishDrafts(tab, result.files[tab], parseOrUndefined(before)), null, 2)}\n`;
+    if (before === content) continue;
     const temp = `${target}.tmp`;
     writeFileSync(temp, content);
     staged.push({ temp, target });
