@@ -337,6 +337,13 @@
       "when": 1795426127273,
       "tag": "0047_player_style",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "6",
+      "when": 1795428732756,
+      "tag": "0048_npc_chat",
+      "breakpoints": true
     }
   ]
 }

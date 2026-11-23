@@ -366,7 +366,7 @@ export function npcRefs(db: DbOrTx, gameId: string, npcIds: readonly string[]): 
   return new Map(rows.filter((r) => npcIds.includes(r.npcId)).map((r) => [r.npcId, r.ref]));
 }
 
-function npcIdForRef(db: DbOrTx, gameId: string, ref: string): string | undefined {
+export function npcIdForRef(db: DbOrTx, gameId: string, ref: string): string | undefined {
   return db
     .select({ npcId: npcRef.npcId })
     .from(npcRef)

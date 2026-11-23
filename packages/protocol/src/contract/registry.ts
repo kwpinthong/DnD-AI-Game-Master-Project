@@ -143,6 +143,9 @@ export const CONTRACT_SCHEMAS = {
   NpcExampleAddRequest: p.NpcExampleAddRequest,
   StyleReviewResponse: p.StyleReviewResponse,
   StyleProposalApproveRequest: p.StyleProposalApproveRequest,
+  NpcChatRequest: p.NpcChatRequest,
+  NpcChatStatus: p.NpcChatStatus,
+  NpcChatResponse: p.NpcChatResponse,
 } as const;
 export type ContractSchemaName = keyof typeof CONTRACT_SCHEMAS;
 
@@ -243,6 +246,8 @@ export const CONTRACT: readonly ContractItem[] = [
   http('POST', '/api/game/companions', 'SaveCompanionRequest', 'CompanionsResponse', ready('GEN-054', 'player', ['play-companions', 'play-place'])),
   http('DELETE', '/api/game/companions/:ref', null, 'CompanionsResponse', ready('GEN-054', 'player', ['play-companions'])),
   http('GET', '/api/game/inventory', null, 'InventoryResponse', ready('GEN-055', 'player', ['play-inventory'])),
+  http('GET', '/api/game/npc-chat', null, 'NpcChatStatus', ready('GEN-149', 'player', ['play-npc'], 'โควตาคุยกับ NPC ของช่วงนี้ (ค่าเริ่ม 5 ต่อช่วงต่อผู้เล่น ปรับได้ที่แถว System_Rules หมวด `NPC Chat`); `left` 0 = ปุ่มส่งปิดจนถึงช่วงถัดไป')),
+  http('POST', '/api/game/npc-chat', 'NpcChatRequest', 'NpcChatResponse', ready('GEN-149', 'player', ['play-npc'], 'คุยกับ NPC ที่อยู่ที่เดียวกันตอนนี้ ตอบทันที เทิร์นไม่เดิน; AI รุ่นเล็ก purpose `npc_chat`; มีผลแค่ความสัมพันธ์ + ความจำของ NPC (ขอของ / ขู่ / รับเควส = `suggestion` ให้ทำเป็น action); คนที่อยู่ที่เดียวกันเห็นเป็น entry `player` + `npc` (whisper = ผู้พูดคนเดียว + GM คน); NPC ไม่อยู่ = 404 `npc_not_found`; ครบโควตา / ล็อก = 409 `not_allowed`; AI ล้ม = 503 `ai_unavailable` ไม่เสียโควตา')),
   http('GET', '/api/game/log', null, 'GameLogResponse', ready('GEN-037 + GEN-059', 'player', ['home', 'play-top-bar', 'play-changes', 'ending'], '[ประวัติ] + รายการเกม; `reveal` หลังจบเท่านั้น; entries รวม kind `changes` (GEN-114)')),
 
   socket('client', 'hello', 'RoomHello', ready('GEN-056', 'player', PLAY_ROOM, 'ข้อความแรก มี token + afterSeq')),

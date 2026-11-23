@@ -45,7 +45,7 @@ export function createMockProvider(config: AiConfig, script?: MockScript, answer
                 ? cannedOrigin(req)
                 : req.purpose === 'learning_extract'
                   ? cannedLearning(req)
-                  : ((await answer?.(req)) ?? sampleFor(req.output.jsonSchema));
+                  : ((await answer?.(req)) ?? (req.purpose === 'npc_chat' ? cannedNpcChat(req) : sampleFor(req.output.jsonSchema)));
         return {
           ok: true,
           json,
@@ -102,6 +102,17 @@ function cannedLearning(req: AiCallRequest) {
   return {
     lore: [{ content: `ตำนานจากเกมก่อน: เมืองผ่านวันที่ 12 ไปด้วยตอนจบแบบ ${path}`, tags: [`ending_${path}`], npcIds: [] }],
     feedback: (source.comments?.length ?? 0) > 0 ? { content: 'ผู้เล่นฝากให้ GM เล่าให้กระชับและบอกผลของการกระทำให้ชัด' } : null,
+  };
+}
+
+/** A readable NPC chat answer for offline dev (GEN-149); asking for something gets the "do it as an action" hint. */
+function cannedNpcChat(req: AiCallRequest) {
+  const message = String((JSON.parse(req.messages[0]?.text ?? '{}') as { message?: unknown }).message ?? '');
+  const asks = /ขอ|ให้|ซื้อ|ขาย/.test(message);
+  return {
+    reply: asks ? 'เรื่องนั้นพูดกันปากเปล่าไม่ได้หรอกนะ' : 'อืม ฟังดูน่าสนใจดี เล่าต่อสิ',
+    suggestion: asks ? 'ถ้าอยากได้จริง ลองทำเป็น action ของเทิร์นนี้' : null,
+    mood: 'same',
   };
 }
 

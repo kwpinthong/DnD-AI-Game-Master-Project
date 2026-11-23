@@ -140,6 +140,10 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'GET /api/game/timeline', { token: t.a.token });
     await hit(call, 'GET /api/game/timeline', { token: tgm });
     await hit(call, 'GET /api/game/inventory', { token: t.a.token });
+    // GEN-149: the chat quota and one message to the NPC here (no turn moves); the Human GM has no chat.
+    await hit(call, 'GET /api/game/npc-chat', { token: t.a.token });
+    await hit(call, 'POST /api/game/npc-chat', { token: t.a.token, body: { npc: npcRef, text: 'วันนี้ตลาดคึกคักไหม' } });
+    await hit(call, 'POST /api/game/npc-chat', { token: tgm, body: { npc: npcRef, text: 'สวัสดี' } });
     await hit(call, 'GET /api/game/character', { token: t.a.token });
     await hit(call, 'GET /api/game/gm/console', { token: tgm });
     await hit(call, 'GET /api/game/gm/console', { token: t.a.token });

@@ -18,7 +18,9 @@ export type AiPurpose =
   /** GEN-178: the style review round (server-wide, not a game's; usage under the `system` game id). */
   | 'style_review'
   /** GEN-080: lore + feedback_note of an ended game (usage under that game's id, the summary model). */
-  | 'learning_extract';
+  | 'learning_extract'
+  /** GEN-149: a player's chat with an NPC outside the turn (the small model, Q-309). */
+  | 'npc_chat';
 
 /** The period of the day (GEN-063), as `Phase` in `@isekai/protocol`. */
 export type AiPhase = 'EOSORIA' | 'SOLARION' | 'HESPERION' | 'NOCTHERION';

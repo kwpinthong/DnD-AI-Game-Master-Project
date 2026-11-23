@@ -1,5 +1,5 @@
 import { PHASE_LABEL, actionTextProblem, type RoomEntry, type RoomState } from '@isekai/protocol';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { GameSummaryPage } from './GameHistory.tsx';
 import { GmConsole } from './GmConsole.tsx';
 import { GmNarrating } from './play/GmNarrating.tsx';
@@ -10,6 +10,7 @@ import { HitPin } from './play/chat/HitPin.tsx';
 import { CompactHudBar, HudBar } from './play/chat/Hud.tsx';
 import { InfoPanel, InfoTabBody, type InfoData } from './play/chat/InfoPanel.tsx';
 import { MobileLayout } from './play/chat/MobileLayout.tsx';
+import { NpcChatBox, httpNpcChatApi } from './play/chat/NpcChat.tsx';
 import { useCompact } from './play/chat/useCompact.ts';
 import { useEntryVotes } from './play/chat/useEntryVotes.ts';
 import { OmenBox, TravelSheet } from './play/PlaceColumn.tsx';
@@ -71,6 +72,9 @@ export function PlayRoom({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [companionTick, setCompanionTick] = useState(0);
   const [companionProblem, setCompanionProblem] = useState<string>();
+  /** GEN-149: the NPC whose chat box is open. */
+  const [chatWith, setChatWith] = useState<{ ref: string; name: string } | null>(null);
+  const chatApi = useMemo(() => httpNpcChatApi(apiBaseUrl, token), [apiBaseUrl, token]);
   const compact = useCompact();
   const votes = useEntryVotes(apiBaseUrl, token);
   const conn = useRef<RoomConnection | undefined>(undefined);
@@ -264,6 +268,8 @@ export function PlayRoom({
                 }}
               />
             )}
+            {/* C5: the NPC left (a new turn or a move reloads who is here): the box closes with it. */}
+            {chatWith && data.npcs.some((n) => n.ref === chatWith.ref) && <NpcChatBox key={chatWith.ref} npc={chatWith} api={chatApi} onClose={() => setChatWith(null)} />}
           </>
         );
         const info: InfoData = {
@@ -279,6 +285,7 @@ export function PlayRoom({
           whisper: { text: whisperText, setText: setWhisperText },
           whisperProblem,
           onWhisper: sendWhisper,
+          onChat: you.astral ? null : setChatWith,
         };
         const actions = you.astral ? (
           <OmenBox

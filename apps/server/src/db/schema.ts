@@ -177,3 +177,5 @@ export * from './schema-style-review.ts';
 export * from './schema-style-eval.ts';
 // GEN-080: the learning entries kept across games and the per-game extract state, own file for the same reason.
 export * from './schema-learning.ts';
+// GEN-149: chat with an NPC outside the turn, own file for the same reason.
+export * from './schema-npc-chat.ts';

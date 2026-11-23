@@ -415,6 +415,27 @@ export const playText = {
     mine: (to: string, text: string) => `ถึง ${to}: ${text}`,
     theirs: (from: string, text: string) => `จาก ${from}: ${text}`,
   },
+  // GEN-149: chat with an NPC outside the turn.
+  npcChat: {
+    open: 'คุย',
+    openName: (name: string) => `คุยกับ ${name}`,
+    title: (name: string) => `คุยกับ ${name}`,
+    intro: 'คุยนอกเทิร์น เทิร์นไม่เดิน มีผลแค่ความสัมพันธ์ ขอของ / ขู่ / รับเควส ต้องทำเป็น action',
+    text: (name: string) => `ข้อความถึง ${name}`,
+    whisper: 'กระซิบ (คนอื่นที่นี่ไม่ได้ยิน)',
+    send: 'ส่ง',
+    sending: 'กำลังรอคำตอบ',
+    retry: 'ลองใหม่',
+    close: 'ปิด',
+    me: 'คุณ',
+    left: (left: number, of: number) => `เหลือ ${left}/${of} ข้อความในช่วงนี้`,
+    used: (of: number) => `ครบ ${of} ข้อความของช่วงนี้แล้ว คุยได้อีกในช่วงถัดไป`,
+    loading: 'กำลังโหลดโควตา',
+    loadFailed: 'โหลดโควตาไม่ได้',
+    empty: 'พิมพ์ข้อความก่อนส่ง',
+    offline: 'ต่อ server ไม่ได้ ลองใหม่อีกครั้ง',
+    hint: (text: string) => `แนะนำ: ${text}`,
+  },
 } as const;
 
 // GEN-127: how much the NPCs talk (game.npcDialogue).
