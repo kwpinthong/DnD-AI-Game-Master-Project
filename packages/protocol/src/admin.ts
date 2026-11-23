@@ -130,6 +130,20 @@ export type GameDataAuditResponse = z.infer<typeof GameDataAuditResponse>;
 export const GameDataExportResponse = z.strictObject({ exportedAt: z.string(), files: z.record(z.string(), z.unknown()) });
 export type GameDataExportResponse = z.infer<typeof GameDataExportResponse>;
 
+/**
+ * GEN-199: an AI answer the server refused (before its repair), tokens for every name, each text cut short.
+ * `got`: the AI's value at `path` as JSON (cut short); `message` names the expected value.
+ */
+export const GmRefusal = z.strictObject({
+  at: z.string(),
+  purpose: z.string(),
+  stage: z.enum(['first', 'repair']),
+  errors: z.array(z.strictObject({ code: z.string(), path: z.string(), message: z.string(), got: z.string() })),
+  /** The scrubbed answer as JSON, cut to a size limit (may then not parse). */
+  proposal: z.string(),
+});
+export type GmRefusal = z.infer<typeof GmRefusal>;
+
 /** 200 from GET /api/admin/ai-usage/:gameId. */
 export const AiUsageGameResponse = z.strictObject({
   generatedAt: z.string(),
@@ -140,5 +154,7 @@ export const AiUsageGameResponse = z.strictObject({
   byPeriod: z.array(UsageByPeriod),
   byModel: z.array(UsageByModel),
   failures: z.array(UsageFailure),
+  /** GEN-199: the newest refused answers of this game, newest first. */
+  refusals: z.array(GmRefusal),
 });
 export type AiUsageGameResponse = z.infer<typeof AiUsageGameResponse>;

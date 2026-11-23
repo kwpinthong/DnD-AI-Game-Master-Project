@@ -5,6 +5,7 @@ import { monthStartUtc } from '../ai/core/usage.ts';
 import type { Db } from '../db/client.ts';
 import { game } from '../db/schema.ts';
 import { aiUsage } from '../db/schema-ai.ts';
+import { gameRefusals } from '../gm/refusal-log.ts';
 
 /**
  * Sums of the ai_usage table for the server owner's dashboard (GEN-061). Reads numbers, purposes,
@@ -153,6 +154,7 @@ export function gameUsageReport(db: Db, config: AiConfig, now: number, gameId: s
       .sort((x, y) => y.totals.calls - x.totals.calls || x.key.localeCompare(y.key))
       .map(({ key, totals: t }) => ({ model: key, priced: key in config.prices, totals: t })),
     failures: failures(list),
+    refusals: gameRefusals(db, gameId),
   };
 }
 
