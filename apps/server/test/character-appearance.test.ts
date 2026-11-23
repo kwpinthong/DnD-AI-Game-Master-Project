@@ -99,6 +99,12 @@ describe('character avatar + appearance chips (ISK-006)', { timeout: 120_000 }, 
     expect(character).toMatchObject({ appearance: C1_SENTENCE, avatarId: 'avatar-03', appearanceTraits: C1_TRAITS });
     expect(stored(owner.memberId)).toMatchObject({ appearance: C1_SENTENCE, avatar_id: 'avatar-03' });
     expect(JSON.parse(stored(owner.memberId).appearance_traits!)).toEqual(C1_TRAITS);
+
+    // An edit before the start checks and builds the same way.
+    const edited = await call('PUT', '/api/game/character', { token: owner.token, body: body({ avatarId: 'avatar-07', appearanceTraits: { ...C1_TRAITS, outfit: 'noble' } }) });
+    expect(edited.status, JSON.stringify(edited.body)).toBe(200);
+    expect(stored(owner.memberId)).toMatchObject({ appearance: C1_SENTENCE.replace('ชุดเดินทาง', 'ชุดสูงศักดิ์'), avatar_id: 'avatar-07' });
+    expect((await call('PUT', '/api/game/character', { token: owner.token, body: body({ avatarId: 'avatar-99' }) })).body).toMatchObject({ code: 'invalid_avatar' });
   });
 
   it('C2: shaved + heterochromia + no feature + extra: no double space, the extra kept as typed (line break = one space)', async () => {
