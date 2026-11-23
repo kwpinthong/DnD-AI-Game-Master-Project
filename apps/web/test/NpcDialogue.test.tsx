@@ -23,9 +23,12 @@ afterEach(() => {
 });
 
 const group = () => screen.getByRole('radiogroup', { name: 'บทพูดของ NPC' });
-const radio = (name: string) => within(group()).getByRole('radio', { name }) as HTMLInputElement;
-const bodiesOf = (spy: ReturnType<typeof vi.spyOn>, method: string) =>
-  spy.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === method).map(([, init]) => JSON.parse(String((init as RequestInit).body)) as unknown);
+const radio = (name: RegExp) => within(group()).getByRole('radio', { name }) as HTMLInputElement;
+const bodiesOf = (spy: { mock: { calls: unknown[][] } }, method: string) =>
+  spy.mock.calls
+    .map(([, init]) => init as RequestInit | undefined)
+    .filter((init) => init?.method === method)
+    .map((init) => JSON.parse(String(init?.body)) as unknown);
 
 describe('GEN-127 C1 create game', () => {
   it('shows 3 options with a description each, normal by default, and sends the pick', async () => {

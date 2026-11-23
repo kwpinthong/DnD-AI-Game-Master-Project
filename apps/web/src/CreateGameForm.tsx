@@ -2,6 +2,7 @@ import { createGameFieldErrors, type CreateGameField, type GameView, type Member
 import { useState, type FormEvent } from 'react';
 import { useFieldErrors } from './form-state.ts';
 import { memorySourcesCall, postCreateGame, type CreateGameInput } from './game-api.ts';
+import { NpcDialoguePicker } from './NpcDialoguePicker.tsx';
 import { PENDING_BACKEND_UI } from './pending.ts';
 import { PinInput } from './PinInput.tsx';
 import { Button, EmptyState, Field, Panel } from './ui/index.ts';
@@ -30,7 +31,7 @@ export function CreateGameForm({
   onBack: () => void;
   pendingFields?: boolean;
 }) {
-  const [values, setValues] = useState<Base>({ createCode: '', gameName: '', mode: 'online', humanGm: false, name: '', pin: '' });
+  const [values, setValues] = useState<Base>({ createCode: '', gameName: '', mode: 'online', humanGm: false, npcDialogue: 'normal', name: '', pin: '' });
   const [formError, setFormError] = useState<string>();
   const [busy, setBusy] = useState(false);
 
@@ -131,7 +132,8 @@ export function CreateGameForm({
               )}
             </fieldset>
           )}
-          <Field id="create-name" label="ชื่อผู้เล่นของคุณ" hint="ใช้เข้าเกมนี้ครั้งหน้า คู่กับ PIN" error={errors.errorOf('name')}>
+          <NpcDialoguePicker value={values.npcDialogue ?? 'normal'} onChange={(npcDialogue) => setValues((v) => ({ ...v, npcDialogue }))} />
+          <Field id="create-name"label="ชื่อผู้เล่นของคุณ" hint="ใช้เข้าเกมนี้ครั้งหน้า คู่กับ PIN" error={errors.errorOf('name')}>
             {(control) => <input {...control} {...bind('name')} autoComplete="username" />}
           </Field>
           <Field id="create-pin" label="PIN ของคุณ" hint="ตัวเลข 4-6 หลัก" error={errors.errorOf('pin')}>

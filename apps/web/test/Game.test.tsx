@@ -114,6 +114,7 @@ describe('Create game + Lobby (GEN-025)', () => {
       gameName: 'เมืองก่อนอุกกาบาต',
       mode: 'online',
       humanGm: true,
+      npcDialogue: 'normal',
       name: 'นก',
       pin: '1234',
     });

@@ -19,6 +19,8 @@ import {
   type CharacterView,
   type CreateGameField,
   type Member,
+  type NpcDialogueLevel,
+  type UpdateGameRequest,
 } from '@isekai/protocol';
 import { apiUrl, fetchWithTimeout } from './session.ts';
 
@@ -29,6 +31,7 @@ export interface CreateGameInput {
   gameName: string;
   mode: 'online' | 'single';
   humanGm: boolean;
+  npcDialogue?: NpcDialogueLevel;
   name: string;
   pin: string;
   /** Pending GEN-082 / GEN-083 (sent only when the form shows them, GEN-090): the creator's player code and the memory toggle. */
@@ -82,12 +85,16 @@ export type GameResult =
 export type GameAction =
   | { method: 'GET'; path: '/api/game' }
   | { method: 'POST'; path: '/api/game/invite-code' | '/api/game/start' }
-  | { method: 'DELETE'; path: `/api/game/members/${string}` };
+  | { method: 'DELETE'; path: `/api/game/members/${string}` }
+  /** GEN-127: the owner edits the game before the start (npcDialogue). */
+  | { method: 'PATCH'; path: '/api/game'; body: UpdateGameRequest };
 
 export async function gameCall(baseUrl: string, token: string, action: GameAction): Promise<GameResult> {
+  const patch = action.method === 'PATCH';
   const answer = await send(apiUrl(baseUrl, action.path), {
     method: action.method,
-    headers: { authorization: `Bearer ${token}` },
+    headers: { authorization: `Bearer ${token}`, ...(patch ? { 'content-type': 'application/json' } : {}) },
+    ...(patch ? { body: JSON.stringify(action.body) } : {}),
   });
   if (!answer) return { kind: 'error', message: UNREACHABLE };
   if (answer.res.ok) {

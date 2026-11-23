@@ -371,3 +371,15 @@ export const playText = {
     theirs: (from: string, text: string) => `จาก ${from}: ${text}`,
   },
 } as const;
+
+// GEN-127: how much the NPCs talk (game.npcDialogue).
+export const npcDialogueText = {
+  group: 'บทพูดของ NPC',
+  levels: [
+    { value: 'low', label: 'น้อย', hint: 'NPC พูดสั้น ๆ เฉพาะที่จำเป็น เรื่องเดินเร็ว' },
+    { value: 'normal', label: 'ปกติ', hint: 'NPC พูดพอประมาณ สมดุลระหว่างบทพูดกับการบรรยาย' },
+    { value: 'high', label: 'เยอะ', hint: 'NPC พูดคุยโต้ตอบมาก เหมือนมีตัวละครมีชีวิตรอบตัว' },
+  ],
+  locked: 'ล็อกแล้ว เปลี่ยนระดับบทพูดไม่ได้หลังเริ่มเล่น',
+  ownerOnly: 'เฉพาะเจ้าของเกมเปลี่ยนได้ก่อนเริ่มเกม',
+} as const;
