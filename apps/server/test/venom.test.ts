@@ -261,7 +261,7 @@ describe('Venom of Despair on the server (GEN-095)', { timeout: 60_000 }, () => 
       assets,
     });
     const b = ctx.players.find((p) => p.ref === world.players.get(t.b.memberId)!.ref)!;
-    expect(b.curses).toEqual([{ label: 'หวาดกลัว', source: VENOM, effect: assets.ability(VENOM)!.description }]);
+    expect(b.curses).toEqual([{ label: 'หวาดกลัว', source: VENOM, effect: assets.ability(VENOM)!.descriptionEn }]);
     expect(ctx.players.find((p) => p.ref === world.players.get(t.a.memberId)!.ref)!.curses).toEqual([]);
     expect(ctx.npcs.find((n) => n.id === 'beggar')?.curses).toEqual(['หวาดกลัว']);
   });

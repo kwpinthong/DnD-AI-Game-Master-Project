@@ -17,6 +17,7 @@ import type { Clock } from '../auth/join.ts';
 import type { Db } from '../db/client.ts';
 import { gameDataAudit, gameDataSet } from '../db/schema.ts';
 import { AssetLoadError, buildGameAssets, DATA_SET_FILES, DATA_SETS, type DataSetName, type GameAssets, type RawDataSets } from './load.ts';
+import { ENGLISH_SETS, withEnglishDrafts } from './model.ts';
 
 export const isDataSetName = (name: string): name is DataSetName => (DATA_SETS as readonly string[]).includes(name);
 
@@ -203,6 +204,17 @@ export function openGameData(
     current = next;
     fallbacks.delete(name);
     return { ok: true };
+  }
+
+  // GEN-165: a DB seeded before the English drafts gets those it lacks, as a logged (undoable) edit; a field it
+  // has is never touched. shortcut: an undo removes them and the next start fills them again; to keep the Thai, clear one to "".
+  for (const name of ENGLISH_SETS.filter(isDataSetName)) {
+    const row = rows().get(name);
+    if (!row || fallbacks.has(name)) continue;
+    const filled = withEnglishDrafts(name, JSON.parse(row.json), seed[name]);
+    if (JSON.stringify(filled) === row.json) continue;
+    const outcome = apply(name, filled, 'edit');
+    if (!outcome.ok) log(`[game-data] English drafts for ${name} not added: ${outcome.reason === 'invalid' ? outcome.message : outcome.reason}`);
   }
 
   return {

@@ -13,7 +13,7 @@ import { getGameScenario } from '../scenario/store.ts';
 import { SKILL_FLAGS } from '../skills/unlock-rules.ts';
 import { buildEventContext, type EventContext } from '../timeline/context.ts';
 import { namesVisibleTo, presencesInGame } from '../visibility/store.ts';
-import { THAI_OUTPUT } from './language.ts';
+import { forAi, THAI_OUTPUT } from './language.ts';
 import { activeConstraints, dayLog, journalFor, memoryFor } from './store.ts';
 
 /**
@@ -494,7 +494,7 @@ function qualitativeText(o: StoredOption, assets: GameAssets | undefined): strin
   const row = sheetRow(o, assets);
   if (!row) return o.description;
   const boost = 'synergy' in row ? (/เสริมสกิล:\s*([^/]*)/.exec(row.synergy)?.[1]?.trim() ?? '') : '';
-  const text = 'effect' in row ? row.effect : row.description;
+  const text = 'effect' in row ? forAi(row.effect, row.effectEn) : forAi(row.description, row.descriptionEn);
   return [text, boost && `เสริมสกิล: ${boost}`, row.note].filter((s) => s.length > 0).join(' / ');
 }
 
@@ -502,8 +502,9 @@ function qualitativeText(o: StoredOption, assets: GameAssets | undefined): strin
 function curseText(source: string | undefined, assets: GameAssets | undefined): string {
   if (source === undefined || assets === undefined) return '';
   const ability = assets.ability(source);
-  if (ability) return ability.description;
-  return assets.items.find((i) => i.nameEn === source)?.effect ?? '';
+  if (ability) return forAi(ability.description, ability.descriptionEn);
+  const item = assets.items.find((i) => i.nameEn === source);
+  return item ? forAi(item.effect, item.effectEn) : '';
 }
 
 /** The weather as the AI GM reads it (GEN-068): the period's weather plus the day-5 Disaster state. */

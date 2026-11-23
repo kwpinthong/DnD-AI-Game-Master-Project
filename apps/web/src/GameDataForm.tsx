@@ -42,6 +42,8 @@ export const FORM_SETS: Readonly<Record<string, FormSet>> = {
       { key: 'farewell', label: 'คำลา (Farewell)', kind: 'text' },
       { key: 'trueName', label: 'ชื่อจริง', kind: 'text' },
       { key: 'lore', label: 'Lore', kind: 'long' },
+      // GEN-165: what the AI reads instead of Lore (names stay Thai); empty = the AI reads the Thai Lore.
+      { key: 'loreEn', label: 'Lore ภาษาอังกฤษ (AI อ่าน ผู้เล่นไม่เห็น ชื่อคงเป็นไทย)', kind: 'long' },
       { key: 'unlockCondition', label: 'เงื่อนไขปลดล็อก', kind: 'long' },
       { key: 'rewards', label: 'รางวัล', kind: 'long' },
       { key: 'matchVerbTags', label: 'Verb tags (คั่นด้วย ,)', kind: 'list' },

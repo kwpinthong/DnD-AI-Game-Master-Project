@@ -129,11 +129,13 @@ describe('record / field form for NPC_Schedule and NPC (GEN-172)', () => {
     fireEvent.change(within(first).getByLabelText('ชื่อเรียกสั้น (คั่นด้วย ,)'), { target: { value: 'โนอา, Noa, นก' } });
     fireEvent.change(within(first).getByLabelText('ชื่อที่ผู้เล่นเห็น (Public_Alias)'), { target: { value: 'นก' } });
     fireEvent.change(within(first).getByLabelText('คำลา (Farewell)'), { target: { value: 'ไว้เจอกันใหม่' } });
+    // GEN-165 C4: the AI-only English lore is edited here too (same save / audit path).
+    fireEvent.change(within(first).getByLabelText(/^Lore ภาษาอังกฤษ/), { target: { value: 'A thin boy.' } });
     fireEvent.change(within(first).getByLabelText('Grade'), { target: { value: 'B' } });
     fireEvent.click(within(first).getByRole('checkbox', { name: 'Evil' }));
     save();
     await waitFor(() => expect(server.puts()).toHaveLength(1));
-    expect(server.puts()[0]!.body!.value).toEqual([{ ...NPC, grade: 'B', alignments: ['Good'], aliases: ['โนอา', 'Noa', 'นก'], publicAlias: 'นก', farewell: 'ไว้เจอกันใหม่' }]);
+    expect(server.puts()[0]!.body!.value).toEqual([{ ...NPC, grade: 'B', alignments: ['Good'], aliases: ['โนอา', 'Noa', 'นก'], publicAlias: 'นก', farewell: 'ไว้เจอกันใหม่', loreEn: 'A thin boy.' }]);
   });
 
   it('C4: every input and button of the form is labelled; the form styles use tokens only with 44px targets', async () => {

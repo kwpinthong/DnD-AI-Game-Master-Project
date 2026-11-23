@@ -22,7 +22,7 @@ import type { GameAssets } from '../assets/load.ts';
 import type { AbilityRecord, ItemRecord } from '../assets/model.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { character, characterLoot, game } from '../db/schema.ts';
-import { THAI_OUTPUT } from '../gm/language.ts';
+import { forAi, THAI_OUTPUT } from '../gm/language.ts';
 import type { MemberRow } from './service.ts';
 import { resolveOwnTokens } from './tokens.ts';
 
@@ -187,9 +187,9 @@ export function lootCatalogue(assets: GameAssets): string {
     `${kind}: ${name} | ${verbs.join(', ')} | ${targets.join(', ')} | ${text.replace(/\s+/g, ' ').trim()}`;
   return [
     `Skills of Rank ${LOOT_RANK} (name | Verb tags | Target tags | description):`,
-    ...rankB(assets.abilities).map((a) => line('skill', a.name, a.matchVerbTags, a.matchTargetTags, a.description)),
+    ...rankB(assets.abilities).map((a) => line('skill', a.name, a.matchVerbTags, a.matchTargetTags, forAi(a.description, a.descriptionEn))),
     `Items of Rank ${LOOT_RANK} (name | Verb tags | Target tags | effect):`,
-    ...rankB(assets.items).map((i) => line('item', i.nameEn, i.matchVerbTags, i.matchTargetTags, i.effect)),
+    ...rankB(assets.items).map((i) => line('item', i.nameEn, i.matchVerbTags, i.matchTargetTags, forAi(i.effect, i.effectEn))),
   ].join('\n');
 }
 
