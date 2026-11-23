@@ -322,7 +322,9 @@ describe('C7 / C8 layout, contrast and tap targets (measured in Chrome too; jsdo
     expect(rule(chat, '.play .chat-tabs__tab')).toMatch(/min-height:\s*48px/);
     expect(rule(chat, '.play .chat-send')).toMatch(/min-height:\s*48px/);
     expect(rule(chat, '.play .chat-input')).toMatch(/min-height:\s*48px/);
-    expect(chat).toMatch(/\.chat-col \.vote-btn \{\s*min-height: 44px;/);
+    // small icon-only pills (2356e17): 28px visible + an 8px ::after halo on every side = a 44px tap target
+    expect(chat).toMatch(/\.play \.chat-col \.vote-btn \{\s*position: relative;\s*min-height: 28px;\s*min-width: 28px;/);
+    expect(chat).toMatch(/\.play \.chat-col \.vote-btn::after \{\s*content: '';\s*position: absolute;\s*inset: -8px;/);
   });
 });
 
