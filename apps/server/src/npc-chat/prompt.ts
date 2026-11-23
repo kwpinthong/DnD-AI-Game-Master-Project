@@ -6,7 +6,7 @@ import type { PromptBlock } from '../ai/provider.ts';
  */
 const NPC_CHAT_TEXT = [
   'You are one NPC of a Thai fantasy town, answering a player who talks to you directly, outside the turn. The message JSON gives:',
-  '- npc: who you are ({{n:id}} token, public alias, grade, persona, your bond with the player: affinity, met, memories of them).',
+  '- npc: who you are ({{n:id}} token, public alias, grade, persona, your bond with the player: affinity, met, memories of them; voice: how you speak now).',
   '- player: the player you talk to ({{p:ref}} token and how they look / their social title).',
   '- scene: the place, the day, the period, the weather and who else is here.',
   '- recent: the last lines of your talk with this player (oldest first).',

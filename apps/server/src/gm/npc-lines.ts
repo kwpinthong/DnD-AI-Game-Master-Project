@@ -1,6 +1,7 @@
 import type { NpcDialogueLevel } from '@isekai/protocol';
 import { restorePhaseState, type Period, type Weather } from '@isekai/rules';
 import type { GameAssets } from '../assets/load.ts';
+import { voiceFormOf, voiceProfile } from '../assets/voice.ts';
 import { sheetNpcFor } from '../companions/sheet.ts';
 import { seatedKarmas } from '../crossplayer/phase.ts';
 import { eq } from 'drizzle-orm';
@@ -214,11 +215,14 @@ export function npcRealNames(assets: GameAssets, n: GmWorld['npcs'][number]): st
 }
 
 export function npcPrompt(db: DbOrTx, assets: GameAssets, world: GmWorld, npcs: GmWorld['npcs'], here: ReadonlySet<string>, members: readonly string[], lingering: ReadonlySet<string> = new Set()): NarrationContext['npcs'] {
-  const bonds = new Map(members.map((m) => [m, new Map(npcBondsOf(db, m).map((b) => [b.npcId, b.affinity]))] as const));
+  const bonds = new Map(members.map((m) => [m, new Map(npcBondsOf(db, m).map((b) => [b.npcId, b]))] as const));
   return npcs.map((n) => {
     const sheet = sheetNpcFor(assets, n);
     const lore = here.has(n.id) && sheet ? forAi(sheet.record.lore, sheet.record.loreEn) : '';
     const persona = lore.length === 0 ? null : withinTokens(npcRealNames(assets, n).reduce((t, name) => t.split(name).join(npcToken(n.id)), world.tokenise(lore)), PERSONA_TOKENS);
+    // GEN-193: evolution is per player; players who see it in different forms leave the form unknown.
+    const forms = new Set(members.map((m) => voiceFormOf(bonds.get(m)!.get(n.id))));
+    const form = forms.size > 1 ? undefined : ([...forms][0] ?? null);
     return {
       id: n.id,
       alias: n.alias,
@@ -226,14 +230,28 @@ export function npcPrompt(db: DbOrTx, assets: GameAssets, world: GmWorld, npcs: 
       here: here.has(n.id),
       lingering: here.has(n.id) && lingering.has(n.id),
       persona,
+      ...(here.has(n.id) ? { form } : {}),
       bonds: members.flatMap((m) => {
         const player = world.players.get(m);
         if (!player) return [];
         // GEN-146: what an NPC here remembers of the player (per turn, never in the cached library block).
         const memories = here.has(n.id) ? npcMemoriesOf(db, world.gameId, m, n.id) : [];
-        return [{ player: player.ref, affinity: bonds.get(m)!.get(n.id) ?? 0, met: bonds.get(m)!.has(n.id), ...(memories.length > 0 ? { memories } : {}) }];
+        return [{ player: player.ref, affinity: bonds.get(m)!.get(n.id)?.affinity ?? 0, met: bonds.get(m)!.has(n.id), ...(memories.length > 0 ? { memories } : {}) }];
       }),
     };
+  });
+}
+
+/**
+ * GEN-193: the NPCs of a dialogue call with the speech profile of their `form` (the main one when the audience sees
+ * different forms). Only the calls that write NPC lines get it: the narration's token budget stops the turn.
+ */
+export function withVoice(assets: GameAssets, npcs: NarrationContext['npcs']): NarrationContext['npcs'] {
+  return npcs.map((n) => {
+    const speech = n.here ? voiceProfile(assets.voice, n.id, n.form ?? null) : undefined;
+    if (!speech) return n;
+    const { neverWords: _checkerOnly, ...voice } = speech;
+    return { ...n, voice };
   });
 }
 

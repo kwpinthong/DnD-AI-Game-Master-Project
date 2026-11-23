@@ -11,7 +11,7 @@ import { activeMembers, type MemberRow } from '../game/service.ts';
 import { loadWorld, npcToken, playerToken } from '../gm/context.ts';
 import { renderTokens } from '../gm/loop.ts';
 import { dialoguePrompt } from '../gm/npc-examples.ts';
-import { cutLine, npcPrompt, npcRealNames, npcsHereNow } from '../gm/npc-lines.ts';
+import { cutLine, npcPrompt, npcRealNames, npcsHereNow, withVoice } from '../gm/npc-lines.ts';
 import { MEMORY_LIMITS } from '../gm/npc-memory.ts';
 import { gateStyle, styleIssues } from '../gm/style-check.ts';
 import { gameTone, toneBlock } from '../gm/tone.ts';
@@ -119,7 +119,7 @@ export async function sendNpcChat(deps: NpcChatDeps, me: MemberRow, input: { npc
       .sort((a, b) => b[0].length - a[0].length)
       .reduce((out, [name, token]) => out.split(name).join(token), world.tokenise(raw.normalize('NFC')));
   // The persona / bond / memories as the turn's dialogue reads them; with examples, the persona sits in the library block.
-  const { system: library, npcs: [npcView] } = dialoguePrompt(db, assets, world, npcPrompt(db, assets, world, [npc], new Set([npcId]), [me.id]));
+  const { system: library, npcs: [npcView] } = dialoguePrompt(db, assets, world, withVoice(assets, npcPrompt(db, assets, world, [npc], new Set([npcId]), [me.id])));
   const system = [NPC_CHAT_BLOCK, toneBlock(assets.voice, gameTone(db, me.gameId)), ...library.slice(1)];
   const recent = db
     .select({ text: npcChat.text, reply: npcChat.reply })
@@ -165,7 +165,7 @@ export async function sendNpcChat(deps: NpcChatDeps, me: MemberRow, input: { npc
     timeoutMs: deps.styleRewriteMs,
     label: `game=${me.gameId} purpose=npc_chat npc=${npcId}`,
     log: deps.log,
-    issuesOf: (v) => styleIssues(assets.voice, v.reply, 'dialogue', npcId),
+    issuesOf: (v) => styleIssues(assets.voice, v.reply, 'dialogue', npcId, npcView!.form),
     rewrite: async (issues, signal) => {
       const again = await ask(
         [

@@ -52,7 +52,7 @@
       "note": "ติดอ่างตอนตื่นเต้น ไอแทรก ประโยคสั้น",
       "forms": {
         "ss_good": { "register": "archaic_divine", "self": ["เรา"], "you": { "default": "ท่าน" } },
-        "ss_evil": { "register": "whisper_mock", "self": ["ข้า"], "you": { "default": "เจ้า" } }
+        "ss_evil": { "register": "whisper_mock", "self": ["ข้า"], "you": { "default": "เจ้า" }, "neverWords": ["ค่ะ", "ครับ"] }
       }
     },
     "amnesiac": {

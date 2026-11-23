@@ -9,7 +9,7 @@ import { defaultScenario, StyleSettings, type StyleFlagStat } from '@isekai/prot
 import { eq } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { appMeta } from '../db/schema.ts';
-import { VOICE_REGEX_FLAGS, type VoiceAsset } from '../assets/voice.ts';
+import { VOICE_REGEX_FLAGS, voiceProfile, type VoiceAsset, type VoiceForm } from '../assets/voice.ts';
 import { wordCount } from './check.ts';
 
 export type StyleScope = 'narration' | 'dialogue';
@@ -38,8 +38,11 @@ function overDensity(text: string, words: readonly string[], max: number, per: n
   return false;
 }
 
-/** Every rule `text` breaks (one issue per reason). `npcId`: who speaks a dialogue line. */
-export function styleIssues(voice: VoiceAsset, text: string, scope: StyleScope, npcId: string | null = null): StyleIssue[] {
+/**
+ * Every rule `text` breaks (one issue per reason). `npcId`: who speaks a dialogue line. `form` (GEN-193): the form it
+ * speaks in (null = normal); undefined = not known (stored text, players who see different forms): any of its forms.
+ */
+export function styleIssues(voice: VoiceAsset, text: string, scope: StyleScope, npcId: string | null = null, form?: VoiceForm | null): StyleIssue[] {
   const issues: StyleIssue[] = [];
   const who = scope === 'dialogue' ? npcId : null;
   for (const rule of voice.forbidden) {
@@ -49,10 +52,9 @@ export function styleIssues(voice: VoiceAsset, text: string, scope: StyleScope, 
       m.type === 'literal' ? text.includes(m.value) : m.type === 'regex' ? new RegExp(m.value, VOICE_REGEX_FLAGS).test(text) : overDensity(text, m.words, m.max, m.perSentences);
     if (hit) issues.push({ reason: rule.id, severity: rule.severity, npcId: who, fix: rule.fix });
   }
-  const profile = who === null ? undefined : voice.npcs[who];
+  const profile = who === null ? undefined : voiceProfile(voice, who, form ?? null);
   if (!profile) return issues;
-  // shortcut: a line may use the pronoun of any of the NPC's forms (the server does not know which form speaks); upgrade when forms are tracked.
-  const own = new Set([...profile.self, ...Object.values(profile.forms ?? {}).flatMap((f) => f.self ?? [])]);
+  const own = new Set([...profile.self, ...(form === undefined ? Object.values(voice.npcs[who!]!.forms ?? {}).flatMap((f) => f.self ?? []) : [])]);
   let rest = text;
   let mismatch = false;
   for (const pronoun of SELF_PRONOUNS) {

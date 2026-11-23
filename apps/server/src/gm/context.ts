@@ -2,6 +2,7 @@ import type { ActionVisibility, Phase } from '@isekai/protocol';
 import { ACTION_TAGS, karmaBand, type CrossPlayerState, type PeriodWeather, type TagContext, type Turn } from '@isekai/rules';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
+import type { NpcSpeech, VoiceForm } from '../assets/voice.ts';
 import type { PromptBlock } from '../ai/provider.ts';
 import { sheetNpcFor } from '../companions/sheet.ts';
 import { itemsInGame, skillsInGame } from '../crossplayer/items.ts';
@@ -350,9 +351,20 @@ export interface NarrationContext {
    * only these may speak (`npcLines`). `persona`: the sheet's personality (only when `here`), names as tokens;
    * `bonds`: each cast player's affinity (-/+) and whether they have met. `lingering` (GEN-144): here past its schedule
    * because someone was talking to it. `memories` (GEN-146, only when `here` and it has some): what the NPC remembers
-   * of that player, newest first, tokens only.
+   * of that player, newest first, tokens only. GEN-193 (only when `here`): `form` = the form the cast sees it in (null =
+   * normal; left out when they see different ones), `voice` = its speech profile in that form (the main one when mixed).
    */
-  npcs: { id: string; alias: string; grade: string; here: boolean; lingering: boolean; persona: string | null; bonds: { player: string; affinity: number; met: boolean; memories?: string[] }[] }[];
+  npcs: {
+    id: string;
+    alias: string;
+    grade: string;
+    here: boolean;
+    lingering: boolean;
+    persona: string | null;
+    form?: VoiceForm | null | undefined;
+    voice?: Omit<NpcSpeech, 'neverWords'>;
+    bonds: { player: string; affinity: number; met: boolean; memories?: string[] }[];
+  }[];
   /**
    * GEN-143: the NPCs here who answer beats (asked, talked to, requested): `via` target = the beat aims at it (targetNpc),
    * partner = no target, and it is who the place was talking to last turn (GEN-144). Its own lines are the answer.
@@ -469,6 +481,8 @@ const DIALOGUE_TEXT = [
   '- answers: every NPC in answers must be the main answerer (at least 1 kind dialogue line), answering what the beats of actionIds really ask / request (the narration did not answer for them) / via partner = the earlier conversation partner: answers when that action talks / asks without saying to whom / several players asking the same NPC = one conversation, answered together in one set, at most limits.dialoguePerNpc × the number of actionIds',
   '- Key moments (a beat with targetNpc, a player meeting the NPC for the first time = bonds met false, or a beat of kind event): speak more. An ordinary turn: little, 0-2 lines',
   '- Each line is short, at most 120 characters, in Thai, spoken by that NPC\'s persona, with a manner toward the player by bonds (high affinity = friendly, low = wary), karmaBand (-2 cruel .. +2 kind) and the player\'s looks / title (an NPC knows a player only by looks and title: never call them by a real name)',
+  // GEN-193
+  '- voice = how that NPC speaks now (its current form): self = what it calls itself ([] = it drops the subject), you = what it calls the player, particles, register, catchphrases, never = what it never says. Keep to it',
   // GEN-146
   '- bonds.memories = what that NPC remembers about that player (newest first): speak and behave in keeping with it, mention it when it fits the scene, not every memory',
   '- Never reveal a secret, a real name or karma as a number, never mention what is not in the beats / never tell others about a Secret action. Use {{p:ref}} / {{n:id}} for names, never HP / karma / grade',

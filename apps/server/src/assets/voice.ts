@@ -65,6 +65,23 @@ export const NpcVoice = NpcVoiceBase.extend({
   forms: z.record(z.string().regex(/^ss(_good|_evil)?$/), NpcVoiceBase.partial()).optional(),
 });
 export type NpcVoice = z.infer<typeof NpcVoice>;
+export type NpcSpeech = z.infer<typeof NpcVoiceBase>;
+export type VoiceForm = 'ss' | 'ss_good' | 'ss_evil';
+
+/** GEN-193: the SS form an NPC's evolution for one player (its npc_bond row) puts it in; null = its normal form. */
+export function voiceFormOf(bond: { evolvedGrade: 'S' | 'SS' | null; evolvedAlignment: 'Good' | 'Evil' | 'Neutral' | null } | undefined): VoiceForm | null {
+  if (bond?.evolvedGrade !== 'SS') return null;
+  return bond.evolvedAlignment === 'Good' ? 'ss_good' : bond.evolvedAlignment === 'Evil' ? 'ss_evil' : 'ss';
+}
+
+/** The profile an NPC speaks with in `form`: the form's fields over the main's (a missing ss_good / ss_evil = its plain ss). */
+export function voiceProfile(voice: { npcs: Record<string, NpcVoice> }, npcId: string, form: VoiceForm | null): NpcSpeech | undefined {
+  const profile = voice.npcs[npcId];
+  if (!profile) return undefined;
+  const { forms, ...main } = profile;
+  const over = form === null ? undefined : (forms?.[form] ?? forms?.ss);
+  return { ...main, ...Object.fromEntries(Object.entries(over ?? {}).filter(([, v]) => v !== undefined)) };
+}
 
 const npcIds = () => new Set(defaultScenario().npcs.map((n) => n.id));
 
