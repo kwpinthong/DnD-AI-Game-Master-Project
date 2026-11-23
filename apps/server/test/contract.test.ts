@@ -251,6 +251,10 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'GET /api/admin/style-flags', { token: adminToken });
     await hit(call, 'GET /api/admin/style-settings', { token: adminToken });
     await hit(call, 'PUT /api/admin/style-settings', { token: adminToken, body: { rewrite: false } });
+    // GEN-167: the style eval rounds (no round yet: empty view; marking a round that does not exist = 404).
+    await hit(call, 'GET /api/admin/style-eval', { token: adminToken });
+    await hit(call, 'PUT /api/admin/style-eval/:runId/marks/:sceneId', { token: adminToken, path: '/api/admin/style-eval/1/marks/greeting', body: { mark: 'better' } });
+    await hit(call, 'PUT /api/admin/style-eval/:runId/marks/:sceneId', { token: adminToken, path: '/api/admin/style-eval/1/marks/greeting', body: { mark: 'great' } });
     // GEN-151: the NPC example library.
     await hit(call, 'PUT /api/game/entries/:seq/vote', { token: t.a.token, path: `/api/game/entries/${votable!.seq}/vote`, body: { vote: 'up' } });
     const npcLibrary = await hit(call, 'GET /api/admin/npc-library', { token: adminToken });

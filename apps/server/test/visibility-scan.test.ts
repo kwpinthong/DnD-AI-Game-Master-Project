@@ -80,6 +80,9 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/admin/style-flags': { method: 'GET', path: '/api/admin/style-flags' },
     'GET /api/admin/style-settings': { method: 'GET', path: '/api/admin/style-settings' },
     'PUT /api/admin/style-settings': { method: 'PUT', path: '/api/admin/style-settings', body: { rewrite: true } },
+    // GEN-167: the style eval rounds (server owner); a player's session is 403.
+    'GET /api/admin/style-eval': { method: 'GET', path: '/api/admin/style-eval' },
+    'PUT /api/admin/style-eval/:runId/marks/:sceneId': { method: 'PUT', path: '/api/admin/style-eval/1/marks/greeting', body: { mark: 'better' } },
     // GEN-151: the NPC example library; a player's session is 403 (checked below).
     'GET /api/admin/npc-library': { method: 'GET', path: '/api/admin/npc-library' },
     'POST /api/admin/npc-library': { method: 'POST', path: '/api/admin/npc-library', body: { from: 'correction', correctionId: 1 } },
