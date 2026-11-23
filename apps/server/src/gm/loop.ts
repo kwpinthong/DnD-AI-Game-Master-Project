@@ -389,7 +389,9 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     const hereAt = (placeId: string, members: string[]) => npcsPresentAt(world, assets, placeId, { ...presence(members.map(karmaOf)), lingering });
     const npcsFor = (placeId: string, members: string[]) => {
       const hereIds = new Set(hereAt(placeId, members).map((n) => n.id));
-      // Tokens may still name the NPCs of the scenario place (as before); only the scheduled ones speak.
+      // `here` (GEN-137 + GEN-144): an NPC whose NPC_Schedule row matches this place now, else (no row anywhere now) at its
+      // scenario place, plus the NPCs lingering here after a talk; only these speak. Tokens may also name the other NPCs of
+      // the scenario place (scheduled elsewhere now).
       return npcPrompt(db, assets, world, world.npcs.filter((n) => hereIds.has(n.id) || n.locationId === placeId), hereIds, members, lingeringIds);
     };
     // The NPCs acted on this turn where they were: they linger next turn if the schedule moves them.
