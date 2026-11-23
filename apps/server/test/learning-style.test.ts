@@ -69,7 +69,7 @@ describe('GEN-082 player style across games', { timeout: 120_000 }, () => {
 
   /** Action n of a member (its own period / turn), tagged by the AI GM with `verbs`. */
   function act(gameId: string, seat: Seat, n: number, verbs: string[], visibility: 'public' | 'secret' = 'public') {
-    const at = { day: 1 + Math.floor(n / 8), phase: PERIODS[Math.floor(n / 2) % 4]!, turn: (n % 2) + 1 };
+    const at = { day: 1 + Math.floor(n / 8), phase: PERIODS[Math.floor(n / 2) % 4]!, turn: n % 2 === 0 ? (1 as const) : (2 as const) };
     recordAction(server!.orm, gameId, at, seat.memberId, { text: `การกระทำที่ ${n}`, visibility, rest: false }, CLOCK);
     const row = server!.db.prepare('select proposal from gm_turn where game_id = ? and day = ? and phase = ? and turn = ?').get(gameId, at.day, at.phase, at.turn) as { proposal: string } | undefined;
     const actions = row ? (JSON.parse(row.proposal) as { actions: unknown[] }).actions : [];

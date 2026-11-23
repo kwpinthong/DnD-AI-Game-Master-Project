@@ -330,6 +330,13 @@
       "when": 1795425034230,
       "tag": "0046_learning_entry",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1795426127273,
+      "tag": "0047_player_style",
+      "breakpoints": true
     }
   ]
 }

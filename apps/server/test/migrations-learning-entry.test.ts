@@ -22,4 +22,14 @@ describe('migration learning_entry (GEN-080)', () => {
     expect(code).toMatch(/CREATE TABLE `learning_entry`/);
     expect(code).toMatch(/CREATE TABLE `learning_extract`/);
   });
+
+  it('GEN-082 player_style is additive too: two new tables, no DROP, DELETE or ALTER … DROP', () => {
+    const style = journal.entries.find((e) => e.tag.endsWith('_player_style'));
+    expect(style).toBeDefined();
+    // The member foreign key's "ON DELETE cascade" is a rule, not a DELETE statement.
+    const code = readFileSync(join(migrationsFolder, `${style!.tag}.sql`), 'utf8').replace(/\r\n/g, '\n').replace(/ON DELETE cascade/g, '');
+    expect(code).not.toMatch(/\bdrop\b|\bdelete\b|\balter\b/i);
+    expect(code).toMatch(/CREATE TABLE `member_style`/);
+    expect(code).toMatch(/CREATE TABLE `player_style_pref`/);
+  });
 });

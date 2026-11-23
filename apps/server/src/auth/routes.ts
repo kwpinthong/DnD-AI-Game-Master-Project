@@ -1,6 +1,7 @@
-import { joinFieldErrors, JoinRequest, type ApiError, type JoinResponse, type MeResponse } from '@isekai/protocol';
+import { joinFieldErrors, JoinRequest, JoinStyleFields, type ApiError, type JoinResponse, type MeResponse } from '@isekai/protocol';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Db } from '../db/client.ts';
+import { saveJoinStyle } from '../learning/style.ts';
 import { endSession, joinGame, memberForToken, type Clock } from './join.ts';
 
 // Auth is a bearer token, not a cookie: the web app is on another site (Netlify, Q-031) and
@@ -20,7 +21,14 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, now: Clock) {
       });
     }
 
+    // GEN-082: the optional player code + "ไม่ต้องเก็บสไตล์ของฉัน" (`JoinStyleFields`) ride along in the same body.
+    const style = JoinStyleFields.safeParse(request.body ?? {});
+    if (!style.success) {
+      return sendError(reply, 400, { code: 'invalid_input', message: 'ข้อมูลไม่ถูกต้อง', fields: { playerCode: 'รหัสผู้เล่นยาวได้ไม่เกิน 64 ตัวอักษร' } });
+    }
+
     const outcome = await joinGame(db, parsed.data, now);
+    if (outcome.kind === 'joined') saveJoinStyle(db, outcome.member, style.data, now());
     switch (outcome.kind) {
       case 'game_not_found':
         return sendError(reply, 404, { code: 'game_not_found', message: 'ไม่พบเกมจากโค้ดนี้ ตรวจตัวอักษรอีกครั้ง' });

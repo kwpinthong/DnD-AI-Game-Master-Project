@@ -214,7 +214,7 @@ export const CONTRACT: readonly ContractItem[] = [
   // --- before the game ---
   http('GET', '/health', null, 'HealthResponse', ready('GEN-023', 'any', ['home'], 'ต่อไม่ได้ = "ติดต่อ server ไม่ได้"')),
   http('GET', '/api/me', null, 'MeResponse', ready('GEN-024', 'any', ['home', 'join'])),
-  http('POST', '/api/join', 'JoinRequest', 'JoinResponse', ready('GEN-024', 'any', ['join'])),
+  http('POST', '/api/join', 'JoinRequest', 'JoinResponse', ready('GEN-024', 'any', ['join'], 'GEN-082: body ยังรับ `JoinStyleFields` (`playerCode` ไม่บังคับ ≤ 64, `noStyle`) ได้ด้วย; server เก็บแค่ HMAC ของรหัส')),
   http('POST', '/api/logout', null, null, ready('GEN-024', 'any', ['home'])),
   http('POST', '/api/games', 'CreateGameRequest', 'CreateGameResponse', ready('GEN-025', 'any', ['create-game'])),
   http('POST', '/api/memory/sources', 'MemorySourcesRequest', 'MemorySourcesResponse', pending('GEN-083', 'any', ['create-game'], 'เกมต้นทางที่ผ่านเกณฑ์ของ toggle ความทรงจำ; รหัสผู้เล่นอยู่ใน body เท่านั้น ไม่ใส่ใน URL / header (Q-276)')),
@@ -323,9 +323,9 @@ export const CONTRACT: readonly ContractItem[] = [
   http('POST', '/api/admin/style-review/voice/:version/restore', null, 'StyleReviewResponse', ready('GEN-178', 'admin', ['vote-review'], 'ย้อน Voice เป็นเวอร์ชันนั้น (บันทึกเป็น edit ใหม่ เวอร์ชันใหม่กว่ายังอยู่ในประวัติ); ไม่มี = 404 `response_not_found`')),
 
   // --- player style (player code, Q-167) ---
-  http('POST', '/api/style', 'PlayerStyleRequest', 'PlayerStyleResponse', pending('GEN-082', 'any', ['my-style'])),
-  http('PUT', '/api/style/opt-out', 'PlayerStyleRequest', 'PlayerStyleResponse', pending('GEN-082', 'any', ['my-style', 'join'])),
-  http('POST', '/api/style/delete', 'PlayerStyleRequest', 'PlayerStyleResponse', pending('GEN-082', 'any', ['my-style'])),
+  http('POST', '/api/style', 'PlayerStyleRequest', 'PlayerStyleResponse', ready('GEN-082', 'any', ['my-style'], 'สไตล์ของรหัสนั้น: top 3 verb + โทนสั้น จากเกมที่จบแล้ว (ไม่มีเกณฑ์คะแนน) หรือ `style: null`; รหัสอยู่ใน body เท่านั้น เก็บแค่ HMAC; รหัสที่ไม่เคยใช้ = 403 (ผิด 5 ครั้ง / 10 นาที ต่อ IP = 429); มี session ของสมาชิกที่รหัสไม่ตรง = 403')),
+  http('PUT', '/api/style/opt-out', 'PlayerStyleRequest', 'PlayerStyleResponse', ready('GEN-082', 'any', ['my-style', 'join'], '"ไม่ให้เก็บสไตล์ฉัน" ของรหัสนั้นทุกเกม (`optOut` จำเป็น); เกมที่จบหลังจากนี้ไม่สร้างสไตล์ใหม่ และ AI ไม่ได้สไตล์นี้')),
+  http('POST', '/api/style/delete', 'PlayerStyleRequest', 'PlayerStyleResponse', ready('GEN-082', 'any', ['my-style'], 'ลบสไตล์ทั้งหมดของรหัสนั้น (ลบจริง ไม่มี undo) แล้วตอบ `style: null`')),
 ];
 
 /**
@@ -347,6 +347,4 @@ export const PENDING_FIELDS: readonly PendingField[] = [
   { schema: 'RoomState', path: 'you.placeActions', owner: 'GEN-069', screens: ['play-action'], note: 'ชิป action ของสถานที่' },
   { schema: 'RoomAction', path: 'placeAction', owner: 'GEN-069', screens: ['play-action'], note: 'ใช้ชิปของสถานที่เป็น action ของเทิร์น' },
   { schema: 'GameView', path: 'memory', owner: 'GEN-083', screens: ['lobby'], note: 'Lobby บอกสถานะความทรงจำ' },
-  { schema: 'GameMemorySetting', path: 'enabled', owner: 'GEN-083', screens: ['create-game'], note: 'จะเป็น `CreateGameRequest.memory`' },
-  { schema: 'JoinStyleFields', path: 'playerCode', owner: 'GEN-082', screens: ['join'], note: 'จะเป็น `JoinRequest.playerCode` + `noStyle`' },
-];
+  { schema: 'GameMemorySetting', path: 'enabled', owner: 'GEN-083', screens: ['create-game'], note: 'จะเป็น `CreateGameRequest.memory`' },];
