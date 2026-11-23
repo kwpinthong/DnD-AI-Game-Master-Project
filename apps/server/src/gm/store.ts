@@ -69,6 +69,8 @@ export interface DialogueJob {
   system: PromptBlock[];
   context: DialogueContext;
   forbidden: string[];
+  /** GEN-197: a place audience's feed readers of the turn (none in jobs stored before; those go to who is there now). */
+  readers?: string[];
 }
 
 export function saveDialogueJobs(db: DbOrTx, gameId: string, at: TurnAt, jobs: readonly DialogueJob[], now: number): void {

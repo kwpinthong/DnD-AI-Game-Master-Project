@@ -61,7 +61,7 @@ import { isOwnRestText } from '../game/rest-text.ts';
 import { weatherAt, type WeatherService } from '../weather/service.ts';
 import { applyCrisisLog, astralMembers, astralViewOf, omenCheck } from '../game/crisis.ts';
 import { settleTurnProgress, withPeriodEndEffects } from '../skills/progress.ts';
-import type { ClosedAction, DialogueStage, FinaleResolution, PhaseResolution, PhaseResolver, ResolutionEntry, ResolverStuck } from './resolver.ts';
+import type { ClosedAction, DialogueStage, FinaleResolution, PhaseResolution, PhaseResolver, PlaceReaders, ResolutionEntry, ResolverStuck } from './resolver.ts';
 import { getEnding, markNarrated, settleEnding } from '../finale/store.ts';
 import { templateFinaleEntries } from '../gm/finale.ts';
 import { periodAnnouncement } from '../gm/scene.ts';
@@ -167,6 +167,8 @@ export interface HeldTurn {
   readonly scene?: boolean;
   /** GEN-128: the NPC lines of a published turn (`at` = that turn, entries only); approving stores and sends them. */
   readonly dialogue?: boolean;
+  /** GEN-197: with `dialogue`, who read each place's feed of that turn; approving sends the place's lines to them. */
+  readonly places?: PlaceReaders;
 }
 
 const AWAITING_GM_PLAYER_MESSAGE = 'ผลของเทิร์นนี้รอ GM ตรวจและอนุมัติก่อน แล้วจะส่งให้ทุกคน';
@@ -556,7 +558,7 @@ export function createRoomService(
     // GEN-115: counts only, never text.
     log(`[room] game=${gameId} publish db_ms=${Math.round(socketStart - dbStart)} socket_ms=${Math.round(performance.now() - socketStart)}`);
     const { dialogue, entries } = resolution;
-    if (dialogue) startDialogue(gameId, turn.at, (publish) => dialogue(publish, entries), placeAudience);
+    if (dialogue) startDialogue(gameId, turn.at, (publish) => dialogue(publish, entries, placeAudience), placeAudience);
     if (published.opened) startScene(gameId, published.opened);
     if (published.ended) startFinale(gameId);
     if (outcome.ended !== null) {
@@ -578,7 +580,7 @@ export function createRoomService(
     gameId: string,
     at: HeldTurn['at'],
     run: (publish: Parameters<DialogueStage>[0]) => Promise<void>,
-    places: ReadonlyMap<string, ReadonlySet<string>>,
+    places: PlaceReaders,
   ): void {
     if (stopped) return;
     // GEN-128 C3: with a Human GM the lines wait in the console like a turn; they count as stored once the GM approves them.
@@ -598,7 +600,7 @@ export function createRoomService(
       .then(() => {
         if (stopped || kept.entries.length === 0) return;
         const resolution: PhaseResolution = { entries: kept.entries, apply: () => kept.stored.forEach((done) => done()) };
-        hold(gameId, { at, state: ensurePhaseState(db, gameId, now()), actions: [], resolution, dialogue: true });
+        hold(gameId, { at, state: ensurePhaseState(db, gameId, now()), actions: [], resolution, dialogue: true, places });
       })
       .catch((error) => log(`[room] game=${gameId} dialogue stage failed: ${error instanceof Error ? error.name : 'unknown error'}`))
       .finally(() => {
@@ -614,7 +616,7 @@ export function createRoomService(
    * Stores NPC lines under their own turn (a late line still belongs to it) and returns the rows to send. A place's lines go
    * to who read that place's feed (`places`), else to who is there now. `apply` runs in the same transaction.
    */
-  function storeLines(gameId: string, at: TurnPoint, entries: readonly ResolutionEntry[], places: ReadonlyMap<string, ReadonlySet<string>>, apply?: (tx: DbOrTx) => void) {
+  function storeLines(gameId: string, at: TurnPoint, entries: readonly ResolutionEntry[], places: PlaceReaders, apply?: (tx: DbOrTx) => void) {
     return db.transaction((tx) => {
       const t = now();
       const state = ensurePhaseState(tx, gameId, t);
@@ -895,9 +897,8 @@ export function createRoomService(
       if (!caughtUp.has(me.gameId)) {
         caughtUp.add(me.gameId);
         if (resolver.catchUp) startAfter(me.gameId, (signal) => resolver.catchUp!({ gameId: me.gameId, signal }));
-        // GEN-128 C2: NPC lines a restart cut short are asked again, under their own turn.
-        // shortcut: a place's lines go to who is there now, not who read that turn's feed; upgrade if players notice.
-        for (const left of resolver.dialogueLeft?.({ gameId: me.gameId, signal: shutdown.signal }) ?? []) startDialogue(me.gameId, left.at, left.dialogue, new Map());
+        // GEN-128 C2: NPC lines a restart cut short are asked again, under their own turn, for who read that turn's feed (GEN-197).
+        for (const left of resolver.dialogueLeft?.({ gameId: me.gameId, signal: shutdown.signal }) ?? []) startDialogue(me.gameId, left.at, left.dialogue, left.places);
       }
       // GEN-185: a scene a restart cut short is written (before the turn below, so its resolve waits for it).
       if (resolver.scene && !sceneChecked.has(me.gameId)) {
@@ -927,7 +928,7 @@ export function createRoomService(
       }
       if (turn.dialogue) {
         try {
-          deliver(gameId, storeLines(gameId, turn.at, resolution.entries ?? [], new Map(), resolution.apply));
+          deliver(gameId, storeLines(gameId, turn.at, resolution.entries ?? [], turn.places ?? new Map(), resolution.apply));
         } catch (error) {
           log(`[room] dialogue publish failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
           held.set(gameId, turn);

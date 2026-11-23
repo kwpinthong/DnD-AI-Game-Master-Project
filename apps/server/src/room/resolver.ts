@@ -31,10 +31,18 @@ export interface PhaseResolver {
    */
   scene?(input: { readonly gameId: string; readonly at: TurnPoint; readonly weather: PeriodWeather | null; readonly signal?: AbortSignal }): Promise<readonly ResolutionEntry[]>;
   /** GEN-128: the dialogue stages a restart cut short, each to run like `PhaseResolution.dialogue`; the room asks once per game, on the first join. */
-  dialogueLeft?(input: { readonly gameId: string; readonly signal?: AbortSignal }): { readonly at: TurnPoint; readonly dialogue: DialogueStage }[];
+  dialogueLeft?(input: { readonly gameId: string; readonly signal?: AbortSignal }): { readonly at: TurnPoint; readonly dialogue: DialogueStage; readonly places: PlaceReaders }[];
 }
 
-export type DialogueStage = (publish: (entries: readonly ResolutionEntry[], stored?: () => void) => void, published?: readonly ResolutionEntry[]) => Promise<void>;
+/** GEN-197: who read each place's feed of a turn (place id → member ids); that place's late NPC lines go to them. */
+export type PlaceReaders = ReadonlyMap<string, ReadonlySet<string>>;
+
+/** `places` is stored with the calls, so lines redone after a restart reach the same readers. */
+export type DialogueStage = (
+  publish: (entries: readonly ResolutionEntry[], stored?: () => void) => void,
+  published?: readonly ResolutionEntry[],
+  places?: PlaceReaders,
+) => Promise<void>;
 
 /** The ending as entries (whole-town feed + one narration per player), or why it could not be told (retry). */
 export type FinaleResolution = { readonly entries: readonly ResolutionEntry[]; readonly stuck?: undefined } | { readonly stuck: ResolverStuck };
