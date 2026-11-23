@@ -1058,6 +1058,86 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       expect(farewells(clients[0]!, 2)).toEqual([]);
     });
 
+    describe('GEN-143 the NPC asked is the one who answers', () => {
+      /** Aims every action with `marker` in it at `npcId`; the dialogue stage answers `lines(audience)` when given. */
+      const asking =
+        (marker: string, npcId: string, lines?: (audience: NarrationContext['audience'], ctx: DialogueContext) => unknown[]): Handler =>
+        (req) => {
+          if (isTurn(req)) {
+            const ctx = contextOf<TurnContext>(req);
+            const proposal = mockTurnProposal(ctx);
+            for (const a of proposal.actions) {
+              a.check = { type: 'none' };
+              if (ctx.actions.find((x) => x.actionId === a.actionId)?.text.includes(marker)) a.targetNpc = npcId;
+            }
+            return mockReply.ok(proposal);
+          }
+          if (lines && isDialogue(req)) {
+            const ctx = contextOf<DialogueContext>(req);
+            return mockReply.ok({ npcLines: lines(ctx.audience, ctx) });
+          }
+          return undefined;
+        };
+      const LUCIA = 'หญิงสาวผู้พกนาฬิกาพกตาย';
+      const placeCtx = (turn: Turn = 1) =>
+        provider.requests.filter(isNarration).map((r) => contextOf<NarrationContext>(r)).find((c) => 'place' in c.audience && c.audience.place === 'fountain' && c.turn.turn === turn)!;
+
+      it('C1 + C4: asked about the town, Lucia answers with her own lines and the narration is told not to tell her answer; next turn, asked with no target, she (the partner) answers again', async () => {
+        await boot({}, asking('หญิงสาว', 'amnesiac'));
+        const { clients } = await atFountain();
+        await playTurn(clients, ['ถามหญิงสาวเรื่องเมืองนี้', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+
+        expect(placeCtx().answers).toEqual([{ npcId: 'amnesiac', actionIds: ['act-1'], via: 'target' }]);
+        const narrator = provider.requests.find(isNarration)!.system.map((b) => b.text).join('\n');
+        expect(narrator).toContain('ห้ามสรุปคำตอบ');
+        const lucia = npcEntries(clients[0]!).filter((e) => e.npc?.kind === 'dialogue' && e.npc.name === LUCIA);
+        expect(lucia.length).toBeGreaterThanOrEqual(1);
+
+        await playTurn(clients, ['แล้วนาฬิกานั่นล่ะ', 'ยืนฟัง', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 1 });
+        expect(placeCtx(2).answers).toEqual([expect.objectContaining({ npcId: 'amnesiac', via: 'partner', actionIds: expect.arrayContaining(['act-1']) })]);
+        expect(npcEntries(clients[0]!, 1, 'SOLARION', 2).filter((e) => e.npc?.kind === 'dialogue' && e.npc.name === LUCIA).length).toBeGreaterThanOrEqual(1);
+      });
+
+      it('C2: two players ask Lucia in public: one set of lines answers both, up to twice the cap of one', async () => {
+        await boot({}, asking('หญิงสาว', 'amnesiac', (audience) => ('place' in audience ? Array.from({ length: 8 }, (_, i) => ({ npcId: 'amnesiac', kind: 'dialogue', text: `ตอบทั้งสองคน ${i + 1}` })) : [])));
+        const { clients } = await atFountain();
+        await playTurn(clients, ['ถามหญิงสาวเรื่องนาฬิกา', 'ถามหญิงสาวเรื่องเดียวกัน', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+
+        expect(placeCtx().answers).toEqual([{ npcId: 'amnesiac', actionIds: ['act-1', 'act-2'], via: 'target' }]);
+        for (const c of clients.slice(0, 2)) expect(npcEntries(c).map((e) => e.text)).toEqual(Array.from({ length: 6 }, (_, i) => `ตอบทั้งสองคน ${i + 1}`));
+        // One call for the group: the public actions get no private dialogue call.
+        expect(provider.requests.filter(isDialogue).map((r) => contextOf<DialogueContext>(r).audience)).toEqual([{ place: 'fountain' }]);
+      });
+
+      it('C3: a Secret question: Lucia answers in the asker\'s private narration only', async () => {
+        let refA = '';
+        await boot({}, asking('หญิงสาว', 'amnesiac', (audience, ctx) => ('player' in audience && audience.player === refA && ctx.answers.some((a) => a.npcId === 'amnesiac') ? [{ npcId: 'amnesiac', kind: 'dialogue', text: 'ข้าบอกเจ้าคนเดียวนะ' }] : [])));
+        const { t, clients } = await atFountain();
+        refA = refOf(t.a);
+        await playTurn(clients, ['กระซิบถามหญิงสาวเรื่องลับ', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 }, ['secret', 'public', 'public']);
+
+        expect(npcEntries(clients[0]!).filter((e) => e.npc?.private).map((e) => e.text)).toEqual(['ข้าบอกเจ้าคนเดียวนะ']);
+        for (const other of clients.slice(1)) expect(JSON.stringify(other.entries())).not.toContain('ข้าบอกเจ้าคนเดียวนะ');
+        expect(placeCtx().answers).toEqual([]);
+      });
+
+      it('C7: asked while the schedule has him elsewhere (Noah at the clinic in the rain): no line of his, no error', async () => {
+        await boot({}, asking('เด็กขอทาน', 'beggar', () => [{ npcId: 'beggar', kind: 'dialogue', text: 'ข้าไม่ได้อยู่ตรงนี้' }]));
+        const t = await startedTable(server!, false);
+        move(t.a, 'fountain');
+        move(t.b, 'fountain');
+        // A rainy EOSORIA: the schedule has Noah at the clinic; Lucia (no row now) is at her fountain.
+        server!.db.prepare("insert or replace into period_weather (game_id, day, phase, weather, disaster, source, created_at) values (?, 1, 'EOSORIA', 'Rain', 0, 'ai', 0)").run(gameIdOf(t));
+        const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+        await playTurn(clients, ['ถามเด็กขอทานเรื่องเมือง', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'EOSORIA', turn: 2 });
+
+        expect(turnRows()).toEqual([expect.objectContaining({ status: 'applied' })]);
+        expect(placeCtx().npcs.find((n) => n.id === 'beggar')?.here).toBe(false);
+        expect(placeCtx().answers).toEqual([]);
+        for (const c of clients) expect(JSON.stringify(c.entries())).not.toContain('ข้าไม่ได้อยู่ตรงนี้');
+      });
+    });
+
     it('the Mock GM gives the same NPC lines every time for the same context', async () => {
       const ctx = {
         kind: 'gm_dialogue',
