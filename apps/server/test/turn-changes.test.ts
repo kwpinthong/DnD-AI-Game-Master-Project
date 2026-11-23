@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import { character } from '../src/db/schema.ts';
-import { turnChangesOf, type StatSnapshot } from '../src/room/turn-changes.ts';
+import { actionCausesOf, turnChangesOf, type StatSnapshot } from '../src/room/turn-changes.ts';
 import type { RunningServer } from '../src/server.ts';
 import { forbiddenKeysIn } from '../src/visibility/guard.ts';
 import { moveCharacter, presenceOf } from '../src/visibility/store.ts';
@@ -48,6 +48,42 @@ describe('GEN-114 per-turn changes: the pure part', () => {
     expect(changes).toEqual([{ stat: 'stamina', delta: 6, reason: 'พักผ่อน' }]);
     const hazard = turnChangesOf('a', snap(), snap(), snap({ stamina: 20 }), { ...nobody, hazard: new Map([['a', 10]]) });
     expect(hazard).toEqual([{ stat: 'stamina', delta: -10, reason: 'พื้นที่อันตราย' }]);
+  });
+});
+
+/** GEN-124: the resolver says why a player's own HP / Stamina moved (attack, skill) instead of the generic text. */
+describe('GEN-124 specific reasons from the resolver', () => {
+  const GENERIC = 'การกระทำในเทิร์นนี้';
+  const sumOf = (cs: readonly { stat: string }[], stat: string) => cs.reduce((n, c) => n + (c.stat === stat && 'delta' in c ? (c as { delta: number }).delta : 0), 0);
+  const outcome = (over: Record<string, unknown>) => ({ status: 'resolved', actorId: 'a', actionId: 'x', target: null, log: { stamina: { net: 5 }, hp: { actor: { before: 100, after: 100 }, target: null }, tagging: undefined }, ...over }) as never;
+
+  it('C1: an attack on an enemy names the attack for the actor\'s Stamina and HP', () => {
+    const causes = actionCausesOf([outcome({ target: { playerId: 'b' } })], () => undefined);
+    const hpCause = { stat: 'hp' as const, delta: -4, kind: 'attack' as const };
+    const withHp = new Map([['a', [...(causes.get('a') ?? []), hpCause]]]);
+    const changes = turnChangesOf('a', snap(), snap(), snap({ hp: 96, stamina: 25 }), { ...nobody, causes: withHp });
+    expect(changes).toContainEqual({ stat: 'stamina', delta: -5, reason: 'โจมตีศัตรู' });
+    expect(changes).toContainEqual({ stat: 'hp', delta: -4, reason: 'โจมตีศัตรู' });
+    expect(JSON.stringify(changes)).not.toContain(GENERIC);
+  });
+
+  it('C2: a skill that costs Stamina is named', () => {
+    const tagging = { activated: [{ ref: 'sk1', stamina: 3, usesToday: 1 }] };
+    const causes = actionCausesOf([outcome({ log: { stamina: { net: 5 }, hp: { actor: { before: 100, after: 100 }, target: null }, tagging } })], (id) => (id === 'sk1' ? 'ลูกไฟ' : undefined));
+    const changes = turnChangesOf('a', snap(), snap(), snap({ stamina: 22 }), { ...nobody, causes });
+    expect(changes).toContainEqual({ stat: 'stamina', delta: -3, reason: 'ใช้ทักษะ ลูกไฟ' });
+    expect(sumOf(changes, 'stamina')).toBe(-8);
+  });
+
+  it('C3: no known reason keeps the old generic text', () => {
+    expect(turnChangesOf('a', snap(), snap(), snap({ stamina: 25 }), nobody)).toEqual([{ stat: 'stamina', delta: -5, reason: GENERIC }]);
+  });
+
+  it('C4: reasons never explain more than really changed; the sums stay equal to the status bar', () => {
+    const causes = new Map([['a', [{ stat: 'stamina' as const, delta: -9, kind: 'attack' as const }]]]);
+    const changes = turnChangesOf('a', snap(), snap(), snap({ stamina: 27 }), { ...nobody, causes });
+    expect(sumOf(changes, 'stamina')).toBe(-3);
+    expect(changes).toEqual([{ stat: 'stamina', delta: -3, reason: 'โจมตีศัตรู' }]);
   });
 });
 
@@ -126,6 +162,8 @@ describe('GEN-114 per-turn changes over the real play room', { timeout: 60_000 }
       expect([sumOf(mine, 'hp'), sumOf(mine, 'stamina'), sumOf(mine, 'coins')]).toEqual([now.hp - was.hp, now.stamina - was.stamina, now.coins - was.coins]);
       for (const e of mine) for (const ch of e.changes ?? []) expect(TurnChange.safeParse(ch).success).toBe(true);
     }
+    // GEN-124: A attacked B, so A's Stamina cost says so, not the generic text.
+    expect(changesOf(a).flatMap((e) => e.changes ?? [])).toContainEqual({ stat: 'stamina', delta: expect.any(Number), reason: 'โจมตีศัตรู' });
     // B was hit: the hp loss is in B's own log and says why.
     expect(changesOf(b).flatMap((e) => e.changes ?? [])).toContainEqual({ stat: 'hp', delta: expect.any(Number), reason: 'ถูกโจมตี' });
     // C4: nobody gets another player's entry (each only their own character's name), not live and not from the log.

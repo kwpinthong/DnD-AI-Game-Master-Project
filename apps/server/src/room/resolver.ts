@@ -1,6 +1,7 @@
 import type { ActionVisibility, GmCheckView, GmFallbackCause, HitView, RollView, RoomGmStatusCode } from '@isekai/protocol';
 import type { PeriodWeather, PhaseState, PlayerResult, TurnPoint } from '@isekai/rules';
 import type { DbOrTx } from '../db/client.ts';
+import type { ActionCause } from './turn-changes.ts';
 
 /**
  * The hand-off to the AI GM turn loop (GEN-057, `../gm/loop.ts` is the real one; tests may plug in their own).
@@ -120,6 +121,8 @@ export interface PhaseResolution {
   readonly results?: Readonly<Record<string, PlayerResult>>;
   readonly entries?: readonly ResolutionEntry[];
   readonly hits?: readonly ResolutionHit[];
+  /** GEN-124: why each actor's own HP / Stamina moved (attack, skill), for their private change log. */
+  readonly causes?: ReadonlyMap<string, readonly ActionCause[]>;
   /** Q-229: every number of each roll, for the Human GM's console (never sent to players). */
   readonly checks?: readonly GmCheckView[];
   /**
