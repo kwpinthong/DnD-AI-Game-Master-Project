@@ -54,6 +54,7 @@ import {
   loadWorld,
   narrationJournal,
   requestTokens,
+  stripStrayTokens,
   withinTokens,
   type Beat,
   type DayContext,
@@ -874,8 +875,7 @@ export function renderTokens(db: DbOrTx, world: GmWorld, text: string, reader: s
     if (p.memberId === reader && !shared) return 'คุณ';
     return reader !== null && world.knownNames(reader).has(p.memberId) ? p.name : p.socialTitle;
   });
-  // GEN-152: any other {{...}} the AI wrote ({{place}}, a wrong kind, a half token) is dropped, never shown raw.
-  return known.replace(/\{\{[^}]*\}\}|\{\{|\}\}/g, '').replace(/ {2,}/g, ' ');
+  return stripStrayTokens(known);
 }
 
 /** HP / Stamina / Karma per player after the turn, for the day / period engine (`PlayerResult`). */

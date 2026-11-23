@@ -25,6 +25,8 @@ import { activeConstraints, dayLog, journalFor, memoryFor } from './store.ts';
 export const playerToken = (ref: string) => `{{p:${ref}}}`;
 export const npcToken = (id: string) => `{{n:${id}}}`;
 export const TOKEN_PATTERN = /\{\{([pn]):([A-Za-z0-9_-]+)\}\}/g;
+/** GEN-152: any {{...}} left after the p / n tokens are rendered ({{place}}, a wrong kind, a half token) is dropped, never shown raw. */
+export const stripStrayTokens = (text: string) => text.replace(/\{\{[^}]*\}\}|\{\{|\}\}/g, '').replace(/ {2,}/g, ' ');
 
 /** Rough, on the safe side for Thai (one token per non-ASCII character). Used for the context budget. */
 export function estimateTokens(text: string): number {
