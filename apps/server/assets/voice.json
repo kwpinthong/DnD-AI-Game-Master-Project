@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "tone": "A",
+  "guide": {
+    "voice": "ผู้เล่าเรื่องที่ยืนข้างผู้เล่น เล่าสิ่งที่เห็น ได้ยิน ได้กลิ่น ไม่ตัดสินแทนผู้เล่น ไม่เฉลยความลับ เรียกผู้อ่านคนเดียวว่า คุณ",
+    "register": "narration ใช้ภาษาเขียนกลาง ไม่ใช่ราชาศัพท์และไม่ใช่ภาษาแชต บทพูด NPC ตามโปรไฟล์ของ NPC ตัวนั้น",
+    "length": "ประโยคละไม่เกินราว 40 ตัวอักษร segment ละไม่เกิน 3 ประโยค บทพูด NPC ไม่เกิน 120 ตัวอักษร",
+    "use": ["กริยาตรง", "ละประธานเมื่อรู้ว่าใคร", "เรียกคนด้วยรูปลักษณ์หรือฉายา", "ชื่อระบบเป็นอังกฤษตามเกม"]
+  },
+  "forbidden": [
+    { "id": "dai_tham_kan", "match": { "type": "regex", "value": "(ได้)?ทำการ" }, "scope": "all", "severity": "block", "fix": "ตัด ทำการ ใช้กริยาตรง" },
+    { "id": "sueng_nan", "match": { "type": "regex", "value": "(^|\\s)ซึ่ง(นั่น)?ทำให้" }, "scope": "all", "severity": "flag", "fix": "ขึ้นประโยคใหม่ บอกผลตรงๆ" },
+    { "id": "pronoun_repeat", "match": { "type": "density", "words": ["เขา", "เธอ"], "max": 1, "perSentences": 2 }, "scope": "narration", "severity": "flag", "fix": "ละประธาน หรือใช้คำเรียกตามรูปลักษณ์" },
+    { "id": "mee_khwam", "match": { "type": "regex", "value": "มีความ(กล้าหาญ|โกรธ|เศร้า|กลัว|ระมัดระวัง)" }, "scope": "all", "severity": "flag", "fix": "ใช้คุณศัพท์หรือกริยาตรง" },
+    { "id": "kan_thi_nan", "match": { "type": "regex", "value": "(^|\\s)การที่.{1,40}นั้น" }, "scope": "all", "severity": "flag", "fix": "ขึ้นด้วยผู้กระทำ" },
+    { "id": "passive_thuk", "match": { "type": "regex", "value": "ถูก(ต้อนรับ|แนะนำ|เชิญ|ชื่นชม|มอบ)" }, "scope": "all", "severity": "flag", "fix": "ให้ผู้กระทำเป็นประธาน" },
+    { "id": "khong_khao", "match": { "type": "density", "words": ["ของเขา", "ของเธอ"], "max": 1, "perSentences": 3 }, "scope": "all", "severity": "flag", "fix": "ตัด ของเขา ของเธอ เมื่อรู้ว่าเป็นของใคร" },
+    { "id": "connector_start", "match": { "type": "regex", "value": "(^|\\s)(อย่างไรก็ตาม|ในขณะเดียวกัน)" }, "scope": "all", "severity": "flag", "fix": "ตัดคำเชื่อม" },
+    { "id": "intensifier", "match": { "type": "regex", "value": "เป็นอย่างมาก|อย่างยิ่ง|อย่างแท้จริง" }, "scope": "all", "severity": "flag", "fix": "แสดงด้วยอาการแทนคำเน้น" },
+    { "id": "loanword", "match": { "type": "regex", "value": "โอเค|เช็ค|ซีเรียส|รีแอค" }, "scope": "narration", "severity": "flag", "fix": "ใช้คำไทย" },
+    { "id": "emoji_markdown", "match": { "type": "regex", "value": "[\\u{1F300}-\\u{1FAFF}]|\\*\\*|^#" }, "scope": "all", "severity": "block", "fix": "ข้อความล้วน" }
+  ],
+  "pairs": [
+    { "bad": "เขาได้ทำการเปิดประตูออก", "good": "เขาผลักประตูเปิด" },
+    { "bad": "ยามล้มลง ซึ่งนั่นทำให้ทางว่าง", "good": "ยามล้มลง ทางโล่งทันที" },
+    { "bad": "เธอหันมา เธอยิ้ม แล้วเธอก็เดินจากไป", "good": "เธอหันมายิ้ม แล้วเดินจากไป" },
+    { "bad": "ชายคนนั้นมีความโกรธเป็นอย่างมาก", "good": "ชายคนนั้นโกรธจนหน้าแดง" },
+    { "bad": "คุณถูกต้อนรับโดยเจ้าของร้าน", "good": "เจ้าของร้านออกมาต้อนรับคุณ" },
+    { "bad": "เขายกมือของเขาขึ้นปิดหน้าของเขา", "good": "เขายกมือปิดหน้า" }
+  ],
+  "npcs": {
+    "beggar": {
+      "register": "child_polite", "self": ["ผม"], "you": { "default": "พี่", "wary": "ท่าน" }, "particles": ["ครับ", "นะครับ"],
+      "catchphrases": ["ไม่เป็นไรครับ ผมชินแล้ว"], "never": ["คำหยาบ", "ขอของตรงๆ", "พูดถึงพลังที่ผนึกในตัว"], "neverWords": ["ค่ะ", "เจ้า"],
+      "note": "ติดอ่างตอนตื่นเต้น ไอแทรก ประโยคสั้น",
+      "forms": {
+        "ss_good": { "register": "archaic_divine", "self": ["เรา"], "you": { "default": "ท่าน" } },
+        "ss_evil": { "register": "whisper_mock", "self": ["ข้า"], "you": { "default": "เจ้า" } }
+      }
+    },
+    "amnesiac": {
+      "register": "flat", "self": [], "you": { "default": "เธอ" }, "particles": ["มั้ง"],
+      "catchphrases": ["ยังไม่ถึงเวลา"], "never": ["อุทาน", "เลือกข้างดีหรือชั่ว"], "neverWords": ["ครับ", "ค่ะ", "!"],
+      "note": "ประโยคครึ่งๆ มักจบด้วย ... ละประธานเกือบทุกครั้ง",
+      "forms": { "ss": { "register": "archaic_divine", "self": ["ข้า"], "you": { "default": "เจ้า" } } }
+    },
+    "nun": {
+      "register": "polite", "self": ["ดิฉัน"], "you": { "default": "ท่าน", "friendly": "ลูก" }, "particles": ["ค่ะ", "คะ"],
+      "catchphrases": ["ขอพระแสงคุ้มครองท่านนะคะ"], "never": ["กล่าวหาลัทธิตรงๆ โดยไม่มีหลักฐาน", "โกหก"], "neverWords": ["ครับ", "ข้า"],
+      "note": "อ่อนโยนแต่เหนื่อย ถอนหายใจได้"
+    },
+    "guard": {
+      "register": "curt", "self": ["ข้า"], "you": { "default": "เจ้า" }, "particles": [],
+      "catchphrases": ["หยุดตรงนั้น", "ไม่ใช่เรื่องของเจ้า"], "never": ["พูดยาว", "ด่าหัวหน้าต่อหน้าคนอื่น"], "neverWords": ["ครับ", "ค่ะ", "คุณ"],
+      "note": "ห้วน สั่งการ ใจอ่อนเฉพาะเมื่อสนิท"
+    },
+    "cloaked-man": {
+      "register": "street", "self": ["ฉัน"], "you": { "default": "สหาย", "wary": "ลูกค้า" }, "particles": ["นะ", "หึ"],
+      "catchphrases": ["ข่าวดีไม่เคยฟรีนะสหาย"], "never": ["ให้ข้อมูลฟรี", "สาบานอย่างจริงใจ"], "neverWords": ["ครับ", "ค่ะ"],
+      "note": "ลื่นไหล กวนๆ ต่อรองทุกเรื่อง"
+    },
+    "merchant": {
+      "register": "merchant", "self": ["ข้าน้อย"], "you": { "default": "ท่าน" }, "particles": ["ล่ะท่าน", "นะท่าน"],
+      "catchphrases": ["ของแลกของ อย่างเท่าเทียม"], "never": ["ความเห็นการเมืองหรือศาสนา", "ต่อราคาเอาเปรียบ"], "neverWords": ["เจ้า"],
+      "note": "ชอบเล่าประวัติของเก่า อธิบายเป็นขั้น"
+    },
+    "noble": {
+      "register": "formal", "self": ["กระผม"], "you": { "default": "ท่าน" }, "particles": ["ครับ"],
+      "catchphrases": ["ความจริงย่อมทิ้งร่องรอยเสมอ"], "never": ["บอกว่ามาสืบคดี", "เปิดเผยตระกูล"], "neverWords": ["ข้า", "เจ้า", "ค่ะ"],
+      "note": "สุภาพ ระวังคำ ตอบคำถามด้วยคำถาม"
+    },
+    "archbishop": {
+      "register": "sweet_priest", "self": ["พ่อ"], "you": { "default": "ลูก", "friendly": "ลูกเอ๋ย" }, "particles": ["เถิด", "นะลูก"],
+      "catchphrases": ["จงรับความเมตตานี้ไว้เถิดลูก"], "never": ["พูดถึงพิธีกรรมหรือเทพมารในที่สาธารณะ", "ขู่ตรงๆ"], "neverWords": ["ข้า", "ครับ", "ค่ะ"],
+      "note": "หวานเกินจริงเล็กน้อย ผู้เล่นที่ระวังจะรู้สึกแปลก"
+    },
+    "archivist": {
+      "register": "scholarly", "self": ["ฉัน"], "you": { "default": "คุณ" }, "particles": ["ค่ะ"],
+      "catchphrases": ["ตามที่คำนวณไว้"], "never": ["ซุบซิบ", "เลือกข้างโบสถ์หรือลัทธิ", "ระบายอารมณ์"], "neverWords": ["ครับ", "เจ้า"],
+      "note": "แม่นยำ ประโยคสั้น เย็นชาแต่ไม่หยาบ"
+    },
+    "light-spirit": {
+      "register": "archaic_divine", "self": ["เรา"], "you": { "default": "เจ้า" }, "particles": ["เถิด"],
+      "catchphrases": ["แสงยังไม่ดับ ตราบที่ยังมีผู้ส่งต่อ"], "never": ["คำสมัยใหม่", "ประชด", "ขู่"], "neverWords": ["ครับ", "ค่ะ", "โอเค"],
+      "note": "สงบ ขึ้นต้นคำสั่งด้วย จง"
+    },
+    "dark-spirit": {
+      "register": "whisper_mock", "self": ["ข้า"], "you": { "default": "มนุษย์", "friendly": "เจ้าสิ่งเปราะบาง" }, "particles": ["ฮึๆ"],
+      "catchphrases": ["สิ้นหวังให้มากกว่านี้อีกสิ"], "never": ["ปลอบใจอย่างจริงใจ"], "neverWords": ["ขอบคุณ", "ขอโทษ", "ครับ", "ค่ะ"],
+      "note": "กระซิบ เว้นวรรคด้วย ... เยาะเย้ย"
+    },
+    "horizon-watcher": {
+      "register": "chronicle", "self": ["ผู้บันทึก"], "you": { "default": "ผู้มาเยือน" }, "particles": [],
+      "catchphrases": ["โลกนี้ถูกจดไว้แล้ว"], "never": ["แนะนำอนาคตตรงๆ", "อารมณ์ส่วนตัว"], "neverWords": ["ครับ", "ค่ะ", "ฉัน"],
+      "note": "พูดเหมือนอ่านบันทึก เล่าเป็นอดีต"
+    }
+  }
+}
