@@ -3,8 +3,9 @@ import { eq } from 'drizzle-orm';
 import { npcSpeaker } from '../companions/store.ts';
 import type { DbOrTx } from '../db/client.ts';
 import { character } from '../db/schema.ts';
+import { titleOf } from '../game/character.ts';
 import { getGameScenario } from '../scenario/store.ts';
-import { ASTRAL_PLANE } from '../visibility/store.ts';
+import { ASTRAL_PLANE, namesVisibleTo } from '../visibility/store.ts';
 import type { GameAssets } from '../assets/load.ts';
 import { placeMap, placeOfPresence, zoneView } from '../travel/rules.ts';
 import type { EntryMeta, RoomEntryRow } from './store.ts';
@@ -28,6 +29,13 @@ function npcOf(db: DbOrTx, npc: NonNullable<EntryMeta['npc']>, viewerId: string,
   return speaker ? { npc: { ...speaker, kind: npc.kind, ...(npc.private ? { private: true as const } : {}) } } : {};
 }
 
+/** GEN-129: the actor of a `player` entry as `viewer` may know them: the real name for the Human GM and for a person they know (GEN-117), else the Social Title. */
+function actorOf(db: DbOrTx, memberId: string, viewer: { id: string; role: string }): { actor: { name: string } } {
+  const c = db.select().from(character).where(eq(character.memberId, memberId)).get();
+  if (!c) return { actor: { name: '' } };
+  return { actor: { name: viewer.role === 'gm' || namesVisibleTo(db, viewer.id).has(memberId) ? c.name : titleOf(c) } };
+}
+
 /** A stored feed / narration / whisper / hit entry as `viewer` receives it, live, on replay and in the game log (GEN-037). */
 export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string; role: string }, assets: GameAssets): RoomEntry {
   const meta = row.meta === null ? {} : (JSON.parse(row.meta) as EntryMeta);
@@ -45,6 +53,7 @@ export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string;
     ...(meta.changes ? { changes: [...meta.changes] } : {}),
     // GEN-110: who says the line, as this viewer may know them (alias until the name is learned, grade only then).
     ...(row.kind === 'npc' && meta.npc ? npcOf(db, meta.npc, viewer.id, assets) : {}),
+    ...(row.kind === 'player' && meta.actor ? actorOf(db, meta.actor, viewer) : {}),
     ...(row.kind === 'whisper'
       ? { whisper: { from: characterNameOf(db, row.fromMemberId), to: characterNameOf(db, row.toMemberId), mine: row.fromMemberId === viewer.id } }
       : {}),

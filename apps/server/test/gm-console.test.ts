@@ -191,7 +191,7 @@ describe('GEN-058 Human GM console', { timeout: 60_000 }, () => {
     expect(narration.type === 'entry' && narration.entry.text).toBe(EDITED_A);
     await a.waitFor(turnIs(2));
     for (const frame of a.raw) expect(frame).not.toContain(ORIGINAL_A);
-    expect(b.entries().map((e) => e.text)).toEqual([FEED]);
+    expect(b.entries().filter((e) => e.kind !== 'player').map((e) => e.text)).toEqual([FEED]);
     expect(a.lastRoom()!.gmStatus).toBeNull();
     expect(characterRow(t.a.memberId)).toMatchObject({ hp: 80, karma: -5 });
     expect(phaseState(t).players[t.a.memberId]).toMatchObject({ hp: 80, karma: -5 });
@@ -392,7 +392,7 @@ describe('GEN-058 Human GM console', { timeout: 60_000 }, () => {
     await act(a, 'เดินสำรวจตลาด');
     await act(b, 'นั่งพัก');
     await act(c, 'ฟังข่าวลือ');
-    const got = await a.waitFor((m) => m.type === 'entry');
+    const got = await a.waitFor((m) => m.type === 'entry' && m.entry.kind === 'narration');
     expect(got.type === 'entry' && got.entry.text).toBe(ORIGINAL_A);
     await a.waitFor(turnIs(2));
     expect(a.messages.some((m) => m.type === 'room' && m.gmStatus?.code === 'awaiting_gm')).toBe(false);

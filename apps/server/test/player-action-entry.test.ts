@@ -1,5 +1,5 @@
 import { socialTitle } from '@isekai/rules';
-import type { RoomEntry, RoomServerMessage } from '@isekai/protocol';
+import { RoomEntry, type RoomServerMessage } from '@isekai/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { RunningServer } from '../src/server.ts';
 import { learnName } from '../src/visibility/store.ts';
@@ -60,6 +60,7 @@ describe('GEN-129 player action entries', { timeout: 60_000 }, () => {
     await playTurn(clients, ['เช็ดโต๊ะ', 'ดื่มชา', 'อ่านประกาศ']);
 
     const forB = players(clients[1]!).find((e) => e.text === 'เช็ดโต๊ะ');
+    expect(RoomEntry.safeParse(forB).success).toBe(true);
     expect(forB?.actor).toEqual({ name: LIN.name });
     expect(forB?.place).not.toBeNull();
     const forC = players(clients[2]!).find((e) => e.text === 'เช็ดโต๊ะ');

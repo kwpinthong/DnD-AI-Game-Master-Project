@@ -54,9 +54,11 @@ export function dividerText(entry: Pick<RoomEntry, 'day' | 'phase' | 'turn' | 'p
 }
 
 /** How one entry is drawn. `skip`: it has no place in the feed (a whisper lives in the people tab, a hit on the pinned card). */
-export type EntryLook = 'narration' | 'npc-dialogue' | 'npc-reaction' | 'changes' | 'omen' | 'hit-line' | 'skip';
-export function entryLook(entry: Pick<RoomEntry, 'kind' | 'npc'>, hitAcknowledged = false): EntryLook {
+export type EntryLook = 'narration' | 'npc-dialogue' | 'npc-reaction' | 'changes' | 'omen' | 'hit-line' | 'player-action' | 'skip';
+export function entryLook(entry: Pick<RoomEntry, 'kind' | 'npc' | 'actor'>, hitAcknowledged = false): EntryLook {
   switch (entry.kind) {
+    case 'player':
+      return entry.actor ? 'player-action' : 'narration';
     case 'feed':
     case 'narration':
       return 'narration';

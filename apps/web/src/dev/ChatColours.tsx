@@ -2,15 +2,13 @@ import { useState } from 'react';
 import '../play/chat/chat.css';
 import '../play/chat/art.css';
 import { ChatFeed } from '../play/chat/ChatFeed.tsx';
-import { PlayerBubble } from '../play/chat/Bubbles.tsx';
 import { scenarioById } from '../mock/scenarios.ts';
 import type { EntryVote } from '@isekai/protocol';
 
 /**
  * /dev/chat-colours (GEN-142, dev + VITE_MOCK=1 only): one page with every chat piece the colour check against
  * docs/design/ui-v3-chat needs. The feed is the real ChatFeed on the `chat-colours` scenario (NPC box, gain badge,
- * vote buttons, our own box). The contract has no entry kind for another player's action yet (GEN-129, server),
- * so the PlayerBubble is drawn from its own props under the feed.
+ * vote buttons, our own box, and another player's box from the `player` entry of GEN-129).
  */
 export function ChatColours() {
   const s = scenarioById('chat-colours');
@@ -26,11 +24,6 @@ export function ChatColours() {
         ownAction={{ text: 'เล่นพิณเพลงพื้นบ้านจากบ้านเกิด', visibility: 'public', rest: false }}
         voting={{ local, busy: new Set(), onVote: (e, next) => setLocal(new Map(local).set(e.seq, next)) }}
       />
-      <ol className="chat-list" style={{ maxWidth: 900, margin: '0 auto', width: '100%', listStyle: 'none', padding: '0 16px' }}>
-        <li className="chat-item">
-          <PlayerBubble alias="ผู้มาเยือนเสื้อคลุมแดง" text="โยนเหรียญลงในหมวกของคุณ แล้วเดินจากไป" />
-        </li>
-      </ol>
     </div>
   );
 }
