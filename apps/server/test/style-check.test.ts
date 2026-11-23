@@ -5,7 +5,7 @@ import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
 import { voiceFormOf, type VoiceForm } from '../src/assets/voice.ts';
 import { loadWorld } from '../src/gm/context.ts';
-import { npcPrompt } from '../src/gm/npc-lines.ts';
+import { npcPrompt, withVoice } from '../src/gm/npc-lines.ts';
 import { gateStyle, getStyleSettings, recordStyleFlags, setStyleSettings, styleIssues } from '../src/gm/style-check.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
 import { makeTempDir } from './helpers.ts';
@@ -160,7 +160,9 @@ describe('style checker (GEN-169)', { timeout: 120_000 }, () => {
 
   it('GEN-193 C2: an NPC in its normal form is checked against its main profile only', () => {
     for (const bond of [undefined, { evolvedGrade: null, evolvedAlignment: null }, { evolvedGrade: 'S' as const, evolvedAlignment: null }]) expect(voiceFormOf(bond)).toBeNull();
-    expect(reasonsIn('เราจะช่วยท่านเอง', 'beggar', null)).toContain('pronoun_mismatch');
+    // ข้า is the beggar's SS-evil pronoun: GEN-169 let any form's pronoun pass, the normal form does not.
+    expect(reasonsIn('ข้าจะช่วยเอง', 'beggar', null)).toContain('pronoun_mismatch');
+    expect(reasons('ข้าจะช่วยเอง', 'dialogue', 'beggar')).not.toContain('pronoun_mismatch');
     expect(reasonsIn('ผมจะช่วยพี่เองครับ', 'beggar', null)).not.toContain('pronoun_mismatch');
   });
 
@@ -171,7 +173,10 @@ describe('style checker (GEN-169)', { timeout: 120_000 }, () => {
     const beggar = world.npcs.filter((n) => n.id === 'beggar');
     const evolve = server.db.prepare("insert into npc_bond (member_id, npc_id, updated_at, evolved_grade, evolved_alignment) values (?, 'beggar', 0, 'SS', 'Good')");
     evolve.run(t.a.memberId);
-    const view = (members: string[]) => npcPrompt(server.orm, server.assets, world, beggar, new Set(['beggar']), members)[0]!;
+    const plain = (members: string[]) => npcPrompt(server.orm, server.assets, world, beggar, new Set(['beggar']), members);
+    const view = (members: string[]) => withVoice(server.assets, plain(members))[0]!;
+    // The narration context gets the form only (its token budget stops the turn); the dialogue calls get the voice.
+    expect(plain([t.a.memberId])[0]).not.toHaveProperty('voice');
     expect(view([t.a.memberId])).toMatchObject({ form: 'ss_good', voice: { self: ['เรา'], you: { default: 'ท่าน' }, note: voice().npcs.beggar!.note } });
     expect(view([t.b.memberId])).toMatchObject({ form: null, voice: { self: ['ผม'] } });
     // Players who see different forms in one scene: no form is assumed (the checker accepts any of them).

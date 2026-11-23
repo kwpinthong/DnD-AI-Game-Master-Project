@@ -17,6 +17,7 @@ import type { AiPurpose, PromptBlock } from '../ai/provider.ts';
 import { pinAssets } from '../assets/game-data.ts';
 import type { GameAssets } from '../assets/load.ts';
 import { tagVocabulary } from '../assets/tags.ts';
+import type { VoiceForm } from '../assets/voice.ts';
 import type { Clock } from '../auth/join.ts';
 import { applyPhaseActions, crisesOf, crossPlayerState, seatedKarmaByMember, seatedKarmas } from '../crossplayer/phase.ts';
 import { outdoorLocationIds, tagContexts, weatherTagging, type TaggingOptions } from '../crossplayer/tags.ts';
@@ -73,7 +74,7 @@ import { learningContext, turnTags } from '../learning/memory.ts';
 import { introduceNpcs } from './npc-intro.ts';
 import { dialoguePrompt } from './npc-examples.ts';
 import { recordNpcMemories } from './npc-memory.ts';
-import { capTotal, cleanNpcLines, lingerAfter, lingersNow, npcAnswers, npcLineLimits, npcPlacesNow, npcPrompt, npcsPresentAt, saveLingers } from './npc-lines.ts';
+import { capTotal, cleanNpcLines, lingerAfter, lingersNow, npcAnswers, npcLineLimits, npcPlacesNow, npcPrompt, npcsPresentAt, saveLingers, withVoice } from './npc-lines.ts';
 import { npcFarewellFor } from './server-lines.ts';
 import { periodScenes } from './scene.ts';
 import { GM_OUTPUT, GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
@@ -289,7 +290,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     answer: R;
     value: T;
     scope: StyleScope;
-    texts: (value: T) => { text: string; npcId: string | null }[];
+    texts: (value: T) => { text: string; npcId: string | null; form?: VoiceForm | null | undefined }[];
     accept: (answer: R) => T | undefined;
     label: string;
     signal?: AbortSignal;
@@ -302,7 +303,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       label: `game=${opts.gameId} purpose=${opts.purpose} audience=${opts.label}`,
       log,
       ...(opts.signal ? { signal: opts.signal } : {}),
-      issuesOf: (v) => opts.texts(v).flatMap((t) => styleIssues(assets.voice, t.text, opts.scope, t.npcId)),
+      issuesOf: (v) => opts.texts(v).flatMap((t) => styleIssues(assets.voice, t.text, opts.scope, t.npcId, t.form)),
       rewrite: async (issues, signal) => {
         const result = await ai.call({
           gameId: opts.gameId,
@@ -645,7 +646,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         if (!ctx.npcs.some((n) => n.here) || (reader !== null && !ctx.privateLines)) return [];
         const { journal: _journal, kind: _kind, ...rest } = ctx;
         // GEN-151: the rules + each NPC's persona and library first (cached), the turn after.
-        const { system: libSystem, npcs } = dialoguePrompt(db, assets, world, rest.npcs);
+        const { system: libSystem, npcs } = dialoguePrompt(db, assets, world, withVoice(assets, rest.npcs));
         // GEN-177 + GEN-151: rules, then the game's tone, then the NPC library — all stable, so all cacheable.
         const system = [...dialogueSystem, ...libSystem.slice(1)];
         // GEN-128 C3: the lines follow the narration the players read, a Human GM's edit included (names back to tokens).
@@ -774,7 +775,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
                 answer: result.value,
                 value: clean(result.value.npcLines),
                 scope: 'dialogue',
-                texts: (ls) => ls.map((l) => ({ text: l.text, npcId: l.npcId })),
+                // GEN-193: in the form its audience sees it in (a job stored before GEN-193 has none: any form).
+                texts: (ls) => ls.map((l) => ({ text: l.text, npcId: l.npcId, form: context.npcs.find((n) => n.id === l.npcId)?.form })),
                 accept: (d) => {
                   const again = clean(d.npcLines);
                   return again.length > 0 ? again : undefined;
