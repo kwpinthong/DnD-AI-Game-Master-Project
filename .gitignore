@@ -28,3 +28,5 @@ Thumbs.db
 
 # ต้นฉบับภาพสถานที่ PNG (ใหญ่) — ใช้ไฟล์ webp ใน assets/illustrations แทน
 apps/web/src/assets/place/
+# ต้นฉบับ avatar PNG 1024px (ISK-005) — ใช้ webp ใน assets/avatars แทน
+apps/web/src/assets/avatars-src/
