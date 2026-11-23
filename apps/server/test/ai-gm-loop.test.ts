@@ -897,15 +897,17 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       expect(provider.requests.filter(isNarration).every((r) => r.messages.length === 1)).toBe(true);
     });
 
-    it('C3: at EOSORIA nobody is scheduled at the fountain, so a line from an NPC of the place is dropped too', async () => {
+    it('GEN-137 C1 (was GEN-110 C3, strict): at EOSORIA Lucia has no schedule row, so she is at her scenario place, the fountain, and may speak there', async () => {
       await boot({}, withLines(() => [{ npcId: 'amnesiac', kind: 'dialogue', text: 'ข้ามาแล้ว' }]));
       const t = await startedTable(server!, false);
       move(t.a, 'fountain');
       move(t.b, 'fountain');
       const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
       await playTurn(clients, ['ทักทายคนแถวนี้', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'EOSORIA', turn: 2 });
-      expect(npcEntries(clients[0]!, 1, 'EOSORIA')).toEqual([]);
+      expect(npcEntries(clients[0]!, 1, 'EOSORIA').map((e) => e.text)).toEqual(['ข้ามาแล้ว']);
       expect(turnEntries(clients[0]!, 1, 'EOSORIA', 1).filter((e) => e.kind === 'narration')).toHaveLength(1);
+      const place = provider.requests.filter(isNarration).map((r) => contextOf<NarrationContext>(r)).find((c) => 'place' in c.audience && c.audience.place === 'fountain')!;
+      expect(place.npcs.find((n) => n.id === 'amnesiac')?.here).toBe(true);
     });
 
     it('C4: a Secret action: nobody else gets a line about it, the owner gets a private line only they read', async () => {

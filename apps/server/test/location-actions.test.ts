@@ -2,6 +2,7 @@ import type { RoomServerMessage } from '@isekai/protocol';
 import { ReplayRng, type PhaseAction, type PhaseState, type Rng } from '@isekai/rules';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { loadAiConfig } from '../src/ai/config.ts';
 import { loadGameAssets } from '../src/assets/load.ts';
 import { applyPhaseActions } from '../src/crossplayer/phase.ts';
 import { character } from '../src/db/schema.ts';
@@ -270,6 +271,21 @@ describe('GEN-069 location actions', { timeout: 60_000 }, () => {
     expect(refused.type === 'action_rejected' ? refused.message : '').toContain('เงินไม่พอ');
     expect(await send(clients[0]!, 'หลอกให้ยามนอนหลับ')).toEqual({ type: 'action_accepted' });
     expect(row(t.a).coins).toBe(4);
+  });
+
+  it('GEN-137 C3: the web [พัก] button sends just the text "พัก" with no rest flag; with the mock AI GM the server makes it a REST from the text', async () => {
+    server = await startTestServer(dataDir, { ai: loadAiConfig({ AI_PROVIDER: 'mock' }) });
+    const t = await startedTable(server, false);
+    put(t.a, 'fountain');
+    setCoins(t.a, 10);
+    setPlayer(t, t.a, { stamina: 10 });
+    const clients = await everyone(t);
+    const from = clients[0]!.messages.length;
+    await turn(t, clients, {}, 'พัก');
+    const mine = clients[0]!.messages.slice(from).find((m) => m.type === 'room' && m.you?.action?.text === 'พัก');
+    expect(mine).toMatchObject({ you: { action: { text: 'พัก', rest: true } } });
+    expect(me(t, t.a).stamina).toBe(18);
+    expect(row(t.a).coins).toBe(10);
   });
 
   it('Q-209: the castaway RESTs on the coast HP +3, not inland; the patient RESTs HP +5 anywhere', async () => {

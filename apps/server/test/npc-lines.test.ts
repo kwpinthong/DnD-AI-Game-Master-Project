@@ -1,12 +1,47 @@
 import { describe, expect, it } from 'vitest';
 import { GmDialogue, GmNarration } from '../src/gm/schema.ts';
-import { NPC_LINE_LIMITS, capTotal, cleanNpcLines, cutLine, type CleanLine, type RawLine } from '../src/gm/npc-lines.ts';
+import { NPC_LINE_LIMITS, capTotal, cleanNpcLines, cutLine, npcsPresentAt, type CleanLine, type RawLine } from '../src/gm/npc-lines.ts';
+import type { GameAssets } from '../src/assets/load.ts';
+import type { GmWorld } from '../src/gm/context.ts';
 
 /** GEN-110: what the server keeps of the NPC lines the AI GM wrote with a narration (limits, ids, names, Thai-safe cut). */
 
 const line = (npcId: string, kind: 'dialogue' | 'reaction', text: string): RawLine => ({ npcId, kind, text });
 const present = (...ids: string[]) => new Set(ids);
 const NONE = { forbidden: [] as string[], cast: new Set<string>() };
+
+describe('GEN-137 (Q-300) who is here: the schedule now, else the scenario place', () => {
+  const world = {
+    places: [
+      { id: 'fountain', name: 'น้ำพุกลางเมือง' },
+      { id: 'clinic', name: 'สถานพยาบาลกลาง' },
+    ],
+    npcs: [
+      { id: 'lucia', names: ['ลูเซีย'], locationId: 'fountain' },
+      { id: 'noah', names: ['โนอา'], locationId: 'fountain' },
+      { id: 'merchant', names: ['มาร์คัส'], locationId: 'fountain' },
+    ],
+  } as unknown as GmWorld;
+  const row = (npc: string, location: string, periods: string[], weathers: string[] = []) => ({ npc, location, periods, weathers, condition: '', note: '' });
+  const assets = {
+    npcSchedule: [row('ลูเซีย', 'น้ำพุกลางเมือง', ['SOLARION']), row('โนอา', 'น้ำพุกลางเมือง', ['SOLARION']), row('โนอา', 'สถานพยาบาลกลาง', ['EOSORIA'])],
+  } as unknown as GameAssets;
+  const here = (placeId: string, phase: 'EOSORIA' | 'SOLARION' | 'HESPERION', weather: 'Rain' | null = null) =>
+    npcsPresentAt(world, assets, placeId, { phase, weather, karmas: [] }).map((n) => n.id).sort();
+
+  it('C1: an NPC with no schedule row at all, or none for this period, is at its scenario place', () => {
+    // merchant has no row; lucia has none for HESPERION; noah has none for HESPERION either.
+    expect(here('fountain', 'HESPERION')).toEqual(['lucia', 'merchant', 'noah']);
+    expect(here('clinic', 'HESPERION')).toEqual([]);
+  });
+
+  it('C2: an NPC the schedule puts elsewhere for this period is not here, even at its scenario place', () => {
+    expect(here('fountain', 'EOSORIA')).toEqual(['lucia', 'merchant']);
+    expect(here('clinic', 'EOSORIA')).toEqual(['noah']);
+    // Scheduled here now: here, as before.
+    expect(here('fountain', 'SOLARION')).toEqual(['lucia', 'merchant', 'noah']);
+  });
+});
 
 describe('GEN-110 NPC lines: the server trims what the AI sends', () => {
   it('C7: a line of 300 characters is cut to 120 at a word boundary, never inside a Thai cluster', () => {

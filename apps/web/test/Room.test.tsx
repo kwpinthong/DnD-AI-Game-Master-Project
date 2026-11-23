@@ -493,13 +493,14 @@ describe('GEN-063 time system (web)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'พัก' }));
     expect(actionText().value).toBe('พัก นอนที่โรงเตี๊ยม');
     fireEvent.click(screen.getByRole('button', { name: 'ส่ง action' }));
-    expect(socket.sent.at(-1)).toEqual({ type: 'action', text: 'พัก นอนที่โรงเตี๊ยม', visibility: 'public', rest: true });
+    // GEN-137 (Q-301 B): the button only fills the word; the server reads REST from the text (GEN-113).
+    expect(socket.sent.at(-1)).toEqual({ type: 'action', text: 'พัก นอนที่โรงเตี๊ยม', visibility: 'public', rest: false });
     socket.receive({ type: 'action_accepted' });
     socket.receive(roomState({ phase: 'NOCTHERION' }, { action: { text: 'พัก นอนที่โรงเตี๊ยม', visibility: 'public', rest: true } }));
     expect(screen.getByText('ส่งแล้ว (เปิดเผย · พัก / นอน): พัก นอนที่โรงเตี๊ยม')).toBeTruthy();
   });
 
-  it('[พัก] alone is a whole action; a quick word only prefills and sends nothing by itself (GEN-122 C3)', async () => {
+  it('[พัก] like every quick word only fills the box and sends nothing by itself; sent, it carries no rest flag (GEN-122 C3, GEN-137 C3)', async () => {
     const socket = await enterRoom();
     socket.receive(roomState());
     const before = socket.sent.length;
@@ -508,8 +509,11 @@ describe('GEN-063 time system (web)', () => {
     expect(socket.sent.length).toBe(before);
     fireEvent.change(actionText(), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'พัก' }));
+    expect(actionText().value).toBe('พัก');
+    expect(socket.sent.length).toBe(before);
+    expect(screen.getByRole('button', { name: 'พัก' }).getAttribute('aria-pressed')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'ส่ง action' }));
-    expect(socket.sent.at(-1)).toEqual({ type: 'action', text: 'พัก', visibility: 'public', rest: true });
+    expect(socket.sent.at(-1)).toEqual({ type: 'action', text: 'พัก', visibility: 'public', rest: false });
   });
 });
 
@@ -520,7 +524,7 @@ describe('GEN-069 TRAIN at the guild (web)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'พัก' }));
     fireEvent.change(actionText(), { target: { value: 'ฝึกซ้อมที่ลานกิลด์' } });
     fireEvent.click(screen.getByRole('button', { name: 'ฝึก TRAIN' }));
-    expect(screen.getByRole('button', { name: 'พัก' }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: 'พัก' }).getAttribute('aria-pressed')).toBeNull();
     expect(screen.getByRole('button', { name: 'ฝึก TRAIN' }).getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(screen.getByRole('button', { name: 'ส่ง action' }));
     expect(socket.sent.at(-1)).toEqual({ type: 'action', text: 'ฝึกซ้อมที่ลานกิลด์', visibility: 'public', rest: false, train: true });
