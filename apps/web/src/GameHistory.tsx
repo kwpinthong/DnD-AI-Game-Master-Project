@@ -6,7 +6,7 @@ import { forgetToken, loadKnownTokens } from './session.ts';
 import { TurnChangesList } from './play/TurnChanges.tsx';
 import { Button } from './ui/Button.tsx';
 import { ErrorState, Skeleton } from './ui/parts.tsx';
-import { endText } from './ui/strings.ts';
+import { endText, gameClosedText } from './ui/strings.ts';
 
 /**
  * The game list (GEN-037 C3): every game this browser joined or created, newest first, and a read-only
@@ -18,6 +18,7 @@ type Loaded = { token: string; log: GameLogResponse } | { token: string; log: 'u
 function statusText(game: GameLogResponse['game']): string {
   if (game.status === 'lobby') return 'ยังไม่เริ่ม';
   if (game.status === 'playing') return `กำลังเล่น ${game.at ? at(game.at) : ''}`.trim();
+  if (game.endReason === 'closed') return gameClosedText.byOwner;
   return game.endReason === 'game_over' ? 'จบแล้ว (ทุกคนสลบ)' : 'จบแล้ว';
 }
 
@@ -141,6 +142,7 @@ export function GameLog({ log, onBack, apiBaseUrl, token }: { log: GameLogRespon
       {log.reveal && (
         <EndingReveal
           reveal={log.reveal}
+          {...(log.game.closedEarly ? { closed: { reason: log.game.closeReason ?? null } } : {})}
           rating={rating.state.state === 'ready' ? rating.state.rating : null}
           onVote={(ref, vote) => void rating.vote(ref, vote)}
           endingId={ids.ending}

@@ -131,9 +131,40 @@ export const libraryText = {
   votes: (up: number, down: number, players: number) => `👍 ${up} · 👎 ${down} · ผู้เล่น ${players}`,
   topVerbs: 'ทำบ่อย',
   secretShare: (share: number) => `ลงมือแบบลับ ${Math.round(share * 100)}%`,
-  adminNav: { usage: 'การใช้ AI', library: 'Learning library', data: 'ข้อมูลเกม', votes: 'ข้อความที่ถูก 👎', style: 'ทบทวนสำนวน' },
+  adminNav: { usage: 'การใช้ AI', games: 'เกม', library: 'Learning library', data: 'ข้อมูลเกม', votes: 'ข้อความที่ถูก 👎', style: 'ทบทวนสำนวน' },
   // GEN-084 (Q-322): the two tabs of the library page.
   tabs: { entries: 'ความรู้ที่เก็บไว้', npc: 'คลังบทพูดต่อ NPC' },
+} as const;
+
+// ISK-002: the admin page's เกม tab (every game + the early close).
+export const adminGamesText = {
+  title: 'รายการเกม',
+  loading: 'กำลังโหลดรายการเกม…',
+  empty: 'ยังไม่มีเกม',
+  head: { name: 'ชื่อ', status: 'สถานะ', day: 'วันในเกม', players: 'ผู้เล่น', last: 'เล่นล่าสุด', ai: 'ค่า AI' },
+  phase: { lobby: 'รอเริ่ม', setup: 'กำลังเตรียมตัว', playing: 'กำลังเล่น', ended: 'จบแล้ว', closed: 'ปิดโดยผู้ดูแล' },
+  day: (day: number) => `วันที่ ${day}`,
+  close: 'ปิดเกม',
+  closeLabel: (name: string) => `ปิดเกม ${name}`,
+  confirmTitle: (name: string) => `ปิดเกม ${name}?`,
+  withSummary: 'เกมจะจบทันทีโดยไม่มีฉากจบจาก AI ผู้เล่นทุกคนเห็นป้าย "เกมถูกปิดโดยผู้ดูแล" และยังดูหน้าสรุปได้ตามปกติ',
+  noSummary: 'เกมยังไม่ได้เล่น จึงไม่มีหน้าสรุป ผู้เล่นทุกคนเห็นป้าย "เกมถูกปิดโดยผู้ดูแล" แล้วกลับหน้าแรก',
+  undo: 'ปิดแล้วเปิดกลับไม่ได้',
+  typeName: 'พิมพ์ชื่อเกมเพื่อยืนยัน',
+  reason: 'เหตุผล (ไม่บังคับ)',
+  confirm: 'ยืนยันปิดเกม',
+  sending: 'กำลังปิดเกม…',
+  cancel: 'ยกเลิก',
+} as const;
+
+// ISK-002: what a player sees when the server owner closed the game.
+export const gameClosedText = {
+  title: 'เกมถูกปิดโดยผู้ดูแล',
+  reason: (reason: string) => `เหตุผล: ${reason}`,
+  toSummary: 'ไปหน้าสรุป',
+  home: 'กลับหน้าแรก',
+  closedEarly: 'ปิดก่อนกำหนด',
+  byOwner: 'ปิดโดยผู้ดูแล',
 } as const;
 
 // GEN-151: the NPC example library (on the Learning library page, Q-322).

@@ -18,7 +18,9 @@ class FakeSocket {
   onopen: (() => void) | null = null;
   onmessage: ((event: { data: string }) => void) | null = null;
   onclose: ((event: { code: number }) => void) | null = null;
-  constructor(readonly url: string) {
+  readonly url: string;
+  constructor(url: string) {
+    this.url = url;
     FakeSocket.all.push(this);
   }
   send(data: string) {

@@ -1,5 +1,6 @@
 import { PHASE_LABEL, actionTextProblem, type RoomEntry, type RoomState } from '@isekai/protocol';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { GameClosure } from './GameClosed.tsx';
 import { GameSummaryPage } from './GameHistory.tsx';
 import { GmConsole } from './GmConsole.tsx';
 import { GmNarrating } from './play/GmNarrating.tsx';
@@ -43,6 +44,7 @@ export function PlayRoom({
   onGameList,
   onNeedCharacter,
   onSessionLost,
+  onClosed,
 }: {
   apiBaseUrl: string;
   token: string;
@@ -52,6 +54,8 @@ export function PlayRoom({
   /** The server says this player has no character yet (C2). */
   onNeedCharacter: () => void;
   onSessionLost: () => void;
+  /** ISK-002: the server owner closed the game (the lobby shows the modal). */
+  onClosed?: (closed: GameClosure) => void;
 }) {
   const [connection, setConnection] = useState<RoomConnectionStatus>('connecting');
   const [room, setRoom] = useState<RoomState>();
@@ -115,6 +119,7 @@ export function PlayRoom({
         } else setMoveProblem(reply.message);
       },
       omenReply: (reply) => setOmenProblem(reply.ok ? undefined : reply.message),
+      gameClosed: (closed) => onClosed?.(closed),
       fatal: (code, message) => {
         if (code === 'no_character') onNeedCharacter();
         else if (code === 'unauthorized') onSessionLost();

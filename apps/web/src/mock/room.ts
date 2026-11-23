@@ -155,6 +155,11 @@ export class MockRoomServer {
     this.addEntry({ kind: 'feed', place: this.state.you.place, text: 'ระหว่างที่คุณหลุด: ทหารยามเดินผ่านน้ำพุไปทางโบสถ์' });
   }
 
+  /** ISK-002: the server owner closes the game (the fixture with a reason and an end page). */
+  closeGame(): void {
+    for (const peer of this.peers) peer.deliver(clone(F.GameClosedEvent[0]));
+  }
+
   stop(): void {
     for (const t of this.timers) clearTimeout(t);
     this.timers.clear();

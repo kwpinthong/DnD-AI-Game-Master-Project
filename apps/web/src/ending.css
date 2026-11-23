@@ -53,6 +53,23 @@
   scroll-margin-top: var(--space-7);
 }
 
+/* ISK-002: a game the server owner closed early: a badge and the reason in place of the ending. */
+.end-closed {
+  justify-self: center;
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border: var(--line-w) solid var(--highlight);
+  border-radius: var(--radius-pill);
+  color: var(--highlight);
+  font-weight: 600;
+}
+
+.end-scene__reason {
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
 .end-scene__title {
   color: var(--muted);
   font-size: var(--text-sm);

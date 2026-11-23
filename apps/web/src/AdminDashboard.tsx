@@ -2,6 +2,7 @@ import type { AiUsageGameResponse, AiUsageOverviewResponse, GmRefusal, UsageCeil
 import { PHASES as PERIODS } from '@isekai/protocol';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { fetchGameUsage, fetchUsageOverview, postAdminLogout, postAdminSession } from './admin-api.ts';
+import { AdminGames } from './AdminGames.tsx';
 import { GameDataEditor } from './GameDataEditor.tsx';
 import { LearningLibrary } from './LearningLibrary.tsx';
 import { NpcLibrary } from './NpcLibrary.tsx';
@@ -89,7 +90,7 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
     return token ? { state: 'dashboard', token } : { state: 'login' };
   });
 
-  const [page, setPage] = useState<'usage' | 'library' | 'data' | 'votes' | 'style'>('usage');
+  const [page, setPage] = useState<'usage' | 'games' | 'library' | 'data' | 'votes' | 'style'>('usage');
   const [libraryTab, setLibraryTab] = useState<'entries' | 'npc'>('entries');
 
   function signedIn(token: string) {
@@ -111,7 +112,7 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
         <>
           {/* GEN-091: both pages sit behind the same admin code (Q-168). */}
           <nav className="admin__nav" aria-label="ผู้ดูแล">
-            {(['usage', 'library', 'data', 'votes', 'style'] as const).map((p) => (
+            {(['usage', 'games', 'library', 'data', 'votes', 'style'] as const).map((p) => (
               <button key={p} type="button" aria-pressed={page === p} onClick={() => setPage(p)}>
                 {libraryText.adminNav[p]}
               </button>
@@ -127,6 +128,11 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
                 signedOut();
               }}
             />
+          ) : page === 'games' ? (
+            <section aria-label={libraryText.adminNav.games}>
+              <h2>{libraryText.adminNav.games}</h2>
+              <AdminGames apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
+            </section>
           ) : page === 'library' ? (
             <section aria-label={libraryText.title}>
               <h2>{libraryText.title}</h2>

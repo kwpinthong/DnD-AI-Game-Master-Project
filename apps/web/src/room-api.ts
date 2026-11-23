@@ -27,6 +27,8 @@ export interface RoomListener {
   moveReply?(reply: { ok: true; place: PlaceView; arrives: 'now' | 'next_turn' } | { ok: false; message: string }): void;
   /** The server answered the last omen of an Astral Spirit (GEN-070). */
   omenReply?(reply: { ok: true } | { ok: false; message: string }): void;
+  /** ISK-001: the server owner closed the game. */
+  gameClosed?(closed: { reason: string | null; hasSummary: boolean }): void;
 }
 
 export interface RoomConnection {
@@ -95,6 +97,10 @@ export function connectRoom(baseUrl: string, token: string, listener: RoomListen
           return listener.omenReply?.({ ok: true });
         case 'omen_rejected':
           return listener.omenReply?.({ ok: false, message: message.message });
+        case 'game_closed':
+          // ISK-001: nothing changes in the game any more; the server may end the socket (4010), so no reconnect.
+          stopped = true;
+          return listener.gameClosed?.({ reason: message.reason, hasSummary: message.hasSummary });
         case 'error':
           stopped = true;
           listener.status('closed');

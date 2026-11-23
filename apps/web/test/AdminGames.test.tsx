@@ -85,7 +85,7 @@ describe('C1 the game list', () => {
     expect(rowOf('เตรียมตัว').textContent).toContain('กำลังเตรียมตัว');
     expect(rowOf('ทดสอบ').textContent).toContain('กำลังเล่น');
     expect(rowOf('จบไปแล้ว').textContent).toContain('จบแล้ว');
-    expect(within(rowOf('ห้องรอ')).getByText('-')).toBeTruthy();
+    expect(rowOf('ห้องรอ').querySelector('[data-label="วันในเกม"]')!.textContent).toBe('-');
     expect(rowOf('ทดสอบ').textContent).toContain('วันที่ 4');
     expect(rowOf('ทดสอบ').textContent).toContain('$0.42');
     for (const name of ['ห้องรอ', 'เตรียมตัว', 'ทดสอบ']) expect(screen.getByRole('button', { name: `ปิดเกม ${name}` })).toBeTruthy();
@@ -104,7 +104,8 @@ describe('C1 the game list', () => {
     const calls = server({ list: [() => Promise.reject(new TypeError('Failed to fetch')), () => Response.json({ games: FOUR })] });
     openTab();
     const alert = await screen.findByRole('alert');
-    fireEvent.click(within(alert).getByRole('button', { name: 'ลองใหม่' }));
+    // the house ErrorState's retry (uiText.error.retry)
+    fireEvent.click(within(alert).getByRole('button', { name: 'ลองอีกครั้ง' }));
     expect(await table()).toBeTruthy();
     expect(calls.filter((c) => c.path === '/api/admin/games')).toHaveLength(2);
   });

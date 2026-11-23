@@ -16,7 +16,7 @@ import { learningStatus, ratingApi, type RatingResult } from './rating-api.ts';
 import { Button } from './ui/Button.tsx';
 import { ErrorState, Skeleton } from './ui/parts.tsx';
 import { VoteButtons } from './ui/VoteButtons.tsx';
-import { endText } from './ui/strings.ts';
+import { endText, gameClosedText } from './ui/strings.ts';
 import './ending.css';
 
 /**
@@ -186,8 +186,11 @@ export function EndingReveal({
   endingId,
   fatesId,
   secretsId,
+  closed,
 }: {
   reveal: GameReveal;
+  /** ISK-002: the server owner closed the game early (GameLogResponse.game.closedEarly). */
+  closed?: { reason: string | null };
   /** null = the rating is not loaded (or failed): no 👍/👎 buttons. */
   rating: GameRatingView | null;
   onVote: (sourceRef: string, vote: EntryVote | null) => void;
@@ -199,10 +202,18 @@ export function EndingReveal({
   const players = reveal.players.filter((p) => only === '' || p.memberId === only);
   return (
     <section aria-label="ความลับของทุกคน" className="end-reveal">
-      <div className="end-scene" id={endingId}>
-        <h3 className="end-scene__title">{endText.ending}</h3>
-        <p className="end-scene__path">{reveal.path === null ? 'ไม่มีบันทึกตอนจบ' : PATH_TEXT[reveal.path]}</p>
-      </div>
+      {closed ? (
+        // ISK-002: closed by the server owner, so there is no ending to tell: the badge and the reason instead.
+        <div className="end-scene end-scene--closed" id={endingId}>
+          <p className="end-closed">{gameClosedText.closedEarly}</p>
+          {closed.reason && <p className="end-scene__reason">{gameClosedText.reason(closed.reason)}</p>}
+        </div>
+      ) : (
+        <div className="end-scene" id={endingId}>
+          <h3 className="end-scene__title">{endText.ending}</h3>
+          <p className="end-scene__path">{reveal.path === null ? 'ไม่มีบันทึกตอนจบ' : PATH_TEXT[reveal.path]}</p>
+        </div>
+      )}
       <div className="end-fates" id={fatesId}>
         <div className="end-fates__head">
           <h3>{endText.fates}</h3>

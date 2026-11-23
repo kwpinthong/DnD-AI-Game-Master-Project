@@ -98,6 +98,13 @@
   zoom: 0.82;
 }
 
+/* A frame whose page may open a fixed modal (ISK-002): the modal stays inside the frame. */
+.gallery-inline {
+  position: relative;
+  contain: layout;
+  min-height: 540px;
+}
+
 /* the theme's gold corners (.panel--ornament), on the plate so they stay put while the screen scrolls */
 .gallery-frame__plate::before,
 .gallery-frame__plate::after {
