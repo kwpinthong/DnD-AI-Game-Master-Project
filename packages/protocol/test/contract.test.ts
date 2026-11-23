@@ -44,6 +44,8 @@ const V2_SCREENS = [
   'learning-library',
   'ai-usage',
   'my-style',
+  // GEN-147: the server owner's game data editor (after v2).
+  'game-data',
 ];
 
 const schemaNames = Object.keys(CONTRACT_SCHEMAS) as (keyof typeof CONTRACT_SCHEMAS)[];

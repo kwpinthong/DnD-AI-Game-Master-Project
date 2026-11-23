@@ -73,6 +73,54 @@ export const AiUsageOverviewResponse = z.strictObject({
 });
 export type AiUsageOverviewResponse = z.infer<typeof AiUsageOverviewResponse>;
 
+/**
+ * GEN-147: the game data editor (server owner only). A data set is one JSON array (NPC, NPC_Schedule, Location,
+ * Item, Ability, Start_Scenarios, System_Rules, World_Timeline, Day10_Strategies, Server_Lines); the server checks
+ * a save with the same schemas as the asset loader. `value` is that array as JSON.
+ */
+export const GameDataSetSummary = z.strictObject({
+  name: z.string(),
+  /** The asset file it was seeded from and an export writes it to. */
+  file: z.string(),
+  records: z.number().int(),
+  updatedAt: z.string(),
+  /** There is an edit an undo can take back. */
+  canUndo: z.boolean(),
+});
+export type GameDataSetSummary = z.infer<typeof GameDataSetSummary>;
+
+/** 200 from GET /api/admin/game-data. */
+export const GameDataListResponse = z.strictObject({ sets: z.array(GameDataSetSummary) });
+export type GameDataListResponse = z.infer<typeof GameDataListResponse>;
+
+/** 200 from GET / PUT /api/admin/game-data/:name and POST /api/admin/game-data/:name/undo. */
+export const GameDataSetResponse = z.strictObject({ set: GameDataSetSummary, value: z.unknown() });
+export type GameDataSetResponse = z.infer<typeof GameDataSetResponse>;
+
+/** Body of PUT /api/admin/game-data/:name: the whole data set. A schema miss = 400 invalid_input with `fields`. */
+export const GameDataSaveRequest = z.object({ value: z.unknown() });
+export type GameDataSaveRequest = z.infer<typeof GameDataSaveRequest>;
+
+export const GameDataAuditEntry = z.strictObject({
+  id: z.number().int(),
+  name: z.string(),
+  action: z.enum(['edit', 'undo']),
+  at: z.string(),
+  /** File in the data folder's backups/game-data holding the value before this change. */
+  backupFile: z.string(),
+  /** Records that differ, by position; `null` = no record there on that side. */
+  changes: z.array(z.strictObject({ index: z.number().int(), old: z.unknown(), new: z.unknown() })),
+});
+export type GameDataAuditEntry = z.infer<typeof GameDataAuditEntry>;
+
+/** 200 from GET /api/admin/game-data-audit: newest first. */
+export const GameDataAuditResponse = z.strictObject({ entries: z.array(GameDataAuditEntry) });
+export type GameDataAuditResponse = z.infer<typeof GameDataAuditResponse>;
+
+/** 200 from GET /api/admin/game-data-export: file name → JSON, the asset loader reads a folder of these. */
+export const GameDataExportResponse = z.strictObject({ exportedAt: z.string(), files: z.record(z.string(), z.unknown()) });
+export type GameDataExportResponse = z.infer<typeof GameDataExportResponse>;
+
 /** 200 from GET /api/admin/ai-usage/:gameId. */
 export const AiUsageGameResponse = z.strictObject({
   generatedAt: z.string(),

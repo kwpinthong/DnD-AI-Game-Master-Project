@@ -19,6 +19,49 @@
   white-space: nowrap;
 }
 
+/* GEN-147: the game data editor tab. */
+.gdata {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.gdata button,
+.gdata summary {
+  min-height: 44px;
+}
+
+.gdata__sets,
+.gdata__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.gdata__editor textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: var(--space-2);
+  font-family: monospace;
+  font-size: var(--text-sm);
+  background: var(--panel);
+  color: var(--text);
+  border: var(--line-w) solid var(--line-input);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+}
+
+.gdata__problem {
+  color: var(--danger);
+}
+
+.gdata__audit pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--text-xs);
+}
+
 .lib {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

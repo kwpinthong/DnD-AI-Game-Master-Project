@@ -156,7 +156,6 @@ class TurnRng implements Rng {
 
 export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
   const { db, ai, assets, now, log } = deps;
-  const vocabulary = tagVocabulary(assets);
   /**
    * GEN-157: the summaries still being written per game (they run in the background after the turn is published).
    * The rule: the next adjudicate waits for `day` (its `memory.yesterday`), the next narrations for `journals`;
@@ -303,7 +302,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         world,
         state,
         tags,
-        vocabulary,
+        // Per turn: an admin edit of the game data (GEN-147) reaches the next turn.
+        vocabulary: tagVocabulary(assets),
         drowsy,
         at,
         actions: order,

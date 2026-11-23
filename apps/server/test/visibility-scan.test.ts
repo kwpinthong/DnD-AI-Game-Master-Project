@@ -64,6 +64,13 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/admin/ai-usage': { method: 'GET', path: '/api/admin/ai-usage' },
     'GET /api/admin/ai-usage/:gameId': { method: 'GET', path: '/api/admin/ai-usage/any-game' },
     'POST /api/admin/logout': { method: 'POST', path: '/api/admin/logout' },
+    // GEN-147: the game data editor; a player's session is 403 (checked below).
+    'GET /api/admin/game-data': { method: 'GET', path: '/api/admin/game-data' },
+    'GET /api/admin/game-data/:name': { method: 'GET', path: '/api/admin/game-data/NPC' },
+    'PUT /api/admin/game-data/:name': { method: 'PUT', path: '/api/admin/game-data/NPC', body: { value: [] } },
+    'POST /api/admin/game-data/:name/undo': { method: 'POST', path: '/api/admin/game-data/NPC/undo' },
+    'GET /api/admin/game-data-audit': { method: 'GET', path: '/api/admin/game-data-audit' },
+    'GET /api/admin/game-data-export': { method: 'GET', path: '/api/admin/game-data-export' },
     // GEN-055: the player's own skills, held items and library discoveries (no condition or progress).
     'GET /api/game/inventory': { method: 'GET', path: '/api/game/inventory' },
     // GEN-058: the Human GM console. Players get 403 (scanned for karma like every other answer).
@@ -93,7 +100,16 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
 }
 
 /** GEN-061 (Q-058): only the server owner's admin token opens these; every player gets 403. */
-const ADMIN_DATA_ROUTES = ['GET /api/admin/ai-usage', 'GET /api/admin/ai-usage/:gameId'];
+const ADMIN_DATA_ROUTES = [
+  'GET /api/admin/ai-usage',
+  'GET /api/admin/ai-usage/:gameId',
+  'GET /api/admin/game-data',
+  'GET /api/admin/game-data/:name',
+  'PUT /api/admin/game-data/:name',
+  'POST /api/admin/game-data/:name/undo',
+  'GET /api/admin/game-data-audit',
+  'GET /api/admin/game-data-export',
+];
 
 /** The join name the fixture gave each seat (A is "นก" in both table kinds). */
 function playerNameOf(t: Table, me: Seat): string {

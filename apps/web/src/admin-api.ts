@@ -1,4 +1,14 @@
-import { AdminSessionResponse, AiUsageGameResponse, AiUsageOverviewResponse, ApiError, LearningLibraryResponse } from '@isekai/protocol';
+import {
+  AdminSessionResponse,
+  AiUsageGameResponse,
+  AiUsageOverviewResponse,
+  ApiError,
+  GameDataAuditResponse,
+  GameDataExportResponse,
+  GameDataListResponse,
+  GameDataSetResponse,
+  LearningLibraryResponse,
+} from '@isekai/protocol';
 import { apiUrl, fetchWithTimeout } from './session.ts';
 
 const UNREACHABLE = 'ติดต่อ server ไม่ได้ ลองใหม่อีกครั้ง';
@@ -7,7 +17,8 @@ export type AdminResult<T> =
   | { kind: 'ok'; data: T }
   /** 403: not (or no longer) the server owner's admin token. */
   | { kind: 'forbidden'; message: string }
-  | { kind: 'error'; message: string };
+  /** `fields`: 400 invalid_input's field → problem (GEN-147 game data schema misses). */
+  | { kind: 'error'; message: string; fields?: Record<string, string> };
 
 async function call<T>(baseUrl: string, path: string, init: RequestInit, schema: { safeParse(v: unknown): { success: true; data: T } | { success: false } }): Promise<AdminResult<T>> {
   let res: Response;
@@ -24,7 +35,40 @@ async function call<T>(baseUrl: string, path: string, init: RequestInit, schema:
   }
   const error = ApiError.safeParse(json);
   const message = error.success ? error.data.message : UNREACHABLE;
-  return res.status === 403 && error.success && error.data.code === 'forbidden' ? { kind: 'forbidden', message } : { kind: 'error', message };
+  if (res.status === 403 && error.success && error.data.code === 'forbidden') return { kind: 'forbidden', message };
+  return error.success && error.data.code === 'invalid_input' ? { kind: 'error', message, fields: error.data.fields } : { kind: 'error', message };
+}
+
+const auth = (token: string) => ({ authorization: `Bearer ${token}` });
+
+/** GEN-147: the game data editor (server owner only). */
+export function fetchGameDataList(baseUrl: string, token: string) {
+  return call(baseUrl, '/api/admin/game-data', { headers: auth(token) }, GameDataListResponse);
+}
+
+export function fetchGameDataSet(baseUrl: string, token: string, name: string) {
+  return call(baseUrl, `/api/admin/game-data/${encodeURIComponent(name)}`, { headers: auth(token) }, GameDataSetResponse);
+}
+
+export function saveGameDataSet(baseUrl: string, token: string, name: string, value: unknown) {
+  return call(
+    baseUrl,
+    `/api/admin/game-data/${encodeURIComponent(name)}`,
+    { method: 'PUT', headers: { ...auth(token), 'content-type': 'application/json' }, body: JSON.stringify({ value }) },
+    GameDataSetResponse,
+  );
+}
+
+export function undoGameDataSet(baseUrl: string, token: string, name: string) {
+  return call(baseUrl, `/api/admin/game-data/${encodeURIComponent(name)}/undo`, { method: 'POST', headers: auth(token) }, GameDataSetResponse);
+}
+
+export function fetchGameDataAudit(baseUrl: string, token: string) {
+  return call(baseUrl, '/api/admin/game-data-audit', { headers: auth(token) }, GameDataAuditResponse);
+}
+
+export function fetchGameDataExport(baseUrl: string, token: string) {
+  return call(baseUrl, '/api/admin/game-data-export', { headers: auth(token) }, GameDataExportResponse);
 }
 
 /** Exchanges the admin code for a short-lived admin token (the code is not kept anywhere). */

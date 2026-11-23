@@ -8,6 +8,8 @@ import { clientIp, maskIp } from '../auth/client-ip.ts';
 import { CREATE_CODE_LIMIT, createKeyedCodeChecker } from '../game/create-code.ts';
 import { createAdminSessions } from './session.ts';
 import { gameUsageReport, overviewUsageReport } from './usage-report.ts';
+import type { GameDataStore } from '../assets/game-data.ts';
+import { registerGameDataRoutes } from './game-data-routes.ts';
 
 export interface AdminRouteOptions {
   /** scrypt hash of the server owner's admin code (ADMIN_CODE_HASH); without it the dashboard is closed. */
@@ -16,6 +18,8 @@ export interface AdminRouteOptions {
   ai: AiConfig;
   /** Server log; gets one line when an IP is locked out (masked IP, never the code). */
   log?: (line: string) => void;
+  /** GEN-147: the game data the editor reads and saves. */
+  gameData: GameDataStore;
 }
 
 const FORBIDDEN = 'หน้านี้สำหรับเจ้าของ server เท่านั้น';
@@ -76,6 +80,8 @@ export function registerAdminRoutes(app: FastifyInstance, db: Db, now: Clock, op
     if (refuse(request, reply)) return reply;
     return reply.header('cache-control', 'no-store').send(overviewUsageReport(db, options.ai, now()));
   });
+
+  registerGameDataRoutes(app, options.gameData, refuse, now);
 
   app.get<{ Params: { gameId: string } }>('/api/admin/ai-usage/:gameId', async (request, reply) => {
     if (refuse(request, reply)) return reply;

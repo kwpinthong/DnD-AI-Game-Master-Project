@@ -1,14 +1,15 @@
 /**
- * Game data the server uses (GEN-062): read from the JSON files in apps/server/assets at start,
- * never from Google while running. A file that is missing, not JSON or off-schema stops start-up
- * with an AssetLoadError naming the file and the field.
+ * Game data the server uses (GEN-062): one JSON array per data set, checked against its schema. The JSON files
+ * in apps/server/assets are the first-time seed of the DB (GEN-147, see game-data.ts); after that the DB is
+ * the source and this builder checks every edit too. A file that is missing, not JSON or off-schema stops
+ * start-up with an AssetLoadError naming the file and the field.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   aliasMatches,
-  OPTIONAL_TABS,
+  ALL_TABS,
   REQUIRED_TABS,
   TAB_FILES,
   TAB_SCHEMAS,
@@ -31,10 +32,20 @@ import { SERVER_LINES_FILE, ServerLines, type ServerLineRecord } from './server-
 
 export const DEFAULT_ASSETS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets');
 
+/** Every data set: the sheet tabs + GEN-150's server-line templates. The DB keys its rows by these names. */
+export const DATA_SETS = [...ALL_TABS, 'Server_Lines'] as const;
+export type DataSetName = (typeof DATA_SETS)[number];
+export const DATA_SET_FILES: Readonly<Record<DataSetName, string>> = { ...TAB_FILES, Server_Lines: SERVER_LINES_FILE };
+/** Data set → its JSON value as stored (before the schema's defaults); a missing optional set is absent. */
+export type RawDataSets = Partial<Record<DataSetName, unknown>>;
+
 export class AssetLoadError extends Error {
-  constructor(message: string) {
+  /** Field path → its first problem ("[1].periods[0]" → "Invalid option ..."), for the admin editor (GEN-147). */
+  readonly fields: Readonly<Record<string, string>>;
+  constructor(message: string, fields: Record<string, string> = {}) {
     super(message);
     this.name = 'AssetLoadError';
+    this.fields = fields;
   }
 }
 
@@ -66,72 +77,87 @@ function fieldPath(path: readonly PropertyKey[]): string {
   return path.map((p) => (typeof p === 'number' ? `[${p}]` : `.${String(p)}`)).join('').replace(/^\./, '');
 }
 
-function readJson<S extends z.ZodType>(file: string, schema: S, label: string): z.infer<S> {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(readFileSync(file, 'utf8'));
-  } catch (error) {
-    throw new AssetLoadError(`asset file ${file} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  const parsed = schema.safeParse(raw);
+const SCHEMAS: Readonly<Record<DataSetName, z.ZodType>> = { ...TAB_SCHEMAS, Server_Lines: ServerLines };
+
+/** `where`: how an error names the source ("asset file /…/npc.json", "game data set NPC"). */
+function parseSet<T extends DataSetName>(raw: unknown, set: T, where: string): unknown {
+  const parsed = SCHEMAS[set].safeParse(raw);
   if (!parsed.success) {
-    const fields = parsed.error.issues.slice(0, 5).map((i) => `field ${fieldPath(i.path) || '(root)'}: ${i.message}`);
-    throw new AssetLoadError(`asset file ${file} does not match the ${label} schema: ${fields.join('; ')}`);
+    const fields: Record<string, string> = {};
+    for (const issue of parsed.error.issues.slice(0, 20)) fields[fieldPath(issue.path) || '(root)'] ??= issue.message;
+    const shown = Object.entries(fields).slice(0, 5).map(([field, message]) => `field ${field}: ${message}`);
+    throw new AssetLoadError(`${where} does not match the ${set === 'Server_Lines' ? 'server lines' : set} schema: ${shown.join('; ')}`, fields);
   }
   return parsed.data;
 }
 
-function readTab<T extends TabName>(dir: string, tab: T): TabRecords[T] | undefined {
-  const file = join(dir, TAB_FILES[tab]);
-  if (!existsSync(file)) {
-    if ((REQUIRED_TABS as readonly string[]).includes(tab)) {
-      throw new AssetLoadError(`asset file ${file} is missing (run "pnpm assets:import")`);
+/** The JSON of every data set file in `dir`; a missing required file (or server-lines.json) stops here. */
+export function readRawDataSets(dir: string = DEFAULT_ASSETS_DIR): RawDataSets {
+  const raw: RawDataSets = {};
+  for (const set of DATA_SETS) {
+    const file = join(dir, DATA_SET_FILES[set]);
+    if (!existsSync(file)) {
+      // GEN-150: server-lines.json is hand-written, not imported from the sheet, so it gets no import hint.
+      if (set === 'Server_Lines') throw new AssetLoadError(`asset file ${file} is missing`);
+      if ((REQUIRED_TABS as readonly string[]).includes(set)) throw new AssetLoadError(`asset file ${file} is missing (run "pnpm assets:import")`);
+      continue;
     }
-    return undefined;
+    try {
+      raw[set] = JSON.parse(readFileSync(file, 'utf8'));
+    } catch (error) {
+      throw new AssetLoadError(`asset file ${file} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
-  return readJson(file, TAB_SCHEMAS[tab], tab) as TabRecords[T];
+  return raw;
 }
 
-/** GEN-150: hand-written, not imported from the sheet, so a missing file is an error with no import hint. */
-function readServerLines(dir: string): ServerLineRecord[] {
-  const file = join(dir, SERVER_LINES_FILE);
-  if (!existsSync(file)) throw new AssetLoadError(`asset file ${file} is missing`);
-  return readJson(file, ServerLines, 'server lines');
-}
-
-export function loadGameAssets(dir: string = DEFAULT_ASSETS_DIR): GameAssets {
-  const abilities = readTab(dir, 'Ability')!;
-  const items = readTab(dir, 'Item')!;
-  const npcs = readTab(dir, 'NPC')!;
-  const locations = readTab(dir, 'Location')!;
-  const optional = Object.fromEntries(OPTIONAL_TABS.map((tab) => [tab, readTab(dir, tab)])) as {
-    NPC_Schedule?: NpcScheduleRecord[];
-    Day10_Strategies?: Day10StrategyRecord[];
+/** Checks every data set and builds the lookups. `where(set)` names the source in an error. */
+export function buildGameAssets(raw: RawDataSets, where: (set: DataSetName) => string = (set) => `game data set ${set}`): GameAssets {
+  const tab = <T extends TabName>(set: T): TabRecords[T] | undefined => {
+    if (raw[set] === undefined) {
+      if ((REQUIRED_TABS as readonly string[]).includes(set)) throw new AssetLoadError(`${where(set)} is missing`, { '(root)': 'ไม่มีข้อมูล' });
+      return undefined;
+    }
+    return parseSet(raw[set], set, where(set)) as TabRecords[T];
   };
+  const abilities = tab('Ability')!;
+  const items = tab('Item')!;
+  const npcs = tab('NPC')!;
+  const locations = tab('Location')!;
+  const npcSchedule = tab('NPC_Schedule');
+  const day10Strategies = tab('Day10_Strategies');
 
-  const systemRules = readTab(dir, 'System_Rules')!;
+  const systemRules = tab('System_Rules')!;
   const karma = karmaTiersFrom(systemRules);
   if (!karma.ok) {
-    throw new AssetLoadError(
-      `asset file ${join(dir, TAB_FILES.System_Rules)} has unusable "${KARMA_TIERS_CATEGORY}" rows (field mechanics): ${karma.problems.join('; ')}`,
-    );
+    throw new AssetLoadError(`${where('System_Rules')} has unusable "${KARMA_TIERS_CATEGORY}" rows (field mechanics): ${karma.problems.join('; ')}`, {
+      mechanics: karma.problems.join('; '),
+    });
   }
+  if (raw.Server_Lines === undefined) throw new AssetLoadError(`${where('Server_Lines')} is missing`, { '(root)': 'ไม่มีข้อมูล' });
+  const serverLines = parseSet(raw.Server_Lines, 'Server_Lines', where('Server_Lines')) as ServerLineRecord[];
 
   return {
     abilities,
     items,
     npcs,
     locations,
-    startScenarios: readTab(dir, 'Start_Scenarios')!,
+    startScenarios: tab('Start_Scenarios')!,
     systemRules,
     karmaTiers: karma.tiers,
-    serverLines: readServerLines(dir),
-    worldTimeline: readTab(dir, 'World_Timeline')!,
-    ...(optional.NPC_Schedule ? { npcSchedule: optional.NPC_Schedule } : {}),
-    ...(optional.Day10_Strategies ? { day10Strategies: optional.Day10_Strategies } : {}),
+    serverLines,
+    worldTimeline: tab('World_Timeline')!,
+    ...(npcSchedule ? { npcSchedule } : {}),
+    ...(day10Strategies ? { day10Strategies } : {}),
     ability: (name) => abilities.find((a) => a.name === name),
     item: (name) => items.find((i) => i.name === name || i.nameEn === name),
     npc: (name) => npcs.find((n) => n.name === name || n.aliases.some((alias) => aliasMatches(alias, name))),
     location: (name) => locations.find((l) => l.name === name),
   };
+}
+
+export const assetFileLabel = (dir: string) => (set: DataSetName) => `asset file ${join(dir, DATA_SET_FILES[set])}`;
+
+export function loadGameAssets(dir: string = DEFAULT_ASSETS_DIR): GameAssets {
+  return buildGameAssets(readRawDataSets(dir), assetFileLabel(dir));
 }
