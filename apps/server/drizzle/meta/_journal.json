@@ -323,6 +323,13 @@
       "when": 1795424431503,
       "tag": "0045_dialogue_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "6",
+      "when": 1795425017367,
+      "tag": "0049_npc_chat",
+      "breakpoints": true
     }
   ]
 }

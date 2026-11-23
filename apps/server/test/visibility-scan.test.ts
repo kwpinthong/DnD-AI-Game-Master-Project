@@ -59,6 +59,9 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/game/companions': { method: 'GET', path: '/api/game/companions' },
     'POST /api/game/companions': { method: 'POST', path: '/api/game/companions', body: { ref: merchantRef ?? 'none' } },
     'DELETE /api/game/companions/:ref': { method: 'DELETE', path: '/api/game/companions/not-a-companion' },
+    // GEN-149: chat with the NPC at the market (outside the turn) and the quota of the period.
+    'GET /api/game/npc-chat': { method: 'GET', path: '/api/game/npc-chat' },
+    'POST /api/game/npc-chat': { method: 'POST', path: '/api/game/npc-chat', body: { npc: merchantRef ?? 'none', text: 'สวัสดี วันนี้ขายอะไร' } },
     // GEN-061: the server owner's AI usage dashboard; a player's session is 403 (checked below).
     'POST /api/admin/session': { method: 'POST', path: '/api/admin/session', body: { code: 'เดาเอา' } },
     'GET /api/admin/ai-usage': { method: 'GET', path: '/api/admin/ai-usage' },

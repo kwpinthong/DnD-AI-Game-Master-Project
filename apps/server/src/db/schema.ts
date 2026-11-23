@@ -175,3 +175,5 @@ export * from './schema-game-data.ts';
 export * from './schema-style-review.ts';
 // GEN-167: the Thai style eval rounds, own file for the same reason.
 export * from './schema-style-eval.ts';
+// GEN-149: chat with an NPC outside the turn, own file for the same reason.
+export * from './schema-npc-chat.ts';

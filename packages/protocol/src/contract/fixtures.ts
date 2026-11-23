@@ -733,4 +733,10 @@ export const CONTRACT_FIXTURES: Fixtures = {
     },
   ],
   StyleProposalApproveRequest: [{}, { content: { bad: 'เขามีความสุข', good: 'เขาสุขใจ' } }],
+  NpcChatRequest: [{ npc: 'r-merchant', text: 'วันนี้ตลาดคึกคักไหม' }, { npc: 'r-merchant', text: 'ขอดาบเล่มนั้นได้ไหม', whisper: true }],
+  NpcChatStatus: [{ perPeriod: 5, left: 3 }, { perPeriod: 5, left: 0 }],
+  NpcChatResponse: [
+    { reply: 'คึกคักสิ พ่อค้าจากแดนเหนือเพิ่งมาถึง', suggestion: null, status: { perPeriod: 5, left: 4 } },
+    { reply: 'ของดีแบบนี้ไม่ได้ให้กันง่ายๆ หรอกนะ', suggestion: 'ลองต่อรองซื้อดาบเป็น action ของเทิร์นนี้', status: { perPeriod: 5, left: 0 } },
+  ],
 };
