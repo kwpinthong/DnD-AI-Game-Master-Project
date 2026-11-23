@@ -3,7 +3,7 @@ import { expect } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
 import { startServer, type RunningServer, type ServerOptions } from '../src/server.ts';
-import { seedChosenLoot } from './helpers.ts';
+import { seedChosenLoot, withLooks } from './helpers.ts';
 
 export const CREATE_CODE = 'ลับเฉพาะ-2026';
 export const CLOCK = Date.UTC(2026, 10, 22, 12, 0, 0);
@@ -16,9 +16,10 @@ export interface Seat {
   personality: string;
 }
 
-export const LIN = { name: 'ลิน', appearance: 'หญิงผ้าคลุมเทา แผลเป็นที่คาง', personality: 'ช่างสังเกต พูดน้อย' };
-export const DARIN = { name: 'ดาริน', appearance: 'ชายร่างสูงสวมเกราะหนังเก่า', personality: 'ใจร้อน รักพวกพ้อง' };
-export const MEKHA = { name: 'เมฆา', appearance: 'เด็กหนุ่มผมขาวถือไม้เท้า', personality: 'ขี้สงสัย ชอบเดินป่า' };
+// ISK-006: chips + avatar; `appearance` is the sentence the server builds (the old text is the extra).
+export const LIN = withLooks({ name: 'ลิน', appearance: 'หญิงผ้าคลุมเทา แผลเป็นที่คาง', personality: 'ช่างสังเกต พูดน้อย' }, 'avatar-01');
+export const DARIN = withLooks({ name: 'ดาริน', appearance: 'ชายร่างสูงสวมเกราะหนังเก่า', personality: 'ใจร้อน รักพวกพ้อง' }, 'avatar-05');
+export const MEKHA = withLooks({ name: 'เมฆา', appearance: 'เด็กหนุ่มผมขาวถือไม้เท้า', personality: 'ขี้สงสัย ชอบเดินป่า' }, 'avatar-09');
 
 export type Call = (
   method: string,

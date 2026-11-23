@@ -15,6 +15,8 @@ export * from './scenario-default.ts';
 export * from './game.ts';
 
 export * from './character.ts';
+// ISK-006: avatar + appearance chips, shared by server and web.
+export * from './appearance.ts';
 export * from './loot.ts';
 
 export * from './visibility.ts';
