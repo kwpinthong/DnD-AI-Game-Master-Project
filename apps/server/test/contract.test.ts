@@ -287,6 +287,9 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'POST /api/admin/style-review/proposals/:id/reject', { token: adminToken, path: '/api/admin/style-review/proposals/99999/reject' });
     await hit(call, 'POST /api/admin/style-review/voice/:version/restore', { token: adminToken, path: '/api/admin/style-review/voice/1/restore' });
     await hit(call, 'POST /api/admin/style-review/voice/:version/restore', { token: adminToken, path: '/api/admin/style-review/voice/99/restore' });
+    // GEN-080: the lore + feedback extract of the ended table game (Mock AI), then a game that is not one.
+    await hit(call, 'POST /api/admin/learning/games/:gameId/extract', { token: adminToken, path: `/api/admin/learning/games/${tableGame}/extract` });
+    await hit(call, 'POST /api/admin/learning/games/:gameId/extract', { token: adminToken, path: '/api/admin/learning/games/nope/extract' });
     await hit(call, 'POST /api/admin/logout', { token: adminToken });
     await hit(call, 'POST /api/logout', { token: p1.token });
     await hit(call, 'DELETE /api/game', { token: gm, body: { confirmName: 'เกมสัญญา 2' } });

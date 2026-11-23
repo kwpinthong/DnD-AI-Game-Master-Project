@@ -127,6 +127,7 @@ export const CONTRACT_SCHEMAS = {
   GameDataImportPreviewResponse: p.GameDataImportPreviewResponse,
   GameDataExportResponse: p.GameDataExportResponse,
   LearningLibraryResponse: p.LearningLibraryResponse,
+  LearningExtractResponse: p.LearningExtractResponse,
   PlayerStyleRequest: p.PlayerStyleRequest,
   PlayerStyleResponse: p.PlayerStyleResponse,
   AdminDownvotesResponse: p.AdminDownvotesResponse,
@@ -295,6 +296,7 @@ export const CONTRACT: readonly ContractItem[] = [
   http('GET', '/api/admin/learning', null, 'LearningLibraryResponse', pending('GEN-084', 'admin', ['learning-library'], 'ชนิด entry ตาม ADR ของ GEN-077')),
   http('DELETE', '/api/admin/learning/:id', null, 'LearningLibraryResponse', pending('GEN-084', 'admin', ['learning-library'])),
   http('DELETE', '/api/admin/learning/games/:gameId', null, 'LearningLibraryResponse', pending('GEN-084', 'admin', ['learning-library'])),
+  http('POST', '/api/admin/learning/games/:gameId/extract', null, 'LearningExtractResponse', ready('GEN-080', 'admin', ['learning-library'], 'สกัด lore + feedback_note จากหน้าสรุปตอนจบ (ไม่มีเกณฑ์คะแนน) AI 1 call purpose `learning_extract`; ครั้งเดียวต่อเกม (ซ้ำ = `done` ไม่ call); AI ล้ม = `failed` "สกัดไม่สำเร็จ" ไม่มี entry เรียกซ้ำได้; เกมยังไม่จบ = 409 `not_allowed`; ไม่มีเกม = 404 `game_not_found`; เรียกเองอัตโนมัติเมื่อสมาชิกให้คะแนนครบ')),
 
   // --- GEN-168: review of 👎 messages (server owner) ---
   http('GET', '/api/admin/downvotes', null, 'AdminDownvotesResponse', ready('GEN-168', 'admin', ['vote-review'], 'ข้อความ AI ที่มี 👎 ทุกเกม พร้อม NPC / เหตุผล (นับ) / คู่ "แก้เป็น" ที่บันทึกไว้')),

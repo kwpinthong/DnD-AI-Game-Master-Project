@@ -48,6 +48,7 @@ const PURPOSE_LABEL: Record<string, string> = {
   finale: 'ฉากจบ (finale)',
   character_analyze: 'loot ตอนสร้างตัวละคร',
   style_review: 'ทบทวนสำนวน (ทั้ง server)',
+  learning_extract: 'สกัดตำนาน + feedback หลังจบเกม',
 };
 
 const FAILURE_LABEL: Record<string, string> = {

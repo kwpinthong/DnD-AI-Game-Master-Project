@@ -43,7 +43,9 @@ export function createMockProvider(config: AiConfig, script?: MockScript, answer
               ? cannedWeather(requests.filter((r) => r.purpose === 'gm_weather').length)
               : req.output.name === 'origin_narration'
                 ? cannedOrigin(req)
-                : ((await answer?.(req)) ?? sampleFor(req.output.jsonSchema));
+                : req.purpose === 'learning_extract'
+                  ? cannedLearning(req)
+                  : ((await answer?.(req)) ?? sampleFor(req.output.jsonSchema));
         return {
           ok: true,
           json,
@@ -86,6 +88,21 @@ function cannedOrigin(req: AiCallRequest) {
   const token = /\{\{p:[^}]+\}\}/.exec(prompt)?.[0] ?? 'คุณ';
   const arrival = /^จุดเกิด: (.*)$/m.exec(prompt)?.[1] ?? 'ที่ไหนสักแห่ง';
   return { narration: `แสงสีขาวกลืน ${token} หายไปจากโลกเดิม เมื่อลืมตาขึ้นอีกครั้ง คุณคือ${arrival}` };
+}
+
+/** GEN-080: a stable lore (+ a feedback note when there are comments) from the end-page data in the prompt (C10). */
+function cannedLearning(req: AiCallRequest) {
+  let source: { ending?: { path?: string | null }; comments?: unknown[] } = {};
+  try {
+    source = JSON.parse(req.messages.map((m) => m.text).join('\n')) as typeof source;
+  } catch {
+    // Not the extract's JSON: the lore says only that the game ended.
+  }
+  const path = source.ending?.path ?? 'none';
+  return {
+    lore: [{ content: `ตำนานจากเกมก่อน: เมืองผ่านวันที่ 12 ไปด้วยตอนจบแบบ ${path}`, tags: [`ending_${path}`], npcIds: [] }],
+    feedback: (source.comments?.length ?? 0) > 0 ? { content: 'ผู้เล่นฝากให้ GM เล่าให้กระชับและบอกผลของการกระทำให้ชัด' } : null,
+  };
 }
 
 function cannedLoot(req: AiCallRequest, n: number) {

@@ -108,7 +108,7 @@ export interface AiServiceDeps {
   sleep?: (ms: number) => Promise<void>;
 }
 
-const SUMMARY_PURPOSES: ReadonlySet<AiPurpose> = new Set(['summarize_day', 'summarize_journal']);
+const SUMMARY_PURPOSES: ReadonlySet<AiPurpose> = new Set(['summarize_day', 'summarize_journal', 'learning_extract']);
 const NO_PRICE: ModelPrice = { inputPerM: 0, cachedInputPerM: 0, cacheWritePerM: 0, outputPerM: 0 };
 
 /** Second line of defence: anything shaped like an API key never reaches a log or a row. */

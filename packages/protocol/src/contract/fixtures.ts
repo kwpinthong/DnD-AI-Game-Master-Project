@@ -581,6 +581,10 @@ export const CONTRACT_FIXTURES: Fixtures = {
     },
     { entries: [], counts: { lore: 0, feedback_note: 0, ruling: 0, style: 0 } },
   ],
+  LearningExtractResponse: [
+    { status: 'done', message: 'สกัดความรู้แล้ว', lore: 2, feedback: 1 },
+    { status: 'failed', message: 'สกัดไม่สำเร็จ', lore: 0, feedback: 0 },
+  ],
   PlayerStyleRequest: [{ playerCode: 'nok-2026' }, { playerCode: 'nok-2026', optOut: true }],
   PlayerStyleResponse: [{ style: { verbs: [{ verb: 'OBSERVE', count: 14 }, { verb: 'PERSUADE', count: 6 }], summary: 'ชอบสังเกตก่อนลงมือ' }, optOut: false }, { style: null, optOut: false }],
   // GEN-168: the server owner's 👎 review
