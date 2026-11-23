@@ -181,6 +181,27 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expectNoNamesInPrompts();
   });
 
+  it('GEN-164 C1 / C2 / C6: a turn\'s rule blocks are English, the typed Thai reaches the AI as typed, the narration stays Thai', async () => {
+    await boot({}, noRoll);
+    const t = await startedTable(server!, false);
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    const texts = ['สำรวจโรงเตี๊ยมหาเบาะแส แล้วนั่งพักสักครู่', 'ถามข่าวเจ้าของโรงเตี๊ยม', 'แอบค้นห้องเก็บของ'];
+    await playTurn(clients, texts, { day: 1, phase: 'EOSORIA', turn: 2 });
+
+    const ctx = contextOf<TurnContext>(provider.requests.find(isTurn)!);
+    expect(ctx.actions.map((a) => a.text).sort()).toEqual([...texts].sort());
+    const rules = provider.requests.flatMap((r) => r.system).filter((b) => /-rules$|^rules$/.test(b.id));
+    expect([...new Set(rules.map((b) => b.id))]).toEqual(expect.arrayContaining(['rules', 'narrator-rules']));
+    for (const b of rules) expect(b.text.split('คุณ').join(''), b.id).not.toMatch(/[฀-๿]/);
+    const letters = (s: string) => [...s].filter((ch) => /\p{L}/u.test(ch));
+    for (const c of clients) {
+      for (const e of turnEntries(c, 1, 'EOSORIA', 1).filter((x) => x.kind === 'narration')) {
+        const all = letters(e.text);
+        expect(all.filter((ch) => /[฀-๿]/.test(ch)).length / all.length).toBeGreaterThan(0.9);
+      }
+    }
+  });
+
   it('GEN-115 C1: a resolved turn logs the time of each stage and the tokens, and no player text', async () => {
     await boot({}, noRoll);
     const t = await startedTable(server!, false);
