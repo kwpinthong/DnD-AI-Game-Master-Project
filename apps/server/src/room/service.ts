@@ -32,6 +32,7 @@ import { and, eq } from 'drizzle-orm';
 import type { Clock } from '../auth/join.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { game, roomEntry } from '../db/schema.ts';
+import { arrivalText, dropLateJoiners, hasSpawnedLate, seatArrivals } from '../game/late-join.ts';
 import { activeMembers, type MemberRow } from '../game/service.ts';
 import { CryptoRng } from '../rng.ts';
 import { characterNameOf, entryViewOf, placeViewOf } from './entry-view.ts';
@@ -92,6 +93,7 @@ const LOCK_MESSAGE: Record<RoomLockCode, string> = {
   resolving: 'เทิร์นนี้ปิดรับ action แล้ว กำลังสรุปผล รอเทิร์นถัดไป',
   game_ended: 'เกมจบแล้ว ส่ง action ไม่ได้',
   traveling: 'เทิร์นนี้ใช้ไปกับการเดินทางข้ามโซนแล้ว ส่ง action ได้อีกเมื่อถึงที่หมายเทิร์นถัดไป',
+  arriving: 'คุณเพิ่งข้ามมาถึงโลกนี้ ส่ง action ได้ตั้งแต่เทิร์นถัดไป',
 };
 
 const WHISPER_MESSAGE: Record<RoomWhisperCode, string> = {
@@ -296,7 +298,8 @@ export function createRoomService(
   }
 
   function lockOf(me: MemberRow, state: PhaseState): RoomLockCode | null {
-    if (me.role === 'gm' || !state.players[me.id]) return 'not_a_player';
+    if (me.role === 'gm') return 'not_a_player';
+    if (!state.players[me.id]) return hasSpawnedLate(db, me.id) && !isEnded(state) ? 'arriving' : 'not_a_player';
     if (state.status === 'finale' || state.status === 'game_over') return 'game_ended';
     if (state.status === 'resolving') return 'resolving';
     const condition = state.players[me.id]!.condition;
@@ -510,17 +513,19 @@ export function createRoomService(
             step = phaseStep(current, { type: 'resolved', results: settled({}) }, rng);
           }
           if (!step.ok) throw new Error(`phase engine refused an empty result: ${step.error.code}`);
+          // ISK-015: who spawned after joining late takes a seat in the turn that opens now.
+          const seated = isEnded(step.state) ? { state: step.state, arrived: [] } : seatArrivals(tx, gameId, step.state, t);
           applyLocationLog(tx, step.log, t);
           // GEN-070: carried to the clinic (half the coins), or dead for good (no place any more).
           applyCrisisLog(tx, assets, gameId, step.log, t);
-          savePhaseState(tx, gameId, step.state, t);
-          syncCharacterStats(tx, step.state, t);
+          savePhaseState(tx, gameId, seated.state, t);
+          syncCharacterStats(tx, seated.state, t);
           // GEN-055: karma per day / period for the unlock rules, then the skills that unlock now.
           settleTurnProgress(tx, assets, gameId, current, t);
           // GEN-066: trips to another zone arrive, rift visitors go back (after the feed's witnesses were taken).
           completeTravel(tx, gameId, t);
           // The timeline follows each turn (GEN-053, GEN-096): events starting on the next turn become active for it.
-          const next = step.state;
+          const next = seated.state;
           // GEN-114: the player's own log of the turn: numbers from the server's before / after, reasons from the engine's log.
           const s2 = snapshotsOf(tx, assets, gameId, next, current.order);
           const hits = new Map<string, readonly HitChange[]>((resolution.hits ?? []).map((h) => [h.memberId, h.hit.changes]));
@@ -545,6 +550,14 @@ export function createRoomService(
             const text = periodAnnouncement(assets, opened, current, rng);
             const recipients = recipientsOf(tx, gameId, next, { kind: 'feed', locationId: null, actorMemberId: null, text });
             rows.push({ row: insertEntry(tx, gameId, { kind: 'time', at: opened, locationId: null, text }, [...recipients], t), recipients });
+            // ISK-015: a newcomer still not spawned a whole period after the one they joined in leaves (the seat is free).
+            dropLateJoiners(tx, gameId, opened);
+          }
+          // ISK-015: everyone sees someone new arrive, by look and title (nobody knows them yet).
+          for (const id of seated.arrived) {
+            const text = arrivalText(tx, id);
+            const recipients = recipientsOf(tx, gameId, next, { kind: 'feed', locationId: null, actorMemberId: null, text, except: [id] });
+            rows.push({ row: insertEntry(tx, gameId, { kind: 'time', at: { day: next.day, phase: next.phase, turn: next.turn }, locationId: null, text }, [...recipients], t), recipients });
           }
           return { rows, ended: isEnded(next), opened };
         });
@@ -910,7 +923,8 @@ export function createRoomService(
   const rejectedBy: Record<PhaseErrorCode, RoomActionCode | null> = {
     not_collecting: 'resolving',
     game_ended: 'game_ended',
-    unknown_player: 'not_a_player',
+    // Not seated: `lockOf` tells a GM (not_a_player) from a late joiner who just spawned (arriving, ISK-015).
+    unknown_player: null,
     cannot_act: null,
     secret_quota_used: 'secret_quota_used',
     train_used: 'train_used',

@@ -8,15 +8,17 @@ import type { GameAssets } from '../assets/load.ts';
 import type { StartScenarioRecord } from '../assets/model.ts';
 import { startPassiveSource } from '../assets/tags.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
-import { character, characterLoot, characterOrigin, member, npcBond } from '../db/schema.ts';
+import { character, characterLoot, characterOrigin, lateJoin, member, npcBond, phaseAction } from '../db/schema.ts';
+import { maskNames } from '../gm/check.ts';
 import { forAi, THAI_OUTPUT } from '../gm/language.ts';
+import { latestSaga } from '../gm/store.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { PLACE_TAG } from '../travel/rules.ts';
 import { placeCharacter } from '../visibility/store.ts';
 import type { StoredChosen } from './loot.ts';
 import type { MemberRow } from './service.ts';
 import { CHRONIC_ILLNESS_LABEL, START_RULES } from './start-rules.ts';
-import { resolveOwnTokens } from './tokens.ts';
+import { resolveOwnTokens, UNKNOWN_PERSON } from './tokens.ts';
 
 /**
  * Start scenarios (GEN-065 on GEN-049's origin code, GDD §6.1, sheet Start_Scenarios).
@@ -111,43 +113,55 @@ export function rollOrigins(db: DbOrTx, gameId: string, assets: GameAssets, rng:
 
   for (const { memberId } of seatedPlayers(db, gameId)) {
     if (rolled.has(memberId)) continue;
-    const chance = rollSpawn(table, rng);
-    const row = chance.row;
-    const rule = row ? START_RULES[row.name] : undefined;
-    db.insert(characterOrigin)
-      .values({
-        memberId,
-        gameId,
-        tierId: chance.tierId,
-        kind: chance.kind,
-        spawnPointId: chance.spawnPointId,
-        locationId: chance.locationId,
-        startScenario: row?.name ?? null,
-        illnessLeft: rule?.illnessTreatments ?? null,
-        knowsDay12Secret: rule?.knowsDay12Secret ?? false,
-        curseResistRank: rule?.curseResistRank ?? null,
-        rolledAt: now,
-      })
-      .run();
-    if (row) {
-      db.update(character)
-        .set({
-          hp: Math.min(row.startHp, row.maxHp),
-          hpMax: row.maxHp,
-          stamina: Math.min(row.startStamina, RULES.staminaMax),
-          karma: row.startKarma,
-          coins: row.startCoins,
-          initialTitle: row.initialTitle,
-          updatedAt: now,
-        })
-        .where(eq(character.memberId, memberId))
-        .run();
-    }
-    placeCharacter(db, gameId, memberId, chance.locationId, now);
-    const met = rule?.meetsNpc ? scenario.npcs.find((n) => n.name === rule.meetsNpc) : undefined;
-    // Met from the start: the name is known (Q-219: a grade S NPC hides it until met).
-    if (met) db.insert(npcBond).values({ memberId, npcId: met.id, nameRevealed: true, updatedAt: now }).onConflictDoNothing().run();
+    placeCharacter(db, gameId, memberId, rollOne(db, gameId, memberId, scenario, table, rng, now), now);
   }
+}
+
+/** ISK-015: one late joiner's start scenario, by the same table; placed later, when they take their seat. */
+export function rollOriginFor(db: DbOrTx, gameId: string, memberId: string, assets: GameAssets, rng: Rng, now: number): void {
+  const scenario = getGameScenario(db, gameId);
+  const table = scenario ? spawnTable(scenario, assets) : [];
+  if (scenario && table.length > 0 && !originOf(db, memberId)) rollOne(db, gameId, memberId, scenario, table, rng, now);
+}
+
+/** Rolls and stores one player's start scenario; returns the place it puts them. */
+function rollOne(db: DbOrTx, gameId: string, memberId: string, scenario: Scenario, table: readonly SpawnChance[], rng: Rng, now: number): string {
+  const chance = rollSpawn(table, rng);
+  const row = chance.row;
+  const rule = row ? START_RULES[row.name] : undefined;
+  db.insert(characterOrigin)
+    .values({
+      memberId,
+      gameId,
+      tierId: chance.tierId,
+      kind: chance.kind,
+      spawnPointId: chance.spawnPointId,
+      locationId: chance.locationId,
+      startScenario: row?.name ?? null,
+      illnessLeft: rule?.illnessTreatments ?? null,
+      knowsDay12Secret: rule?.knowsDay12Secret ?? false,
+      curseResistRank: rule?.curseResistRank ?? null,
+      rolledAt: now,
+    })
+    .run();
+  if (row) {
+    db.update(character)
+      .set({
+        hp: Math.min(row.startHp, row.maxHp),
+        hpMax: row.maxHp,
+        stamina: Math.min(row.startStamina, RULES.staminaMax),
+        karma: row.startKarma,
+        coins: row.startCoins,
+        initialTitle: row.initialTitle,
+        updatedAt: now,
+      })
+      .where(eq(character.memberId, memberId))
+      .run();
+  }
+  const met = rule?.meetsNpc ? scenario.npcs.find((n) => n.name === rule.meetsNpc) : undefined;
+  // Met from the start: the name is known (Q-219: a grade S NPC hides it until met).
+  if (met) db.insert(npcBond).values({ memberId, npcId: met.id, nameRevealed: true, updatedAt: now }).onConflictDoNothing().run();
+  return chance.locationId;
 }
 
 export function originOf(db: DbOrTx, memberId: string): OriginRow | undefined {
@@ -221,7 +235,35 @@ export function startPassivesInGame(db: DbOrTx, gameId: string, assets: GameAsse
 // --- Narration ---
 
 const NARRATION_MAX = 1500;
-export const OriginNarration = z.object({ narration: z.string().trim().min(1).max(NARRATION_MAX) });
+/** ISK-015: the public story so far a late joiner reads under their crossing, in code points. */
+export const STORY_MAX = 400;
+const STORY_HEAD = 'เรื่องราวก่อนคุณมาถึง: ';
+// `story` is cut to STORY_MAX here rather than refused, so a long one never costs the crossing itself.
+export const OriginNarration = z.object({ narration: z.string().trim().min(1).max(NARRATION_MAX), story: z.string().trim().max(4 * STORY_MAX).optional() });
+
+const STORY_PROMPT = [
+  `This player joins late. Also write story: the story so far as the whole town could know it, for this newcomer, at most ${STORY_MAX} characters, Thai`,
+  'Never a Secret action, a private talk or anything only one person saw; names of people only as tokens',
+].join('\n');
+
+/**
+ * The AI's story as the newcomer may read it, or null to show none: dropped when it repeats a Secret action of
+ * the game; every person token is "someone" (the newcomer knows nobody yet), an NPC is its alias, a real name
+ * typed out is masked the same way; then cut to STORY_MAX code points.
+ */
+function publicStory(db: Db, scenario: Scenario, gameId: string, story: string, names: { memberId: string; names: string[] }[]): string | null {
+  if (story.length === 0) return null;
+  // shortcut: catches a Secret action repeated word for word only (a paraphrase relies on STORY_PROMPT); add an AI check if real games leak one.
+  const secrets = db.select({ text: phaseAction.text }).from(phaseAction).where(and(eq(phaseAction.gameId, gameId), eq(phaseAction.visibility, 'secret'))).all();
+  if (secrets.some((s) => s.text.trim().length > 0 && story.includes(s.text.trim()))) return null;
+  const alias = new Map(scenario.npcs.map((n) => [n.id, n.alias] as const));
+  const npcNames = new Map(scenario.npcs.filter((n) => n.name.trim().length > 0 && n.name !== n.alias).map((n) => [n.name, n.alias] as const));
+  const shown = maskNames(
+    tokenize(story, names).replace(/\{\{([pn]):([^}]*)\}\}/g, (_, kind: string, id: string) => (kind === 'n' ? (alias.get(id) ?? UNKNOWN_PERSON) : UNKNOWN_PERSON)),
+    npcNames,
+  );
+  return [...shown].slice(0, STORY_MAX).join('');
+}
 
 export const RULES_PROMPT = [
   'You are the AI GM of Isekai Chronicles: a player has just crossed over into another world',
@@ -279,7 +321,12 @@ function narrateOne(db: Db, ai: Pick<AiService, 'call'>, assets: GameAssets, mem
       .map((m) => ({ memberId: m.memberId, names: [m.playerName, m.characterName ?? ''] }));
     const safe = (text: string) => tokenize(text, names);
 
+    // ISK-015: a late joiner also gets the story so far, from the GM's saga (no saga yet = no story).
+    const late = db.select({ memberId: lateJoin.memberId }).from(lateJoin).where(eq(lateJoin.memberId, memberId)).get() !== undefined;
+    const saga = late ? latestSaga(db, row.gameId, Number.MAX_SAFE_INTEGER) : null;
+
     const lines = [
+      ...(saga === null ? [] : [`Story so far (the Game Master's private saga; it may hold secrets):\n${safe(saga)}`, STORY_PROMPT]),
       `Character {{p:${memberId}}}`,
       `Personality:\n${safe(me.personality)}`,
       chosen ? `Starting skill: ${safe(chosen.skill.name)} — ${safe(forAi(chosen.skill.description, assets.ability(chosen.skill.name)?.descriptionEn))}` : 'Starting skill: none',
@@ -301,8 +348,10 @@ function narrateOne(db: Db, ai: Pick<AiService, 'call'>, assets: GameAssets, mem
       maxOutputTokens: 1_500,
     });
     if (!result.ok) return;
+    const story = saga === null ? null : publicStory(db, scenario, row.gameId, result.value.story ?? '', names);
+    const narration = story === null ? result.value.narration : `${result.value.narration}\n\n${STORY_HEAD}${story}`;
     db.update(characterOrigin)
-      .set({ narration: result.value.narration, narratedAt: now() })
+      .set({ narration, narratedAt: now() })
       .where(and(eq(characterOrigin.memberId, memberId), isNull(characterOrigin.narration)))
       .run();
   })().finally(() => inFlight.delete(memberId));

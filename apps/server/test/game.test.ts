@@ -410,7 +410,7 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     expect((await call('PATCH', '/api/game', { body: { mode: 'single' } })).status).toBe(401);
   });
 
-  it('C8: after the start, mode cannot change, nobody new can join, and nobody can be kicked', async () => {
+  it('C8: after the start, mode cannot change and nobody can be kicked; a newcomer may still join (ISK-015)', async () => {
     await start();
     const created = await createGame();
     const bel = await joinOk(created.game.inviteCode, 'เบล', '5555');
@@ -423,14 +423,14 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     const kick = await call('DELETE', `/api/game/members/${bel.member.id}`, { token: created.token });
     const startAgain = await call('POST', '/api/game/start', { token: created.token });
 
-    for (const res of [modeChange, newcomer, kick, startAgain]) {
+    for (const res of [modeChange, kick, startAgain]) {
       expect(res.status).toBe(409);
       expect(error(res.body).code).toBe('game_started');
     }
-    expect(error(newcomer.body).message).toBe('เกมนี้เริ่มไปแล้ว รับคนเพิ่มไม่ได้');
+    expect(newcomer.status).toBe(200);
     const view = await getGame(created.token);
     expect(view.mode).toBe('online');
-    expect(view.members.map((m) => m.name)).toEqual(['นก', 'เบล']);
+    expect(view.members.map((m) => m.name)).toEqual(['นก', 'เบล', 'ปลา']);
     // Members of a started game still log back in.
     expect((await postJoin(created.game.inviteCode, 'เบล', '5555')).status).toBe(200);
   });

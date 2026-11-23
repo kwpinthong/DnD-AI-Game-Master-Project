@@ -128,8 +128,9 @@ export type RoomMember = z.infer<typeof RoomMember>;
  * Why this viewer cannot send an action now (the codes the server sends today); null = they can. GEN-070:
  * `exhausted` (Stamina 0: this turn is a forced REST), `unconscious` (HP 0: out cold this turn), `recovering`
  * (resting at the central clinic after HP 0), `astral_spirit` (dead for good; `you.astral` has the omen box).
+ * ISK-015: `arriving` = joined a started game and just spawned; acts from the turn that opens next.
  */
-export const RoomLockCode = z.enum(['not_a_player', 'exhausted', 'unconscious', 'recovering', 'astral_spirit', 'resolving', 'game_ended', 'traveling']);
+export const RoomLockCode = z.enum(['not_a_player', 'exhausted', 'unconscious', 'recovering', 'astral_spirit', 'resolving', 'game_ended', 'traveling', 'arriving']);
 export type RoomLockCode = z.infer<typeof RoomLockCode>;
 
 /**
@@ -337,6 +338,8 @@ export const RoomActionCode = z.enum([
   'train_used',
   /** GEN-069 (Q-088): Max HP is at the TRAIN ceiling (45). */
   'train_cap',
+  /** ISK-015: spawned this turn after joining late; acts from the next turn. */
+  'arriving',
 ]);
 export type RoomActionCode = z.infer<typeof RoomActionCode>;
 

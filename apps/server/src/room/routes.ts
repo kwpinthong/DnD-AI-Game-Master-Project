@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { memberRowForToken, type Clock } from '../auth/join.ts';
 import type { Db } from '../db/client.ts';
 import { character, game } from '../db/schema.ts';
+import { isPreparing } from '../game/late-join.ts';
 import type { MemberRow } from '../game/service.ts';
 import type { GameAssets } from '../assets/load.ts';
 import type { WeatherService } from '../weather/service.ts';
@@ -43,7 +44,8 @@ function entryRefusal(db: Db, me: MemberRow): RoomErrorCode | null {
   if (!row || row.startedAt === null) return 'game_not_started';
   if (me.role === 'gm') return null;
   const own = db.select({ memberId: character.memberId }).from(character).where(eq(character.memberId, me.id)).get();
-  return own ? null : 'no_character';
+  // ISK-015: a late joiner enters once spawned (making the character includes the loot and the spawn).
+  return own && !isPreparing(db, me.id) ? null : 'no_character';
 }
 
 /**

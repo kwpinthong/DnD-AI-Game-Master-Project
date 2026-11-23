@@ -2,7 +2,7 @@ import type { ActionVisibility, GmFallbackCause, HitView, RollView, RoomEntryKin
 import { createPhaseState, restorePhaseState, type PhaseState, type TurnPoint } from '@isekai/rules';
 import { and, asc, eq, gt, inArray, max, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
-import { character, gamePhase, phaseAction, roomEntry, roomEntryRecipient } from '../db/schema.ts';
+import { character, gamePhase, lateJoin, phaseAction, roomEntry, roomEntryRecipient } from '../db/schema.ts';
 import { activeMembers } from '../game/service.ts';
 
 /** Current karma of each of `ids` from their character (the engine's copy only decides Drowsy, Q-087). */
@@ -26,7 +26,9 @@ export function ensurePhaseState(db: DbOrTx, gameId: string, now: number): Phase
   const row = db.select({ state: gamePhase.state }).from(gamePhase).where(eq(gamePhase.gameId, gameId)).get();
   if (row) return withCharacterHpMax(db, restorePhaseState(JSON.parse(row.state)));
 
-  const players = activeMembers(db, gameId).filter((m) => m.role === 'player');
+  // ISK-015: a late joiner is never seated here; they take a seat at the turn after they spawn (seatArrivals).
+  const late = new Set(db.select({ id: lateJoin.memberId }).from(lateJoin).where(eq(lateJoin.gameId, gameId)).all().map((r) => r.id));
+  const players = activeMembers(db, gameId).filter((m) => m.role === 'player' && !late.has(m.id));
   const stats = new Map(
     players.length === 0
       ? []

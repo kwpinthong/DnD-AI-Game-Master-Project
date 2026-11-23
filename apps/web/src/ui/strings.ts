@@ -266,6 +266,7 @@ export const playText = {
     resolving: 'กำลังสรุปผล',
     game_ended: 'เกมจบแล้ว',
     traveling: 'กำลังเดินทาง',
+    arriving: 'เพิ่งมาถึง',
     recovering: 'พักฟื้น',
     astral_spirit: 'Astral Spirit',
   },

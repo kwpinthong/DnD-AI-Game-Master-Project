@@ -86,6 +86,12 @@ export function createPhaseState(input: { readonly players: readonly NewPlayer[]
   };
 }
 
+/** ISK-015: a player who joined a started game takes the last seat, awake, from the turn `state` is at. */
+export function seatPlayer(state: PhaseState, p: NewPlayer): PhaseState {
+  if (state.players[p.id]) return state;
+  return { ...state, order: [...state.order, p.id], players: { ...state.players, [p.id]: newPlayer(p) } };
+}
+
 function newPlayer(p: NewPlayer): PlayerPhaseState {
   return {
     id: p.id,

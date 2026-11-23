@@ -1,5 +1,25 @@
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { character, game } from './schema.ts';
+import { character, game, member } from './schema.ts';
+
+/**
+ * ISK-015: a player who joined after the start (no row = joined before it). `joined_turn` / `spawned_turn` are
+ * `turnNumber`s of the game; `spawned_turn` stays null while they make their character. The row goes with the
+ * member when they are dropped for not spawning in time.
+ */
+export const lateJoin = sqliteTable(
+  'late_join',
+  {
+    memberId: text('member_id')
+      .primaryKey()
+      .references(() => member.id, { onDelete: 'cascade' }),
+    gameId: text('game_id')
+      .notNull()
+      .references(() => game.id, { onDelete: 'cascade' }),
+    joinedTurn: integer('joined_turn').notNull(),
+    spawnedTurn: integer('spawned_turn'),
+  },
+  (t) => [index('late_join_game').on(t.gameId)],
+);
 
 /**
  * Each character's start scenario (GEN-065 on GEN-049's table, GDD §6.1, sheet Start_Scenarios), rolled

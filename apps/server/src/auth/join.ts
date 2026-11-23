@@ -2,7 +2,8 @@ import { nameKey, ONLINE_MAX_PLAYERS, type JoinRequest, type Member } from '@ise
 import { and, count, eq, isNull, lte } from 'drizzle-orm';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { Db } from '../db/client.ts';
-import { game, member, pinFailure, session } from '../db/schema.ts';
+import { game, lateJoin, member, pinFailure, session } from '../db/schema.ts';
+import { lateJoinCheck } from '../game/late-join.ts';
 import { hashPin, verifyPin } from './pin.ts';
 
 const MINUTE = 60_000;
@@ -17,7 +18,9 @@ export type JoinOutcome =
   | { kind: 'joined'; created: boolean; member: Member; token: string; expiresAt: number }
   | { kind: 'game_not_found' }
   | { kind: 'game_full'; mode: 'online' | 'single'; max: number }
-  | { kind: 'game_started' }
+  | { kind: 'single_mode' }
+  | { kind: 'game_ended' }
+  | { kind: 'join_closed_day' }
   | { kind: 'kicked' }
   | { kind: 'wrong_pin'; attemptsLeft: number }
   | { kind: 'locked'; retryAt: number };
@@ -32,8 +35,8 @@ const toMember = (row: MemberRow): Member => ({ id: row.id, gameId: row.gameId, 
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
 /**
- * First join with a name creates the member (refused once the game has started or is full); later
- * joins need the same PIN and still work after the start. A kicked member's name is blocked.
+ * First join with a name creates the member (refused when the game is full; after the start, by the ISK-015
+ * late-join rules); later joins need the same PIN and still work after the start. A kicked member's name is blocked.
  */
 export async function joinGame(db: Db, input: JoinRequest, now: Clock): Promise<JoinOutcome> {
   const found = db.select().from(game).where(eq(game.inviteCode, input.inviteCode)).get();
@@ -46,7 +49,10 @@ export async function joinGame(db: Db, input: JoinRequest, now: Clock): Promise<
   const existing = findMember();
   if (existing) return joinExisting(db, existing, input.pin, now);
 
-  if (found.startedAt !== null) return { kind: 'game_started' };
+  if (found.startedAt !== null) {
+    const late = lateJoinCheck(db, found);
+    if (late.kind !== 'ok') return late;
+  }
   const pinHash = await hashPin(input.pin);
   const createdAt = now();
   const row: MemberRow = {
@@ -65,7 +71,9 @@ export async function joinGame(db: Db, input: JoinRequest, now: Clock): Promise<
     const refused = db.transaction((tx): JoinOutcome | undefined => {
       const current = tx.select().from(game).where(eq(game.id, found.id)).get();
       if (!current) return { kind: 'game_not_found' };
-      if (current.startedAt !== null) return { kind: 'game_started' };
+      // ISK-015: a started game takes newcomers (same seat count; the late-join rules re-read here).
+      const late = current.startedAt === null ? null : lateJoinCheck(tx, current);
+      if (late !== null && late.kind !== 'ok') return late;
       const players =
         tx
           .select({ n: count() })
@@ -75,6 +83,7 @@ export async function joinGame(db: Db, input: JoinRequest, now: Clock): Promise<
       const max = maxPlayers(current.mode);
       if (players >= max) return { kind: 'game_full', mode: current.mode, max };
       tx.insert(member).values(row).run();
+      if (late !== null) tx.insert(lateJoin).values({ memberId: row.id, gameId: found.id, joinedTurn: late.turn, spawnedTurn: null }).run();
       return undefined;
     });
     if (refused) return refused;

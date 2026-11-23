@@ -82,6 +82,7 @@ export {
   nextPoint,
   phaseStep,
   restorePhaseState,
+  seatPlayer,
   secretQuotaUsed,
   turnNumber,
 } from './phase/engine.ts';
