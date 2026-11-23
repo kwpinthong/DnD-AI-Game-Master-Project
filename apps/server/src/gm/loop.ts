@@ -18,7 +18,7 @@ import { pinAssets } from '../assets/game-data.ts';
 import type { GameAssets } from '../assets/load.ts';
 import { tagVocabulary } from '../assets/tags.ts';
 import type { Clock } from '../auth/join.ts';
-import { applyPhaseActions, crisesOf, crossPlayerState, seatedKarmas } from '../crossplayer/phase.ts';
+import { applyPhaseActions, crisesOf, crossPlayerState, seatedKarmaByMember, seatedKarmas } from '../crossplayer/phase.ts';
 import { outdoorLocationIds, tagContexts, weatherTagging, type TaggingOptions } from '../crossplayer/tags.ts';
 import { eq } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db/client.ts';
@@ -268,7 +268,9 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     const everyone = presence(seatedKarmas(db, gameId));
     const { last: lastTurn, lingering, farewells } = lingersNow(db, world, assets, everyone);
     const npcPlaces = npcPlacesNow(world, assets, { ...everyone, lingering });
-    const state = crossPlayerState(db, gameId, drowsy, assets, crises, npcPlaces);
+    // GEN-184: each actor's presence check by their own karma, like the chips they see (`npcsHereNow`).
+    const npcPlacesOf = new Map([...seatedKarmaByMember(db, gameId)].map(([memberId, karma]) => [memberId, npcPlacesNow(world, assets, { ...presence([karma]), lingering })]));
+    const state = crossPlayerState(db, gameId, drowsy, assets, crises, npcPlaces, npcPlacesOf);
     const tagging: TaggingOptions = weatherTagging(assets, at.day, at.phase, input.weather ?? null);
     const tags = tagContexts(db, gameId, state, tagging);
     // GEN-068: the same weather input as the turn's apply (`applyPhaseActions`), so the results the engine gets
@@ -602,7 +604,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       causes: actionCausesOf(resolved.log.outcomes, nameOf),
       checks,
       apply: (tx) => {
-        const applied = applyPhaseActions(tx, gameId, actions, new ReplayRng(rolls), now(), tagging, drowsy, crises, npcPlaces);
+        const applied = applyPhaseActions(tx, gameId, actions, new ReplayRng(rolls), now(), tagging, drowsy, crises, npcPlaces, npcPlacesOf);
         if (!applied.ok) throw new Error('the stored turn no longer applies');
         // GEN-055: the unlock progress of every action (verb tags, karma) and the library's INVESTIGATE reveal.
         recordTurnProgress(tx, assets, gameId, applied.log, { day: at.day, period: at.phase, now: now() }, investigators);

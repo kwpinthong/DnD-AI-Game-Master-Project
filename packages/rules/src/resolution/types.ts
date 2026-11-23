@@ -79,6 +79,8 @@ export interface NpcState {
   readonly grade: NpcGrade;
   readonly hp: number;
   readonly locationId: string;
+  /** GEN-184: actor id → where this NPC is for that actor when it differs from `locationId` (a karma-only schedule row). */
+  readonly placeFor?: Readonly<Record<string, string>>;
   /** -2..+2 from the NPC's personality in the scenario (spec §10.4). */
   readonly obsTrait: number;
   readonly damageReduction: number;
