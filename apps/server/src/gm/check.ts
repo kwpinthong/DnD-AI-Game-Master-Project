@@ -165,8 +165,12 @@ export function containsName(text: string, name: string): boolean {
 /** GEN-169: how many times `text` has `word` as a whole word (same rule as `containsName`). */
 export const wordCount = (text: string, word: string): number => nameOccurrences(text.normalize('NFC'), word.normalize('NFC').trim()).length;
 
+const THAI = /[฀-๿]/;
+/** GEN-202: a Thai/non-Thai script change is a word edge even inside one segment (ICU keeps ของNok as one). */
+const glued = (t: string, at: number) => THAI.test(t[at - 1]!) !== THAI.test(t[at]!);
+
 /** Start offsets in `t` (already NFC) of the whole-word occurrences of `n` (NFC, trimmed); see `containsName`. */
-function nameOccurrences(t: string, n: string): number[] {
+export function nameOccurrences(t: string, n: string): number[] {
   const found: number[] = [];
   if (n.length === 0) return found;
   let words: (readonly [number, number])[] | null = null;
@@ -175,7 +179,9 @@ function nameOccurrences(t: string, n: string): number[] {
     if (end < t.length && MARK.test(t[end]!)) continue;
     if (SEGMENTER) {
       words ??= [...SEGMENTER.segment(t)].map((s) => [s.index, s.index + s.segment.length] as const);
-      if (words.some(([from, to]) => from <= i && end <= to && to - from > n.length)) continue;
+      const inside = ([from, to]: readonly [number, number]) =>
+        from <= i && end <= to && to - from > n.length && (from === i || !glued(t, i)) && (end === to || !glued(t, end));
+      if (words.some(inside)) continue;
     }
     found.push(i);
   }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { exampleTokens, hasWord, PLAYER_TOKEN } from '../src/gm/npc-examples.ts';
+import { containsName as hasWord } from '../src/gm/check.ts';
+import { exampleTokens, PLAYER_TOKEN } from '../src/gm/npc-examples.ts';
 
 /** GEN-202: a short Thai lobby name is swapped only where it stands as a whole word (Intl.Segmenter). */
 describe('scrub whole words only', () => {
@@ -16,7 +17,8 @@ describe('scrub whole words only', () => {
   it('a name glued to Thai text in another script is still swapped; inside a longer Latin word it is not', () => {
     expect(exampleTokens('ของNok', [], ['Nok'])).toBe(`ของ${PLAYER_TOKEN}`);
     expect(exampleTokens('Nokia', [], ['Nok'])).toBe('Nokia');
-  });
+    // ICU cuts an unknown name oddly (ลิ|นที่): it still swaps, while ลิน inside คลินิก stays
+    expect(exampleTokens('หาลินที่คลินิก', [], ['ลิน'])).toBe(`หา${PLAYER_TOKEN}ที่คลินิก`);  });
 
   it('NPC names and multi-word names still swap, longest first', () => {
     expect(exampleTokens('คุณนกครับ ลุงสมชายมา', [{ id: 'npc_1', names: ['ลุงสมชาย'] }], ['นก'])).toBe(`คุณ${PLAYER_TOKEN}ครับ {{n:npc_1}}มา`);

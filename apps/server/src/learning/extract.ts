@@ -8,6 +8,7 @@ import { game, gamePhase, gameRating, learningEntry, learningExtract, member } f
 import { getEnding } from '../finale/store.ts';
 import { revealFor } from '../finale/reveal.ts';
 import { activeMembers } from '../game/service.ts';
+import { containsName } from '../gm/check.ts';
 import { exampleTokens, PLAYER_TOKEN } from '../gm/npc-examples.ts';
 import { gameEnded } from '../rating/store.ts';
 import { getGameScenario } from '../scenario/store.ts';
@@ -28,7 +29,7 @@ function scrubberOf(db: DbOrTx, gameId: string) {
   const npcs = (getGameScenario(db, gameId)?.npcs ?? []).map((n) => ({ id: n.id, names: [n.name, ...(n.otherNames ?? [])] }));
   const lobby = db.select({ name: member.name }).from(member).where(eq(member.gameId, gameId)).all().map((m) => m.name);
   const scrub = (text: string) => exampleTokens(text, npcs, lobby).split(PLAYER_TOKEN).join('ผู้เล่น');
-  const hasLobbyName = (text: string) => lobby.some((name) => name.trim().length > 0 && text.normalize('NFC').includes(name));
+  const hasLobbyName = (text: string) => lobby.some((name) => containsName(text, name));
   return { scrub, hasLobbyName };
 }
 
