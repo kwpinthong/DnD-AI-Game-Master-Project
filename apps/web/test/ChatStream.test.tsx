@@ -30,7 +30,7 @@ function feed(entries: RoomEntry[], live: ReadonlyMap<number, number>) {
 }
 
 const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
-const npcText = (container: HTMLElement) => [...container.querySelectorAll('.chat-box--npc')].map((b) => b.textContent ?? '');
+const npcText = (container: HTMLElement) => [...container.querySelectorAll('.chat-box--npc:not(.chat-typing)')].map((b) => b.textContent ?? '');
 const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
 
 beforeEach(() => {

@@ -2,8 +2,9 @@ import { FALLBACK_NARRATION_LABEL, PHASES, type EntryVote, type RoomEntry, type 
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { hitChangeText } from '../../screen-models.ts';
 import { VoteButtons, playText } from '../../ui/index.ts';
-import { FeedDivider, NarrationLine, NpcBubble, OwnBubble, PlayerBubble, ResultBadge, RollBadge } from './Bubbles.tsx';
+import { FeedDivider, NarrationLine, NpcBubble, OwnBubble, PlayerBubble, ResultBadge, RollBadge, TypingBubble } from './Bubbles.tsx';
 import { changeBadges, dividerText, entryLook, shownVote } from './chat-model.ts';
+import { awaitingDialogue, npcSlots, revealBubbles, revealPhase, revealPlan, revealShare, splitBubbles, useReducedMotion, type Reveal, type RevealPhase } from './stream.ts';
 
 const t = playText;
 
@@ -29,6 +30,18 @@ export interface ChatFeedProps {
   /** Our own action of this turn (`RoomState.you.action`), drawn last on the right. */
   ownAction?: RoomState['you']['action'];
   voting?: FeedVoting | undefined;
+  /** GEN-148: seq → when it arrived (ms) of the entries that came in while online; only those are revealed piece by piece. */
+  live?: ReadonlyMap<number, number> | undefined;
+}
+
+const NO_LIVE: ReadonlyMap<number, number> = new Map();
+/** The looks that stream in (GEN-148); badges, dividers and our own words appear at once. */
+const STREAMED = new Set<ReturnType<typeof entryLook>>(['narration', 'omen', 'npc-dialogue', 'npc-reaction']);
+
+interface Shown {
+  phase: RevealPhase;
+  share: number;
+  slot: number | undefined;
 }
 
 /**
@@ -36,16 +49,30 @@ export interface ChatFeedProps {
  * amber box, an NPC's line on the left with avatar and name, GM narration and NPC reactions are italic text with
  * no box, rolls and changed values are capsules in the centre, a divider opens each turn / place.
  */
-export function ChatFeed({ entries, day, placeId, placeName, astral, acknowledged, ownAction, voting }: ChatFeedProps) {
+export function ChatFeed({ entries, day, placeId, placeName, astral, acknowledged, ownAction, voting, live = NO_LIVE }: ChatFeedProps) {
   const [only, setOnly] = useState('');
   const selectId = useId();
   const scroller = useRef<HTMLDivElement>(null);
+  const reduced = useReducedMotion();
+  const [now, setNow] = useState(Date.now);
   // GEN-116: an NPC line can arrive later (a later seq) than the next turn's first entry; it belongs under its own turn.
   entries = [...entries].sort((a, b) => a.day - b.day || PHASES.indexOf(a.phase) - PHASES.indexOf(b.phase) || a.turn - b.turn || a.seq - b.seq);
   const places = [...new Map(entries.flatMap((e) => (e.place ? [[e.place.id, e.place.name] as const] : []))).entries()];
   const shown = astral && only ? entries.filter((e) => e.place === null || e.place.id === only) : entries;
   const arrivedAfter = astral || !placeId || !placeName ? undefined : [...entries].reverse().find((e) => e.place && e.place.id !== placeId)?.seq;
-  const last = `${entries.length}/${Math.max(0, ...entries.map((e) => e.seq))}/${ownAction?.text ?? ''}`;
+  const slots = npcSlots(entries);
+  const plan = reduced
+    ? new Map<number, Reveal>()
+    : revealPlan(shown.flatMap((e) => (live.has(e.seq) && STREAMED.has(entryLook(e)) ? [{ seq: e.seq, at: live.get(e.seq)!, text: e.text, typing: entryLook(e) === 'npc-dialogue' }] : [])));
+  const streaming = [...plan.values()].some((r) => now < r.to);
+  const waiting = awaitingDialogue(entries, live, now) && !streaming;
+  const last = `${entries.length}/${Math.max(0, ...entries.map((e) => e.seq))}/${ownAction?.text ?? ''}/${streaming ? now : ''}/${waiting}`;
+  // Ticks only while something streams or waits; a quiet feed has no timer.
+  useEffect(() => {
+    if (!streaming && !waiting) return;
+    const timer = setInterval(() => setNow(Date.now()), 40);
+    return () => clearInterval(timer);
+  }, [streaming, waiting]);
   const atBottom = useRef(true);
   // New messages: follow them only while the reader is at the bottom; someone reading older ones is not moved.
   useEffect(() => {
@@ -72,6 +99,9 @@ export function ChatFeed({ entries, day, placeId, placeName, astral, acknowledge
   for (const e of shown) {
     const look = entryLook(e, acknowledged?.has(e.seq));
     if (look === 'skip') continue;
+    const reveal = plan.get(e.seq);
+    const view: Shown = { phase: revealPhase(reveal, now), share: revealShare(reveal, now), slot: e.npc ? slots.get(e.npc.ref) : undefined };
+    if (view.phase === 'queued') continue;
     const where = `${e.day}|${e.phase}|${e.turn}|${e.place?.id ?? ''}`;
     if (where !== before) {
       before = where;
@@ -83,7 +113,9 @@ export function ChatFeed({ entries, day, placeId, placeName, astral, acknowledge
     }
     rows.push(
       <Fragment key={e.seq}>
-        <li className="chat-item">{entryView(e, look, vote, placeId, astral)}</li>
+        <li className="chat-item" aria-busy={view.phase !== 'done' || undefined}>
+          {entryView(e, look, view.phase === 'done' ? vote : () => null, placeId, astral, view)}
+        </li>
         {e.seq === arrivedAfter && placeName && (
           <li className="chat-item chat-item--arrival">
             <FeedDivider text={`— ${t.feed.arrived(placeName)} —`} />
@@ -123,6 +155,11 @@ export function ChatFeed({ entries, day, placeId, placeName, astral, acknowledge
         ) : (
           <ol className="chat-list">
             {rows}
+            {waiting && (
+              <li className="chat-item">
+                <TypingBubble />
+              </li>
+            )}
             {ownAction && (
               <li className="chat-item">
                 <OwnBubble text={ownAction.text} secret={ownAction.visibility === 'secret'} />
@@ -135,25 +172,36 @@ export function ChatFeed({ entries, day, placeId, placeName, astral, acknowledge
   );
 }
 
-function entryView(e: RoomEntry, look: ReturnType<typeof entryLook>, vote: (entry: RoomEntry) => ReactNode, placeId: string | null, astral: boolean): ReactNode {
+function entryView(e: RoomEntry, look: ReturnType<typeof entryLook>, vote: (entry: RoomEntry) => ReactNode, placeId: string | null, astral: boolean, view: Shown): ReactNode {
   // Something said or seen at another place (or by the whole town): a word says where, not only the divider.
   const tag = e.kind === 'omen' ? t.chat.omen : !e.place && e.kind === 'feed' ? t.feed.town : e.place && e.place.id !== placeId && astral ? t.feed.at(e.place.name) : undefined;
-  const fallback = e.fallback ? <small className="fallback-label">{FALLBACK_NARRATION_LABEL}</small> : null;
+  const done = view.phase === 'done';
+  const fallback = e.fallback && done ? <small className="fallback-label">{FALLBACK_NARRATION_LABEL}</small> : null;
+  // GEN-148: only a prefix of the final (already masked) text is ever drawn.
+  const text = done ? e.text : (revealBubbles([e.text], view.share)[0] ?? '');
   switch (look) {
     case 'narration':
     case 'omen':
       return (
         <>
-          <NarrationLine text={e.text} tag={tag}>
+          <NarrationLine text={text} tag={tag}>
             {fallback}
             {vote(e)}
           </NarrationLine>
-          {e.roll && <RollBadge roll={e.roll} />}
+          {e.roll && done && <RollBadge roll={e.roll} />}
         </>
       );
     case 'npc-dialogue':
+      if (view.phase === 'typing') return <TypingBubble name={e.npc!.name} grade={e.npc!.grade} slot={view.slot} />;
       return (
-        <NpcBubble name={e.npc!.name} grade={e.npc!.grade} text={e.text} privateLine={e.npc!.private === true}>
+        <NpcBubble
+          name={e.npc!.name}
+          grade={e.npc!.grade}
+          text={e.text}
+          slot={view.slot}
+          {...(done ? {} : { lines: revealBubbles(splitBubbles(e.text), view.share) })}
+          privateLine={e.npc!.private === true}
+        >
           {vote(e)}
         </NpcBubble>
       );
@@ -161,7 +209,7 @@ function entryView(e: RoomEntry, look: ReturnType<typeof entryLook>, vote: (entr
       return <PlayerBubble alias={e.actor!.name} text={e.text} />;
     case 'npc-reaction':
       return (
-        <NarrationLine text={e.text}>
+        <NarrationLine text={text}>
           {vote(e)}
         </NarrationLine>
       );

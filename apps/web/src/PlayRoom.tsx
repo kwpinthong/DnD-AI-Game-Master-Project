@@ -74,12 +74,21 @@ export function PlayRoom({
   const compact = useCompact();
   const votes = useEntryVotes(apiBaseUrl, token);
   const conn = useRef<RoomConnection | undefined>(undefined);
+  const isOnline = useRef(false);
+  const live = useRef(new Map<number, number>());
 
   useEffect(() => {
     const c = connectRoom(apiBaseUrl, token, {
-      status: setConnection,
+      status: (status) => {
+        isOnline.current = status === 'online';
+        setConnection(status);
+      },
       room: setRoom,
-      entry: (entry) => setEntries((list) => [...list, entry]),
+      entry: (entry) => {
+        // GEN-148: what came after `ready` streams in; the history and a reconnect's catch-up appear whole.
+        if (isOnline.current) live.current.set(entry.seq, Date.now());
+        setEntries((list) => [...list, entry]);
+      },
       actionReply: (reply) => {
         setWaitingReply(false);
         if (reply.ok) {
@@ -241,7 +250,7 @@ export function PlayRoom({
         const feed = (
           <>
             <HitPin pinned={pinned} onAcknowledge={acknowledge} />
-            <ChatFeed entries={entries} day={room.day} placeId={you.place?.id ?? null} placeName={you.place?.name} astral={Boolean(you.astral)} acknowledged={acked} ownAction={you.action} voting={voting} />
+            <ChatFeed entries={entries} day={room.day} placeId={you.place?.id ?? null} placeName={you.place?.name} astral={Boolean(you.astral)} acknowledged={acked} ownAction={you.action} voting={voting} live={live.current} />
             {travelOpen && (
               <TravelSheet
                 apiBaseUrl={apiBaseUrl}

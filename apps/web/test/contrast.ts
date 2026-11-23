@@ -57,6 +57,13 @@ export const textPairs: readonly Pair[] = [
   ['--highlight', '--bg', 'ป้ายเหรียญที่ได้ (บนพื้น feed)'],
   ['--text', '--line', 'ตัวอักษรใน avatar'],
   ['--on-accent', '--highlight', 'ปุ่ม [ส่ง] สีอำพัน'],
+  // GEN-148 สีประจำ NPC: ชื่อบนพื้น feed / กล่อง, ตัวอักษรบน avatar; "กำลังพิมพ์…" ในกล่อง NPC
+  ...[1, 2, 3, 4, 5, 6].flatMap((n): Pair[] => [
+    [`--npc-${n}`, '--bg', `ชื่อ NPC สีที่ ${n} บนพื้น feed`],
+    [`--npc-${n}`, '--bubble-npc', `ชื่อ NPC สีที่ ${n} ใกล้กล่อง`],
+    ['--on-accent', `--npc-${n}`, `ตัวอักษรบน avatar NPC สีที่ ${n}`],
+  ]),
+  ['--text-soft', '--bubble-npc', '"กำลังพิมพ์…" ในกล่อง NPC'],
 ];
 
 // Non-text UI parts (WCAG 1.4.11, >= 3:1).
