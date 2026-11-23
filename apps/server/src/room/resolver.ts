@@ -63,7 +63,18 @@ export interface ClosedPhase {
  * - `narration`: private text for one player only.
  */
 export type ResolutionEntry = (
-  | { readonly kind: 'feed'; readonly locationId: string | null; readonly actorMemberId: string | null; readonly text: string }
+  | {
+      readonly kind: 'feed';
+      readonly locationId: string | null;
+      readonly actorMemberId: string | null;
+      readonly text: string;
+      /**
+       * GEN-117: the same event told with names per reader. `only` = this text goes to these members alone (no Human GM);
+       * `except` = the default text, not for these members (they got their own).
+       */
+      readonly only?: readonly string[];
+      readonly except?: readonly string[];
+    }
   | {
       readonly kind: 'narration';
       readonly memberId: string;

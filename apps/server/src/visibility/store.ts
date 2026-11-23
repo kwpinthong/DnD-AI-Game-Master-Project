@@ -70,8 +70,9 @@ export function locationSnapshot(db: DbOrTx, gameId: string): Map<string, string
 
 /**
  * Records that `viewer` learned `subject`'s real name (แนะนำตัว = introduced, สืบรู้ = discovered; GEN-050).
- * A discovered name shows to that viewer for good (Q-134, `namesVisibleTo`); an introduction alone does
- * not since GEN-067 (the row stays as a record). Discovering a name already introduced upgrades the row.
+ * Either shows to that viewer for good (`namesVisibleTo`): Q-292 counts an introduction (GEN-117), so this is
+ * the one per-pair "known" state, one way (B knowing A says nothing of A knowing B). Discovering a name
+ * already introduced upgrades the row.
  */
 export function learnName(
   db: DbOrTx,
@@ -87,12 +88,12 @@ export function learnName(
   } else insert.onConflictDoNothing().run();
 }
 
-/** Members whose real name `viewer` discovered (Q-134); permanent, per viewer. */
-function discoveredNamesOf(db: DbOrTx, viewerMemberId: string): string[] {
+/** Members whose real name `viewer` learned, introduced or discovered (Q-134, Q-292); permanent, per viewer. */
+function learnedNamesOf(db: DbOrTx, viewerMemberId: string): string[] {
   return db
     .select({ subject: knownName.subjectMemberId })
     .from(knownName)
-    .where(and(eq(knownName.viewerMemberId, viewerMemberId), eq(knownName.how, 'discovered')))
+    .where(eq(knownName.viewerMemberId, viewerMemberId))
     .all()
     .map((r) => r.subject);
 }
@@ -164,9 +165,9 @@ export function closeAlliesOf(db: DbOrTx, memberId: string): Set<string> {
   return new Set([...playerBondsOf(db, memberId)].filter(([, bond]) => revealsPlayerName(bond)).map(([id]) => id));
 }
 
-/** Members whose real name `viewer` sees: close allies (not permanent) plus names they discovered (permanent, Q-134). */
+/** Members whose real name `viewer` sees: close allies (not permanent) plus names they learned (permanent, Q-134 / Q-292). */
 export function namesVisibleTo(db: DbOrTx, viewerMemberId: string): Set<string> {
-  return new Set([...closeAlliesOf(db, viewerMemberId), ...discoveredNamesOf(db, viewerMemberId)]);
+  return new Set([...closeAlliesOf(db, viewerMemberId), ...learnedNamesOf(db, viewerMemberId)]);
 }
 
 // --- Hidden Evidence (GEN-067) ---

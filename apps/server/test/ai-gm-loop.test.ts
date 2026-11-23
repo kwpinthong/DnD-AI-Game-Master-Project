@@ -371,7 +371,7 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(turnRows()).toEqual([]);
   });
 
-  it('C3: A\'s private narration with B\'s real name (A does not know it) is refused and repaired', async () => {
+  it('C3: A\'s private narration with B\'s real name (A does not know it) gets the alias instead, with no repair (GEN-117 C6)', async () => {
     let refA = '';
     await boot({}, async (req) => {
       if (!isNarration(req)) return undefined;
@@ -389,8 +389,7 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     await playTurn(clients, ['ทักทายคนข้างโต๊ะ', 'ดื่มชา', 'อ่านประกาศ'], { day: 1, phase: 'EOSORIA', turn: 2 });
 
     const forA = provider.requests.filter((r) => isNarration(r) && 'player' in narrationFor(r) && (narrationFor(r) as { player: string }).player === refA);
-    expect(forA).toHaveLength(2);
-    expect(lastUserText(forA[1]!)).toContain('name_leak');
+    expect(forA).toHaveLength(1);
     expect(JSON.stringify(clients[0]!.entries())).not.toContain(DARIN.name);
     expect(turnEntries(clients[0]!, 1, 'EOSORIA', 1).filter((e) => e.kind === 'narration')).toHaveLength(1);
   });
@@ -412,8 +411,7 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     await playTurn(clients, ['มองทะเล', 'เก็บเปลือกหอย', 'นั่งริมผา'], { day: 1, phase: 'EOSORIA', turn: 2 });
 
     const forA = provider.requests.filter((r) => isNarration(r) && 'player' in narrationFor(r) && (narrationFor(r) as { player: string }).player === refA);
-    expect(forA).toHaveLength(2);
-    expect(lastUserText(forA[1]!)).toContain('name_leak');
+    expect(forA).toHaveLength(1);
     const mine = turnEntries(clients[0]!, 1, 'EOSORIA', 1).filter((e) => e.kind === 'narration');
     expect(mine).toHaveLength(1);
     expect(mine[0]!.text).toContain('ผู้เฝ้ามองเส้นขอบฟ้า');
@@ -972,8 +970,9 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       const [refA, refB] = [refOf(t.a), refOf(t.b)];
       const place = provider.requests.filter(isNarration).map((r) => contextOf<NarrationContext>(r)).find((c) => 'place' in c.audience && c.audience.place === 'fountain')!;
       const castOf = (ref: string) => place.cast.find((c) => c.ref === ref)!;
-      expect(castOf(refA)).toMatchObject({ karmaBand: 2, looks: expect.stringContaining('ผ้าคลุมเทา') });
-      expect(castOf(refB)).toMatchObject({ karmaBand: -2, looks: expect.stringContaining('เกราะหนัง') });
+      // GEN-117: a place feed is read by everyone, so it carries nobody's looks (only the alias).
+      expect(castOf(refA)).toMatchObject({ karmaBand: 2, looks: '' });
+      expect(castOf(refB)).toMatchObject({ karmaBand: -2, looks: '' });
       const lucia = place.npcs.find((n) => n.id === 'amnesiac')!;
       expect(lucia.persona).toEqual(expect.any(String));
       expect(lucia.bonds).toEqual(expect.arrayContaining([

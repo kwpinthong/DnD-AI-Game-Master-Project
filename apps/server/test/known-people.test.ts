@@ -1,5 +1,5 @@
 import type { RoomEntry, RoomServerMessage } from '@isekai/protocol';
-import { socialTitle, type Period, type Turn } from '@isekai/rules';
+import { socialTitle } from '@isekai/rules';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import type { AiCallRequest, AiCallResult, AiProvider } from '../src/ai/provider.ts';
@@ -75,8 +75,6 @@ describe('GEN-117 known people and looks', { timeout: 60_000 }, () => {
     await client.waitFor(isReady);
     return client;
   }
-  const at = (day: number, phase: Period, turn: Turn) => (m: RoomServerMessage) =>
-    m.type === 'room' && m.day === day && m.phase === phase && m.turn === turn && m.status === 'collecting';
   const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   /** Every player acts publicly; resolves once another turn is open for all (the one after the turn they acted in). */
@@ -115,17 +113,17 @@ describe('GEN-117 known people and looks', { timeout: 60_000 }, () => {
   });
 
   it('C2: A looks at B: A\'s narration may carry B\'s looks; C, who did not look, never gets them', async () => {
+    let refA = '';
     let refB = '';
     await boot((req) => {
       if (!isTurn(req)) return undefined;
       const proposal = mockTurnProposal(contextOf<TurnContext>(req));
-      const first = proposal.actions[0] as unknown as { looksAt?: string[] };
-      first.looksAt = [refB];
+      for (const a of proposal.actions) if (a.actor === refA) a.looksAt = [refB];
       return mockReply.ok(proposal);
     });
     const { t, clients } = await table();
     refB = refOf(t.b);
-    const refA = refOf(t.a);
+    refA = refOf(t.a);
     await playTurn(clients, ['มองดาริน', 'ดื่มชา', 'อ่านประกาศ']);
 
     const forA = narrationsFor(refA).map(narrationOf);

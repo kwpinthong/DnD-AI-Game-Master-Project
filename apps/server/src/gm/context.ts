@@ -318,8 +318,9 @@ export interface NarrationContext {
   turn: { day: number; phase: Phase; turn: Turn };
   place: { id: string; name: string };
   /**
-   * The only players the text may name, as {{p:ref}}. `self`: the reader of a private narration. `looks` + `title`
-   * = how the NPCs know the player (the alias); `karmaBand` -2..+2 (GEN-110: how NPCs treat them, never the number).
+   * The only players the text may name, as {{p:ref}}. `self`: the reader of a private narration. `looks` = how the
+   * player looks, only for someone the reader looked at (GEN-117; '' = do not describe them, a place feed has none);
+   * `title` = the alias (Title Mask) NPCs and strangers know them by; `karmaBand` -2..+2 (GEN-110: how NPCs treat them, never the number).
    */
   cast: { ref: string; looks: string; title: string; self: boolean; karmaBand: number }[];
   /**
@@ -381,6 +382,8 @@ const RULES_TEXT = [
     ' / grants = มอบสกิลที่เงื่อนไขครบแล้ว หรือสกิล / ไอเทมที่อยู่ในรางวัลของ NPC (npcId) ที่เปิดให้ผู้เล่นคนนี้แล้ว ไอเทมต้องมี npcId เสมอ นอกนั้นเว้นว่าง',
   // GEN-070
   '10. ผู้เล่น hp 0 คือสลบ: เป็นเป้าได้แค่ targetPlayer.intent steal / execute / rescue / execute ใช้กับผู้เล่นที่สลบเท่านั้น สำเร็จ = ตายถาวร (Astral Spirit) / ผู้เล่นที่พักฟื้นที่สถานพยาบาลโดนโจมตีหรือขโมยได้ แต่ execute ไม่ได้',
+  // GEN-117
+  '12. looksAt: ใส่ ref ของผู้เล่นที่ action นั้นตั้งใจมอง / สังเกต / คุยด้วยจริง ๆ (นอกเหนือจาก targetPlayer) เท่านั้น ถ้าไม่ได้มองใครตอบ [] ผู้เล่นจะได้รับรูปลักษณ์ของคนที่มองเท่านั้น',
   '9. endingPath: เฉพาะตอนที่เหตุการณ์ kind finale (วันพิพากษา วันที่ 12) active เท่านั้น ถ้าผู้เล่นทำเส้นทางสำเร็จในเทิร์นนี้ ให้ตอบ good (ม่านปาฏิหาริย์เบี่ยงอุกกาบาต) / evil (ดูดซับพลังอุกกาบาต) / neutral (ร่วมกับ NPC ของเหตุการณ์ลบล้างผลเป็นศูนย์) ตาม interventionEffects ของเหตุการณ์นั้น โดยดูจากผลของวันที่ 1, 5, 7, 10 ใน past ด้วย นอกนั้นตอบ null',
   // GEN-093 (Q-203)
   '10. strategy ของ action: เฉพาะตอนที่เหตุการณ์ที่มี strategies (คืนวันที่ 10) active เท่านั้น ถ้า action เป็นส่วนหนึ่งของแผน ให้ตอบ id ของแผนจาก strategies ของเหตุการณ์ (ห้ามใช้ D10-DRIFT) และ role = leader (ผู้นำที่ทอยตัดสินแผน) หรือ support (ผู้ร่วมสนับสนุน) ผลสำเร็จมาจากเต๋าของ action นั้น นอกนั้นตอบ null',
@@ -399,6 +402,8 @@ const NARRATOR_TEXT = [
   'คุณคือผู้เล่าเรื่องของ Game Master เล่าเฉพาะ beats ที่ให้มา ตามลำดับ ทุก beat ต้องมีอย่างน้อย 1 segment ที่ actionId ตรงกับ beat',
   'ห้ามเล่าเรื่องที่ไม่อยู่ใน beats ห้ามอ้างคนที่ไม่อยู่ใน cast ใช้ {{p:ref}} / {{n:id}} แทนชื่อเสมอ ห้ามเขียนชื่อจริง',
   'audience แบบ place = ทุกคนที่อยู่ที่นั่นอ่านร่วมกัน / แบบ player = อ่านคนเดียว (self = คุณ)',
+  // GEN-117
+  'cast ที่ looks ว่าง = ผู้อ่านไม่ได้มองคนนั้น ห้ามบรรยายรูปร่างหน้าตา ผม ผิว เสื้อผ้า ของเขาเด็ดขาด บอกได้แค่ว่ามีคนอยู่และทำอะไร (เรียกด้วย token) / บรรยายรูปลักษณ์ได้เฉพาะ cast ที่ looks มีค่า และตามผลของ beat',
   // GEN-116: บทพูด NPC เป็นขั้นตอนที่สองแยกต่างหาก (DIALOGUE_TEXT) ที่นี่เล่าเฉพาะ segments ไม่ต้องเขียนบทพูด NPC
   'ห้ามใส่บทพูดของ NPC ลงใน segments (มีขั้นตอนแยกเขียนให้ทีหลัง) เล่าแค่ผลของ beats',
 ].join('\n');
