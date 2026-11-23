@@ -28,10 +28,10 @@ import {
   type PlayerResult,
   type TurnPoint,
 } from '@isekai/rules';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { Clock } from '../auth/join.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
-import { game } from '../db/schema.ts';
+import { game, roomEntry } from '../db/schema.ts';
 import { activeMembers, type MemberRow } from '../game/service.ts';
 import { CryptoRng } from '../rng.ts';
 import { characterNameOf, entryViewOf, placeViewOf } from './entry-view.ts';
@@ -204,6 +204,8 @@ export function createRoomService(
   const caughtUp = new Set<string>();
   /** GEN-145: the period-change scene being written per game; the turn it opens waits for it before resolving. */
   const scenes = new Map<string, Promise<void>>();
+  /** GEN-185: the games whose missing scene was looked for since this process started. */
+  const sceneChecked = new Set<string>();
   let stopped = false;
 
   function memberOf(socket: RoomSocket): MemberRow | undefined {
@@ -615,6 +617,23 @@ export function createRoomService(
   }
 
   /**
+   * GEN-185: turn 1 of a period that opened (its announcement is stored) and is not finished, with no scene yet: a
+   * restart cut the scene short. Before turn 1 is published its only feed entries are the scene's (one transaction).
+   */
+  function missingScene(gameId: string, state: PhaseState): TurnPoint | null {
+    if (!playing(state) || state.turn !== 1) return null;
+    const kinds = new Set(
+      db
+        .select({ kind: roomEntry.kind })
+        .from(roomEntry)
+        .where(and(eq(roomEntry.gameId, gameId), eq(roomEntry.day, state.day), eq(roomEntry.phase, state.phase), eq(roomEntry.turn, 1)))
+        .all()
+        .map((r) => r.kind),
+    );
+    return kinds.has('time') && !kinds.has('feed') ? { day: state.day, phase: state.phase, turn: 1 } : null;
+  }
+
+  /**
    * GEN-059: tells the stored ending of an ended game once (whole-town feed + one narration per player). An
    * AI failure leaves the game ended and the ending untold: the room offers retry, and a restart tries again.
    */
@@ -795,6 +814,12 @@ export function createRoomService(
       if (resolver.catchUp && !caughtUp.has(me.gameId)) {
         caughtUp.add(me.gameId);
         startAfter(me.gameId, (signal) => resolver.catchUp!({ gameId: me.gameId, signal }));
+      }
+      // GEN-185: a scene a restart cut short is written (before the turn below, so its resolve waits for it).
+      if (resolver.scene && !sceneChecked.has(me.gameId)) {
+        sceneChecked.add(me.gameId);
+        const at = scenes.has(me.gameId) ? null : missingScene(me.gameId, state);
+        if (at) startScene(me.gameId, at);
       }
       // After a restart a phase can be left `resolving` with nobody working on it. A stuck turn waits for `retry`.
       if (state.status === 'resolving') wakeTurn(me.gameId);
