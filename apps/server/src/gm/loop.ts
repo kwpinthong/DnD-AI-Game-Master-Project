@@ -862,9 +862,9 @@ function introduce(db: DbOrTx, world: GmWorld, order: readonly TurnAction[], sta
  * how they look, that comes only to who looked); NPCs by alias until revealed. `shared`: a text many read (the place feed),
  * where the reader's own token is a person like any other.
  */
-function renderTokens(db: DbOrTx, world: GmWorld, text: string, reader: string | null, shared = false): string {
+export function renderTokens(db: DbOrTx, world: GmWorld, text: string, reader: string | null, shared = false): string {
   const revealed = reader === null ? new Set<string>() : new Set(npcBondsOf(db, reader).filter((b) => b.nameRevealed).map((b) => b.npcId));
-  return text.replace(TOKEN_PATTERN, (_all, kind: string, id: string) => {
+  const known = text.replace(TOKEN_PATTERN, (_all, kind: string, id: string) => {
     if (kind === 'n') {
       const npc = world.npcs.find((n) => n.id === id);
       return npc ? (revealed.has(id) ? npc.name : npc.alias) : '';
@@ -874,6 +874,8 @@ function renderTokens(db: DbOrTx, world: GmWorld, text: string, reader: string |
     if (p.memberId === reader && !shared) return 'คุณ';
     return reader !== null && world.knownNames(reader).has(p.memberId) ? p.name : p.socialTitle;
   });
+  // GEN-152: any other {{...}} the AI wrote ({{place}}, a wrong kind, a half token) is dropped, never shown raw.
+  return known.replace(/\{\{[^}]*\}\}|\{\{|\}\}/g, '').replace(/ {2,}/g, ' ');
 }
 
 /** HP / Stamina / Karma per player after the turn, for the day / period engine (`PlayerResult`). */
