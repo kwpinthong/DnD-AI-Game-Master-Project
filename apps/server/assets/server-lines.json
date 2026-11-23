@@ -1,0 +1,22 @@
+[
+  { "situation": "time_announce", "text": "ระฆังหอคอยดังกังวานไปทั่วเมือง บัดนี้เข้าสู่ช่วง {phase} แล้ว" },
+  { "situation": "time_announce", "text": "แสงบนฟากฟ้าเปลี่ยนสี เวลาล่วงเข้าสู่ช่วง {phase}" },
+  { "situation": "time_announce", "text": "สายลมพัดผ่าน พร้อมเสียงกระซิบของกาลเวลา... ช่วง {phase} มาเยือนแล้ว" },
+  { "situation": "time_announce", "text": "เงาของสรรพสิ่งทอดยาวไปอีกทาง โลกนี้ก้าวเข้าสู่ช่วง {phase}" },
+
+  { "situation": "npc_arrive", "text": "{npc} เดินเข้ามาที่{place}" },
+  { "situation": "npc_arrive", "text": "เสียงฝีเท้าแผ่วเบาดังขึ้น {npc} ปรากฏตัวที่{place}" },
+  { "situation": "npc_arrive", "text": "ผู้คนที่{place}หันไปมอง เมื่อ {npc} ก้าวเข้ามา" },
+
+  { "situation": "npc_leave", "text": "{npc} เดินจาก{place}ไปแล้ว" },
+  { "situation": "npc_leave", "text": "{npc} หันหลังให้{place} แล้วลับหายไปในฝูงชน" },
+  { "situation": "npc_leave", "text": "เพียงชั่วพริบตา {npc} ก็ไม่อยู่ที่{place}อีกต่อไป" },
+
+  { "situation": "farewell", "text": "{npc} หยุดเดินครู่หนึ่งแล้วเอ่ยว่า \"{farewell}\"" },
+  { "situation": "farewell", "text": "ก่อนจากไป {npc} หันมาบอกเบา ๆ ว่า \"{farewell}\"" },
+  { "situation": "farewell", "text": "{npc} ยิ้มบาง ๆ \"{farewell}\"" },
+
+  { "situation": "generic_farewell", "text": "ขอให้โชคชะตาเมตตาเจ้านะ" },
+  { "situation": "generic_farewell", "text": "ไว้พบกันใหม่ ถ้าเทพยังให้เราได้เจอกันอีก" },
+  { "situation": "generic_farewell", "text": "ระวังตัวด้วยล่ะ เมืองนี้ไม่ได้ใจดีกับใครเสมอไป" }
+]

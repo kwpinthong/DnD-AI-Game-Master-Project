@@ -247,6 +247,7 @@ const LAYOUTS: Record<TabName, TabLayout> = {
       col('Match_Verb_Tags', 'matchVerbTags', tags),
       col('Match_Target_Tags', 'matchTargetTags', tags),
       optionalCol('Public_Alias', 'publicAlias', text, ''),
+      optionalCol('Farewell', 'farewell', text, ''),
     ],
     derive: (r) => {
       r.aliases = npcAliases(r.name as string, r.trueName as string);
