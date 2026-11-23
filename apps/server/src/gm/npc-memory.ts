@@ -1,4 +1,4 @@
-import type { Phase } from '@isekai/protocol';
+import { PHASES, type Phase } from '@isekai/protocol';
 import { AFFINITY_PER_ACTION, NPC_NAME_REVEAL_AFFINITY, type ActionOutcome } from '@isekai/rules';
 import { and, eq, inArray, lt } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
@@ -27,7 +27,6 @@ export const MEMORY_LIMITS = {
   foldAfterDays: 2,
 } as const;
 
-const PHASES: readonly Phase[] = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'];
 
 type MemoryWorld = Pick<GmWorld, 'gameId' | 'players' | 'byRef' | 'tokenise'>;
 type Row = typeof npcMemory.$inferInsert;

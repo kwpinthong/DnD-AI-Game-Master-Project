@@ -1,10 +1,11 @@
+import { WEATHERS } from '@isekai/rules';
 import { z } from 'zod';
 
 /**
- * The weather of a period (GEN-068), as everyone in the town sees it. Same values as `WEATHERS` in
- * `@isekai/rules`, which holds the rules. Disaster is not a weather the AI picks: it holds from day 5 on.
+ * The weather of a period (GEN-068), as everyone in the town sees it. `WEATHERS` is the one of
+ * `@isekai/rules` (GEN-191), which holds the rules. Disaster is not a weather the AI picks: it holds from day 5 on.
  */
-export const WEATHERS = ['Clear', 'Rain', 'Fog', 'Dark Night', 'Clear Night', 'Storm'] as const;
+export { WEATHERS };
 export const Weather = z.enum(WEATHERS);
 export type Weather = z.infer<typeof Weather>;
 

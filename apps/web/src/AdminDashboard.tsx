@@ -1,4 +1,5 @@
 import type { AiUsageGameResponse, AiUsageOverviewResponse, UsageCeiling, UsageFailure, UsageTotals } from '@isekai/protocol';
+import { PHASES as PERIODS } from '@isekai/protocol';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { fetchGameUsage, fetchUsageOverview, postAdminLogout, postAdminSession } from './admin-api.ts';
 import { GameDataEditor } from './GameDataEditor.tsx';
@@ -61,8 +62,6 @@ const FAILURE_LABEL: Record<string, string> = {
   provider_error: 'provider ผิดพลาด (provider_error)',
   aborted: 'ยกเลิก (aborted)',
 };
-
-const PERIODS = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
 
 const n = (value: number) => value.toLocaleString('en-US');
 const usd = (micros: number) => `$${(micros / 1_000_000).toFixed(4)}`;

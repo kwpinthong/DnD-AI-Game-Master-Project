@@ -1,4 +1,5 @@
 import type { AiUsageGameResponse, AiUsageOverviewResponse, UsageCeiling, UsageFailure, UsageTotals } from '@isekai/protocol';
+import { PERIODS } from '@isekai/rules';
 import { eq, max, sql, sum, count } from 'drizzle-orm';
 import type { AiConfig } from '../ai/config.ts';
 import { monthStartUtc } from '../ai/core/usage.ts';
@@ -12,7 +13,7 @@ import { aiUsage } from '../db/schema-ai.ts';
  * so its detail never leaves the database.
  */
 
-const PERIOD_ORDER = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'];
+const PERIOD_ORDER: readonly string[] = PERIODS;
 /** Warning from this share of the ceiling (C3). */
 export const CEILING_WARNING_PERCENT = 80;
 

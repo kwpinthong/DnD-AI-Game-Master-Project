@@ -1,3 +1,4 @@
+import { PERIODS } from '@isekai/rules';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { game, member } from './schema.ts';
 
@@ -17,7 +18,7 @@ export const npcChat = sqliteTable(
       .references(() => member.id, { onDelete: 'cascade' }),
     npcId: text('npc_id').notNull(),
     day: integer('day').notNull(),
-    phase: text('phase', { enum: ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] }).notNull(),
+    phase: text('phase', { enum: PERIODS }).notNull(),
     whisper: integer('whisper', { mode: 'boolean' }).notNull().default(false),
     text: text('text').notNull(),
     reply: text('reply').notNull(),

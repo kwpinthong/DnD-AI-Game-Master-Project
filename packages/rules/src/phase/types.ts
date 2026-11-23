@@ -10,7 +10,7 @@
 import type { StatusEffect, Visibility } from '../resolution/types.ts';
 
 /**
- * Same values as `Phase` in `@isekai/protocol`. EOSORIA 06-12, SOLARION 12-18, HESPERION 18-24,
+ * The one list of periods: `PHASES` of `@isekai/protocol` is this array (GEN-191). EOSORIA 06-12, SOLARION 12-18, HESPERION 18-24,
  * NOCTHERION 24-06 (still the same game day: the day changes after NOCTHERION).
  */
 export const PERIODS = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;

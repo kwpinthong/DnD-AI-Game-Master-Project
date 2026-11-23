@@ -1,8 +1,6 @@
+import { PERIODS as PHASES } from '@isekai/rules';
 import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { game } from './schema.ts';
-
-/** `Phase` of `@isekai/protocol` (periods, GEN-063); written out because drizzle-kit loads this file alone. */
-const PHASES = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
 
 /**
  * Where a game is on its 12-day timeline (GEN-053). Moves forward only, through `advanceTimeline`.

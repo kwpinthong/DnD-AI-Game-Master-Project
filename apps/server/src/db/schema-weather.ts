@@ -1,9 +1,6 @@
+import { PERIODS as PHASES, WEATHERS } from '@isekai/rules';
 import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { game } from './schema.ts';
-
-/** Written out because drizzle-kit loads this file alone (same values as `PERIODS` / `WEATHERS` of `@isekai/rules`). */
-const PHASES = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
-const WEATHERS = ['Clear', 'Rain', 'Fog', 'Dark Night', 'Clear Night', 'Storm'] as const;
 
 /**
  * The weather of each period of a game (GEN-068), picked once when the period opens and never again:

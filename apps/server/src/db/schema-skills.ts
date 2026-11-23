@@ -1,8 +1,6 @@
+import { PERIODS } from '@isekai/rules';
 import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { game, member } from './schema.ts';
-
-/** `Period` of `@isekai/rules`; written out because drizzle-kit loads this file alone. */
-const PERIODS = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
 
 /**
  * Skills and items beyond the loot step (GEN-055). A player's skills are the loot skill (character_loot),
