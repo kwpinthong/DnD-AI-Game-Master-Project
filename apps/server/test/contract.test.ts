@@ -295,6 +295,16 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     // GEN-080: the lore + feedback extract of the ended table game (Mock AI), then a game that is not one.
     await hit(call, 'POST /api/admin/learning/games/:gameId/extract', { token: adminToken, path: `/api/admin/learning/games/${tableGame}/extract` });
     await hit(call, 'POST /api/admin/learning/games/:gameId/extract', { token: adminToken, path: '/api/admin/learning/games/nope/extract' });
+    // GEN-084: the game owner's extract status / retry (Q-363), then the library and its deletes.
+    await hit(call, 'GET /api/game/learning', { token: t.gm!.token });
+    await hit(call, 'POST /api/game/learning/extract', { token: t.gm!.token });
+    await hit(call, 'GET /api/game/learning', { token: t.b.token });
+    const lib = await hit(call, 'GET /api/admin/learning', { token: adminToken });
+    const first = (lib.body as { entries: { id: string }[] }).entries[0]!.id;
+    await hit(call, 'DELETE /api/admin/learning/:id', { token: adminToken, path: `/api/admin/learning/${first}` });
+    await hit(call, 'DELETE /api/admin/learning/:id', { token: adminToken, path: `/api/admin/learning/${first}` });
+    await hit(call, 'DELETE /api/admin/learning/games/:gameId', { token: adminToken, path: `/api/admin/learning/games/${tableGame}` });
+    await hit(call, 'DELETE /api/admin/learning/games/:gameId', { token: adminToken, path: `/api/admin/learning/games/${tableGame}` });
     // GEN-082: a player's style by their player code (stored as joining with it would): look up, switch off, delete; unknown = 403.
     server!.db.prepare("insert into member_style (member_id, game_id, player_key, opt_out, updated_at) values (?, ?, ?, 0, 0)").run(t.a.memberId, tableGame, playerKeyOf(server!.orm, 'pc-contract'));
     await hit(call, 'POST /api/style', { body: { playerCode: 'pc-contract' } });

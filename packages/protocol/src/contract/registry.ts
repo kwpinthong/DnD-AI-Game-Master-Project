@@ -128,6 +128,7 @@ export const CONTRACT_SCHEMAS = {
   GameDataExportResponse: p.GameDataExportResponse,
   LearningLibraryResponse: p.LearningLibraryResponse,
   LearningExtractResponse: p.LearningExtractResponse,
+  GameLearningResponse: p.GameLearningResponse,
   PlayerStyleRequest: p.PlayerStyleRequest,
   PlayerStyleResponse: p.PlayerStyleResponse,
   AdminDownvotesResponse: p.AdminDownvotesResponse,
@@ -284,6 +285,8 @@ export const CONTRACT: readonly ContractItem[] = [
   // --- after the end ---
   http('GET', '/api/game/rating', null, 'GameRatingResponse', ready('GEN-078', 'player', ['ending-rating'], 'หลังเกมจบเท่านั้น (ก่อนจบ 409); ไม่ใช่สมาชิก 403; `average` แสดงเฉยๆ ไม่เป็นเกณฑ์ (GEN-079)')),
   http('PUT', '/api/game/rating', 'GameRatingRequest', 'GameRatingResponse', ready('GEN-078', 'player', ['ending-rating'], 'คนละ 1 คะแนน ส่งใหม่ = แทนค่าเดิม')),
+  http('GET', '/api/game/learning', null, 'GameLearningResponse', ready('GEN-084', 'player', ['ending'], 'Q-363: สถานะสกัดความรู้ของเกมนี้ เจ้าของเกมเท่านั้น (คนอื่น 403); ก่อนจบ 409')),
+  http('POST', '/api/game/learning/extract', null, 'GameLearningResponse', ready('GEN-084', 'player', ['ending'], 'Q-363: เจ้าของเกมลองสกัดใหม่จากหน้าจบเกม (ครั้งเดียวต่อเกม สำเร็จแล้ว = `done` ไม่ call); คนอื่น 403; ก่อนจบ 409; Q-364: server สกัดเองเมื่อจบเกินกำหนด (LEARNING_AUTO_EXTRACT_HOURS ค่าเริ่ม 24)')),
   http('PUT', '/api/game/rating/votes/:sourceRef', 'ResponseVoteRequest', 'GameRatingResponse', ready('GEN-171', 'player', ['ending-rating'], '👍/👎 action → ผล ด้วย `sourceRef` (ADR GEN-077) แบบ GEN-107, `vote: null` = ยกเลิก; เก็บใน response_vote เป็น `ruling-${sourceRef}` (Q-325); เห็นแค่ `myVotes` ของตัวเอง ไม่มียอดรวม; GM คน / ไม่ใช่สมาชิก 403; ก่อนจบ 409; ref ที่หน้าสรุปไม่เปิด = 404 `ruling_not_found`')),
 
   // --- server owner ---
@@ -298,9 +301,9 @@ export const CONTRACT: readonly ContractItem[] = [
   http('GET', '/api/admin/game-data-export', null, 'GameDataExportResponse', ready('GEN-147', 'admin', ['game-data'], 'ชื่อไฟล์ → JSON ที่ loader เดิมโหลดกลับได้')),
   http('GET', '/api/admin/ai-usage', null, 'AiUsageOverviewResponse', ready('GEN-061', 'admin', ['ai-usage'])),
   http('GET', '/api/admin/ai-usage/:gameId', null, 'AiUsageGameResponse', ready('GEN-061', 'admin', ['ai-usage'])),
-  http('GET', '/api/admin/learning', null, 'LearningLibraryResponse', pending('GEN-084', 'admin', ['learning-library'], 'ชนิด entry ตาม ADR ของ GEN-077')),
-  http('DELETE', '/api/admin/learning/:id', null, 'LearningLibraryResponse', pending('GEN-084', 'admin', ['learning-library'])),
-  http('DELETE', '/api/admin/learning/games/:gameId', null, 'LearningLibraryResponse', pending('GEN-084', 'admin', ['learning-library'])),
+  http('GET', '/api/admin/learning', null, 'LearningLibraryResponse', ready('GEN-084', 'admin', ['learning-library'], '5 ชนิด (lore, feedback_note, good_example, avoid, style) + ชื่อเกมต้นทาง + วันที่; good/avoid มี 👍 / 👎 / ผู้เล่น; ไม่มี entry ที่ลบแล้ว; style ไม่มี playerKey')),
+  http('DELETE', '/api/admin/learning/:id', null, 'LearningLibraryResponse', ready('GEN-084', 'admin', ['learning-library'], 'ลบแบบ tombstone: ไม่ถูกใช้ใน prompt อีก และสร้างใหม่ไม่กลับมา; ไม่มี / ลบแล้ว = 404 `response_not_found`')),
+  http('DELETE', '/api/admin/learning/games/:gameId', null, 'LearningLibraryResponse', ready('GEN-084', 'admin', ['learning-library'], 'ลบทุก entry ของเกมต้นทางนั้น (tombstone); ไม่มี entry = 404 `game_not_found`')),
   http('POST', '/api/admin/learning/games/:gameId/extract', null, 'LearningExtractResponse', ready('GEN-080', 'admin', ['learning-library'], 'สกัด lore + feedback_note จากหน้าสรุปตอนจบ (ไม่มีเกณฑ์คะแนน) AI 1 call purpose `learning_extract`; ครั้งเดียวต่อเกม (ซ้ำ = `done` ไม่ call); AI ล้ม = `failed` "สกัดไม่สำเร็จ" ไม่มี entry เรียกซ้ำได้; เกมยังไม่จบ = 409 `not_allowed`; ไม่มีเกม = 404 `game_not_found`; เรียกเองอัตโนมัติเมื่อสมาชิกให้คะแนนครบ')),
 
   // --- GEN-168: review of 👎 messages (server owner) ---

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Phase } from './scenario.ts';
 import { AdminCorrection, ReviewScene } from './vote-review.ts';
+import { StyleGoodCandidate } from './style-review.ts';
 
 /**
  * GEN-151: the server owner's NPC example library (admin code only). An example is a message players gave a 👍
@@ -49,6 +50,8 @@ export const NpcLibraryResponse = z.strictObject({
   candidates: z.array(AdminCorrection),
   /** The NPCs of the games' scenarios, to give an example to. */
   npcChoices: z.array(NpcChoice),
+  /** GEN-084 (Q-322): NPC lines of ended games most players liked (GEN-081 good_example), not in the library yet; tokens + "ผู้เล่น". */
+  goodLines: z.array(StyleGoodCandidate),
 });
 export type NpcLibraryResponse = z.infer<typeof NpcLibraryResponse>;
 

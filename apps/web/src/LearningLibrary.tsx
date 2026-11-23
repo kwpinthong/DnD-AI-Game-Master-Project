@@ -1,4 +1,4 @@
-import type { LearningEntryView, LearningLibraryResponse, LearningType } from '@isekai/protocol';
+import { LearningType, type LearningEntryView, type LearningLibraryResponse } from '@isekai/protocol';
 import { useCallback, useEffect, useState } from 'react';
 import { deleteLearningEntry, deleteLearningGame, fetchLearningLibrary, type AdminResult } from './admin-api.ts';
 import { Button } from './ui/Button.tsx';
@@ -8,16 +8,15 @@ import { libraryText as t } from './ui/strings.ts';
 import './library.css';
 
 /**
- * The Learning library (GEN-091, Screens and Flows v2 §7): what the AI GM keeps across games, by source game.
- * Only the server owner sees or deletes it (Q-168): it lives behind the admin code and a 403 hands the
- * session back. An entry whose game dropped to 8 or lower shows as suspended (Q-223). Built on the GEN-099
- * contract; the endpoints are GEN-084's.
+ * The Learning library (GEN-091, Screens and Flows v2 §7): what the AI GM keeps across games, by source game, in
+ * the 5 types of GEN-084. Only the server owner sees or deletes it (Q-168): it lives behind the admin code and a
+ * 403 hands the session back. A voted example whose votes no longer pass shows as suspended (GEN-081).
  */
 
 type State = { state: 'loading' } | { state: 'error' } | { state: 'ready'; data: LearningLibraryResponse };
 type Confirm = { kind: 'entry'; id: string } | { kind: 'game'; id: string; name: string };
 
-const TYPES: readonly LearningType[] = ['lore', 'feedback_note', 'ruling', 'style'];
+const TYPES = LearningType.options;
 
 const day = (ms: number) => new Date(ms).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
 
@@ -28,10 +27,11 @@ function detailLine(e: LearningEntryView): string {
       return t.endingPath[e.detail.endingPath];
     case 'feedback_note':
       return t.fromComments(e.detail.fromComments);
-    case 'ruling': {
+    case 'good_example':
+    case 'avoid': {
       const d = e.detail;
-      const roll = [t.check[d.check], d.dcLabel, d.d20 === null ? null : `d20 ${d.d20}`, t.result[d.result], t.thumbs(d.thumbs, d.players)];
-      return roll.filter((part) => part !== null).join(' · ');
+      const parts = [t.kind[d.kind], d.dcLabel, d.d20 === null ? null : `d20 ${d.d20}`, d.result === null ? null : t.result[d.result], t.votes(d.up, d.down, d.players)];
+      return parts.filter((part) => part !== null).join(' · ');
     }
     case 'style':
       return `${t.topVerbs}: ${e.detail.topVerbs.join(', ')} · ${t.secretShare(e.detail.secretShare)}`;
@@ -47,7 +47,6 @@ function Entry({ entry: e, onDelete }: { entry: LearningEntryView; onDelete: () 
         {e.status === 'suspended' && <span className="lib-entry__suspended">{t.suspended}</span>}
       </p>
       <p className="lib-entry__content">{e.content}</p>
-      {e.type === 'ruling' && e.detail.actionText !== e.content && <p className="lib-entry__detail">{e.detail.actionText}</p>}
       <p className="lib-entry__detail">{detailLine(e)}</p>
       {e.tags.length > 0 && (
         <ul className="lib-entry__tags" aria-label="tag">

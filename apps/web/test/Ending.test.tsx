@@ -80,7 +80,7 @@ describe('GEN-091 end page', () => {
 
     const scores = await ratingRegion().findAllByRole('radio');
     expect(scores.map((r) => (r as HTMLInputElement).value)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']);
-    expect(calls[0]).toMatchObject({ method: 'GET', path: '/api/game/rating', auth: 'Bearer tok' });
+    expect(calls.find((c) => c.path === '/api/game/rating')).toMatchObject({ method: 'GET', auth: 'Bearer tok' });
 
     // GEN-171: the 👍/👎 set of GEN-107 on the action row, above the form; no totals anywhere
     const group = await secrets.findByRole('group', { name: /โหวตการตัดสินนี้: .*แอบเข้าโบสถ์ชั้นใต้ดิน/ });

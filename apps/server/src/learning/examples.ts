@@ -1,5 +1,5 @@
 import { isVotableEntry, type RollOutcome, type RollView, type StyleGoodCandidate } from '@isekai/protocol';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import { memberNames } from '../admin/vote-review.ts';
 import type { DbOrTx } from '../db/client.ts';
 import { game, learningEntry, npcExample, roomEntry, roomEntryRecipient } from '../db/schema.ts';
@@ -149,9 +149,14 @@ export function syncExamples(db: DbOrTx, gameId: string, now: number): void {
   for (const e of existing) if (e.status === 'active' && !keptKeys.has(keyOf(e))) db.update(learningEntry).set({ status: 'suspended' }).where(eq(learningEntry.id, e.id)).run();
 }
 
-/** A library delete (GEN-084 calls this): the entry is never used again and a rebuild does not bring it back. */
+/** A library delete (GEN-084): the entry is never used again and a rebuild does not bring it back. false = none to delete. */
 export function deleteLearningEntry(db: DbOrTx, id: number): boolean {
-  return db.update(learningEntry).set({ status: 'deleted', content: '' }).where(eq(learningEntry.id, id)).run().changes > 0;
+  return db.update(learningEntry).set({ status: 'deleted', content: '' }).where(and(eq(learningEntry.id, id), ne(learningEntry.status, 'deleted'))).run().changes > 0;
+}
+
+/** GEN-084: every entry of a source game, as `deleteLearningEntry` does one. false = the game has none left. */
+export function deleteLearningGame(db: DbOrTx, gameId: string): boolean {
+  return db.update(learningEntry).set({ status: 'deleted', content: '' }).where(and(eq(learningEntry.sourceGameId, gameId), ne(learningEntry.status, 'deleted'))).run().changes > 0;
 }
 
 export interface LearningExample {

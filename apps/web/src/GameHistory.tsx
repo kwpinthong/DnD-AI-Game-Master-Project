@@ -1,6 +1,6 @@
 import type { GameLogResponse, RoomEntry } from '@isekai/protocol';
 import { useEffect, useId, useState } from 'react';
-import { EndingReveal, EndingToc, RatingSection, useRating, when as at } from './Ending.tsx';
+import { EndingReveal, EndingToc, LearningRetry, RatingSection, useRating, when as at } from './Ending.tsx';
 import { fetchGameLog } from './history-api.ts';
 import { forgetToken, loadKnownTokens } from './session.ts';
 import { TurnChangesList } from './play/TurnChanges.tsx';
@@ -149,6 +149,7 @@ export function GameLog({ log, onBack, apiBaseUrl, token }: { log: GameLogRespon
         />
       )}
       {ended && <RatingSection rating={rating} id={ids.rating} />}
+      {ended && apiBaseUrl !== undefined && token && <LearningRetry apiBaseUrl={apiBaseUrl} token={token} />}
 
       {ended ? (
         <details className="end-log">

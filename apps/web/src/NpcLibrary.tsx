@@ -93,8 +93,8 @@ export function NpcLibrary({ apiBaseUrl, token, onForbidden }: Props) {
   if (view.state === 'loading') return <Skeleton lines={3} />;
   if (view.state === 'error') return <ErrorState message={t.loadFailed} onRetry={() => void load()} />;
 
-  const { npcs, upvoted, candidates, npcChoices } = view.data;
-  const names = new Map([...npcChoices.map((c) => [c.id, c.name] as const), ...npcs.map((n) => [n.npcId, n.npcName] as const)]);
+  const { npcs, upvoted, candidates, npcChoices, goodLines } = view.data;
+  const names = new Map([...goodLines.map((l) => [l.npc.id, l.npc.name] as const), ...npcChoices.map((c) => [c.id, c.name] as const), ...npcs.map((n) => [n.npcId, n.npcName] as const)]);
   /** The owner reads words, not tokens. */
   const words = (text: string) => text.replace(/\{\{p:[^}]+\}\}/g, t.player).replace(/\{\{n:([^}]+)\}\}/g, (_, id: string) => names.get(id) ?? id);
   const add = async (body: NpcExampleAddRequest) => take(await addNpcExample(apiBaseUrl, token, body));
@@ -133,6 +133,25 @@ export function NpcLibrary({ apiBaseUrl, token, onForbidden }: Props) {
           </div>
         </section>
       ))}
+
+      {/* GEN-084 (Q-322): GEN-081's good NPC lines, one click to the NPC they belong to. */}
+      <section aria-label={t.goodLinesTitle}>
+        <h3>{t.goodLinesTitle}</h3>
+        <p className="lib__owner">{t.goodLinesNote}</p>
+        {goodLines.length === 0 ? (
+          <p>{t.noGoodLines}</p>
+        ) : (
+          <ul className="npc-lib__list">
+            {goodLines.map((l) => (
+              <li key={`${l.gameId}/${l.seq}`} className="lib-entry">
+                <p className="lib-entry__meta">{`${l.npc.name} · ${t.up(l.up)}`}</p>
+                <p className="lib-entry__content">{words(l.text)}</p>
+                <AddForm choices={npcChoices} npcId={l.npc.id} scene="npc-dialogue" label={t.addLabel(words(l.text))} onAdd={(npcId, scene) => add({ from: 'vote', gameId: l.gameId, seq: l.seq, npcId, scene: scene ?? 'npc-dialogue' })} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section aria-label={t.upvotedTitle}>
         <h3>{t.upvotedTitle}</h3>
