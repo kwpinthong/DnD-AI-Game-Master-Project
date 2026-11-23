@@ -179,6 +179,8 @@ export type GmDialogue = z.infer<typeof GmDialogue>;
 export const GmDaySummary = z.object({
   recap: z.string().min(1).max(1800),
   saga: z.string().min(1).max(4500),
+  /** ISK-014: tomorrow's morning news. Never fails the summary: a wrong shape is dropped and the server's template used (C9). */
+  news: z.array(z.string()).optional().catch(undefined),
 });
 export type GmDaySummary = z.infer<typeof GmDaySummary>;
 

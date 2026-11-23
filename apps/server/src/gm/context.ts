@@ -15,6 +15,7 @@ import { SKILL_FLAGS } from '../skills/unlock-rules.ts';
 import { buildEventContext, type EventContext } from '../timeline/context.ts';
 import { namesVisibleTo, presencesInGame } from '../visibility/store.ts';
 import { forAi, THAI_OUTPUT } from './language.ts';
+import type { NewsSources } from './news.ts';
 import { activeConstraints, dayLog, journalFor, memoryFor } from './store.ts';
 
 /**
@@ -406,6 +407,8 @@ export interface DayContext {
   day: number;
   saga: string | null;
   log: string[];
+  /** ISK-014: what tomorrow's morning news may draw on (events by name + public description only). */
+  news: NewsSources;
 }
 
 // --- Prompts (static, cacheable) ---
@@ -492,7 +495,7 @@ const DIALOGUE_TEXT = [
 ].join('\n');
 
 // GEN-164: with English instructions the recap / saga ran past the 1,500 output tokens; the caps keep it as long as before.
-const SUMMARY_TEXT = `Summarise the day that just ended for the Game Master: recap = what mattered today, at most 400 characters / saga = the whole story up to today, the old saga folded together with today, at most 900 characters (when full, shorten the older days). Always use tokens for names. ${THAI_OUTPUT}`;
+const SUMMARY_TEXT = `Summarise the day that just ended for the Game Master: recap = what mattered today, at most 400 characters / saga = the whole story up to today, the old saga folded together with today, at most 900 characters (when full, shorten the older days). news = tomorrow morning's town news that every player reads alike, 1-3 short items (each at most 160 characters, all together at most 300): from news.starting (events that begin tomorrow) and news.yesterday (today's events) by their title and description, plus what happened today in plain view of the town; when nothing new, one rumour or a line on the town's mood. Never an outcome or what will happen, a private clue, a secret or a Secret action; people only as tokens (they are shown by their alias). Always use tokens for names. ${THAI_OUTPUT}`;
 
 export const RULES_BLOCK: PromptBlock = { id: 'rules', text: RULES_TEXT, cache: true };
 export const NARRATOR_BLOCK: PromptBlock = { id: 'narrator-rules', text: NARRATOR_TEXT, cache: true };

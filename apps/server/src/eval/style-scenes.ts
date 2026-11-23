@@ -287,6 +287,7 @@ export const STYLE_SCENES: StyleScene[] = [
         '{{p:p_b}} พา {{n:guard}} ไปดูรอยงัดที่ประตูโกดัง',
         'ตกค่ำมีคนเห็นเงาคนแบกหีบมุ่งหน้าไปทางป่า',
       ],
+      news: { day: 6, starting: [], yesterday: [] },
     },
   },
   {

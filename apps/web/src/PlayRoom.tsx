@@ -340,7 +340,7 @@ export function PlayRoom({
               </div>
             )}
             <GmConsole apiBaseUrl={apiBaseUrl} token={token} refreshKey={`${room.day}-${room.phase}-${room.turn}-${room.status}-${room.gmStatus?.code ?? ''}`} gmStatus={room.gmStatus} />
-            <ChatFeed entries={entries.filter((e) => e.kind === 'feed' || e.kind === 'time')} day={room.day} placeId={null} astral={false} />
+            <ChatFeed entries={entries.filter((e) => e.kind === 'feed' || e.kind === 'time' || e.kind === 'news')} day={room.day} placeId={null} astral={false} />
             <PrivateColumn
               entries={entries}
               you={you}

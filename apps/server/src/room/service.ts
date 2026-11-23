@@ -64,6 +64,7 @@ import { settleTurnProgress, withPeriodEndEffects } from '../skills/progress.ts'
 import type { ClosedAction, DialogueStage, FinaleResolution, PhaseResolution, PhaseResolver, PlaceReaders, ResolutionEntry, ResolverStuck } from './resolver.ts';
 import { getEnding, markNarrated, settleEnding } from '../finale/store.ts';
 import { templateFinaleEntries } from '../gm/finale.ts';
+import { hasNews, insertNews, templateNews } from '../gm/news.ts';
 import { periodAnnouncement } from '../gm/scene.ts';
 import {
   ensurePhaseState,
@@ -655,12 +656,22 @@ export function createRoomService(
   /**
    * GEN-145: the scene of each place with players for the period that just opened, in the background (the next turn's
    * resolve waits for it, so it comes before that turn's results). A failure only costs the scene; the announcement stays.
+   * ISK-014: a day's first turn also gets the morning news, out before the scene. `parts`: only what a restart left missing.
    */
-  function startScene(gameId: string, at: HeldTurn['at']): void {
-    if (!resolver.scene || stopped) return;
+  function startScene(gameId: string, at: HeldTurn['at'], parts = { scene: true, news: at.phase === 'EOSORIA' && at.turn === 1 }): void {
+    const scene = parts.scene && resolver.scene !== undefined;
+    if (stopped || (!scene && !parts.news)) return;
+    const sceneFailed = (error: unknown): readonly ResolutionEntry[] => {
+      log(`[room] game=${gameId} scene failed: ${error instanceof Error ? error.name : 'unknown error'}`);
+      return [];
+    };
     const task: Promise<void> = (async () => {
-      const weatherNow = await weatherFor(gameId, ensurePhaseState(db, gameId, now()));
-      const entries = await resolver.scene!({ gameId, at, weather: weatherNow, signal: shutdown.signal });
+      // The scene is written meanwhile; only its publish waits for the news.
+      const written = scene
+        ? (async () => resolver.scene!({ gameId, at, weather: await weatherFor(gameId, ensurePhaseState(db, gameId, now())), signal: shutdown.signal }))().catch(sceneFailed)
+        : Promise.resolve([]);
+      if (parts.news) await publishNews(gameId, at.day);
+      const entries = await written;
       if (stopped || entries.length === 0) return;
       // GEN-186: with a Human GM the scene waits in the console like a turn (the announcement is already out),
       // GEN-128: after the NPC lines of the turn before.
@@ -674,6 +685,21 @@ export function createRoomService(
       .catch((error) => log(`[room] game=${gameId} scene failed: ${error instanceof Error ? error.name : 'unknown error'}`))
       .finally(() => scenes.delete(gameId));
     scenes.set(gameId, task);
+  }
+
+  /** ISK-014: the morning news of `day` once (the AI's, else the server's template) to everyone in the game, unless the day is over. */
+  async function publishNews(gameId: string, day: number): Promise<void> {
+    const written = (await resolver.news?.({ gameId, day }).catch(() => null)) ?? null;
+    if (stopped) return;
+    try {
+      const out = db.transaction((tx) => {
+        if (ensurePhaseState(tx, gameId, now()).day !== day) return null;
+        return insertNews(tx, gameId, day, written && written.length > 0 ? written : templateNews(tx, assets, gameId, day), now());
+      });
+      if (out) deliver(gameId, [out]);
+    } catch (error) {
+      log(`[room] news publish failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
+    }
   }
 
   /** Stores and sends a period's scene under its turn 1, unless the game has moved past that turn; false = the transaction failed. */
@@ -714,6 +740,11 @@ export function createRoomService(
         .map((r) => r.kind),
     );
     return kinds.has('time') && !kinds.has('feed') ? { day: state.day, phase: state.phase, turn: 1 } : null;
+  }
+
+  /** ISK-014 (C10): a day's first turn, not finished, without its morning news: a restart cut it short. */
+  function missingNews(gameId: string, state: PhaseState): TurnPoint | null {
+    return playing(state) && state.phase === 'EOSORIA' && state.turn === 1 && !hasNews(db, gameId, state.day) ? { day: state.day, phase: state.phase, turn: 1 } : null;
   }
 
   /**
@@ -910,11 +941,13 @@ export function createRoomService(
         // GEN-128 C2: NPC lines a restart cut short are asked again, under their own turn, for who read that turn's feed (GEN-197).
         for (const left of resolver.dialogueLeft?.({ gameId: me.gameId, signal: shutdown.signal }) ?? []) startDialogue(me.gameId, left.at, left.dialogue, left.places);
       }
-      // GEN-185: a scene a restart cut short is written (before the turn below, so its resolve waits for it).
-      if (resolver.scene && !sceneChecked.has(me.gameId)) {
+      // GEN-185: a scene a restart cut short is written (before the turn below, so its resolve waits for it); ISK-014: the news too.
+      if (!sceneChecked.has(me.gameId)) {
         sceneChecked.add(me.gameId);
-        const at = scenes.has(me.gameId) ? null : missingScene(me.gameId, state);
-        if (at) startScene(me.gameId, at);
+        const sceneAt = scenes.has(me.gameId) || !resolver.scene ? null : missingScene(me.gameId, state);
+        const newsAt = scenes.has(me.gameId) ? null : missingNews(me.gameId, state);
+        const at = sceneAt ?? newsAt;
+        if (at) startScene(me.gameId, at, { scene: sceneAt !== null, news: newsAt !== null });
       }
       // After a restart a phase can be left `resolving` with nobody working on it. A stuck turn waits for `retry`.
       if (state.status === 'resolving') wakeTurn(me.gameId);

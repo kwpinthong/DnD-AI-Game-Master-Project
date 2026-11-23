@@ -24,6 +24,7 @@ import { placeUnplacedCharacters } from '../visibility/store.ts';
 import type { Rng } from '@isekai/rules';
 import type { GameAssets } from '../assets/load.ts';
 import { rollOrigins } from './origin.ts';
+import { insertNews, templateNews } from '../gm/news.ts';
 
 export type GameRow = typeof game.$inferSelect;
 export type MemberRow = typeof member.$inferSelect;
@@ -296,6 +297,8 @@ export function startGame(db: Db, actor: MemberRow, now: Clock, assets: GameAsse
     // The game starts at day 1 Morning: its events become active (GEN-053), after placing, so each
     // event's witness snapshot sees where everyone starts (Q-104).
     advanceTimeline(tx, row.id, { day: 1, phase: 'EOSORIA' }, t);
+    // ISK-014 (C5): day 1 opens with the template news (no AI call); everyone reads it when they enter the room.
+    insertNews(tx, row.id, 1, templateNews(tx, assets, row.id, 1), t);
     return undefined;
   });
 }

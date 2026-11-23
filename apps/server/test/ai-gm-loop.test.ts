@@ -275,7 +275,8 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(JSON.stringify([t.a, t.b, t.c].map(stats))).toBe(before);
     expect(turnRows()).toEqual([]);
     expect(provider.requests.filter(isNarration)).toEqual([]);
-    for (const c of clients) expect(c.entries()).toEqual([]);
+    // ISK-014: only day 1's morning news (from the game start).
+    for (const c of clients) expect(c.entries().filter((e) => e.kind !== 'news')).toEqual([]);
     expect(shown.you.action?.text).toBe('ร้องเพลง');
 
     // Retry with a working AI: the same three actions resolve.
@@ -568,7 +569,7 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(provider.requests.filter(isNarration)).toEqual([]);
     for (const c of clients) {
       // GEN-114: the player's own `changes` log is the server's, never a narration.
-      const entries = turnEntries(c, 1, 'EOSORIA', 1).filter((e) => e.kind !== 'changes' && e.kind !== 'player');
+      const entries = turnEntries(c, 1, 'EOSORIA', 1).filter((e) => e.kind !== 'changes' && e.kind !== 'player' && e.kind !== 'news');
       expect(entries.length).toBeGreaterThan(0);
       for (const e of entries) expect(e.fallback).toBe(true);
       // Q-221: no one-off "ระบบ: ..." narration any more.

@@ -170,7 +170,8 @@ describe('GEN-058 Human GM console', { timeout: 60_000 }, () => {
     await gm.waitFor((m) => m.type === 'room' && m.gmStatus?.code === 'awaiting_gm');
     expect(a.lastRoom()!.gmStatus).toMatchObject({ code: 'awaiting_gm', canRetry: false });
     expect(a.lastRoom()!.gmStatus!.message).toMatch(/GM/);
-    for (const x of [a, b, c, gm]) expect(x.entries()).toEqual([]);
+    // ISK-014: only day 1's morning news (from the game start).
+    for (const x of [a, b, c, gm]) expect(x.entries().filter((e) => e.kind !== 'news')).toEqual([]);
     expect(phaseState(t)).toMatchObject({ turn: 1, status: 'resolving' });
 
     const edit = await t.call('POST', '/api/game/gm/turn/edit', {
@@ -182,7 +183,7 @@ describe('GEN-058 Human GM console', { timeout: 60_000 }, () => {
     expect(edited.entries[1]).toMatchObject({ text: EDITED_A, edited: true });
     expect(edited.results.find((r) => r.memberId === t.a.memberId)).toMatchObject({ after: { hp: 80, stamina: 30, karma: -5 }, edited: true });
     // Still held: an edit does not publish.
-    for (const x of [a, b, c]) expect(x.entries()).toEqual([]);
+    for (const x of [a, b, c]) expect(x.entries().filter((e) => e.kind !== 'news')).toEqual([]);
 
     const approve = await t.call('POST', '/api/game/gm/turn/approve', { token: t.gm!.token });
     expect(approve.status, JSON.stringify(approve.body)).toBe(200);
@@ -192,7 +193,7 @@ describe('GEN-058 Human GM console', { timeout: 60_000 }, () => {
     expect(narration.type === 'entry' && narration.entry.text).toBe(EDITED_A);
     await a.waitFor(turnIs(2));
     for (const frame of a.raw) expect(frame).not.toContain(ORIGINAL_A);
-    expect(b.entries().filter((e) => e.kind !== 'player').map((e) => e.text)).toEqual([FEED]);
+    expect(b.entries().filter((e) => e.kind !== 'player' && e.kind !== 'news').map((e) => e.text)).toEqual([FEED]);
     expect(a.lastRoom()!.gmStatus).toBeNull();
     expect(characterRow(t.a.memberId)).toMatchObject({ hp: 80, karma: -5 });
     expect(phaseState(t).players[t.a.memberId]).toMatchObject({ hp: 80, karma: -5 });

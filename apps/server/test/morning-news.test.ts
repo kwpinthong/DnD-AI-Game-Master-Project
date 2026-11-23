@@ -12,7 +12,7 @@ import { getGameScenario, updateGameScenario } from '../src/scenario/store.ts';
 import type { RunningServer } from '../src/server.ts';
 import { makeTempDir } from './helpers.ts';
 import { isReady, openRoom, type RoomClient } from './room-client.ts';
-import { CLOCK, startTestServer, startedTable, type Seat, type Table } from './visibility-fixture.ts';
+import { CLOCK, startTestServer, startedTable, type Table } from './visibility-fixture.ts';
 
 /**
  * ISK-014: the morning news. The day summary (no extra call) also answers `news`; the room publishes it as one `news`
@@ -115,15 +115,13 @@ describe('ISK-014 morning news', { timeout: 60_000 }, () => {
     expect(result.ok, JSON.stringify(result)).toBe(true);
   }
 
-  /** Plays the last turn of `day` with everyone in `present` (the others stay offline); resolves once day + 1 is open for them. */
-  async function endDay(day: number, opts: { t?: Table; present?: (t: Table) => Seat[] } = {}): Promise<{ t: Table; clients: RoomClient[] }> {
+  /** Plays the last turn of `day` with everyone; resolves once day + 1 is open for them. */
+  async function endDay(day: number, opts: { t?: Table } = {}): Promise<{ t: Table; clients: RoomClient[] }> {
     const t = opts.t ?? (await startedTable(server!, false));
     const gameId = gameIdOf(t);
     savePhaseState(server!.orm, gameId, { ...ensurePhaseState(server!.orm, gameId, CLOCK), day, phase: 'NOCTHERION', turn: 2 }, CLOCK);
-    const seats = opts.present ? opts.present(t) : [t.a, t.b, t.c];
-    const clients = [];
-    for (const s of seats) clients.push(await enter(s));
-    await sendAll(clients, ['เฝ้ายามทั้งคืน', 'นับดาว', 'จุดไฟ'].slice(0, clients.length));
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    await sendAll(clients, ['เฝ้ายามทั้งคืน', 'นับดาว', 'จุดไฟ']);
     for (const c of clients) await c.waitFor(at(day + 1, 'EOSORIA', 1));
     return { t, clients };
   }
@@ -238,7 +236,7 @@ describe('ISK-014 morning news', { timeout: 60_000 }, () => {
     // Day 1 and day 2 are summarised (the game jumped to day 2), once each.
     expect(summaryRequests().map((r) => contextOf<DayContext>(r).day).sort()).toEqual([1, 2]);
     expect(server!.db.prepare("select count(*) as n from ai_usage where purpose = 'summarize_day'").get()).toEqual({ n: 2 });
-    const known = new Set(['gm_turn_proposal', 'gm_narration', 'gm_dialogue', 'gm_day_summary', 'gm_journal', 'gm_scene', 'gm_weather']);
+    const known = new Set(['period_weather', 'gm_turn_proposal', 'gm_narration', 'gm_dialogue', 'gm_day_summary', 'gm_journal', 'gm_scene', 'gm_weather']);
     expect(ai!.requests.map((r) => r.output.name).filter((name) => !known.has(name))).toEqual([]);
   });
 
@@ -295,8 +293,19 @@ describe('ISK-014 morning news', { timeout: 60_000 }, () => {
 
   it('C11: a player offline that morning sees the news when they come back', async () => {
     await boot();
-    const { t, clients } = await endDay(3, { present: (t) => [t.a, t.b] });
+    const t = await startedTable(server!, false);
+    const gameId = gameIdOf(t);
+    savePhaseState(server!.orm, gameId, { ...ensurePhaseState(server!.orm, gameId, CLOCK), day: 3, phase: 'NOCTHERION', turn: 2 }, CLOCK);
+    // C sends the night's action, then goes offline before the morning.
+    const away = await enter(t.c);
+    await sendAll([away], ['หลับยาว']);
+    await away.close();
+    sockets.splice(sockets.indexOf(away), 1);
+    const clients = [await enter(t.a), await enter(t.b)];
+    await sendAll(clients, ['เฝ้ายามทั้งคืน', 'นับดาว']);
+    for (const c of clients) await c.waitFor(at(4, 'EOSORIA', 1));
     await waitNews(clients[0]!, 4);
+    expect(newsOf(away, 4)).toEqual([]);
     const late = await enter(t.c);
     expect(newsOf(late, 4)).toHaveLength(1);
     expect(newsOf(late, 4)[0]!.text).toBe(newsOf(clients[0]!, 4)[0]!.text);

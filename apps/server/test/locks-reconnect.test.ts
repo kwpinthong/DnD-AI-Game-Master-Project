@@ -89,7 +89,8 @@ describe('GEN-119 locks and a cut socket on the real room', { timeout: 60_000 },
     const entries = a.entries();
     // feed + narration + the player's own change log (GEN-114: Stamina to 0) + one `player` entry per
     // other player's public action at the place (GEN-129: B and C acted here)
-    expect(entries.map((e) => e.kind).sort()).toEqual(['changes', 'feed', 'narration', 'player', 'player']);
+    // ISK-014: + day 1's morning news.
+    expect(entries.map((e) => e.kind).sort()).toEqual(['changes', 'feed', 'narration', 'news', 'player', 'player']);
     expect(entries.find((e) => e.kind === 'changes')!.changes).toContainEqual(expect.objectContaining({ stat: 'stamina' }));
     expect(new Set(entries.map((e) => e.seq)).size).toBe(entries.length);
     expect(a.messages.filter(isEntry).length).toBe(entries.length);
