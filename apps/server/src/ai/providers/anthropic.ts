@@ -89,7 +89,8 @@ function answerFormat(output: AiCallRequest['output']): string {
 }
 
 function toParams(req: AiCallRequest): Anthropic.Beta.MessageCreateParamsNonStreaming {
-  const cachedIndexes = req.system.flatMap((block, i) => (block.cache ? [i] : [])).slice(-MAX_CACHE_BREAKPOINTS);
+  // GEN-118: the answer format (the schema, the same for every call of one output) is cached too, one breakpoint of the four.
+  const cachedIndexes = req.system.flatMap((block, i) => (block.cache ? [i] : [])).slice(-(MAX_CACHE_BREAKPOINTS - 1));
   return {
     model: req.model,
     max_tokens: req.maxOutputTokens,
@@ -99,7 +100,7 @@ function toParams(req: AiCallRequest): Anthropic.Beta.MessageCreateParamsNonStre
         text: block.text,
         ...(cachedIndexes.includes(i) ? { cache_control: { type: 'ephemeral' as const } } : {}),
       })),
-      { type: 'text' as const, text: answerFormat(req.output) },
+      { type: 'text' as const, text: answerFormat(req.output), cache_control: { type: 'ephemeral' as const } },
     ],
     messages: req.messages.map((message) => ({ role: message.role, content: message.text })),
     output_config: { effort: req.effort },
