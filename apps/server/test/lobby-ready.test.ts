@@ -162,6 +162,19 @@ describe('ISK-017 ready + auto start, no owner', { timeout: 120_000 }, () => {
     for (const w of watchers) expect(w.messages.filter((m) => m.type === 'room' || m.type === 'ready')).toEqual([]);
   });
 
+  it('C4: a lobby socket only listens (a command = bad_message); after the start a lobby hello enters the room', async () => {
+    const t = await lobby({ mode: 'single' });
+    const listener = await lobbySocket(t.creator);
+    await primed([listener], t.creator, false);
+    listener.send({ type: 'retry' });
+    expect(await listener.waitFor((m) => m.type === 'error')).toMatchObject({ code: 'bad_message' });
+
+    expect(GameView.parse((await ready(t.creator)).body).status).toBe('started');
+    const after = await lobbySocket(t.creator);
+    await after.waitFor(isReady);
+    expect(after.messages.some((m) => m.type === 'room')).toBe(true);
+  });
+
   it('C5: the last two ready at the same time: startGame runs once', async () => {
     await reboot({ rng: new SeededRng(7) });
     const t = await lobby({ joiners: ['บี', 'ซี'] });
