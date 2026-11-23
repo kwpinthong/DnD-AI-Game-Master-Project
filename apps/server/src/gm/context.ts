@@ -450,7 +450,7 @@ export const DIALOGUE_BLOCK: PromptBlock = { id: 'dialogue-rules', text: DIALOGU
 export const SUMMARY_BLOCK: PromptBlock = { id: 'summary-rules', text: SUMMARY_TEXT, cache: true };
 
 const JOURNAL_TEXT =
-  'สรุปบันทึกส่วนตัวของผู้เล่นหนึ่งคนจาก seen (สิ่งที่ผู้เล่นคนนี้เห็นและได้รับรู้ในวันนั้นเท่านั้น): journal = เรื่องสำคัญของวันนี้จากมุมของเขา / saga = saga เดิมย่อรวมกับวันนี้ ห้ามเพิ่มเรื่องที่ไม่อยู่ใน seen ใช้ token แทนชื่อเสมอ ห้ามตัวเลข HP / กรรม';
+  'สรุปบันทึกส่วนตัวของผู้เล่นหนึ่งคนจาก seen (สิ่งที่ผู้เล่นคนนี้เห็นและได้รับรู้ในวันนั้นเท่านั้น): journal = เรื่องสำคัญของวันนี้จากมุมของเขา ไม่เกิน 300 ตัวอักษร / saga = saga เดิมย่อรวมกับวันนี้ ไม่เกิน 900 ตัวอักษร (ถ้าเต็มให้ย่อเรื่องวันเก่าให้สั้นลง เก็บแต่เรื่องสำคัญ) ห้ามเพิ่มเรื่องที่ไม่อยู่ใน seen ใช้ token แทนชื่อเสมอ ห้ามตัวเลข HP / กรรม';
 export const JOURNAL_BLOCK: PromptBlock = { id: 'journal-rules', text: JOURNAL_TEXT, cache: true };
 
 /** Tokens of a whole request (system + messages). */
