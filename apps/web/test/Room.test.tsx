@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CONTRACT_FIXTURES } from '@isekai/protocol/contract';
 import { App } from '../src/App.tsx';
+import { TYPING_MS } from '../src/play/chat/stream.ts';
 import { COMPACT_QUERY } from '../src/play/chat/useCompact.ts';
 import { roomSocketUrl } from '../src/room-api.ts';
 import { TOKEN_KEY } from '../src/session.ts';
@@ -297,6 +298,36 @@ describe('GEN-056 play room (web)', () => {
     expect(text.indexOf('ฟีดหนึ่ง')).toBeGreaterThanOrEqual(0);
     expect(text.indexOf('ฟีดสอง')).toBeGreaterThan(text.indexOf('ฟีดหนึ่ง'));
     expect(screen.getByRole('status', { name: 'การเชื่อมต่อห้อง' }).textContent).toBe('เชื่อมต่อแล้ว');
+  });
+
+  it('GEN-148 C3: a line cut off mid-stream by a drop ends whole, once, after the reconnect; what the reconnect replays is not streamed', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
+    const first = await enterRoom();
+    first.receive(roomState());
+    first.receive({ type: 'ready', lastSeq: 0 });
+    const said = 'ข้ารอเจ้าอยู่ตั้งนานแล้วรีบตามข้ามาที่หลังวิหารเดี๋ยวนี้เลย';
+    first.receive({ type: 'entry', entry: { ...entry(6, 'npc', said), place: { id: 'market', name: 'ลานตลาด' }, npc: { ref: 'n-noa', name: 'โนอา', kind: 'dialogue' } } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(TYPING_MS + 200);
+    });
+    expect(screen.getByRole('region', { name: FEED }).textContent).not.toContain(said);
+    first.drop();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    const second = FakeSocket.all.at(-1)!;
+    second.open();
+    expect(second.sent[0]).toEqual({ type: 'hello', token: 'tok-abc', afterSeq: 6 });
+    second.receive({ type: 'entry', entry: { ...entry(6, 'npc', said), place: { id: 'market', name: 'ลานตลาด' }, npc: { ref: 'n-noa', name: 'โนอา', kind: 'dialogue' } } });
+    second.receive({ type: 'entry', entry: entry(8, 'feed', 'ฟีดที่พลาดไป') });
+    second.receive(roomState());
+    second.receive({ type: 'ready', lastSeq: 8 });
+    expect(screen.getByRole('region', { name: FEED }).textContent).toContain('ฟีดที่พลาดไป');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(screen.getAllByText(said)).toHaveLength(1);
   });
 
   it('GEN-067 C4 / C6: Whisper goes to the chosen ally by ref; sent and received Whispers are listed apart', async () => {

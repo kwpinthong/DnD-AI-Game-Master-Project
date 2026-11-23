@@ -386,6 +386,7 @@ export const playText = {
     you: 'คุณ',
     secret: 'ลับ',
     privateLine: 'พูดกับคุณคนเดียว',
+    typing: 'กำลังพิมพ์…',
     omen: 'ลางสังหรณ์',
     hit: 'เกิดกับคุณ',
     arrived: 'คุณมาถึง',
