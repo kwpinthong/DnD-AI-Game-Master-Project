@@ -13,8 +13,11 @@ import { GameTimelineResponse } from './timeline.ts';
 export const GameLogStatus = z.enum(['lobby', 'playing', 'ended']);
 export type GameLogStatus = z.infer<typeof GameLogStatus>;
 
-/** `finale`: past day 12 NOCTHERION turn 2. `game_over`: every player dead for good, an Astral Spirit (GEN-070). */
-export const GameEndReason = z.enum(['finale', 'game_over']);
+/**
+ * `finale`: past day 12 NOCTHERION turn 2. `game_over`: every player dead for good, an Astral Spirit (GEN-070).
+ * `closed` (ISK-001): the server owner closed the game early.
+ */
+export const GameEndReason = z.enum(['finale', 'game_over', 'closed']);
 export type GameEndReason = z.infer<typeof GameEndReason>;
 
 /**
@@ -81,6 +84,12 @@ export const GameLogResponse = z.strictObject({
     /** Where the game is (or stopped); null before the start. */
     at: z.strictObject({ day: z.number().int(), phase: Phase, turn: Turn }).nullable(),
     startedAt: z.string().nullable(),
+    /**
+     * ISK-001: the server owner closed the game while it was played (no AI ending; the summary is the normal one).
+     * The server always sends both; optional so older web fixtures still type.
+     */
+    closedEarly: z.boolean().optional(),
+    closeReason: z.string().nullable().optional(),
   }),
   you: z.strictObject({ memberId: z.string(), role: MemberRole }),
   /** Lobby names, join order; kicked members are left out. */

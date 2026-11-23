@@ -28,6 +28,8 @@ export * from './inventory.ts';
 
 // GEN-037: the read-only game summary / log, own file so parallel protocol work merges cleanly.
 export * from './history.ts';
+// ISK-001: the server owner's game list + early close.
+export * from './admin-games.ts';
 
 // GEN-099: view-models of Screens and Flows v2 the server does not send yet (see docs/contract.md).
 // The registry + fixtures are `@isekai/protocol/contract`.

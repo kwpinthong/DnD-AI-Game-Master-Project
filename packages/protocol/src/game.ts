@@ -127,6 +127,8 @@ export const GameView = z.object({
   startBlockers: z.array(z.string()),
   /** GEN-083: the "ความทรงจำจากเกมก่อน" setting the lobby shows. The server always sends it; optional for older web fixtures. */
   memory: GameMemoryView.optional(),
+  /** ISK-001: the server owner closed the game (null = not closed); the lobby polls this. Optional for older web fixtures. */
+  closed: z.strictObject({ reason: z.string().nullable(), hasSummary: z.boolean() }).nullable().optional(),
 });
 export type GameView = z.infer<typeof GameView>;
 

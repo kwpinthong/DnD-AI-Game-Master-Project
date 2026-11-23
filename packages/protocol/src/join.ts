@@ -157,5 +157,15 @@ export const ApiError = z.discriminatedUnion('code', [
   z.object({ code: z.literal('response_not_found'), message: z.string() }),
   /** 404 (GEN-147): no game data set with that name. */
   z.object({ code: z.literal('data_set_not_found'), message: z.string() }),
+  /** 400 (ISK-001): the typed name is not the game's name. */
+  z.object({ code: z.literal('confirm_required'), message: z.string() }),
+  /** 400 (ISK-001): the close reason is over 200 characters. */
+  z.object({ code: z.literal('reason_too_long'), message: z.string() }),
+  /** 409 (ISK-001): the game already ended (or was closed); nothing changed. */
+  z.object({ code: z.literal('already_ended'), message: z.string() }),
+  /** 409 (ISK-001): the server owner closed this game; nothing changes any more. */
+  z.object({ code: z.literal('game_closed'), message: z.string() }),
+  /** 404 (ISK-001): the game was closed before it was played, so it has no end page. */
+  z.object({ code: z.literal('not_started'), message: z.string() }),
 ]);
 export type ApiError = z.infer<typeof ApiError>;

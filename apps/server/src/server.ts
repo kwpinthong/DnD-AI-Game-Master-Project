@@ -26,6 +26,7 @@ import { dirname, join } from 'node:path';
 import { registerCompanionRoutes } from './companions/routes.ts';
 import { registerNpcChatRoutes } from './npc-chat/routes.ts';
 import { registerAdminRoutes } from './admin/routes.ts';
+import { registerClosedGameGuard } from './admin/games-routes.ts';
 import { createStyleReview, type StyleReview } from './admin/style-review.ts';
 import { registerInventoryRoutes } from './skills/routes.ts';
 import { registerGmConsoleRoutes } from './gm-console/routes.ts';
@@ -144,6 +145,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   });
 
   const now = options.now ?? Date.now;
+  registerClosedGameGuard(app, db, now);
   registerAuthRoutes(app, db, now);
   registerGameRoutes(app, db, now, {
     ai,
@@ -188,6 +190,14 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     gameData,
     styleReview,
     learning,
+    onGameClosed: (gameId, closed) => {
+      room.closed(gameId, closed);
+      if (!closed.hasSummary) return;
+      // ISK-001: a played game closed early ends like a finale for the backup and learning (no style review: no AI from a close).
+      void backups?.gameEnded(gameId, 'finale');
+      syncExamples(db, gameId, now());
+      buildStyles(db, gameId, now());
+    },
     ...(config.adminCodeHash ? { adminCodeHash: config.adminCodeHash } : {}),
   });
   registerInventoryRoutes(app, db, now, assets);

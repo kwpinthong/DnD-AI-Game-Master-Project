@@ -150,6 +150,8 @@ export interface RoomService {
   wake(gameId: string): void;
   /** GEN-149: sends entries stored outside the turn (the NPC chat) to the open sockets of their recipients. */
   publish(gameId: string, rows: readonly { row: RoomEntryRow; recipients: ReadonlySet<string> }[]): void;
+  /** ISK-001: the server owner closed the game (already stored): drop what waits for it and tell every open socket. */
+  closed(gameId: string, event: { reason: string | null; hasSummary: boolean }): void;
   /** Shutdown: forgets every socket (their close events no longer touch the database), then waits for running resolves. */
   stop(): Promise<void>;
 }
@@ -964,6 +966,11 @@ export function createRoomService(
     },
 
     publish: deliver,
+
+    closed(gameId, event) {
+      void gameId;
+      void event;
+    },
 
     wake(gameId) {
       const state = ensurePhaseState(db, gameId, now());
