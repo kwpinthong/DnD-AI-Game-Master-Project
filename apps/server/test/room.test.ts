@@ -217,13 +217,13 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
   });
 
   describe('C5: refused actions come back with a reason', () => {
-    it('C5: empty, whitespace only and over 1000 characters are refused; exactly 1000 is accepted', async () => {
+    it('C5: empty, whitespace only and over 200 characters (ISK-012) are refused; exactly 200 is accepted', async () => {
       const t = await startedTable(server!, false);
       const a = await enter(t.a);
       for (const [text, code] of [
         ['', 'empty'],
         ['   \n  ', 'empty'],
-        ['ก'.repeat(1001), 'too_long'],
+        ['ก'.repeat(201), 'text_too_long'],
       ] as const) {
         const from = a.messages.length;
         a.action(text, 'public');
@@ -234,7 +234,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
       const from = a.messages.length;
       a.send({ type: 'action', text: 'x', visibility: 'loud' });
       expect((await a.waitFor(isRejected, from)).code).toBe('invalid_action');
-      await submitAndAccept(a, 'ก'.repeat(1000));
+      await submitAndAccept(a, 'ก'.repeat(200));
     });
 
     it('C5: while the phase is resolving, actions are refused (resolving)', async () => {
