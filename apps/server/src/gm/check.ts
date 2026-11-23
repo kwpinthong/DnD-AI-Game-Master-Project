@@ -66,6 +66,9 @@ export function checkTurnProposal(input: TurnCheckInput, proposal: GmTurnProposa
     } else if (plan !== null && !input.strategies.active.has(plan.id)) {
       fail('strategy_not_active', `${path}.strategy`, `${plan.id} is only for the night of day 10 while its event is active; answer null`);
     }
+    (a.looksAt ?? []).forEach((r, k) => {
+      if (memberOfRef(r) === undefined) fail('unknown_ref', `${path}.looksAt[${k}]`, `${r} is not a player ref of this game`);
+    });
     if (a.moveTo !== null && !places.has(a.moveTo)) fail('unknown_location', `${path}.moveTo`, `the scenario has no place ${a.moveTo}`);
     let targetMember: string | undefined;
     if (a.targetPlayer !== null) {
@@ -156,19 +159,34 @@ const MARK = /\p{M}/u;
  * part of another syllable and does not count. Without Intl.Segmenter every other occurrence counts.
  */
 export function containsName(text: string, name: string): boolean {
-  const n = name.normalize('NFC').trim();
-  if (n.length === 0) return false;
-  const t = text.normalize('NFC');
+  return nameOccurrences(text.normalize('NFC'), name.normalize('NFC').trim()).length > 0;
+}
+
+/** Start offsets in `t` (already NFC) of the whole-word occurrences of `n` (NFC, trimmed); see `containsName`. */
+function nameOccurrences(t: string, n: string): number[] {
+  const found: number[] = [];
+  if (n.length === 0) return found;
   let words: (readonly [number, number])[] | null = null;
   for (let i = t.indexOf(n); i !== -1; i = t.indexOf(n, i + 1)) {
     const end = i + n.length;
     if (end < t.length && MARK.test(t[end]!)) continue;
-    if (!SEGMENTER) return true;
-    words ??= [...SEGMENTER.segment(t)].map((s) => [s.index, s.index + s.segment.length] as const);
-    const insideLongerWord = words.some(([from, to]) => from <= i && end <= to && to - from > n.length);
-    if (!insideLongerWord) return true;
+    if (SEGMENTER) {
+      words ??= [...SEGMENTER.segment(t)].map((s) => [s.index, s.index + s.segment.length] as const);
+      if (words.some(([from, to]) => from <= i && end <= to && to - from > n.length)) continue;
+    }
+    found.push(i);
   }
-  return false;
+  return found;
+}
+
+/** GEN-117 C6: `text` with every whole-word occurrence of each real name swapped for its alias (longest names first). */
+export function maskNames(text: string, aliases: ReadonlyMap<string, string>): string {
+  let out = text.normalize('NFC');
+  for (const [name, alias] of [...aliases].sort((x, y) => y[0].length - x[0].length)) {
+    const n = name.normalize('NFC').trim();
+    for (const i of nameOccurrences(out, n).reverse()) out = out.slice(0, i) + alias + out.slice(i + n.length);
+  }
+  return out;
 }
 
 /**

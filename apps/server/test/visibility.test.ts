@@ -78,12 +78,14 @@ describe('visibility layer: who sees what (GEN-050)', { timeout: 60_000 }, () =>
     expect(view.people.some((p) => p.appearance === t.a.appearance)).toBe(false);
   });
 
-  // GEN-067 replaced "introduced" with the sheet's Title Mask: allies with relationship > +9 see the name.
-  it('C3: an introduction alone no longer shows the name; once A and B are allies at +10 A sees it, C still does not', async () => {
+  // GEN-117 (Q-292): an introduction shows the name to that viewer only; allies with relationship > +9 see it too.
+  it('C3: an introduction shows the name to A only; allies at +10 see it too, C still does not', async () => {
     const t = await table();
 
-    learnName(server!.orm, t.a.memberId, t.b.memberId, 'introduced', CLOCK);
     expect((await playerView(t, t.a)).view.people.find((p) => p.appearance === t.b.appearance)?.name).toBeNull();
+    learnName(server!.orm, t.a.memberId, t.b.memberId, 'introduced', CLOCK);
+    expect((await playerView(t, t.a)).view.people.find((p) => p.appearance === t.b.appearance)?.name).toBe('ดาริน');
+    expect((await playerView(t, t.c)).view.people.find((p) => p.appearance === t.b.appearance)?.name).toBeNull();
 
     setPlayerBond(server!.orm, t.a.memberId, t.b.memberId, { alliance: true, relationship: 10 }, CLOCK);
     const seenByA = (await playerView(t, t.a)).view.people.find((p) => p.appearance === t.b.appearance);

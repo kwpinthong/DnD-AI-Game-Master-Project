@@ -66,6 +66,11 @@ export const GmAction = z.object({
       onFail: PlayerEffects,
     })
     .nullable(),
+  /**
+   * GEN-117 (Q-292): player refs this action really looks at (มอง / สังเกต / คุย, or a direct pair action) beyond
+   * `targetPlayer`. Only the actor's narration may then describe how they look. Empty = looks at nobody.
+   */
+  looksAt: z.array(z.string()).max(3).default([]),
   witnessNpcIds: z.array(z.string()).max(6),
   repDeltaIfCaught: Int,
   onSuccess: Effects,

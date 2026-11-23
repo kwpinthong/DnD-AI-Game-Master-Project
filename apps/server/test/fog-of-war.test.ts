@@ -177,10 +177,11 @@ describe('GEN-067 karma words, Title Mask, Whisper, Hidden Evidence', { timeout:
     expect((await seenBy(t, t.a, t.c))?.name).toBeNull();
   });
 
-  it('Q-134: an introduction alone still hides the name; discovering it later shows it', async () => {
+  it('Q-292: an introduction shows the name (one way); discovering it later keeps it', async () => {
     const t = await table();
     learnName(server!.orm, t.a.memberId, t.b.memberId, 'introduced', CLOCK);
-    expect((await seenBy(t, t.a, t.b))?.name).toBeNull();
+    expect((await seenBy(t, t.a, t.b))?.name).toBe(t.b.name);
+    expect((await seenBy(t, t.b, t.a))?.name).toBeNull();
     learnName(server!.orm, t.a.memberId, t.b.memberId, 'discovered', CLOCK);
     expect((await seenBy(t, t.a, t.b))?.name).toBe(t.b.name);
   });

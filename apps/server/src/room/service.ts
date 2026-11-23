@@ -367,7 +367,11 @@ export function createRoomService(
   function recipientsOf(tx: DbOrTx, gameId: string, state: PhaseState, entry: NonNullable<PhaseResolution['entries']>[number]): Set<string> {
     const members = activeMembers(tx, gameId);
     const ids = new Set(members.map((m) => m.id));
-    const recipients = new Set(members.filter((m) => m.role === 'gm').map((m) => m.id));
+    const recipients = new Set(members.filter((m) => m.role === 'gm' && !(entry.kind === 'feed' && entry.only)).map((m) => m.id));
+    if (entry.kind === 'feed' && entry.only) {
+      for (const id of entry.only) if (ids.has(id)) recipients.add(id);
+      return recipients;
+    }
     const only = entry.kind === 'narration' || entry.kind === 'npc' ? entry.memberId : null;
     if (only !== null) {
       if (ids.has(only)) recipients.add(only);
@@ -381,7 +385,8 @@ export function createRoomService(
       at === null
         ? [...locations.keys(), ...(actor ? [actor] : [])]
         : witnessesOf({ locationId: at, actorMemberId: actor, visibility: 'public' }, locations);
-    for (const id of witnesses) if (ids.has(id)) recipients.add(id);
+    const own = new Set(entry.kind === 'feed' ? entry.except : []);
+    for (const id of witnesses) if (ids.has(id) && !own.has(id)) recipients.add(id);
     return recipients;
   }
 
@@ -425,7 +430,7 @@ export function createRoomService(
           const rows =(resolution.entries ?? []).map((entry) => {
             const recipients = recipientsOf(tx, gameId, current, entry);
             const locationId = entry.kind === 'narration' ? null : entry.locationId;
-            if (entry.kind === 'feed' && entry.locationId !== null && entry.actorMemberId === null) placeAudience.set(entry.locationId, recipients);
+            if (entry.kind === 'feed' && entry.locationId !== null && entry.actorMemberId === null) placeAudience.set(entry.locationId, new Set([...(placeAudience.get(entry.locationId) ?? []), ...recipients]));
             const fallback = entry.fallback ? { fallback: entry.fallback } : {};
             const meta =
               entry.kind === 'narration' && entry.roll

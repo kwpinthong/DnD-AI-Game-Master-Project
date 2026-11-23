@@ -30,14 +30,14 @@ import { checkViewOf, hitOf, rollViewOf } from './roll-view.ts';
 import { CryptoRng } from '../rng.ts';
 import { buildEventContext } from '../timeline/context.ts';
 import { setEventOutcome } from '../timeline/store.ts';
-import { discoverHiddenEvidence, locationSnapshot, npcBondsOf } from '../visibility/store.ts';
+import { discoverHiddenEvidence, learnName, locationSnapshot, npcBondsOf } from '../visibility/store.ts';
 import { recordTurnProgress } from '../skills/progress.ts';
 import { applySkillChanges, checkSkillChanges, earnedSkillChanges, SUCCEEDED } from './skill-grants.ts';
 import { setEndingPath } from '../finale/store.ts';
 import { DRIFT_STRATEGY_ID, recordStrategyParticipation } from '../strategy/store.ts';
 import { SCENARIO_DAYS } from '@isekai/protocol';
 import { buildFinaleContext, checkFinale, finaleCheckInput, finaleEntries, templateFinale } from './finale.ts';
-import { checkNarration, checkTurnProposal, type GmError } from './check.ts';
+import { checkNarration, checkTurnProposal, containsName, maskNames, type GmError } from './check.ts';
 import {
   CONTEXT_BUDGET,
   DIALOGUE_BLOCK,
@@ -177,6 +177,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     maxOutputTokens: number;
     budget: number;
     check: (value: T) => GmError[];
+    /** GEN-117 C6: fixes what the server can fix by itself (a leaked real name → the alias) before `check`, so it never costs a repair. */
+    sanitize?: (value: T) => T;
     /**
      * Narration only: the server template, used when the answer is still wrong after the repair (Q-151) or
      * the call failed (Q-177: timeout after one retry, budget at once, any other failure). Without it → stuck.
@@ -217,12 +219,13 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         // Q-221: a budget fallback is shown to the owner / Human GM as the room's gmStatus (ai.budgetNotice).
         return useFallback(fallbackCause(result.error));
       }
-      const errors = opts.check(result.value);
-      if (errors.length === 0) return { value: result.value, fallback: null };
+      const value = opts.sanitize ? opts.sanitize(result.value) : result.value;
+      const errors = opts.check(value);
+      if (errors.length === 0) return { value, fallback: null };
       log(`[gm] game=${opts.gameId} purpose=${purpose} refused: ${[...new Set(errors.map((e) => e.code))].join(', ')}`);
       messages = [
         ...first,
-        { role: 'assistant' as const, text: JSON.stringify(result.value) },
+        { role: 'assistant' as const, text: JSON.stringify(value) },
         { role: 'user' as const, text: JSON.stringify({ errors, instruction: 'แก้ทุกข้อแล้วตอบใหม่ทั้งก้อนในรูปแบบเดิม' }) },
       ];
     }
@@ -371,9 +374,16 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     };
     const secretBy = new Set(order.filter((a) => a.visibility === 'secret').map((a) => a.memberId));
     const targetNpcs = new Map(proposal.actions.map((a) => [a.actionId, a.targetNpc]));
-    const audiences = narrationAudiences(world, resolved.log, textOf, start, events.active, evidenceFor, npcsFor, (m) => karmaBand(karmaOf(m)), (id) => targetNpcs.get(id) ?? null);
+    const lookedAt = new Map<string, Set<string>>();
+    for (const a of proposal.actions) {
+      const member = world.byRef.get(a.actor)?.memberId;
+      if (member) lookedAt.set(member, new Set([...(a.targetPlayer ? [a.targetPlayer.player] : []), ...(a.looksAt ?? [])]));
+    }
+    // GEN-117 (Q-292): who learned whose real name this turn, before any text is rendered. Idempotent, so a replay after a restart is safe.
+    introduce(db, world, order, start, lookedAt, now());
+    const audiences = narrationAudiences(world, resolved.log, textOf, start, events.active, evidenceFor, npcsFor, (m) => karmaBand(karmaOf(m)), (id) => targetNpcs.get(id) ?? null, (m) => lookedAt.get(m) ?? new Set());
     // GEN-115: the narrations do not depend on each other, so they run together: the wait is the slowest one, not the sum.
-    const narrations = await timer.time('narrate', () => Promise.all(audiences.map(async (audience): Promise<{ key: string; ctx: NarrationContext; out: StoredNarration; forbidden: string[] }> => {
+    const narrations = await timer.time('narrate', () => Promise.all(audiences.map(async (audience): Promise<{ key: string; ctx: NarrationContext; out: StoredNarration; forbidden: string[]; readers: string[] }> => {
       const ctx: NarrationContext = {
         kind: 'gm_narration',
         ...audience.ctx,
@@ -384,6 +394,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       };
       const saved = stored.narrations[audience.key];
       const forbidden = forbiddenNamesFor(world, audience.readers);
+      const aliases = aliasesOf(world, forbidden);
       const out: StoredNarration =
         saved ??
         (await ask({
@@ -396,13 +407,14 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           output: { name: GM_OUTPUT.narration, schema: GmNarration },
           maxOutputTokens: 1_500,
           budget: 'player' in ctx.audience ? CONTEXT_BUDGET.narrate_player : CONTEXT_BUDGET.narrate_place,
+          sanitize: (n) => ({ ...n, segments: n.segments.map((s) => ({ ...s, text: maskNames(s.text, aliases) })) }),
           check: (n) => checkNarration(ctx, n, forbidden),
           fallback: { label: audience.key, make: () => templateNarration(ctx) },
           timer: { timer, stage: 'narrate_calls' },
           ...(signal ? { signal } : {}),
         }).then(({ value, fallback }) => (fallback === null ? value : { ...value, fallback })));
       if (!saved) timer.time('db', () => saveNarration(db, gameId, at, audience.key, out, now()));
-      return { key: audience.key, ctx, out, forbidden };
+      return { key: audience.key, ctx, out, forbidden, readers: audience.readers };
     })));
 
     // Q-229: each player's own roll (F5) and the hit card of whoever another player cost something.
@@ -429,14 +441,26 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     });
 
     // 6: what the room publishes and applies. GEN-116: the result and narration only; the NPC lines are the second stage below.
-    const entries: ResolutionEntry[] = narrations.map(({ ctx, out }) => {
+    const entries: ResolutionEntry[] = narrations.flatMap(({ ctx, out, readers }): ResolutionEntry[] => {
       const reader = 'player' in ctx.audience ? world.byRef.get(ctx.audience.player)!.memberId : null;
-      const text = out.segments.map((s) => renderTokens(db, world, s.text, reader)).join('\n');
+      const render = (who: string | null, shared: boolean) => out.segments.map((s) => renderTokens(db, world, s.text, who, shared)).join('\n');
       const fallback = out.fallback ? { fallback: out.fallback } : {};
-      const roll = reader !== null && rollOf.has(reader) ? { roll: rollOf.get(reader)! } : {};
-      return reader === null
-        ? { kind: 'feed', locationId: ctx.place.id, actorMemberId: null, text, ...fallback }
-        : { kind: 'narration', memberId: reader, text, ...roll, ...fallback };
+      if (reader !== null) {
+        const roll = rollOf.has(reader) ? { roll: rollOf.get(reader)! } : {};
+        return [{ kind: 'narration', memberId: reader, text: render(reader, false), ...roll, ...fallback }];
+      }
+      // GEN-117 C5: the place feed reads the alias by default; a reader who knows someone in it (or has met an NPC) gets their own text.
+      const text = render(null, true);
+      const own = new Map<string, string[]>();
+      for (const r of readers) {
+        const t = render(r, true);
+        if (t !== text) own.set(t, [...(own.get(t) ?? []), r]);
+      }
+      const feed = { kind: 'feed' as const, locationId: ctx.place.id, actorMemberId: null, ...fallback };
+      return [
+        { ...feed, text, except: [...own.values()].flat() },
+        ...[...own].map(([t, only]): ResolutionEntry => ({ ...feed, text: t, only })),
+      ];
     });
 
     // GEN-116: the second stage, run by the room after the entries above are out and not waited for. One call per
@@ -693,6 +717,8 @@ function narrationAudiences(
   npcsFor: (placeId: string, members: string[]) => NarrationContext['npcs'],
   karmaBandOf: (memberId: string) => number,
   targetNpcOf: (actionId: string) => string | null,
+  /** GEN-117: the player refs this member's action really looked at (target or `looksAt`); only they get looks in that member's narration. */
+  lookedAt: (memberId: string) => ReadonlySet<string>,
 ): Audience[] {
   const ref = (memberId: string) => world.players.get(memberId)!.ref;
   const placeBeats = new Map<string, Beat[]>();
@@ -737,11 +763,13 @@ function narrationAudiences(
     }
   }
 
-  const castOf = (beats: Beat[], extra: string[], self: string | null) => {
-    const refs = new Set([...extra, ...beats.flatMap((b) => [b.actor, b.target].filter((r): r is string => r !== null))]);
+  // GEN-117: looks only of the reader themself and of whoever the reader looked at; a place feed (many readers) has none.
+  const castOf = (beats: Beat[], extra: string[], self: string | null, looked: ReadonlySet<string> = new Set()) => {
+    const refs = new Set([...extra, ...looked, ...beats.flatMap((b) => [b.actor, b.target].filter((r): r is string => r !== null))]);
     return [...refs].flatMap((r) => {
       const p = world.byRef.get(r);
-      return p ? [{ ref: r, looks: world.tokenise(p.appearance), title: p.socialTitle, self: r === self, karmaBand: karmaBandOf(p.memberId) }] : [];
+      const looks = r === self || looked.has(r) ? world.tokenise(p?.appearance ?? '') : '';
+      return p ? [{ ref: r, looks, title: p.socialTitle, self: r === self, karmaBand: karmaBandOf(p.memberId) }] : [];
     });
   };
   const npcsAt = (placeId: string, cast: { ref: string }[]) => npcsFor(placeId, cast.flatMap((c) => world.byRef.get(c.ref)?.memberId ?? []));
@@ -757,7 +785,7 @@ function narrationAudiences(
     const p = world.players.get(memberId);
     if (!p) continue;
     const placeId = start.get(memberId) ?? p.locationId;
-    const cast = castOf(beats, [p.ref], p.ref);
+    const cast = castOf(beats, [p.ref], p.ref, lookedAt(memberId));
     out.push({ key: `player:${p.ref}`, placeId, readers: [memberId], ctx: { audience: { player: p.ref }, cast, npcs: npcsAt(placeId, cast), beats } });
   }
   return out;
@@ -800,8 +828,39 @@ function forbiddenNamesFor(world: GmWorld, readers: readonly string[]): string[]
   return [...names];
 }
 
-/** Tokens → what this reader sees: "คุณ" for themselves, a known real name, otherwise how they look; NPCs by alias until revealed. */
-function renderTokens(db: DbOrTx, world: GmWorld, text: string, reader: string | null): string {
+/** GEN-117: each forbidden real name → the alias a reader who does not know them sees (a player's Social Title, an NPC's alias). */
+function aliasesOf(world: GmWorld, names: readonly string[]): Map<string, string> {
+  const alias = new Map<string, string>();
+  for (const p of world.players.values()) alias.set(p.name, p.socialTitle);
+  for (const n of world.npcs) alias.set(n.name, n.alias);
+  return new Map(names.flatMap((name) => (alias.has(name) ? [[name, alias.get(name)!] as const] : [])));
+}
+
+/**
+ * GEN-117 (Q-292): a player who says their own real name in an action introduces themself: to everyone at their
+ * place when the action is Public, to whoever it is aimed at when Secret. One way: it tells the hearers nothing
+ * about the speaker knowing them. The pair state is `known_name` (survives a restart); allies know each other
+ * by `namesVisibleTo`.
+ */
+function introduce(db: DbOrTx, world: GmWorld, order: readonly TurnAction[], start: ReadonlyMap<string, string>, lookedAt: ReadonlyMap<string, ReadonlySet<string>>, at: number): void {
+  for (const a of order) {
+    const me = world.players.get(a.memberId);
+    if (!me || !containsName(a.text, me.name)) continue;
+    const place = start.get(a.memberId);
+    const hearers =
+      a.visibility === 'public'
+        ? [...start].filter(([, loc]) => loc === place).map(([id]) => id)
+        : [...(lookedAt.get(a.memberId) ?? [])].flatMap((ref) => world.byRef.get(ref)?.memberId ?? []);
+    for (const id of hearers) if (world.players.has(id)) learnName(db, id, a.memberId, 'introduced', at);
+  }
+}
+
+/**
+ * Tokens → what this reader sees: "คุณ" for themselves, a known real name, otherwise the alias (Social Title; GEN-117: never
+ * how they look, that comes only to who looked); NPCs by alias until revealed. `shared`: a text many read (the place feed),
+ * where the reader's own token is a person like any other.
+ */
+function renderTokens(db: DbOrTx, world: GmWorld, text: string, reader: string | null, shared = false): string {
   const revealed = reader === null ? new Set<string>() : new Set(npcBondsOf(db, reader).filter((b) => b.nameRevealed).map((b) => b.npcId));
   return text.replace(TOKEN_PATTERN, (_all, kind: string, id: string) => {
     if (kind === 'n') {
@@ -810,8 +869,8 @@ function renderTokens(db: DbOrTx, world: GmWorld, text: string, reader: string |
     }
     const p = world.byRef.get(id);
     if (!p) return '';
-    if (p.memberId === reader) return 'คุณ';
-    return reader !== null && world.knownNames(reader).has(p.memberId) ? p.name : p.appearance;
+    if (p.memberId === reader && !shared) return 'คุณ';
+    return reader !== null && world.knownNames(reader).has(p.memberId) ? p.name : p.socialTitle;
   });
 }
 
