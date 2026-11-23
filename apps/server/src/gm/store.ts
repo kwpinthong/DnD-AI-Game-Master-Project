@@ -120,14 +120,17 @@ export function releaseConstraint(db: DbOrTx, gameId: string, id: number, reason
 
 // --- Memory (C5) ---
 
-/** The GM's log of one day from its applied turns: what each actor did and the GM's own notes, in turn order. */
+/**
+ * The GM's log of one day from its stored turns: what each actor did and the GM's own notes, in turn order. GEN-190: an
+ * adjudicated turn counts too (its proposal never changes after it is stored; only the day's last turn is read that early).
+ */
 export function dayLog(db: DbOrTx, gameId: string, day: number, before?: TurnAt): string[] {
   const rank = (phase: string, turn: number) => PERIODS.indexOf(phase as Period) * 2 + turn;
   const limit = before ? rank(before.phase, before.turn) : Number.POSITIVE_INFINITY;
   return db
     .select()
     .from(gmTurn)
-    .where(and(eq(gmTurn.gameId, gameId), eq(gmTurn.day, day), eq(gmTurn.status, 'applied')))
+    .where(and(eq(gmTurn.gameId, gameId), eq(gmTurn.day, day)))
     .all()
     .filter((r) => rank(r.phase, r.turn) < limit)
     .sort((a, b) => rank(a.phase, a.turn) - rank(b.phase, b.turn))

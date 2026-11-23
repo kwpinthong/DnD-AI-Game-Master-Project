@@ -76,6 +76,8 @@ export interface ClosedPhase {
    * Apply it with `weatherTagging` (crossplayer/tags.ts): Weather_Verb_Boost and the d20 / Stamina rules.
    */
   readonly weather: PeriodWeather | null;
+  /** GEN-190: the scene of the period this turn opens, still being written (never rejects); the room publishes it first. */
+  readonly scene?: Promise<void>;
 }
 
 /**

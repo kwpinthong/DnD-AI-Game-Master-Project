@@ -460,6 +460,12 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       resolved = result;
     }
 
+    // GEN-190: the day's last turn: all the day summary reads of it (the proposal) is stored and final, so the summary
+    // runs next to the narrations instead of after the publish, and the next day's adjudicate hardly waits for it.
+    // shortcut: a game that ends (game_over) on a day's last turn gets that day's summary too (one unused call); upgrade if that costs.
+    const summaryStarted = at.phase === 'NOCTHERION' && at.turn === 2 && at.day < SCENARIO_DAYS && !hasDaySummary(db, gameId, at.day);
+    if (summaryStarted) void summarizeFinishedDays(gameId, signal, { day: at.day, journals: false });
+
     // 5: narration per place and per player.
     const proposal = stored.proposal;
     const textOf = new Map(order.map((a) => [a.actionId, world.tokenise(a.text)]));
@@ -521,6 +527,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       const member = world.byRef.get(a.actor)?.memberId;
       if (member) lookedAt.set(member, new Set([...(a.targetPlayer ? [a.targetPlayer.player] : []), ...(a.looksAt ?? [])]));
     }
+    // GEN-190: the period's scene (written next to this turn) renders who knows whom as it was before this turn.
+    if (input.scene) await timer.time('scene_wait', () => input.scene);
     // GEN-117 (Q-292): who learned whose real name this turn, before any text is rendered. Idempotent, so a replay after a restart is safe.
     introduce(db, world, order, start, lookedAt, now());
     introduceNpcs(db, assets, world, order, proposal.actions, start, hereAt, now());
@@ -710,7 +718,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         recordNpcMemories(tx, world, applied.log.outcomes, new Map(proposal.actions.map((a) => [a.actionId, a.intentSummary])), at, now());
         markApplied(tx, gameId, at, now());
       },
-      after: (afterSignal) => summarizeFinishedDays(gameId, afterSignal),
+      // GEN-190: a summary started during the turn is not asked again (a failed one waits for the next turn, as before).
+      after: (afterSignal) => summarizeFinishedDays(gameId, afterSignal, { day: summaryStarted ? null : 'finished', journals: true }),
     };
   }
 
@@ -824,16 +833,18 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
    * Day summaries (C5) and each player's journal (Q-153) for every finished day that has none; a failure is
    * retried after the next turn and never holds the game. GEN-157: the day chain and the journal chain run
    * together (neither reads the other), each journal of a day at once; a run started while one is still going
-   * follows it, so a summary is never asked for twice.
+   * follows it, so a summary is never asked for twice. GEN-190: `parts.day` = a number: the days through that one (its
+   * last turn is adjudicated), null: no day summaries this run (already started during the turn).
    */
-  function summarizeFinishedDays(gameId: string, signal?: AbortSignal): Promise<void> {
+  function summarizeFinishedDays(gameId: string, signal?: AbortSignal, parts: { day: number | 'finished' | null; journals: boolean } = { day: 'finished', journals: true }): Promise<void> {
     const before = writing.get(gameId);
+    const endingDay = typeof parts.day === 'number' ? parts.day : undefined;
     // `one` → null: nothing was missing for that day; false: a call failed (later days wait for the next run).
     const chain = (after: Promise<void> | undefined, stage: string, one: (d: number) => Promise<boolean | null>) =>
       (async () => {
         await after;
         const current = db.select({ state: gamePhase.state }).from(gamePhase).where(eq(gamePhase.gameId, gameId)).get()?.state;
-        const day = current ? (JSON.parse(current) as { day: number }).day : 1;
+        const day = endingDay !== undefined ? endingDay + 1 : current ? (JSON.parse(current) as { day: number }).day : 1;
         const start = performance.now();
         let asked = false;
         for (let d = 1; d < day; d++) {
@@ -844,8 +855,9 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         if (asked) log(`[gm] game=${gameId} ${stage} timing total_ms=${Math.round(performance.now() - start)}`);
       })().catch((error) => log(`[gm] game=${gameId} ${stage} failed: ${error instanceof Error ? error.name : 'unknown error'}`));
     const entry = {
-      day: chain(before?.day, 'summarize_day', (d) => summarizeDay(gameId, d, signal)),
-      journals: chain(before?.journals, 'summarize_journal', (d) => summarizeJournals(gameId, d, signal)),
+      day: parts.day === null ? (before?.day ?? Promise.resolve()) : chain(before?.day, 'summarize_day', (d) => summarizeDay(gameId, d, signal)),
+      // A journal reads the published texts, so never during the turn.
+      journals: parts.journals ? chain(before?.journals, 'summarize_journal', (d) => summarizeJournals(gameId, d, signal)) : (before?.journals ?? Promise.resolve()),
     };
     writing.set(gameId, entry);
     return Promise.all([entry.day, entry.journals]).then(() => {
