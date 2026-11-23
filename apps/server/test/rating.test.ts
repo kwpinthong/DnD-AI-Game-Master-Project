@@ -12,7 +12,10 @@ import { CLOCK, CREATE_CODE, startedTable, startTestServer, type Seat, type Tabl
  */
 
 const RATING = '/api/game/rating';
-const likePath = (ref: string) => `${RATING}/likes/${encodeURIComponent(ref)}`;
+/** GEN-171: the 👍 of GEN-078 is now the 👍/👎 vote (`ruling-…` rows of response_vote). */
+const likePath = (ref: string) => `${RATING}/votes/${encodeURIComponent(ref)}`;
+const UP = { vote: 'up' };
+const CANCEL = { vote: null };
 
 describe('GEN-078 rating + 👍 after the end', { timeout: 60_000 }, () => {
   let dataDir = '';
@@ -32,7 +35,8 @@ describe('GEN-078 rating + 👍 after the end', { timeout: 60_000 }, () => {
 
   const gameIdOf = (t: Table) => (server!.db.prepare('select game_id as id from member where id = ?').get(t.a.memberId) as { id: string }).id;
   const ratingRows = () => server!.db.prepare('select member_id as memberId, score, comment from game_rating order by member_id').all() as { memberId: string; score: number; comment: string }[];
-  const voteRows = () => server!.db.prepare('select member_id as memberId, source_ref as sourceRef from ruling_vote').all() as { memberId: string; sourceRef: string }[];
+  const voteRows = () =>
+    (server!.db.prepare("select member_id as memberId, substr(source_ref, 8) as sourceRef from response_vote where source_ref like 'ruling-%'").all() as { memberId: string; sourceRef: string }[]);
 
   /** Day 1 EOSORIA turn 1: A acts in public, B in secret; day 3 NOCTHERION turn 2: C in secret. */
   function seedActions(t: Table) {
@@ -130,8 +134,8 @@ describe('GEN-078 rating + 👍 after the end', { timeout: 60_000 }, () => {
     for (const [method, path, body] of [
       ['GET', RATING, undefined],
       ['PUT', RATING, { score: 9 }],
-      ['PUT', likePath('1-EOSORIA-1-1'), undefined],
-      ['DELETE', likePath('1-EOSORIA-1-1'), undefined],
+      ['PUT', likePath('1-EOSORIA-1-1'), UP],
+      ['PUT', likePath('1-EOSORIA-1-1'), CANCEL],
     ] as const) {
       const res = await t.call(method, path, { token: t.a.token, ...(body ? { body } : {}) });
       expect(res.status, `${method} ${path}`).toBe(409);
@@ -155,8 +159,8 @@ describe('GEN-078 rating + 👍 after the end', { timeout: 60_000 }, () => {
       for (const [method, path, body] of [
         ['GET', RATING, undefined],
         ['PUT', RATING, { score: 9 }],
-        ['PUT', likePath('1-EOSORIA-1-1'), undefined],
-        ['DELETE', likePath('1-EOSORIA-1-1'), undefined],
+        ['PUT', likePath('1-EOSORIA-1-1'), UP],
+        ['PUT', likePath('1-EOSORIA-1-1'), CANCEL],
       ] as const) {
         const res = await t.call(method, path, { ...(token ? { token } : {}), ...(body ? { body } : {}) });
         expect(res.status, `${method} ${path} as ${token}`).toBe(403);
@@ -201,27 +205,25 @@ describe('GEN-078 rating + 👍 after the end', { timeout: 60_000 }, () => {
     expect(await rate(t, t.b, { score: 7 })).toMatchObject({ raters: 3, average: 8, eligible: false, blocker: 'score_too_low' });
   });
 
-  it('C7: a 👍 on a ruling adds one to its count; taking it back removes it; twice by one member counts once', async () => {
+  it('C7: a 👍 on a ruling is one row per member (twice = still one); cancelling removes it; nobody sees totals (GEN-171)', async () => {
     const t = await endedTable();
     const refs = await revealedRefs(t, t.a);
     const ref = refs[t.b.memberId]![0]!;
     expect(ref).toMatch(/^1-EOSORIA-1-\d+$/);
-    expect(await view(t, t.a)).toMatchObject({ liked: [], thumbs: {} });
+    expect(await view(t, t.a)).toMatchObject({ myVotes: {} });
 
-    const put = async (who: Seat, r: string) => GameRatingResponse.parse((await t.call('PUT', likePath(r), { token: who.token })).body).rating;
-    const del = async (who: Seat, r: string) => GameRatingResponse.parse((await t.call('DELETE', likePath(r), { token: who.token })).body).rating;
+    const put = async (who: Seat, r: string, body: unknown = UP) => GameRatingResponse.parse((await t.call('PUT', likePath(r), { token: who.token, body })).body).rating;
 
-    expect(await put(t.a, ref)).toMatchObject({ liked: [ref], thumbs: { [ref]: 1 } });
+    expect(await put(t.a, ref)).toMatchObject({ myVotes: { [ref]: 'up' } });
     // R3: the same member again = still one.
-    expect(await put(t.a, ref)).toMatchObject({ liked: [ref], thumbs: { [ref]: 1 } });
-    expect(await put(t.c, ref)).toMatchObject({ liked: [ref], thumbs: { [ref]: 2 } });
-    expect(await view(t, t.b)).toMatchObject({ liked: [], thumbs: { [ref]: 2 } });
+    expect(await put(t.a, ref)).toMatchObject({ myVotes: { [ref]: 'up' } });
+    expect(await put(t.c, ref)).toMatchObject({ myVotes: { [ref]: 'up' } });
+    expect(await view(t, t.b)).toMatchObject({ myVotes: {} });
     expect(voteRows()).toHaveLength(2);
 
-    // Pressing again = cancel.
-    expect(await del(t.a, ref)).toMatchObject({ liked: [], thumbs: { [ref]: 1 } });
-    expect(await del(t.a, ref)).toMatchObject({ liked: [], thumbs: { [ref]: 1 } });
-    expect(await del(t.c, ref)).toEqual(expect.objectContaining({ liked: [], thumbs: {} }));
+    expect(await put(t.a, ref, CANCEL)).toMatchObject({ myVotes: {} });
+    expect(await put(t.a, ref, CANCEL)).toMatchObject({ myVotes: {} });
+    expect(await put(t.c, ref, CANCEL)).toMatchObject({ myVotes: {} });
     expect(voteRows()).toEqual([]);
   });
 
@@ -234,7 +236,7 @@ describe('GEN-078 rating + 👍 after the end', { timeout: 60_000 }, () => {
     // A's public action of the same turn as B's secret one: same turn, another seq.
     const seqOfB = Number(refs[t.b.memberId]![0]!.split('-')[3]);
     const publicRef = `1-EOSORIA-1-${seqOfB - 1}`;
-    const res = await t.call('PUT', likePath(publicRef), { token: t.c.token });
+    const res = await t.call('PUT', likePath(publicRef), { token: t.c.token, body: UP });
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(voteRows()).toEqual([{ memberId: t.c.memberId, sourceRef: publicRef }]);
   });
@@ -263,9 +265,9 @@ describe('GEN-078 rating + 👍 after the end', { timeout: 60_000 }, () => {
   it('C7: a ref that names no ruling of this game is 404 and saves nothing', async () => {
     const t = await endedTable();
     for (const ref of ['1-EOSORIA-1-99', '2-EOSORIA-1-1', '1-MORNING-1-1', 'nonsense', '1-EOSORIA-3-1']) {
-      for (const method of ['PUT', 'DELETE']) {
-        const res = await t.call(method, likePath(ref), { token: t.a.token });
-        expect(res.status, `${method} ${ref}`).toBe(404);
+      for (const body of [UP, CANCEL]) {
+        const res = await t.call('PUT', likePath(ref), { token: t.a.token, body });
+        expect(res.status, `${body.vote} ${ref}`).toBe(404);
         expect(ApiError.parse(res.body)).toMatchObject({ code: 'ruling_not_found' });
       }
     }
@@ -277,7 +279,7 @@ describe('GEN-078 rating + 👍 after the end', { timeout: 60_000 }, () => {
     const ref = (await revealedRefs(t, t.a))[t.c.memberId]![0]!;
     server!.db.prepare('update member set kicked_at = ? where id = ?').run(CLOCK, t.c.memberId);
     expect((await revealedRefs(t, t.a))[t.c.memberId]).toBeUndefined();
-    expect((await t.call('PUT', likePath(ref), { token: t.a.token })).status).toBe(404);
+    expect((await t.call('PUT', likePath(ref), { token: t.a.token, body: UP })).status).toBe(404);
     expect(voteRows()).toEqual([]);
   });
 
@@ -286,14 +288,15 @@ describe('GEN-078 rating + 👍 after the end', { timeout: 60_000 }, () => {
     const ref = (await revealedRefs(t, t.a))[t.b.memberId]![0]!;
     await rate(t, t.a, { score: 9, comment: 'จำไว้นะ' });
     await rate(t, t.b, { score: 10 });
-    await t.call('PUT', likePath(ref), { token: t.a.token });
-    await t.call('PUT', likePath(ref), { token: t.c.token });
+    await t.call('PUT', likePath(ref), { token: t.a.token, body: UP });
+    await t.call('PUT', likePath(ref), { token: t.c.token, body: { vote: 'down' } });
     const before = await Promise.all([t.a, t.b, t.c].map((who) => view(t, who)));
 
     await server!.close();
     server = await startTestServer(dataDir);
     const again = { ...t, call: (await import('./visibility-fixture.ts')).caller(server) };
     expect(await Promise.all([t.a, t.b, t.c].map((who) => view(again, who)))).toEqual(before);
-    expect(before[0]).toMatchObject({ mine: { score: 9, comment: 'จำไว้นะ' }, liked: [ref], thumbs: { [ref]: 2 }, raters: 2, average: 9.5 });
+    expect(before[0]).toMatchObject({ mine: { score: 9, comment: 'จำไว้นะ' }, myVotes: { [ref]: 'up' }, raters: 2, average: 9.5 });
+    expect(before[2]!.myVotes).toEqual({ [ref]: 'down' });
   });
 });

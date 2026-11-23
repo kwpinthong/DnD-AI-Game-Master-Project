@@ -8,13 +8,15 @@ export interface VoteButtonsProps {
   onVote: (next: EntryVote | null) => void;
   /** A request is running. */
   disabled?: boolean;
+  /** The group's name for a screen reader (default: the AI message one). */
+  label?: string;
 }
 
 /**
  * ถูกใจ / ไม่ถูกใจ under a message the AI GM wrote (GEN-107). Render it only for a player and only when the
  * entry has `myVote` (the server leaves it out for the Human GM and for text that is not the AI's).
  */
-export function VoteButtons({ value, onVote, disabled = false }: VoteButtonsProps) {
+export function VoteButtons({ value, onVote, disabled = false, label = voteText.group }: VoteButtonsProps) {
   const button = (vote: EntryVote) => (
     <button
       type="button"
@@ -27,7 +29,7 @@ export function VoteButtons({ value, onVote, disabled = false }: VoteButtonsProp
     </button>
   );
   return (
-    <div className="vote-buttons" role="group" aria-label={voteText.group}>
+    <div className="vote-buttons" role="group" aria-label={label}>
       {button('up')}
       {button('down')}
     </div>

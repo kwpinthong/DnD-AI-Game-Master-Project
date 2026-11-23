@@ -291,7 +291,7 @@ const origin: In<typeof p.OriginView> = {
   narration: 'คุณลืมตาขึ้นท่ามกลางกองจานสกปรก…',
 } as const;
 
-const rating: In<typeof p.GameRatingView> = { mine: { score: 9, comment: 'สนุกมาก' }, liked: ['2-HESPERION-1-7'], thumbs: { '2-HESPERION-1-7': 3 }, average: 8.6, raters: 3, members: 4, eligible: true, blocker: null };
+const rating: In<typeof p.GameRatingView> = { mine: { score: 9, comment: 'สนุกมาก' }, myVotes: { '2-HESPERION-1-7': 'up' }, canVote: true, average: 8.6, raters: 3, members: 4, eligible: true, blocker: null };
 const learningSource = { sourceGameId: 'g-old', sourceGameName: 'คืนจันทราโลหิต', sourceScore: 8.6, status: 'active', createdAt: 1_795_200_000_000 } as const;
 const scheduleRow = { npc: 'โนอา', location: 'น้ำพุกลางเมือง', periods: ['SOLARION', 'HESPERION'], weathers: [], condition: '', note: 'ช่วงบ่าย-ค่ำ' };
 const gameDataSummary: In<typeof p.GameDataSetSummary> = {
@@ -428,7 +428,13 @@ export const CONTRACT_FIXTURES: Fixtures = {
   ResponseVoteRequest: [{ vote: 'up' }, { vote: 'down' }, { vote: null }],
   ResponseVoteResponse: [{ seq: 11, myVote: 'up' }, { seq: 12, myVote: null }],
   GameRatingRequest: [{ score: 9, comment: 'สนุกมาก' }, { score: 7 }],
-  GameRatingResponse: [{ rating }, { rating: { mine: null, liked: [], average: null, raters: 1, members: 4, eligible: false, blocker: 'too_few_raters' } }],
+  GameRatingResponse: [
+    { rating },
+    { rating: { mine: null, myVotes: {}, canVote: true, average: null, raters: 1, members: 4, eligible: false, blocker: 'too_few_raters' } },
+    // GEN-171: a 👎, and the Human GM's view (rates, never votes).
+    { rating: { ...rating, myVotes: { '2-HESPERION-1-7': 'down' } } },
+    { rating: { ...rating, myVotes: {}, canVote: false } },
+  ],
   RoomClientMessage: [{ type: 'hello', token: 't0k3n', afterSeq: 0 }],
   RoomHello: [{ type: 'hello', token: 't0k3n', afterSeq: 12 }],
   RoomAction: [{ type: 'action', text: 'ตามนักบวชไปดูว่าเอาขนมปังมาจากไหน', visibility: 'secret' }, { type: 'action', text: 'พักที่โรงเตี๊ยม', visibility: 'public', rest: true, placeAction: 'inn_rest' }],

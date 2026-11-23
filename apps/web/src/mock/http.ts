@@ -34,9 +34,19 @@ const DEFAULTS: Readonly<Record<string, MockReply>> = {
   // GEN-091: a delete answers with what is left, so the library visibly loses the entry / the game.
   'DELETE /api/admin/learning/:id': ok({ entries: LIBRARY.entries.slice(1), counts: { ...LIBRARY.counts, [LIBRARY.entries[0]!.type]: 0 } }),
   'DELETE /api/admin/learning/games/:gameId': ok(CONTRACT_FIXTURES.LearningLibraryResponse[1]),
-  // taking a 👍 back answers with none left of yours and one less in the total (3 → 2)
-  'DELETE /api/game/rating/likes/:sourceRef': ok({ rating: { ...CONTRACT_FIXTURES.GameRatingResponse[0]!.rating, liked: [], thumbs: { '2-HESPERION-1-7': 2 } } }),
 };
+
+const RULING_VOTE = 'PUT /api/game/rating/votes/:sourceRef';
+
+/** GEN-171: a ruling vote answers with the scenario's rating where this ruling holds the sent vote (👍, 👎 or none). */
+function rulingVoteReply(scenario: MockScenario, request: MockRequest): MockReply {
+  const shown = scenario.http['GET /api/game/rating'];
+  const base = (shown && 'status' in shown ? shown.body : CONTRACT_FIXTURES.GameRatingResponse[0]) as (typeof CONTRACT_FIXTURES.GameRatingResponse)[number];
+  const ref = decodeURIComponent(request.path.split('/').pop()!);
+  const { vote } = request.body as { vote: 'up' | 'down' | null };
+  const { [ref]: _gone, ...others } = base.rating.myVotes;
+  return ok({ rating: { ...base.rating, myVotes: vote ? { ...others, [ref]: vote } : others } });
+}
 
 function invalidInput(issues: readonly { path: readonly PropertyKey[]; message: string }[]): MockReply {
   const fields: Record<string, string> = {};
@@ -63,6 +73,7 @@ export function mockHttp(scenario: MockScenario, request: MockRequest, elapsedMs
     if (!parsed.success) return invalidInput(parsed.error.issues);
   }
   if (reply) return reply;
+  if (routeKey(route) === RULING_VOTE) return rulingVoteReply(scenario, request);
   if (route.response === null) return { status: 204, body: null };
   return ok(CONTRACT_FIXTURES[route.response][0]);
 }

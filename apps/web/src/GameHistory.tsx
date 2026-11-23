@@ -142,7 +142,7 @@ export function GameLog({ log, onBack, apiBaseUrl, token }: { log: GameLogRespon
         <EndingReveal
           reveal={log.reveal}
           rating={rating.state.state === 'ready' ? rating.state.rating : null}
-          onToggleLike={(ref, on) => void rating.toggleLike(ref, on)}
+          onVote={(ref, vote) => void rating.vote(ref, vote)}
           endingId={ids.ending}
           fatesId={ids.fates}
           secretsId={ids.secrets}

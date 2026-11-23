@@ -5,6 +5,7 @@ import {
   PHASES,
   RATING_MIN,
   type EndingPath,
+  type EntryVote,
   type GameRatingView,
   type GameReveal,
   type GameRevealPlayer,
@@ -14,6 +15,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEven
 import { ratingApi, type RatingResult } from './rating-api.ts';
 import { Button } from './ui/Button.tsx';
 import { ErrorState, Skeleton } from './ui/parts.tsx';
+import { VoteButtons } from './ui/VoteButtons.tsx';
 import { endText } from './ui/strings.ts';
 import './ending.css';
 
@@ -44,7 +46,7 @@ export interface RatingHandle {
   reload: () => void;
   /** Each returns null on success or the Thai reason. */
   submit: (score: number, comment: string) => Promise<string | null>;
-  toggleLike: (sourceRef: string, on: boolean) => Promise<string | null>;
+  vote: (sourceRef: string, vote: EntryVote | null) => Promise<string | null>;
 }
 
 /** Loads the rating of an ended game and keeps it in step with every answer (`enabled` false = no request). */
@@ -81,7 +83,7 @@ export function useRating(apiBaseUrl: string | undefined, token: string | undefi
     state,
     reload: () => void load(),
     submit: async (score, comment) => (api ? take(await api.put({ score, comment })) : null),
-    toggleLike: async (sourceRef, on) => (api ? take(on ? await api.like(sourceRef) : await api.unlike(sourceRef)) : null),
+    vote: async (sourceRef, vote) => (api ? take(await api.vote(sourceRef, vote)) : null),
   };
 }
 
@@ -127,7 +129,7 @@ function FateCard({ player: p }: { player: GameRevealPlayer }) {
 }
 
 /** Q-270: everyone's Secret actions as one list in time order (day, phase, turn), with a day filter. */
-function SecretList({ reveal, rating, onToggleLike, id }: { reveal: GameReveal; rating: GameRatingView | null; onToggleLike: (ref: string, on: boolean) => void; id?: string }) {
+function SecretList({ reveal, rating, onVote, id }: { reveal: GameReveal; rating: GameRatingView | null; onVote: (ref: string, vote: EntryVote | null) => void; id?: string }) {
   const [day, setDay] = useState('');
   const all = reveal.players
     .flatMap((p) => p.secretActions.map((s) => ({ ...s, who: p })))
@@ -156,24 +158,16 @@ function SecretList({ reveal, rating, onToggleLike, id }: { reveal: GameReveal; 
         <ul aria-label={endText.secrets} className="fate__secrets">
           {shown.map((s, i) => {
             const ref = s.sourceRef;
-            const liked = Boolean(ref && rating?.liked.includes(ref));
-            const count = (ref && rating?.thumbs?.[ref]) || 0;
             return (
               <li key={i} className="secret-row">
                 <span className="secret-row__when">
                   {when(s)} · {`${s.who.characterName} (${s.who.lobbyName})`}
                 </span>
                 <span className="secret-row__text">{s.text}</span>
-                {rating && ref && (
-                  <>
-                    <span className="secret-row__thumbs" role="img" aria-label={endText.thumbsLabel(count)}>
-                      <span aria-hidden="true">👍 {count}</span>
-                    </span>
-                    <Button className="secret-row__like" aria-pressed={liked} aria-label={endText.likeLabel(s.text)} onClick={() => onToggleLike(ref, !liked)}>
-                      <span aria-hidden="true">👍</span>
-                      {liked ? endText.liked : endText.like}
-                    </Button>
-                  </>
+                {rating?.canVote && ref && (
+                  <div className="secret-row__vote">
+                    <VoteButtons value={rating.myVotes[ref] ?? null} onVote={(next) => onVote(ref, next)} label={endText.voteLabel(s.text)} />
+                  </div>
                 )}
               </li>
             );
@@ -188,15 +182,15 @@ function SecretList({ reveal, rating, onToggleLike, id }: { reveal: GameReveal; 
 export function EndingReveal({
   reveal,
   rating,
-  onToggleLike,
+  onVote,
   endingId,
   fatesId,
   secretsId,
 }: {
   reveal: GameReveal;
-  /** null = the rating is not loaded (or failed): no 👍 buttons. */
+  /** null = the rating is not loaded (or failed): no 👍/👎 buttons. */
   rating: GameRatingView | null;
-  onToggleLike: (sourceRef: string, on: boolean) => void;
+  onVote: (sourceRef: string, vote: EntryVote | null) => void;
   endingId?: string;
   fatesId?: string;
   secretsId?: string;
@@ -232,7 +226,7 @@ export function EndingReveal({
           ))}
         </div>
       </div>
-      <SecretList reveal={reveal} rating={rating} onToggleLike={onToggleLike} {...(secretsId ? { id: secretsId } : {})} />
+      <SecretList reveal={reveal} rating={rating} onVote={onVote} {...(secretsId ? { id: secretsId } : {})} />
     </section>
   );
 }
@@ -333,7 +327,7 @@ export function RatingSection({ rating: handle, id }: { rating: RatingHandle; id
             <RatingForm mine={mine} onSubmit={submit} {...(mine ? { onCancel: () => setEditing(false) } : {})} />
           )}
           <LearningStatus rating={state.rating} />
-          <p className="rating__likes">{endText.likes(state.rating.liked.length)}</p>
+          <p className="rating__likes">{endText.likes(Object.keys(state.rating.myVotes).length)}</p>
         </>
       )}
     </section>

@@ -1,15 +1,15 @@
-import { ApiError, GameRatingResponse, type GameRatingRequest, type GameRatingView } from '@isekai/protocol';
+import { ApiError, GameRatingResponse, type EntryVote, type GameRatingRequest, type GameRatingView, type ResponseVoteRequest } from '@isekai/protocol';
 import { apiUrl, fetchWithTimeout } from './session.ts';
 
 /**
  * The end page's rating calls (GEN-099 contract; the backend is GEN-078 / 079 / 081): the game score 1–10 with
- * a comment, and the 👍 on an action → result row by its `sourceRef`. Every answer is the whole rating view.
+ * a comment, and the 👍/👎 on an action → result row by its `sourceRef`. Every answer is the whole rating view.
  */
 export type RatingResult = { ok: true; rating: GameRatingView } | { ok: false; message: string };
 
 const UNREACHABLE = 'ติดต่อ server ไม่ได้ ลองใหม่อีกครั้ง';
 
-async function call(baseUrl: string, token: string, method: 'GET' | 'PUT' | 'DELETE', path: string, body?: GameRatingRequest): Promise<RatingResult> {
+async function call(baseUrl: string, token: string, method: 'GET' | 'PUT', path: string, body?: GameRatingRequest | ResponseVoteRequest): Promise<RatingResult> {
   let res: Response;
   let json: unknown;
   try {
@@ -33,6 +33,6 @@ async function call(baseUrl: string, token: string, method: 'GET' | 'PUT' | 'DEL
 export const ratingApi = (baseUrl: string, token: string) => ({
   get: () => call(baseUrl, token, 'GET', ''),
   put: (body: GameRatingRequest) => call(baseUrl, token, 'PUT', '', body),
-  like: (sourceRef: string) => call(baseUrl, token, 'PUT', `/likes/${encodeURIComponent(sourceRef)}`),
-  unlike: (sourceRef: string) => call(baseUrl, token, 'DELETE', `/likes/${encodeURIComponent(sourceRef)}`),
+  /** GEN-171: 👍/👎 on a ruling; null cancels. */
+  vote: (sourceRef: string, vote: EntryVote | null) => call(baseUrl, token, 'PUT', `/votes/${encodeURIComponent(sourceRef)}`, { vote }),
 });

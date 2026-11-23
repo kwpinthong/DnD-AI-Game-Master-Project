@@ -240,14 +240,15 @@ export type GameRatingRequest = z.input<typeof GameRatingRequest>;
 /**
  * The rating part of the end page. `average` is the game score (public, not a secret value). Eligible for
  * learning when average > 8 and raters ≥ half the members (Q-163, Q-164); `blocker` says which is missing.
- * `liked`: the `sourceRef`s (`${day}-${phase}-${turn}-${actionSeq}`, GEN-077 ADR) of the action → result
- * rows this viewer gave a 👍 (GEN-081 rulings).
+ * `myVotes` (GEN-171): `sourceRef` (`${day}-${phase}-${turn}-${actionSeq}`, GEN-077 ADR) → this viewer's own
+ * 👍/👎 on that action → result row (GEN-081 rulings); rows without a vote are left out. Never anyone
+ * else's vote or a total.
  */
 export const GameRatingView = z.strictObject({
   mine: z.strictObject({ score: z.number().int().min(RATING_MIN).max(RATING_MAX), comment: z.string() }).nullable(),
-  liked: z.array(z.string()),
-  /** GEN-078 C7: `sourceRef` → how many members gave it a 👍 (rows with none are left out). */
-  thumbs: z.record(z.string(), z.number().int().min(1)).optional(),
+  myVotes: z.record(z.string(), z.enum(['up', 'down'])),
+  /** GEN-171: only a player of the game may vote on rulings (the Human GM rates, but does not vote). */
+  canVote: z.boolean(),
   average: z.number().nullable(),
   raters: z.number().int().min(0),
   members: z.number().int().min(0),
@@ -256,7 +257,7 @@ export const GameRatingView = z.strictObject({
 });
 export type GameRatingView = z.infer<typeof GameRatingView>;
 
-/** 200 from GET / PUT /api/game/rating and PUT / DELETE /api/game/rating/likes/:sourceRef. */
+/** 200 from GET / PUT /api/game/rating and PUT /api/game/rating/votes/:sourceRef (body `ResponseVoteRequest`). */
 export const GameRatingResponse = z.strictObject({ rating: GameRatingView });
 export type GameRatingResponse = z.infer<typeof GameRatingResponse>;
 

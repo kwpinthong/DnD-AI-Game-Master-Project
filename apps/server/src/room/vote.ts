@@ -29,7 +29,8 @@ export function gameVotes(db: DbOrTx, gameId: string): GmVotesResponse {
   const players = new Set(activeMembers(db, gameId).filter((m) => m.role === 'player').map((m) => m.id));
   const counts = new Map<string, { up: number; down: number }>();
   for (const v of db.select().from(responseVote).where(eq(responseVote.gameId, gameId)).all()) {
-    if (!players.has(v.memberId)) continue;
+    // The end page's ruling votes (`ruling-…`, GEN-171) share the table; this list is the AI messages only.
+    if (!players.has(v.memberId) || !v.sourceRef.startsWith('entry-')) continue;
     const c = counts.get(v.sourceRef) ?? { up: 0, down: 0 };
     c[v.vote] += 1;
     counts.set(v.sourceRef, c);

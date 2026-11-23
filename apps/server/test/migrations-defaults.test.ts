@@ -48,6 +48,8 @@ const columnsOf = (db: Database.Database, table: string) => db.prepare(`pragma t
  */
 const TIME_MIGRATION = journal.entries.findIndex((e) => e.tag.endsWith('_time_periods'));
 const PHASE_RENAMED: Record<string, string> = { MORNING: 'EOSORIA' };
+/** The other one: 0038_ruling_vote_copy (GEN-171) copies each ruling_vote row into response_vote as `ruling-…`. */
+const RULING_COPY = journal.entries.findIndex((e) => e.tag.endsWith('_ruling_vote_copy'));
 
 function valueFor(column: Column, row: number, appliedCount: number): unknown {
   if (column.name === 'phase') return appliedCount <= TIME_MIGRATION ? 'MORNING' : 'EOSORIA';
@@ -109,7 +111,12 @@ describe('C6: migrating a DB from an older version keeps its data and gives new 
       for (const [table, rows] of Object.entries(before)) {
         const now = columnsOf(sqlite, table);
         expect(now.length, `${table} still exists`).toBeGreaterThan(0);
-        const after = sqlite.prepare(`select * from "${table}"`).all() as Record<string, unknown>[];
+        let after = sqlite.prepare(`select * from "${table}"`).all() as Record<string, unknown>[];
+        if (table === 'response_vote' && count <= RULING_COPY) {
+          const copies = after.filter((r) => String(r.source_ref).startsWith('ruling-'));
+          expect(copies, 'one response_vote copy per ruling_vote row').toHaveLength(before.ruling_vote!.length);
+          after = after.filter((r) => !copies.includes(r));
+        }
         expect(after, `${table} row count`).toHaveLength(rows.length);
 
         // Old columns: the same values (bar the deliberate phase rename).

@@ -236,21 +236,11 @@
 
 .secret-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0 var(--space-3);
   padding-left: var(--space-3);
   border-left: var(--line-w) solid var(--secret);
-}
-
-/* the total 👍 of the ruling, next to the button that gives or takes back yours */
-.secret-row__thumbs {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  color: var(--muted);
-  font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
 .secret-row__when {
@@ -264,12 +254,10 @@
   overflow-wrap: anywhere;
 }
 
-.end .secret-row__like {
-  grid-column: 3;
+/* GEN-171: the 👍/👎 set of GEN-107 (theme.css .vote-btn keeps each ≥ 44 px); only your own vote, no totals */
+.secret-row__vote {
+  grid-column: 2;
   grid-row: 1 / span 2;
-  min-height: 44px;
-  min-width: 44px;
-  white-space: nowrap;
 }
 
 /* ---------- rating ---------- */
