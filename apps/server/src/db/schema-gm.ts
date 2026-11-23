@@ -33,6 +33,25 @@ export const gmTurn = sqliteTable(
 );
 
 /**
+ * GEN-144: the NPCs the last turn left lingering (`Linger` of gm/npc-lines.ts): each one acted on (`talked`) at
+ * `location_id`, or still there past its schedule; `used` = turns already spent past it. Replaced as a whole when a
+ * turn applies; an old game has no rows (nobody lingers). GM-only.
+ */
+export const npcLinger = sqliteTable(
+  'npc_linger',
+  {
+    gameId: text('game_id')
+      .notNull()
+      .references(() => game.id, { onDelete: 'cascade' }),
+    npcId: text('npc_id').notNull(),
+    locationId: text('location_id').notNull(),
+    used: integer('used').notNull(),
+    talked: integer('talked', { mode: 'boolean' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.gameId, t.npcId] })],
+);
+
+/**
  * Constraint Lock (GEN-057 C4): a limit the AI GM put on a player (jailed, tied up). It stays in every
  * turn's context until the AI releases it with a reason. GM-only.
  */

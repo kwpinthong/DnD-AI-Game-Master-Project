@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GmDialogue, GmNarration } from '../src/gm/schema.ts';
-import { NPC_LINE_LIMITS, capTotal, cleanNpcLines, cutLine, npcsPresentAt, type CleanLine, type RawLine } from '../src/gm/npc-lines.ts';
+import { NPC_LINE_LIMITS, capTotal, cleanNpcLines, cutLine, lingerAfter, lingerNow, npcsPresentAt, type CleanLine, type Linger, type RawLine } from '../src/gm/npc-lines.ts';
 import type { GameAssets } from '../src/assets/load.ts';
 import type { GmWorld } from '../src/gm/context.ts';
 
@@ -40,6 +40,88 @@ describe('GEN-137 (Q-300) who is here: the schedule now, else the scenario place
     expect(here('clinic', 'EOSORIA')).toEqual(['noah']);
     // Scheduled here now: here, as before.
     expect(here('fountain', 'SOLARION')).toEqual(['lucia', 'merchant', 'noah']);
+  });
+});
+
+describe('GEN-144 the conversation partner stays past its schedule (at most 2 turns), then says goodbye', () => {
+  const world = {
+    places: [
+      { id: 'fountain', name: 'น้ำพุกลางเมือง' },
+      { id: 'temple', name: 'โบสถ์' },
+      { id: 'market', name: 'ตลาด' },
+    ],
+    npcs: [
+      { id: 'malcolm', names: ['มัลคอล์ม'], locationId: 'temple' },
+      { id: 'lucia', names: ['ลูเซีย'], locationId: 'temple' },
+      { id: 'noah', names: ['โนอา'], locationId: 'fountain' },
+    ],
+  } as unknown as GmWorld;
+  const row = (npc: string, location: string, periods: string[]) => ({ npc, location, periods, weathers: [], condition: '', note: '' });
+  // Malcolm and Lucia are at the fountain at EOSORIA only; at SOLARION both are back at the temple.
+  const assets = { npcSchedule: [row('มัลคอล์ม', 'น้ำพุกลางเมือง', ['EOSORIA']), row('ลูเซีย', 'น้ำพุกลางเมือง', ['EOSORIA'])] } as unknown as GameAssets;
+  const solarion = { phase: 'SOLARION' as const, weather: null, karmas: [] };
+  const scheduledAt = (npcId: string, placeId: string) => npcsPresentAt(world, assets, placeId, solarion).some((n) => n.id === npcId);
+  const here = (placeId: string, lingering: readonly Linger[]) => npcsPresentAt(world, assets, placeId, { ...solarion, lingering }).map((n) => n.id).sort();
+  /** One turn: who lingers and who says goodbye now, then the state the turn leaves after `talked`. */
+  const turn = (prev: readonly Linger[], talked: { npcId: string; placeId: string }[]) => {
+    const now = lingerNow(prev, scheduledAt);
+    return { ...now, next: lingerAfter(now.lingering, talked) };
+  };
+  const atFountain = (npcId: string) => ({ npcId, placeId: 'fountain' });
+
+  it('C1: talked to on the last turn of EOSORIA, it is still at the fountain when SOLARION starts (and not at its scheduled place)', () => {
+    const t1 = turn(lingerAfter([], [atFountain('malcolm')]), []);
+    expect(t1.lingering.map((l) => [l.npcId, l.placeId, l.used])).toEqual([['malcolm', 'fountain', 1]]);
+    expect(t1.farewells).toEqual([]);
+    expect(here('fountain', t1.lingering)).toEqual(['malcolm', 'noah']);
+    expect(here('temple', t1.lingering)).toEqual(['lucia']);
+  });
+
+  it('C2: talked to again while lingering, it stays a 2nd turn; on the 3rd it is gone with one farewell', () => {
+    const t1 = turn(lingerAfter([], [atFountain('malcolm')]), [atFountain('malcolm')]);
+    const t2 = turn(t1.next, [atFountain('malcolm')]);
+    expect(t2.lingering.map((l) => [l.npcId, l.used])).toEqual([['malcolm', 2]]);
+    expect(here('fountain', t2.lingering)).toContain('malcolm');
+    // Gone from the fountain: nobody there can talk to it any more.
+    const t3 = turn(t2.next, []);
+    expect(t3.lingering).toEqual([]);
+    expect(t3.farewells.map((f) => [f.npcId, f.placeId])).toEqual([['malcolm', 'fountain']]);
+    expect(here('fountain', t3.lingering)).not.toContain('malcolm');
+    expect(here('temple', t3.lingering)).toContain('malcolm');
+    // The farewell is said once: the turn after it, nothing is left of it.
+    expect(t3.next).toEqual([]);
+    expect(turn(t3.next, []).farewells).toEqual([]);
+  });
+
+  it('C3: lingering but nobody talked to it this turn: next turn it follows the schedule, with a farewell', () => {
+    const t1 = turn(lingerAfter([], [atFountain('malcolm')]), []);
+    const t2 = turn(t1.next, []);
+    expect(t2.lingering).toEqual([]);
+    expect(t2.farewells.map((f) => f.npcId)).toEqual(['malcolm']);
+    expect(here('temple', t2.lingering)).toContain('malcolm');
+  });
+
+  it('C5: two NPCs each talked to both linger', () => {
+    const t1 = turn(lingerAfter([], [atFountain('malcolm'), atFountain('lucia')]), []);
+    expect(t1.lingering.map((l) => l.npcId).sort()).toEqual(['lucia', 'malcolm']);
+    expect(here('fountain', t1.lingering)).toEqual(['lucia', 'malcolm', 'noah']);
+  });
+
+  it('C6: the NPC stays at the place it was talked to; it does not follow the player elsewhere', () => {
+    const t1 = turn(lingerAfter([], [atFountain('malcolm')]), []);
+    expect(here('market', t1.lingering)).toEqual([]);
+    expect(here('fountain', t1.lingering)).toContain('malcolm');
+  });
+
+  it('an NPC talked to where the schedule keeps it anyway does not linger and says no goodbye', () => {
+    const t1 = turn(lingerAfter([], [atFountain('noah')]), []);
+    expect(t1).toMatchObject({ lingering: [], farewells: [] });
+  });
+
+  it('C8: an old game has no state: nobody lingers and nobody says goodbye', () => {
+    expect(lingerNow([], scheduledAt)).toEqual({ lingering: [], farewells: [] });
+    expect(here('fountain', [])).toEqual(['noah']);
+    expect(npcsPresentAt(world, assets, 'fountain', solarion).map((n) => n.id)).toEqual(['noah']);
   });
 });
 

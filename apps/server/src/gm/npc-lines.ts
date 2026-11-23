@@ -2,7 +2,9 @@ import type { NpcDialogueLevel } from '@isekai/protocol';
 import type { Period, Weather } from '@isekai/rules';
 import type { GameAssets } from '../assets/load.ts';
 import { sheetNpcFor } from '../companions/sheet.ts';
+import { eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
+import { npcLinger } from '../db/schema.ts';
 import { npcsAt } from '../travel/rules.ts';
 import { npcBondsOf } from '../visibility/store.ts';
 import { containsName } from './check.ts';
@@ -50,6 +52,8 @@ export interface PresenceNow {
   weather: Weather | null;
   /** Karma of the players the narration is for: a schedule row with a karma condition holds for any of them. */
   karmas: readonly number[];
+  /** GEN-144: the NPCs lingering this turn (`lingerNow`): each is at its linger place only, whatever the schedule says. */
+  lingering?: readonly Linger[];
 }
 
 /**
@@ -62,12 +66,68 @@ export function npcsPresentAt(world: GmWorld, assets: GameAssets, placeId: strin
   const karmas = now.karmas.length > 0 ? now.karmas : [0];
   const locations = [...new Set(schedule.map((r) => r.location))];
   const at = (karma: number, location: string) => npcsAt(schedule, location, { phase: now.phase, weather: now.weather, karma });
-  return world.npcs.filter((n) =>
-    karmas.some((karma) => {
+  return world.npcs.filter((n) => {
+    const lingering = now.lingering?.find((l) => l.npcId === n.id);
+    if (lingering) return lingering.placeId === placeId;
+    return karmas.some((karma) => {
       const placed = locations.filter((loc) => n.names.some((name) => at(karma, loc).includes(name)));
       return placed.length > 0 ? placeName !== undefined && placed.includes(placeName) : n.locationId === placeId;
-    }),
-  );
+    });
+  });
+}
+
+// --- GEN-144: the conversation partner stays a little ---
+
+/** Turns an NPC may stay past its schedule at the place it was talked to. */
+export const LINGER_TURNS = 2;
+
+/** One NPC a turn left behind (row of `npc_linger`). */
+export interface Linger {
+  npcId: string;
+  placeId: string;
+  /** Turns already spent past its schedule (0: it was where the schedule put it). */
+  used: number;
+  /** Someone acted on it (targetNpc) in that turn. */
+  talked: boolean;
+}
+
+/**
+ * Who lingers this turn (`used` counts this turn) and who says goodbye, from what the last turn left. An NPC talked
+ * to stays while it has turns left; one nobody talked to, or with none left, says goodbye and follows the schedule.
+ * `scheduledAt`: whether the schedule puts the NPC at the place now anyway (then it neither lingers nor leaves).
+ */
+export function lingerNow(prev: readonly Linger[], scheduledAt: (npcId: string, placeId: string) => boolean): { lingering: Linger[]; farewells: Linger[] } {
+  const lingering: Linger[] = [];
+  const farewells: Linger[] = [];
+  for (const l of prev) {
+    if (scheduledAt(l.npcId, l.placeId)) continue;
+    if (l.talked && l.used < LINGER_TURNS) lingering.push({ ...l, used: l.used + 1, talked: false });
+    else farewells.push(l);
+  }
+  return { lingering, farewells };
+}
+
+/** What this turn leaves: every NPC acted on where it was (its count goes on when it was lingering there), and every lingering one nobody talked to. */
+export function lingerAfter(lingering: readonly Linger[], talkedTo: readonly { npcId: string; placeId: string }[]): Linger[] {
+  const talked = new Map(talkedTo.map((t) => [t.npcId, t.placeId]));
+  const kept = lingering.filter((l) => !talked.has(l.npcId));
+  return [
+    ...[...talked].map(([npcId, placeId]) => ({ npcId, placeId, used: lingering.find((l) => l.npcId === npcId && l.placeId === placeId)?.used ?? 0, talked: true })),
+    ...kept,
+  ];
+}
+
+export function lingersOf(db: DbOrTx, gameId: string): Linger[] {
+  return db
+    .select({ npcId: npcLinger.npcId, placeId: npcLinger.locationId, used: npcLinger.used, talked: npcLinger.talked })
+    .from(npcLinger)
+    .where(eq(npcLinger.gameId, gameId))
+    .all();
+}
+
+export function saveLingers(db: DbOrTx, gameId: string, lingers: readonly Linger[]): void {
+  db.delete(npcLinger).where(eq(npcLinger.gameId, gameId)).run();
+  if (lingers.length > 0) db.insert(npcLinger).values(lingers.map((l) => ({ gameId, npcId: l.npcId, locationId: l.placeId, used: l.used, talked: l.talked }))).run();
 }
 
 // --- What the AI is given ---
@@ -79,9 +139,9 @@ const PERSONA_TOKENS = 150;
  * The NPCs of a narration as the AI reads them (`here`: the ones `npcsPresentAt` has at the place now, the only ones that
  * may speak; the others at the scenario place may still be named): alias (never the real name), grade, personality (the sheet's Lore with
  * every real name of the NPC swapped for its token) and the bond with each player of the cast: affinity and whether
- * they have met (a row exists). `members`: the players the narration is about.
+ * they have met (a row exists). `members`: the players the narration is about. `lingering`: here past the schedule (GEN-144).
  */
-export function npcPrompt(db: DbOrTx, assets: GameAssets, world: GmWorld, npcs: GmWorld['npcs'], here: ReadonlySet<string>, members: readonly string[]): NarrationContext['npcs'] {
+export function npcPrompt(db: DbOrTx, assets: GameAssets, world: GmWorld, npcs: GmWorld['npcs'], here: ReadonlySet<string>, members: readonly string[], lingering: ReadonlySet<string> = new Set()): NarrationContext['npcs'] {
   const bonds = new Map(members.map((m) => [m, new Map(npcBondsOf(db, m).map((b) => [b.npcId, b.affinity]))] as const));
   return npcs.map((n) => {
     const sheet = sheetNpcFor(assets, n);
@@ -93,6 +153,7 @@ export function npcPrompt(db: DbOrTx, assets: GameAssets, world: GmWorld, npcs: 
       alias: n.alias,
       grade: sheet?.grade ?? n.rank,
       here: here.has(n.id),
+      lingering: here.has(n.id) && lingering.has(n.id),
       persona,
       bonds: members.flatMap((m) => {
         const player = world.players.get(m);
