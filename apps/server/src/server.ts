@@ -31,6 +31,7 @@ import { registerGmConsoleRoutes } from './gm-console/routes.ts';
 import { startBackupSchedule, type BackupSchedule } from './backup/schedule.ts';
 import { registerHistoryRoutes } from './history/routes.ts';
 import { registerRatingRoutes } from './rating/routes.ts';
+import { createLearningExtractor, everyoneRated } from './learning/extract.ts';
 import { registerVoteRoutes } from './room/vote-routes.ts';
 import type { Rng } from '@isekai/rules';
 import { CryptoRng } from './rng.ts';
@@ -156,6 +157,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   // The backup job starts after `listen`; the room reaches it through this late binding (Q-185).
   let backups: BackupSchedule | undefined;
   const styleReview = createStyleReview({ db, ai, gameData, now, log: options.aiLog ?? ((line) => console.log(line)) });
+  const learning = createLearningExtractor({ db, ai, assets, now, log: options.aiLog ?? ((line) => console.log(line)) });
   const room = registerRoomRoutes(app, db, now, {
     resolver,
     assets,
@@ -175,12 +177,16 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     log: options.aiLog ?? ((line) => console.log(line)),
     gameData,
     styleReview,
+    learning,
     ...(config.adminCodeHash ? { adminCodeHash: config.adminCodeHash } : {}),
   });
   registerInventoryRoutes(app, db, now, assets);
   registerGmConsoleRoutes(app, db, now, room, assets);
   registerHistoryRoutes(app, db, now, assets);
-  registerRatingRoutes(app, db, now);
+  // GEN-080: once every member rated, the lore + feedback extract runs in the background (the owner can also start it).
+  registerRatingRoutes(app, db, now, (gameId) => {
+    if (everyoneRated(db, gameId)) void learning.extract(gameId);
+  });
   registerVoteRoutes(app, db, now);
   if (options.webDistDir) registerWebStatic(app, options.webDistDir);
 
@@ -213,6 +219,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
       await app.close();
       await weather.idle();
       await styleReview.idle();
+      await learning.idle();
       // After the room and the weather picks stopped writing: the shutdown backup has everything.
       await backups?.stop();
       if (sqlite.open) sqlite.close();

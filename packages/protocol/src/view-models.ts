@@ -310,6 +310,19 @@ export const LearningLibraryResponse = z.strictObject({
 });
 export type LearningLibraryResponse = z.infer<typeof LearningLibraryResponse>;
 
+/**
+ * GEN-080: 200 from POST /api/admin/learning/games/:gameId/extract. `done`: the lore / feedback entries of the
+ * game are stored (once per game; a repeat stores nothing new). `failed` ("สกัดไม่สำเร็จ"): the AI gave no usable
+ * answer, nothing was stored, the same call retries. `lore` / `feedback`: entries of the game now.
+ */
+export const LearningExtractResponse = z.strictObject({
+  status: z.enum(['done', 'failed']),
+  message: z.string(),
+  lore: z.number().int().min(0),
+  feedback: z.number().int().min(0),
+});
+export type LearningExtractResponse = z.infer<typeof LearningExtractResponse>;
+
 // --- GEN-082: player style across games (Q-167 player code) ---
 
 /** Join form extras (pending: GEN-082 adds them to `JoinRequest`). */

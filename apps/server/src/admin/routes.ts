@@ -16,6 +16,8 @@ import { registerNpcLibraryRoutes } from './npc-library-routes.ts';
 import type { StyleReview } from './style-review.ts';
 import { registerStyleReviewRoutes } from './style-review-routes.ts';
 import { registerStyleEvalRoutes } from './style-eval-routes.ts';
+import type { LearningExtractor } from '../learning/extract.ts';
+import { registerLearningRoutes } from './learning-routes.ts';
 
 export interface AdminRouteOptions {
   /** scrypt hash of the server owner's admin code (ADMIN_CODE_HASH); without it the dashboard is closed. */
@@ -28,6 +30,8 @@ export interface AdminRouteOptions {
   gameData: GameDataStore;
   /** GEN-178: the style review round. */
   styleReview: StyleReview;
+  /** GEN-080: the lore + feedback extract of ended games. */
+  learning: LearningExtractor;
 }
 
 const FORBIDDEN = 'หน้านี้สำหรับเจ้าของ server เท่านั้น';
@@ -95,6 +99,7 @@ export function registerAdminRoutes(app: FastifyInstance, db: Db, now: Clock, op
   registerNpcLibraryRoutes(app, db, refuse, now);
   registerStyleReviewRoutes(app, options.styleReview, refuse);
   registerStyleEvalRoutes(app, db, refuse);
+  registerLearningRoutes(app, options.learning, refuse);
 
   app.get<{ Params: { gameId: string } }>('/api/admin/ai-usage/:gameId', async (request, reply) => {
     if (refuse(request, reply)) return reply;

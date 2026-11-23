@@ -93,6 +93,8 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'POST /api/admin/style-review/proposals/:id/approve': { method: 'POST', path: '/api/admin/style-review/proposals/1/approve', body: {} },
     'POST /api/admin/style-review/proposals/:id/reject': { method: 'POST', path: '/api/admin/style-review/proposals/1/reject' },
     'POST /api/admin/style-review/voice/:version/restore': { method: 'POST', path: '/api/admin/style-review/voice/1/restore' },
+    // GEN-080: the lore + feedback extract; a player's session is 403.
+    'POST /api/admin/learning/games/:gameId/extract': { method: 'POST', path: '/api/admin/learning/games/any-game/extract' },
     // GEN-055: the player's own skills, held items and library discoveries (no condition or progress).
     'GET /api/game/inventory': { method: 'GET', path: '/api/game/inventory' },
     // GEN-058: the Human GM console. Players get 403 (scanned for karma like every other answer).

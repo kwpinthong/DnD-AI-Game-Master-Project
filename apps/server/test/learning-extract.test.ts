@@ -160,7 +160,11 @@ describe('GEN-080 learning extract (lore + feedback_note)', { timeout: 120_000 }
     expect(extractCalls()).toHaveLength(1);
     const prompt = JSON.stringify(extractCalls()[0]!);
     for (const canary of CANARIES) expect(prompt).not.toContain(canary);
-    for (const name of LOBBY_NAMES) expect(prompt).not.toContain(name);
+    // Short Thai lobby names hide inside other words (เป็นกลาง holds นก), so the check is where they were written.
+    for (const name of LOBBY_NAMES) expect(prompt).not.toContain(`\\"${name}\\"`);
+    expect(prompt).not.toContain('และนก ยืน');
+    expect(prompt).not.toContain('บีเล่น');
+    expect(prompt).toContain('และผู้เล่น ยืน');
     expect(prompt).not.toContain(npc.name);
     // What the end page shows is there: the revealed Secret action, the epilogue (NPC as its token), the comment.
     expect(prompt).toContain('แอบหยิบถุงเงินในตลาด');

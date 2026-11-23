@@ -175,3 +175,5 @@ export * from './schema-game-data.ts';
 export * from './schema-style-review.ts';
 // GEN-167: the Thai style eval rounds, own file for the same reason.
 export * from './schema-style-eval.ts';
+// GEN-080: the learning entries kept across games and the per-game extract state, own file for the same reason.
+export * from './schema-learning.ts';

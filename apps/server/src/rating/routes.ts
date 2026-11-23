@@ -10,7 +10,7 @@ import { gameEnded, ratingViewFor, saveRating, setRulingVote } from './store.ts'
  * After the end (GEN-078): each member's score 1–10 + comment, and their 👍 on the rulings of the end page.
  * Members only (players and the Human GM): anyone else gets 403. Before the game ended: 409, nothing saved.
  */
-export function registerRatingRoutes(app: FastifyInstance, db: Db, now: Clock) {
+export function registerRatingRoutes(app: FastifyInstance, db: Db, now: Clock, onRated: (gameId: string) => void = () => {}) {
   /** The calling member of an ended game; otherwise the error is sent and this is undefined. */
   function rater(request: { headers: { authorization?: string | undefined } }, reply: FastifyReply): MemberRow | undefined {
     const token = bearerToken(request.headers.authorization);
@@ -46,6 +46,7 @@ export function registerRatingRoutes(app: FastifyInstance, db: Db, now: Clock) {
       return sendError(reply, 400, { code: 'invalid_input', message: Object.values(fields)[0] ?? 'เลือกคะแนน 1–10', fields });
     }
     saveRating(db, me, { score: parsed.data.score, comment: parsed.data.comment.normalize('NFC') }, now());
+    onRated(me.gameId);
     return send(reply, me);
   });
 
