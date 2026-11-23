@@ -48,6 +48,9 @@ const V2_SCREENS = [
   'game-data',
   // GEN-168: the server owner's review of 👎 messages + "แก้เป็น".
   'vote-review',
+  // ISK-011: the player's report box and the owner's ฟีดแบ็ก tab.
+  'feedback',
+  'admin-feedback',
 ];
 
 const schemaNames = Object.keys(CONTRACT_SCHEMAS) as (keyof typeof CONTRACT_SCHEMAS)[];
