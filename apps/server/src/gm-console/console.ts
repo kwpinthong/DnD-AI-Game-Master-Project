@@ -168,7 +168,8 @@ function pendingView(db: DbOrTx, gameId: string, turn: HeldTurn): GmPendingTurn 
   return {
     ...(turn.finale ? { finale: true } : {}),
     at: turn.at,
-    ...(edited.checks ? { checks: [...edited.checks] } : {}),
+    // Q-269: a turn with no roll (REST only, a resolver that sends none) is an empty list, never a missing field.
+    checks: [...(edited.checks ?? [])],
     entries: (edited.entries ?? []).map((e, index) => ({
       index,
       // GEN-110: an NPC line is shown (and edited) as the feed line or private text it is published as.

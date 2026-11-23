@@ -1,4 +1,4 @@
-import { difficultyWord, type GmCheckView, type HitChange, type HitView, type RollFactor, type RollFactorKind, type RollOutcome, type RollView } from '@isekai/protocol';
+import { difficultyWord, WEATHER_LABEL, type Weather, type GmCheckView, type HitChange, type HitView, type RollFactor, type RollFactorKind, type RollOutcome, type RollView } from '@isekai/protocol';
 import type { ActionOutcome, Degree, ResolutionLog } from '@isekai/rules';
 
 /**
@@ -43,6 +43,12 @@ export function rollViewOf(log: ResolutionLog, nameOf: NameOf): RollView | null 
   return { d20: log.check.d20, difficulty: difficultyWord(log.check.dc), outcome: OUTCOME[log.degree], factors };
 }
 
+/** The GM's label for a modifier: the weather's / curse's own name where the engine kept one (Q-269), else the generic source. */
+function gmLabelOf(m: Modifier, nameOf: NameOf): string {
+  const weather = m.source === 'weather' ? WEATHER_LABEL[(m.ref?.split(':')[0] ?? '') as Weather] : undefined;
+  return weather ?? (m.source === 'status' ? m.ref : undefined) ?? sourceOf(m, nameOf).label;
+}
+
 /** The Human GM's view of one roll of the held turn: tags, DC, each modifier with its number, d20, total (Screens and Flows v2 §5). */
 export function checkViewOf(outcome: ActionOutcome, action: { text: string; visibility: 'public' | 'secret' } | undefined, nameOf: NameOf): GmCheckView | null {
   if (outcome.status !== 'resolved' || outcome.log.check === null || !action) return null;
@@ -53,7 +59,7 @@ export function checkViewOf(outcome: ActionOutcome, action: { text: string; visi
     visibility: action.visibility,
     tags: [...new Set([...(tagging?.verbTags ?? []), ...(tagging?.targetTags ?? [])])],
     dc: check.dc,
-    modifiers: check.modifiers.filter((m) => m.value !== 0).map((m) => ({ label: sourceOf(m, nameOf).label, value: m.value })),
+    modifiers: check.modifiers.filter((m) => m.value !== 0).map((m) => ({ label: gmLabelOf(m, nameOf), value: m.value })),
     d20: check.d20,
     total: check.total,
     outcome: OUTCOME[degree],
