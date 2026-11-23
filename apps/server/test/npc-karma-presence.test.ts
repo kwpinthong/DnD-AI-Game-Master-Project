@@ -26,9 +26,13 @@ describe('GEN-184 NPC presence per actor karma', { timeout: 60_000 }, () => {
   const sockets: RoomClient[] = [];
   const requests: AiCallRequest[] = [];
 
+  /** GEN-188: aim at Noctis only where the turn context says the actor can see him (the per-actor place, else the shared one). */
+  let byContext = false;
+
   beforeEach(() => {
     ({ dir: dataDir, cleanup } = makeTempDir());
     requests.length = 0;
+    byContext = false;
   });
 
   afterEach(async () => {
@@ -50,7 +54,10 @@ describe('GEN-184 NPC presence per actor karma', { timeout: 60_000 }, () => {
       const proposal = mockTurnProposal(ctx);
       for (const a of proposal.actions) {
         a.check = { type: 'none' };
-        if (req.purpose === 'gm_adjudicate' && ctx.actions.find((x) => x.actionId === a.actionId)?.text.includes('เงา')) a.targetNpc = 'noctis';
+        const action = ctx.actions.find((x) => x.actionId === a.actionId)!;
+        const noctis = ctx.npcs.find((n) => n.id === 'noctis')!;
+        const seen = !byContext || (noctis.placeFor?.[action.actor] ?? noctis.place) === action.place;
+        if (req.purpose === 'gm_adjudicate' && action.text.includes('เงา') && seen) a.targetNpc = 'noctis';
       }
       return { ...mockReply.ok(proposal), model: req.model };
     },
@@ -62,7 +69,7 @@ describe('GEN-184 NPC presence per actor karma', { timeout: 60_000 }, () => {
   const turnPurposes = () => requests.filter((r) => r.output.name === 'gm_turn_proposal').map((r) => r.purpose);
 
   /** Day 1 dusk: Noctis (scenario place: the market) with A (karma -60) and B (karma +60) at the temple. */
-  async function dusk(): Promise<{ t: Table; clients: RoomClient[] }> {
+  async function dusk(karmaB = 60): Promise<{ t: Table; clients: RoomClient[] }> {
     server = await startTestServer(dataDir, { aiProvider: provider, ai: loadAiConfig({ AI_PROVIDER: 'mock', AI_MAX_RETRIES: '0', AI_RETRY_DELAY_MS: '0' }) });
     const t = await startedTable(server, false);
     const gameId = gameIdOf(t);
@@ -71,7 +78,8 @@ describe('GEN-184 NPC presence per actor karma', { timeout: 60_000 }, () => {
     expect(updateGameScenario(server.orm, gameId, { ...scenario, npcs: [...scenario.npcs, noctis] }, CLOCK).ok).toBe(true);
     savePhaseState(server.orm, gameId, { ...ensurePhaseState(server.orm, gameId, CLOCK), day: 1, phase: 'HESPERION', turn: 1 }, CLOCK);
     setKarma(t.a, -60);
-    setKarma(t.b, 60);
+    setKarma(t.b, karmaB);
+    setKarma(t.c, karmaB);
     for (const who of [t.a, t.b]) expect(moveCharacter(server.orm, who.memberId, 'temple', CLOCK)).toBe(true);
     const clients: RoomClient[] = [];
     for (const seat of [t.a, t.b, t.c]) {
@@ -106,5 +114,35 @@ describe('GEN-184 NPC presence per actor karma', { timeout: 60_000 }, () => {
     await playTurn(clients, ['ยืนมองแท่นบูชา', 'ถามเงานั้น', 'ล้างแก้ว']);
     expect(turnPurposes()).toEqual(['gm_adjudicate', 'gm_repair']);
     expect(requests.find((r) => r.purpose === 'gm_repair')!.messages.at(-1)!.text).toContain('npc_not_present');
+  });
+
+  const turnContext = () => contextOf<TurnContext>(requests.find((r) => r.purpose === 'gm_adjudicate')!);
+
+  it('GEN-188 C1: the turn context says the high-karma actor does not see Noctis at the shared place', async () => {
+    const { clients } = await dusk();
+    await playTurn(clients, ['ถามเงานั้น', 'ยืนมองแท่นบูชา', 'ล้างแก้ว']);
+    const ctx = turnContext();
+    const refOf = (text: string) => ctx.actions.find((a) => a.text === text)!.actor;
+    const noctis = ctx.npcs.find((n) => n.id === 'noctis')!;
+    expect(noctis.place).toBe('temple');
+    expect(noctis.placeFor?.[refOf('ยืนมองแท่นบูชา')]).toBeDefined();
+    expect(noctis.placeFor?.[refOf('ยืนมองแท่นบูชา')]).not.toBe('temple');
+    expect(noctis.placeFor?.[refOf('ถามเงานั้น')]).toBeUndefined();
+  });
+
+  it('GEN-188 C2: a mock AI that targets by the context needs no repair', async () => {
+    byContext = true;
+    const { clients } = await dusk();
+    await playTurn(clients, ['ถามเงานั้น', 'ถามเงานั้น', 'ล้างแก้ว']);
+    expect(turnPurposes()).toEqual(['gm_adjudicate']);
+  });
+
+  it('GEN-188 C3: when every player sees the same, the NPC list is as before (no placeFor)', async () => {
+    const { clients } = await dusk(-60);
+    await playTurn(clients, ['ถามเงานั้น', 'ถามเงานั้น', 'ล้างแก้ว']);
+    const ctx = turnContext();
+    expect(ctx.npcs.find((n) => n.id === 'noctis')!.place).toBe('temple');
+    expect(JSON.stringify(ctx.npcs)).not.toContain('placeFor');
+    expect(turnPurposes()).toEqual(['gm_adjudicate']);
   });
 });

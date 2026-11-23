@@ -166,8 +166,11 @@ export interface TurnContext {
   resting: string[];
   players: PlayerContext[];
   places: { id: string; name: string; safety: string; tags: string[] }[];
-  /** `place`: where the NPC is now (GEN-175: NPC_Schedule + linger); '' = at none of the places (cannot be targeted). */
-  npcs: { id: string; alias: string; rank: string; place: string; curses: string[] }[];
+  /**
+   * `place`: where the NPC is now (GEN-175: NPC_Schedule + linger); '' = at none of the places (cannot be targeted).
+   * `placeFor` (GEN-188): player ref → the NPC's place for that actor (karma-only schedule rows), only when it differs from `place`.
+   */
+  npcs: { id: string; alias: string; rank: string; place: string; placeFor?: Record<string, string>; curses: string[] }[];
   /** Every verb / target tag the game data has (GEN-064). */
   tagVocabulary: string[];
   events: { active: Omit<EventContext['active'][number], 'defaultOutcome'>[]; past: EventContext['past'] };
@@ -251,7 +254,18 @@ export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnConte
     players,
     places: world.places,
     // GEN-175: where the rules have the NPC now (schedule + linger), so a target the AI picks from this list is accepted.
-    npcs: world.npcs.map((n) => ({ id: n.id, alias: n.alias, rank: n.rank, place: state.npcs[n.id]?.locationId ?? n.locationId, curses: (state.npcs[n.id]?.statuses ?? []).filter((st) => st.origin === 'curse').map((st) => st.label) })),
+    // GEN-188: the per-actor places the rules check with (GEN-184), by player ref; absent when everyone sees the same (no extra tokens).
+    npcs: world.npcs.map((n) => {
+      const placeFor = state.npcs[n.id]?.placeFor;
+      return {
+        id: n.id,
+        alias: n.alias,
+        rank: n.rank,
+        place: state.npcs[n.id]?.locationId ?? n.locationId,
+        ...(placeFor ? { placeFor: Object.fromEntries(Object.entries(placeFor).map(([memberId, at]) => [ref(memberId), at])) } : {}),
+        curses: (state.npcs[n.id]?.statuses ?? []).filter((st) => st.origin === 'curse').map((st) => st.label),
+      };
+    }),
     tagVocabulary: [...input.vocabulary],
     // GEN-111: the drift outcome describes what comes after (e.g. "วันที่ 7 และ 10"); an active event hands the AI only what it
     // happens now, so the narration cannot run ahead of the day.
@@ -408,6 +422,8 @@ const RULES_TEXT = [
   '12. looksAt: only the refs of players the action really means to look at / watch / talk to (besides targetPlayer). Answer [] when it looks at nobody (walking around / looking round a room in general does not count: it must fix on that person). A player only learns the looks of whom they look at',
   // GEN-170 (Q-320 B)
   '14. introducedNpcs: only ids of NPCs at the place who say their own name in that action\'s scene (introduce themselves). Whoever hears it learns that NPC\'s real name. Answer [] when nobody introduces themselves',
+  // GEN-188
+  '15. targetNpc: only an NPC at the actor\'s place for that actor: npcs[].placeFor[actor] when it has the actor, else npcs[].place',
   '9. endingPath: only while an event of kind finale (Judgement Day, day 12) is active. When the players complete a path this turn, answer good (the miracle veil turns the meteor aside) / evil (absorb the meteor\'s power) / neutral (with the event\'s NPCs, cancel it out to zero) by that event\'s interventionEffects, also weighing the results of days 1, 5, 7, 10 in past. Otherwise answer null',
   // GEN-093 (Q-203)
   '10. An action\'s strategy: only while an event with strategies (the night of day 10) is active. When the action is part of a plan, answer the plan id from the event\'s strategies (never D10-DRIFT) and role = leader (the one whose roll decides the plan) or support (a helper). Success comes from that action\'s dice. Otherwise answer null',
