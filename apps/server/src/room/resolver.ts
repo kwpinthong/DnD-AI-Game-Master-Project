@@ -30,6 +30,11 @@ export interface PhaseResolver {
    * could not write is simply missing.
    */
   scene?(input: { readonly gameId: string; readonly at: TurnPoint; readonly weather: PeriodWeather | null; readonly signal?: AbortSignal }): Promise<readonly ResolutionEntry[]>;
+  /**
+   * ISK-014: the morning news the AI wrote for `day` (with the summary of the day before; waits for one still running).
+   * null, or no `news` at all: the room publishes the server's template.
+   */
+  news?(input: { readonly gameId: string; readonly day: number }): Promise<readonly string[] | null>;
   /** GEN-128: the dialogue stages a restart cut short, each to run like `PhaseResolution.dialogue`; the room asks once per game, on the first join. */
   dialogueLeft?(input: { readonly gameId: string; readonly signal?: AbortSignal }): { readonly at: TurnPoint; readonly dialogue: DialogueStage; readonly places: PlaceReaders }[];
 }

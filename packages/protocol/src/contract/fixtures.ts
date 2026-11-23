@@ -137,6 +137,8 @@ const entries: In<typeof p.RoomEntry>[] = [
   { seq: 21, kind: 'player', ...AT, place: FOUNTAIN_ZONED, text: 'โยนเหรียญลงในหมวกของคุณ แล้วเดินจากไป', actor: { name: 'ผู้มาเยือนเสื้อคลุมแดง' } },
   // GEN-145: a new period began (server text, no votes)
   { seq: 23, kind: 'time', day: 6, phase: 'HESPERION', turn: 1, place: null, text: 'ระฆังหอคอยดังกังวานไปทั่วเมือง บัดนี้เข้าสู่ช่วง HESPERION (ค่ำ 18:00-23:59) แล้ว' },
+  // ISK-014: the morning news, one line per item, the same for everyone (no votes)
+  { seq: 24, kind: 'news', day: 6, phase: 'EOSORIA', turn: 1, place: null, text: 'หมอกพิษยังปกคลุมป่าทิศตะวันออก\nข่าวลือว่าแม่ชีผู้เหนื่อยล้าแห่งโบสถ์เก่าไม่ได้นอนทั้งคืน' },
 ];
 
 const you: In<typeof p.RoomYou> = {

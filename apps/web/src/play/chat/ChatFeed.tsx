@@ -234,7 +234,34 @@ function entryView(e: RoomEntry, look: ReturnType<typeof entryLook>, vote: (entr
     case 'time':
       // GEN-145: the server's announcement of a new period, a centred line (no box, no votes).
       return <p className="chat-time">{e.text}</p>;
+    case 'news':
+      // ISK-014: the morning news, one line per item, for everyone alike (no votes).
+      return (
+        <section className="chat-news" aria-label={t.chat.news(e.day)}>
+          <p className="chat-news-title">
+            <ScrollIcon />
+            {t.chat.news(e.day)}
+          </p>
+          <ul>
+            {e.text.split('\n').map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        </section>
+      );
     case 'skip':
       return null;
   }
+}
+
+/** A rolled scroll in the text colour (decoration only; the title says "ข่าวเช้า"). */
+function ScrollIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M7 4h11a2 2 0 0 1 2 2v1h-4" />
+      <path d="M16 7v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1h10" />
+      <path d="M7 4a2 2 0 0 0-2 2v11" />
+      <path d="M9 9h4M9 12h4" />
+    </svg>
+  );
 }

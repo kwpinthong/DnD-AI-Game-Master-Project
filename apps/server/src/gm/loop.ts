@@ -77,6 +77,7 @@ import { dialoguePrompt } from './npc-examples.ts';
 import { recordNpcMemories } from './npc-memory.ts';
 import { capTotal, cleanNpcLines, lingerAfter, lingersNow, npcAnswers, npcLineLimits, npcPlacesNow, npcPrompt, npcsPresentAt, saveLingers, withVoice } from './npc-lines.ts';
 import { npcFarewellFor } from './server-lines.ts';
+import { newsSources, publicNews, saveNews, storedNews } from './news.ts';
 import { periodScenes } from './scene.ts';
 import { GM_OUTPUT, GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
 import { gateStyle, styleIssues, type StyleScope } from './style-check.ts';
@@ -915,7 +916,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
   /** The GM's summary of day `d` when it has none (null: nothing was missing); false when the call failed. */
   async function summarizeDay(gameId: string, d: number, signal?: AbortSignal): Promise<boolean | null> {
     if (hasDaySummary(db, gameId, d)) return null;
-    const context: DayContext = { kind: 'gm_day', day: d, saga: latestSaga(db, gameId, d), log: dayLog(db, gameId, d) };
+    // ISK-014: the same call writes tomorrow's morning news.
+    const context: DayContext = { kind: 'gm_day', day: d, saga: latestSaga(db, gameId, d), log: dayLog(db, gameId, d), news: newsSources(db, gameId, d + 1) };
     const system = [SUMMARY_BLOCK];
     const messages = [{ role: 'user' as const, text: JSON.stringify(context) }];
     if (requestTokens(system, messages) > CONTEXT_BUDGET.summarize_day) {
@@ -929,13 +931,17 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       system,
       messages,
       output: { name: GM_OUTPUT.daySummary, schema: GmDaySummary },
-      maxOutputTokens: 1_500,
+      // ISK-014: +300 for the news, at most.
+      maxOutputTokens: 1_800,
       ...(signal ? { signal } : {}),
     });
     if (!result.ok) {
       log(`[gm] game=${gameId} summarize_day day=${d} failed: ${failureOf(result.error)}`);
       return false;
     }
+    // Before the summary, which marks the day done: a restart in between asks again rather than losing the news.
+    const news = publicNews(db, assets, gameId, result.value.news);
+    if (news) saveNews(db, gameId, d + 1, news, now());
     saveDaySummary(db, gameId, d, result.value, now());
     return true;
   }
@@ -1000,6 +1006,11 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           places: new Map(jobs.flatMap((j) => (j.readers ? [[j.context.place.id, new Set(j.readers)] as const] : []))),
         })),
     scene: (input) => pinAssets(assets)(() => periodScenes({ db, ai, assets, log }, input)),
+    // ISK-014: what the summary of the day before wrote for `day` (waits for a summary still running); null = none.
+    news: async ({ gameId, day }) => {
+      await writing.get(gameId)?.day;
+      return storedNews(db, gameId, day);
+    },
   };
 }
 

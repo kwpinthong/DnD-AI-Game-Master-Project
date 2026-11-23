@@ -181,10 +181,12 @@ export function mockNarration(ctx: NarrationContext): GmNarration {
   };
 }
 
-export function mockDaySummary(ctx: DayContext): { recap: string; saga: string } {
+export function mockDaySummary(ctx: DayContext): { recap: string; saga: string; news: string[] } {
   const recap = `วันที่ ${ctx.day}: ${ctx.log.join(' / ') || 'ไม่มีเหตุการณ์สำคัญ'}`.slice(0, 1800);
   const saga = [ctx.saga, recap].filter((s): s is string => s !== null).join('\n').slice(-4500);
-  return { recap, saga };
+  // ISK-014: tomorrow's events by name, else one rumour.
+  const starting = (ctx.news?.starting ?? []).slice(0, 3).map((e) => `ชาวเมืองลือกันว่า${e.title}จะเริ่มขึ้นในวันนี้`);
+  return { recap, saga, news: starting.length > 0 ? starting : ['ข่าวลือแพร่ไปทั่วตลาดว่าเมื่อคืนมีเสียงแปลกๆ ดังมาจากทางป่าทิศตะวันออก'] };
 }
 
 export function mockJournal(ctx: JournalContext): GmJournal {

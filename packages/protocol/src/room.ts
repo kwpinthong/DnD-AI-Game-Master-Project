@@ -209,7 +209,7 @@ export type RoomState = z.infer<typeof RoomState>;
  * `time` (GEN-145): the server's announcement that a new period began (a GEN-150 `time_announce` line naming it, and the
  * day when a new day began), once per room under turn 1 of the new period, `place` null; no AI, no votes.
  */
-export const RoomEntryKind = z.enum(['feed', 'narration', 'whisper', 'omen', 'hit', 'changes', 'npc', 'player', 'time']);
+export const RoomEntryKind = z.enum(['feed', 'narration', 'whisper', 'omen', 'hit', 'changes', 'npc', 'player', 'time', 'news']);
 export type RoomEntryKind = z.infer<typeof RoomEntryKind>;
 
 /**

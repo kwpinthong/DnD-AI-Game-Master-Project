@@ -113,7 +113,8 @@ export const gmMemory = sqliteTable(
     gameId: text('game_id')
       .notNull()
       .references(() => game.id, { onDelete: 'cascade' }),
-    kind: text('kind', { enum: ['day', 'saga'] }).notNull(),
+    /** ISK-014: `news` = the morning news of `day` (a JSON list of texts as everyone reads them). */
+    kind: text('kind', { enum: ['day', 'saga', 'news'] }).notNull(),
     day: integer('day').notNull(),
     text: text('text').notNull(),
     createdAt: integer('created_at').notNull(),

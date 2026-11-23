@@ -202,17 +202,17 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
     await submitAndAccept(a, 'ก้มดูใต้โต๊ะ');
     await submitAndAccept(b, 'สั่งเบียร์');
     await submitAndAccept(c, 'นั่งฟังเพลง');
-    const got = await a.waitFor((m) => isEntry(m) && m.entry.kind !== 'player') as Extract<RoomServerMessage, { type: 'entry' }>;
+    const got = await a.waitFor((m) => isEntry(m) && m.entry.kind !== 'player' && m.entry.kind !== 'news') as Extract<RoomServerMessage, { type: 'entry' }>;
     expect(got.entry).toMatchObject({ kind: 'narration', text: narration, day: 1, phase: 'EOSORIA', turn: 1 });
     await a.waitFor(phaseIs(1, 'EOSORIA', 2));
     await b.waitFor(phaseIs(1, 'EOSORIA', 2));
 
     // (B may read A's public action as a `player` entry, GEN-129; never the narration.)
-    expect(b.entries().filter((e) => e.kind !== 'player')).toEqual([]);
+    expect(b.entries().filter((e) => e.kind !== 'player' && e.kind !== 'news')).toEqual([]);
     for (const frame of [...b.raw, ...c.raw]) expect(frame).not.toContain(narration);
     // B reconnecting from the start still gets nothing of A's.
     const bAgain = await enter(t.b, 0);
-    expect(bAgain.entries().filter((e) => e.kind !== 'player')).toEqual([]);
+    expect(bAgain.entries().filter((e) => e.kind !== 'player' && e.kind !== 'news')).toEqual([]);
     expectNoForbiddenKeys(a, b, c, bAgain);
   });
 
@@ -323,7 +323,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
     // Round 1 while A is online.
     for (const [client, text] of [[a, 'หนึ่ง'], [b, 'สอง'], [c, 'สาม']] as const) await submitAndAccept(client, text);
     await a.waitFor(phaseIs(1, 'EOSORIA', 2));
-    const online = a.entries().filter((e) => e.kind !== 'player');
+    const online = a.entries().filter((e) => e.kind !== 'player' && e.kind !== 'news');
     expect(online.map((e) => e.text)).toEqual(['ฟีดรอบ 1', 'เล่าให้ A รอบ 1']);
     const lastSeq = online.at(-1)!.seq;
 
@@ -355,7 +355,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
 
     // A fresh tab (afterSeq 0) gets the whole history once; B never got A's narration.
     const fresh = await enter(t.a, 0);
-    expect(fresh.entries().filter((e) => e.kind !== 'player' && e.kind !== 'time').map((e) => e.text)).toEqual([
+    expect(fresh.entries().filter((e) => e.kind !== 'player' && e.kind !== 'time' && e.kind !== 'news').map((e) => e.text)).toEqual([
       'ฟีดรอบ 1',
       'เล่าให้ A รอบ 1',
       'ฟีดรอบ 2',
@@ -363,7 +363,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
       'ฟีดรอบ 3',
       'เล่าให้ A รอบ 3',
     ]);
-    expect(b.entries().filter((e) => e.kind !== 'player' && e.kind !== 'time').map((e) => e.text)).toEqual(['ฟีดรอบ 1', 'ฟีดรอบ 2', 'ฟีดรอบ 3']);
+    expect(b.entries().filter((e) => e.kind !== 'player' && e.kind !== 'time' && e.kind !== 'news').map((e) => e.text)).toEqual(['ฟีดรอบ 1', 'ฟีดรอบ 2', 'ฟีดรอบ 3']);
     expectNoForbiddenKeys(a, b, c, fresh);
   });
 
@@ -408,11 +408,11 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
     expect(((await b.waitFor((m) => isEntry(m) && m.entry.kind === 'feed')) as Extract<RoomServerMessage, { type: 'entry' }>).entry.text).toBe(result);
     await c.waitFor(phaseIs(1, 'EOSORIA', 2));
 
-    expect(c.entries()).toEqual([]);
+    expect(c.entries().filter((e) => e.kind !== 'news')).toEqual([]);
     for (const frame of c.raw) expect(frame).not.toContain(result);
     // C walking to the market later does not see it either: witnesses are fixed when it was published.
     moveCharacter(server!.orm, t.c.memberId, 'market', CLOCK);
-    expect((await enter(t.c, 0)).entries()).toEqual([]);
+    expect((await enter(t.c, 0)).entries().filter((e) => e.kind !== 'news')).toEqual([]);
     expectNoForbiddenKeys(a, b, c);
   });
 
@@ -437,7 +437,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
     // GEN-058 (Q-030): the turn waits for the GM's approval.
     await approveHeldTurn(t.call, t.gm!.token);
     await gm.waitFor(phaseIs(1, 'EOSORIA', 2));
-    expect(gm.entries().filter((e) => e.kind !== 'player').map((e) => e.text)).toEqual(['เสียงกิ่งไม้หักในป่า', 'ความลับของ A']);
-    expect(players[1]![1].entries().filter((e) => e.kind !== 'player')).toEqual([]);
+    expect(gm.entries().filter((e) => e.kind !== 'player' && e.kind !== 'news').map((e) => e.text)).toEqual(['เสียงกิ่งไม้หักในป่า', 'ความลับของ A']);
+    expect(players[1]![1].entries().filter((e) => e.kind !== 'player' && e.kind !== 'news')).toEqual([]);
   });
 });

@@ -23,7 +23,7 @@ function statusText(game: GameLogResponse['game']): string {
   return game.endReason === 'game_over' ? 'จบแล้ว (ทุกคนสลบ)' : 'จบแล้ว';
 }
 
-const KIND_LABEL: Record<RoomEntry['kind'], string> = { feed: 'สิ่งที่เห็น', narration: 'เฉพาะคุณ', whisper: 'กระซิบ', hit: 'เกิดกับคุณ', changes: 'ค่าที่เปลี่ยน', omen: 'ลางสังหรณ์', npc: 'NPC พูด', player: 'ผู้เล่นอื่นทำ', time: 'เวลา' };
+const KIND_LABEL: Record<RoomEntry['kind'], string> = { feed: 'สิ่งที่เห็น', narration: 'เฉพาะคุณ', whisper: 'กระซิบ', hit: 'เกิดกับคุณ', changes: 'ค่าที่เปลี่ยน', omen: 'ลางสังหรณ์', npc: 'NPC พูด', player: 'ผู้เล่นอื่นทำ', time: 'เวลา', news: 'ข่าวเช้า' };
 const EVENT_STATUS: Record<string, string> = { pending: 'ยังไม่ถึง', active: 'กำลังเกิด', resolved: 'จบแล้ว' };
 
 export function GameHistory({ apiBaseUrl, onClose }: { apiBaseUrl: string; onClose: () => void }) {

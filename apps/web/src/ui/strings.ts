@@ -470,6 +470,7 @@ export const playText = {
     omen: 'ลางสังหรณ์',
     hit: 'เกิดกับคุณ',
     arrived: 'คุณมาถึง',
+    news: (day: number) => `ข่าวเช้าวันที่ ${day}`,
     hud: { label: 'ตัวละครของคุณ', seenAs: 'คนอื่นเห็นคุณเป็น:', hp: 'HP', stamina: 'แรง', coins: 'เหรียญ', coinsLabel: 'เหรียญ', loading: '…' },
     panel: { label: 'แผงข้อมูล', place: 'สถานที่', scene: 'ฉาก', self: 'ตัวฉัน', bag: 'กระเป๋า', people: 'คนรอบตัว', alias: 'ฉายา', traits: 'จุดแข็ง / จุดอ่อน', strength: 'จุดแข็ง', weakness: 'จุดอ่อน', skills: (n: number) => `สกิล (${n})`, log: 'บันทึกค่าที่เปลี่ยน', logNone: 'ยังไม่มีค่าที่เปลี่ยน', bagEmpty: 'ยังไม่มีของติดตัว', around: 'คนที่อยู่ที่นี่', mates: 'คู่หู' },
     bar: { group: 'แถบ action', more: 'อื่นๆ', moreGroup: 'การกระทำทั้งหมด', close: 'ปิด', input: 'พิมพ์สิ่งที่จะทำ', placeholder: 'พิมพ์สิ่งที่จะทำ…', secret: 'ลับ', send: 'ส่ง', sendLabel: 'ส่ง action', resend: 'ส่งแทนของเดิม', actions: { พูดคุย: 'พูดคุย', สังเกต: 'สังเกต', สืบค้น: 'สืบค้น', โจมตี: 'โจมตี', ป้องกัน: 'ป้องกัน', สวด: 'สวด', ลอบเร้น: 'ลอบเร้น', พัก: 'พัก' }, lockedBecause: (why: string) => `ส่งไม่ได้ตอนนี้: ${why}`, waiting: 'ส่งแล้ว รอเทิร์นถัดไป' },
