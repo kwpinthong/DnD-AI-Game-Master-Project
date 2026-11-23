@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RoomPhaseStatus, Turn } from './room.ts';
+import { RoomEntryKind, RoomPhaseStatus, Turn } from './room.ts';
 import { Phase, ScenarioLegendary } from './scenario.ts';
 import { GmTimelineEvent } from './timeline.ts';
 import { RollOutcome } from './view-models.ts';
@@ -197,6 +197,27 @@ export type GmOverrideView = z.infer<typeof GmOverrideView>;
 /** 200 from GET /api/game/gm/log: oldest first. */
 export const GmLogResponse = z.strictObject({ overrides: z.array(GmOverrideView) });
 export type GmLogResponse = z.infer<typeof GmLogResponse>;
+
+/**
+ * GEN-126: one AI-written entry that has at least one 👍 / 👎 (GEN-107), with the counts out of every player of the game.
+ * `good` (Q-286): 👍 > half of all players (a player who did not vote counts as 👎; a tie does not pass).
+ * `avoid` (Q-287): real 👎 > half of all players (a player who did not vote does not count).
+ */
+export const GmVoteEntry = z.strictObject({
+  seq: z.number().int().min(1),
+  kind: RoomEntryKind,
+  at: GmTurnPoint,
+  text: z.string(),
+  up: z.number().int().min(0),
+  down: z.number().int().min(0),
+  good: z.boolean(),
+  avoid: z.boolean(),
+});
+export type GmVoteEntry = z.infer<typeof GmVoteEntry>;
+
+/** 200 from GET /api/game/gm/votes: `players` = the players of the game now (the base of both rules); entries oldest first. */
+export const GmVotesResponse = z.strictObject({ players: z.number().int().min(0), entries: z.array(GmVoteEntry) });
+export type GmVotesResponse = z.infer<typeof GmVotesResponse>;
 
 /** 200 from POST /api/game/gm/adjust: the override it logged. */
 export const GmAdjustResponse = z.strictObject({ override: GmOverrideView });

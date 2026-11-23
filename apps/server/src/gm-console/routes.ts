@@ -6,6 +6,7 @@ import { bearerToken, sendError } from '../auth/routes.ts';
 import type { Db } from '../db/client.ts';
 import type { MemberRow } from '../game/service.ts';
 import type { RoomService } from '../room/service.ts';
+import { gameVotes } from '../room/vote.ts';
 import { adjustValue, approveTurn, consoleView, editTurn, insertEvent, overrideLog, type ConsoleResult } from './console.ts';
 
 /**
@@ -75,5 +76,12 @@ export function registerGmConsoleRoutes(app: FastifyInstance, db: Db, now: Clock
     const gm = gmOf(request, reply);
     if (!gm) return reply;
     return reply.send({ overrides: overrideLog(db, gm.gameId) } satisfies GmLogResponse);
+  });
+
+  // GEN-126: the players' 👍 / 👎 per AI message (GEN-107) with the Q-286 / Q-287 flags; a player sees only their own vote, on their entries.
+  app.get(`${GM_CONSOLE_PATH}/votes`, async (request, reply) => {
+    const gm = gmOf(request, reply);
+    if (!gm) return reply;
+    return reply.send(gameVotes(db, gm.gameId));
   });
 }

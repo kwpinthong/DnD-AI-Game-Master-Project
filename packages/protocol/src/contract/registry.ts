@@ -113,6 +113,7 @@ export const CONTRACT_SCHEMAS = {
   GmInsertEventRequest: p.GmInsertEventRequest,
   GmInsertEventResponse: p.GmInsertEventResponse,
   GmLogResponse: p.GmLogResponse,
+  GmVotesResponse: p.GmVotesResponse,
   AdminSessionRequest: p.AdminSessionRequest,
   AdminSessionResponse: p.AdminSessionResponse,
   AiUsageOverviewResponse: p.AiUsageOverviewResponse,
@@ -248,6 +249,7 @@ export const CONTRACT: readonly ContractItem[] = [
   http('POST', '/api/game/gm/adjust', 'GmAdjustRequest', 'GmAdjustResponse', ready('GEN-058', 'gm', ['gm-console'])),
   http('POST', '/api/game/gm/events', 'GmInsertEventRequest', 'GmInsertEventResponse', ready('GEN-058', 'gm', ['gm-console'])),
   http('GET', '/api/game/gm/log', null, 'GmLogResponse', ready('GEN-058', 'gm', ['gm-console'])),
+  http('GET', '/api/game/gm/votes', null, 'GmVotesResponse', ready('GEN-126', 'gm', ['gm-console', 'learning-library'], 'ถูกใจ / ไม่ถูกใจ ต่อข้อความ AI ที่มีคนโหวต (นับเฉพาะผู้เล่นตอนนี้); `good` (Q-286) = 👍 > ครึ่งของผู้เล่นทั้งหมด (ไม่โหวต = 👎, เสมอไม่ผ่าน); `avoid` (Q-287) = 👎 จริง > ครึ่งของผู้เล่นทั้งหมด (ไม่โหวตไม่นับ); ผู้เล่น 403 (เห็นแค่ `RoomEntry.myVote` ของตัวเอง)')),
 
   // --- rate the AI GM while playing (GEN-107) ---
   http('PUT', '/api/game/entries/:seq/vote', 'ResponseVoteRequest', 'ResponseVoteResponse', ready('GEN-107', 'player', ['play-action'], '👍/👎 ข้อความของ AI GM (`RoomEntry.myVote` ≠ undefined = มีปุ่ม); `vote: null` = ยกเลิก; ไม่ใช่ผู้เล่น / ไม่ใช่ผู้รับ entry 403; id ไม่มี/ไม่ใช่ข้อความ AI = 404 `response_not_found`; ใช้ได้หลังเกมจบ')),

@@ -10,6 +10,7 @@ import {
   type GmOverrideView,
   type GmPendingTurn,
   type GmStats,
+  type GmVotesResponse,
   type Phase,
   type RoomGmStatus,
   type RoomPhaseStatus,
@@ -333,12 +334,14 @@ export function GmConsole({ apiBaseUrl, token, refreshKey, gmStatus }: { apiBase
   const api = useMemo(() => gmConsoleApi(apiBaseUrl, token), [apiBaseUrl, token]);
   const [view, setView] = useState<GmConsoleResponse | null>(null);
   const [log, setLog] = useState<GmOverrideView[]>([]);
+  const [votes, setVotes] = useState<GmVotesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [v, l] = await Promise.all([api.view(), api.log()]);
+    const [v, l, votes] = await Promise.all([api.view(), api.log(), api.votes()]);
     if (v.ok) setView(v.value);
     if (l.ok) setLog(l.value.overrides);
+    if (votes.ok) setVotes(votes.value);
     setError(v.ok ? null : v.message);
   }, [api]);
   useEffect(() => {
@@ -518,6 +521,26 @@ export function GmConsole({ apiBaseUrl, token, refreshKey, gmStatus }: { apiBase
                 {view.fallbacks.map((f, i) => (
                   <li key={i}>
                     {`วันที่ ${f.at.day} · ${PHASE_LABEL[f.at.phase]} · เทิร์น ${f.at.turn} · ${f.kind === 'narration' ? `ถึง ${nameOf(f.memberId)}` : `ฟีดของ ${f.locationId ?? 'ทั้งเมือง'}`} · ${FALLBACK_CAUSE[f.cause]}`}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </Panel>
+
+          {/* GEN-126: ตัวอย่างที่ดี = Q-286, ควรเลี่ยง = Q-287 (the server decides both). */}
+          <Panel label="โหวตของผู้เล่น" title={votes ? `โหวตของผู้เล่น (ผู้เล่น ${votes.players} คน)` : 'โหวตของผู้เล่น'}>
+            {!votes || votes.entries.length === 0 ? (
+              <p className="gm-empty">ยังไม่มีใครโหวต</p>
+            ) : (
+              <ol className="gm-list">
+                {votes.entries.map((v) => (
+                  <li key={v.seq} aria-label={v.text}>
+                    {`วันที่ ${v.at.day} · ${PHASE_LABEL[v.at.phase]} · เทิร์น ${v.at.turn} · ${v.text}`}
+                    <span className="gm-break" />
+                    <span className="gm-num">ถูกใจ {v.up}</span>
+                    <span className="gm-num">ไม่ถูกใจ {v.down}</span>
+                    {v.good && <span className="gm-check__outcome gm-check__outcome--ok">ตัวอย่างที่ดี</span>}
+                    {v.avoid && <span className="gm-check__outcome gm-check__outcome--bad">ควรเลี่ยง</span>}
                   </li>
                 ))}
               </ol>

@@ -73,6 +73,8 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'POST /api/game/gm/adjust': { method: 'POST', path: '/api/game/gm/adjust', body: { field: 'karma', memberId: me.memberId, value: 100, reason: 'ทดสอบ' } },
     'POST /api/game/gm/events': { method: 'POST', path: '/api/game/gm/events', body: { day: 6, phase: 'EOSORIA', title: 'ไฟไหม้ตลาด', reason: 'ทดสอบ' } },
     'GET /api/game/gm/log': { method: 'GET', path: '/api/game/gm/log' },
+    // GEN-126: vote counts per AI message, Human GM only.
+    'GET /api/game/gm/votes': { method: 'GET', path: '/api/game/gm/votes' },
     // GEN-078: rating + 👍 after the end (the game here is still playing: the 409 is scanned).
     'GET /api/game/rating': { method: 'GET', path: '/api/game/rating' },
     'PUT /api/game/rating': { method: 'PUT', path: '/api/game/rating', body: { score: 9, comment: 'สนุก' } },
