@@ -150,4 +150,10 @@ describe('record / field form for NPC_Schedule and NPC (GEN-172)', () => {
     expect(block).toMatch(/\.gdata__check[^{]*\{[^}]*min-height: 44px/);
     expect(block).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/);
   });
+
+  it('GEN-183 C1: the form takes periods / weathers / ranks / alignments from @isekai/protocol, no local copy', () => {
+    const src = readFileSync(join(__dirname, '../src/GameDataForm.tsx'), 'utf8').replace(/\r\n/g, '\n');
+    expect(src).toMatch(/import \{[^}]*ASSET_PERIODS[^}]*\} from '@isekai\/protocol'/);
+    for (const literal of ["'EOSORIA'", "'Clear Morning'", "'SS'", "'Neutral'"]) expect(src).not.toContain(literal);
+  });
 });
