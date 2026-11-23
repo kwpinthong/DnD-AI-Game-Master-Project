@@ -232,6 +232,8 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'POST /api/admin/game-data/:name/undo', { token: adminToken, path: '/api/admin/game-data/NPC_Schedule/undo' });
     expect((await call('GET', '/api/admin/game-data/NPC_Schedule', { token: adminToken })).body).toMatchObject({ value: scheduleValue });
     await hit(call, 'GET /api/admin/game-data/:name', { token: adminToken, path: '/api/admin/game-data/Nope' });
+    await hit(call, 'GET /api/admin/game-data/:name/asset-file', { token: adminToken, path: '/api/admin/game-data/NPC_Schedule/asset-file' });
+    await hit(call, 'GET /api/admin/game-data/:name/asset-file', { token: adminToken, path: '/api/admin/game-data/Nope/asset-file' });
     await hit(call, 'GET /api/admin/game-data-audit', { token: adminToken });
     await hit(call, 'GET /api/admin/game-data-export', { token: adminToken });
     await hit(call, 'POST /api/admin/logout', { token: adminToken });

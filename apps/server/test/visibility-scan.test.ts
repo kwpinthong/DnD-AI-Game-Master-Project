@@ -69,6 +69,7 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/admin/game-data/:name': { method: 'GET', path: '/api/admin/game-data/NPC' },
     'PUT /api/admin/game-data/:name': { method: 'PUT', path: '/api/admin/game-data/NPC', body: { value: [] } },
     'POST /api/admin/game-data/:name/undo': { method: 'POST', path: '/api/admin/game-data/NPC/undo' },
+    'GET /api/admin/game-data/:name/asset-file': { method: 'GET', path: '/api/admin/game-data/NPC/asset-file' },
     'GET /api/admin/game-data-audit': { method: 'GET', path: '/api/admin/game-data-audit' },
     'GET /api/admin/game-data-export': { method: 'GET', path: '/api/admin/game-data-export' },
     // GEN-055: the player's own skills, held items and library discoveries (no condition or progress).
@@ -107,6 +108,7 @@ const ADMIN_DATA_ROUTES = [
   'GET /api/admin/game-data/:name',
   'PUT /api/admin/game-data/:name',
   'POST /api/admin/game-data/:name/undo',
+  'GET /api/admin/game-data/:name/asset-file',
   'GET /api/admin/game-data-audit',
   'GET /api/admin/game-data-export',
 ];
