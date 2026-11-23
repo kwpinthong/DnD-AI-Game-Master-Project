@@ -1,4 +1,4 @@
-import { FeedbackPage, FeedbackStatus, FeedbackType, PHASES } from '@isekai/protocol';
+import { FEEDBACK_PAGES, FEEDBACK_STATUSES, FEEDBACK_TYPES, PHASES } from '@isekai/protocol';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 /**
@@ -12,14 +12,14 @@ export const feedback = sqliteTable(
     id: integer('id').primaryKey({ autoIncrement: true }),
     gameId: text('game_id').notNull(),
     memberId: text('member_id').notNull(),
-    type: text('type', { enum: FeedbackType.options }).notNull(),
+    type: text('type', { enum: FEEDBACK_TYPES }).notNull(),
     text: text('text').notNull(),
     day: integer('day'),
     period: text('period', { enum: PHASES }),
     turn: integer('turn'),
-    page: text('page', { enum: FeedbackPage.options }).notNull(),
+    page: text('page', { enum: FEEDBACK_PAGES }).notNull(),
     userAgent: text('user_agent').notNull().default(''),
-    status: text('status', { enum: FeedbackStatus.options }).notNull().default('new'),
+    status: text('status', { enum: FEEDBACK_STATUSES }).notNull().default('new'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
   },
@@ -31,7 +31,7 @@ export const feedbackAudit = sqliteTable('feedback_audit', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   feedbackId: integer('feedback_id').notNull(),
   action: text('action', { enum: ['status'] }).notNull(),
-  from: text('from', { enum: FeedbackStatus.options }).notNull(),
-  to: text('to', { enum: FeedbackStatus.options }).notNull(),
+  from: text('from', { enum: FEEDBACK_STATUSES }).notNull(),
+  to: text('to', { enum: FEEDBACK_STATUSES }).notNull(),
   at: integer('at').notNull(),
 });

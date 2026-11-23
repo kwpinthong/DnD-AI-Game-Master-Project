@@ -7,14 +7,18 @@ import { Phase } from './scenario.ts';
  * state (null before the first turn), never from the client; game and member from the session.
  */
 
-export const FeedbackType = z.enum(['bug', 'idea', 'other']);
+// Tuples as well as enums: the server's table columns take the tuples.
+export const FEEDBACK_TYPES = ['bug', 'idea', 'other'] as const;
+export const FeedbackType = z.enum(FEEDBACK_TYPES);
 export type FeedbackType = z.infer<typeof FeedbackType>;
 
-export const FeedbackStatus = z.enum(['new', 'reviewing', 'done']);
+export const FEEDBACK_STATUSES = ['new', 'reviewing', 'done'] as const;
+export const FeedbackStatus = z.enum(FEEDBACK_STATUSES);
 export type FeedbackStatus = z.infer<typeof FeedbackStatus>;
 
 /** The screen the report was sent from. */
-export const FeedbackPage = z.enum(['lobby', 'character', 'loot', 'spawn', 'play', 'ending', 'other']);
+export const FEEDBACK_PAGES = ['lobby', 'character', 'loot', 'spawn', 'play', 'ending', 'other'] as const;
+export const FeedbackPage = z.enum(FEEDBACK_PAGES);
 export type FeedbackPage = z.infer<typeof FeedbackPage>;
 
 export const FEEDBACK_TEXT_MAX = 1000;
