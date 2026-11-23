@@ -46,7 +46,8 @@ const ok = (body: unknown): MockReply => ({ status: 200, body });
 
 const ROOM_STATES = F.RoomState.map((s) => RoomState.parse(s));
 const ENTRIES = F.RoomEntry.map((e) => RoomEntry.parse(e));
-const BASE_ROOM = ROOM_STATES[0]!;
+// The fixture says 3 sent while nobody has (GEN-131): the counter must start from the real number.
+const BASE_ROOM: RoomState = { ...ROOM_STATES[0]!, submittedCount: 0 };
 const lockState = (code: string) => ROOM_STATES.find((s) => s.you.lock?.code === code)!;
 
 /**
