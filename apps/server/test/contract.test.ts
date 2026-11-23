@@ -328,6 +328,17 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     // GEN-083: the ended games of that code (none ended here: an empty list); unknown = 403.
     await hit(call, 'POST /api/memory/sources', { body: { playerCode: 'pc-contract' } });
     await hit(call, 'POST /api/memory/sources', { body: { playerCode: 'pc-unknown' } });
+    // ISK-010: a player's report, then the owner's list and status change.
+    const report = await hit(call, 'POST /api/feedback', { token: t.a.token, body: { type: 'bug', text: 'ปุ่มส่งค้าง', page: 'ending', userAgent: 'contract' } });
+    await hit(call, 'POST /api/feedback', { token: t.a.token, body: { type: 'spam', text: 'x', page: 'play' } });
+    await hit(call, 'POST /api/feedback', { body: { type: 'bug', text: 'x', page: 'play' } });
+    await hit(call, 'GET /api/admin/feedback', { token: adminToken });
+    await hit(call, 'GET /api/admin/feedback', { token: adminToken, path: '/api/admin/feedback?status=new&type=bug' });
+    await hit(call, 'GET /api/admin/feedback');
+    const reportId = (report.body as { id: number }).id;
+    await hit(call, 'PATCH /api/admin/feedback/:id', { token: adminToken, path: `/api/admin/feedback/${reportId}`, body: { status: 'reviewing' } });
+    await hit(call, 'PATCH /api/admin/feedback/:id', { token: adminToken, path: `/api/admin/feedback/${reportId}`, body: { status: 'closed' } });
+    await hit(call, 'PATCH /api/admin/feedback/:id', { token: adminToken, path: '/api/admin/feedback/99999', body: { status: 'done' } });
     await hit(call, 'POST /api/admin/logout', { token: adminToken });
     await hit(call, 'POST /api/logout', { token: p1.token });
     await hit(call, 'DELETE /api/game', { token: gm, body: { confirmName: 'เกมสัญญา 2' } });

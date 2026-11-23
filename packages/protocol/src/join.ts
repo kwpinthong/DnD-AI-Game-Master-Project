@@ -167,5 +167,16 @@ export const ApiError = z.discriminatedUnion('code', [
   z.object({ code: z.literal('game_closed'), message: z.string() }),
   /** 404 (ISK-001): the game was closed before it was played, so it has no end page. */
   z.object({ code: z.literal('not_started'), message: z.string() }),
+  /** 400 (ISK-010): POST /api/feedback with no text, too long a text, or a type / page outside the lists. */
+  z.object({ code: z.literal('text_required'), message: z.string() }),
+  z.object({ code: z.literal('text_too_long'), message: z.string() }),
+  z.object({ code: z.literal('invalid_type'), message: z.string() }),
+  z.object({ code: z.literal('invalid_page'), message: z.string() }),
+  /** 400 (ISK-010): a feedback status outside new / reviewing / done. */
+  z.object({ code: z.literal('invalid_status'), message: z.string() }),
+  /** 429 (ISK-010): 5 reports in the last 10 minutes from this member. */
+  z.object({ code: z.literal('rate_limited'), message: z.string() }),
+  /** 404 (ISK-010): no feedback with that id. */
+  z.object({ code: z.literal('feedback_not_found'), message: z.string() }),
 ]);
 export type ApiError = z.infer<typeof ApiError>;

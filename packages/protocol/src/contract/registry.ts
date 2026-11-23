@@ -152,6 +152,10 @@ export const CONTRACT_SCHEMAS = {
   NpcChatRequest: p.NpcChatRequest,
   NpcChatStatus: p.NpcChatStatus,
   NpcChatResponse: p.NpcChatResponse,
+  FeedbackInput: p.FeedbackInput,
+  FeedbackRow: p.FeedbackRow,
+  AdminFeedbackResponse: p.AdminFeedbackResponse,
+  AdminFeedbackStatusRequest: p.AdminFeedbackStatusRequest,
 } as const;
 export type ContractSchemaName = keyof typeof CONTRACT_SCHEMAS;
 
@@ -344,6 +348,11 @@ export const CONTRACT: readonly ContractItem[] = [
   http('POST', '/api/style', 'PlayerStyleRequest', 'PlayerStyleResponse', ready('GEN-082', 'any', ['my-style'], 'สไตล์ของรหัสนั้น: top 3 verb + โทนสั้น จากเกมที่จบแล้ว (ไม่มีเกณฑ์คะแนน) หรือ `style: null`; รหัสอยู่ใน body เท่านั้น เก็บแค่ HMAC; รหัสที่ไม่เคยใช้ = 403 (ผิด 5 ครั้ง / 10 นาที ต่อ IP = 429); มี session ของสมาชิกที่รหัสไม่ตรง = 403')),
   http('PUT', '/api/style/opt-out', 'PlayerStyleRequest', 'PlayerStyleResponse', ready('GEN-082', 'any', ['my-style', 'join'], '"ไม่ให้เก็บสไตล์ฉัน" ของรหัสนั้นทุกเกม (`optOut` จำเป็น); เกมที่จบหลังจากนี้ไม่สร้างสไตล์ใหม่ และ AI ไม่ได้สไตล์นี้')),
   http('POST', '/api/style/delete', 'PlayerStyleRequest', 'PlayerStyleResponse', ready('GEN-082', 'any', ['my-style'], 'ลบสไตล์ทั้งหมดของรหัสนั้น (ลบจริง ไม่มี undo) แล้วตอบ `style: null`')),
+
+  // --- ISK-010: Report & Feedback (screens of ISK-011 come later: listed on the nearest existing ones) ---
+  http('POST', '/api/feedback', 'FeedbackInput', 'FeedbackRow', ready('ISK-010', 'player', ['lobby', 'play-action', 'ending'], '201; ทุกสมาชิกที่มี session (ไม่มี = 401); เกม / สมาชิกจาก session; day / period / turn จาก state ของเกม (ยังไม่มีเทิร์น = null) ไม่เชื่อ body; 400 `text_required` / `text_too_long` (> 1000 code point) / `invalid_type` / `invalid_page`; userAgent ตัดที่ 300; 5 ครั้ง / 10 นาที / สมาชิก (นับจากตาราง) = 429 `rate_limited`; ไม่ส่งถึงผู้เล่นอื่น ไม่ log ข้อความ')),
+  http('GET', '/api/admin/feedback', null, 'AdminFeedbackResponse', ready('ISK-010', 'admin', ['learning-library'], 'ล่าสุด 200 แถว ใหม่ก่อน ไม่แบ่งหน้า; `?status=` / `?type=` กรอง (ค่านอกรายการ = 400 `invalid_status` / `invalid_type`); ไม่มี token = 401, token ที่ไม่ใช่ admin = 403; `text` แสดงแบบ escape')),
+  http('PATCH', '/api/admin/feedback/:id', 'AdminFeedbackStatusRequest', 'FeedbackRow', ready('ISK-010', 'admin', ['learning-library'], 'เปลี่ยนสถานะ + updatedAt + audit 1 แถว (from / to / เวลา); สถานะนอกรายการ = 400 `invalid_status`; ไม่มี id = 404 `feedback_not_found`; ไม่มีการลบ')),
 ];
 
 /**

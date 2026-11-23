@@ -56,3 +56,6 @@ export * from './style-review.ts';
 
 // GEN-149: chat with an NPC outside the turn, own file for the same reason.
 export * from './npc-chat.ts';
+
+// ISK-010: players' bug reports / ideas (Report & Feedback), own file for the same reason.
+export * from './feedback.ts';

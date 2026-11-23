@@ -185,3 +185,5 @@ export * from './schema-learning.ts';
 export * from './schema-npc-chat.ts';
 // ISK-001: games the server owner closed early (state + audit), own file for the same reason.
 export * from './schema-close.ts';
+// ISK-010: players' bug reports / ideas and the owner's status changes, own file for the same reason.
+export * from './schema-feedback.ts';

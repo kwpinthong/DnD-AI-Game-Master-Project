@@ -42,6 +42,7 @@ import { registerVoteRoutes } from './room/vote-routes.ts';
 import type { Rng } from '@isekai/rules';
 import { CryptoRng } from './rng.ts';
 import { registerWebStatic } from './web-static.ts';
+import { registerFeedbackRoutes } from './feedback/routes.ts';
 
 export interface RunningServer {
   url: string;
@@ -210,6 +211,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerGameLearningRoutes(app, db, now, learning);
   registerVoteRoutes(app, db, now);
   registerPlayerStyleRoutes(app, db, now);
+  registerFeedbackRoutes(app, db, now);
   if (options.webDistDir) registerWebStatic(app, options.webDistDir);
 
   try {
