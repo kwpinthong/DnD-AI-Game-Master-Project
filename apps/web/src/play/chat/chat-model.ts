@@ -42,7 +42,7 @@ const STAT = playText.changes.stat;
 export function changeBadges(changes: readonly TurnChange[]): ChangeBadge[] {
   return changes.map((c) => {
     const label = STAT[c.stat];
-    const what = 'delta' in c ? `${label} ${c.delta > 0 ? '+' : '−'}${Math.abs(c.delta)}` : c.stat === 'conduct' ? `${label} ${c.from} → ${c.to}` : `${label}: ${c.name}`;
+    const what = 'delta' in c ? `${label} ${c.delta > 0 ? '+' : '−'}${Math.abs(c.delta)}` : c.stat === 'conduct' ? `${label} ${c.from} → ${c.to}` : c.stat === 'bond' ? `${label} ${c.name} ${c.from} → ${c.to}` : `${label}: ${c.name}`;
     return { text: `${what} · ${c.reason}`, tone: c.stat === 'coins' && c.delta > 0 ? 'gain' : 'plain' };
   });
 }

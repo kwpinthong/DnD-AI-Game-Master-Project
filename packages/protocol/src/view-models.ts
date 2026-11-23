@@ -83,6 +83,8 @@ export const TurnChange = z.discriminatedUnion('stat', [
   z.strictObject({ stat: z.literal('item_lost'), name: z.string(), reason: z.string() }),
   z.strictObject({ stat: z.literal('status_gained'), name: z.string(), reason: z.string() }),
   z.strictObject({ stat: z.literal('status_lost'), name: z.string(), reason: z.string() }),
+  // GEN-182: an NPC bond like conduct: the NPC as you know it (alias until its name is known) and the bond word, never the affinity.
+  z.strictObject({ stat: z.literal('bond'), name: z.string(), from: z.string(), to: z.string(), reason: z.string() }),
 ]);
 export type TurnChange = z.infer<typeof TurnChange>;
 

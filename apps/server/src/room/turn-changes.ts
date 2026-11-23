@@ -1,4 +1,5 @@
-import type { HitChange, TurnChange } from '@isekai/protocol';
+import { bondFor, type HitChange, type TurnChange } from '@isekai/protocol';
+import { bondWordsOf } from '../companions/store.ts';
 import { isDrowsy, karmaTitle, type ActionOutcome, type PhaseLogEntry, type PhaseState } from '@isekai/rules';
 import { eq, inArray } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
@@ -19,6 +20,8 @@ export interface StatSnapshot {
   readonly conduct: string;
   readonly items: readonly string[];
   readonly statuses: readonly string[];
+  /** GEN-182: NPC id → the name this player sees and the bond word (`bondWordsOf`). */
+  readonly bonds?: Readonly<Record<string, { readonly name: string; readonly word: string }>>;
 }
 
 const DROWSY_LABEL = 'ง่วงซึม';
@@ -37,6 +40,7 @@ export function snapshotsOf(db: DbOrTx, assets: GameAssets, gameId: string, stat
       conduct: karmaTitle(row.karma, assets.karmaTiers),
       items: heldItemsOf(db, gameId, row.memberId).map((i) => i.name),
       statuses,
+      bonds: bondWordsOf(db, assets, row.memberId),
     });
   }
   return out;
@@ -129,6 +133,11 @@ export function turnChangesOf(memberId: string, s0: StatSnapshot, s1: StatSnapsh
     out.push({ stat: 'coins', ...c });
   }
   if (s0.conduct !== s2.conduct) out.push({ stat: 'conduct', from: s0.conduct, to: s2.conduct, reason: ACTION });
+  // GEN-182: like conduct, a bond only when its word changed; a new bond starts from the word of affinity 0.
+  for (const [npcId, now] of Object.entries(s2.bonds ?? {})) {
+    const from = s0.bonds?.[npcId]?.word ?? bondFor(0).word;
+    if (from !== now.word) out.push({ stat: 'bond', name: now.name, from, to: now.word, reason: ACTION });
+  }
 
   const lostByHit = new Set(hits.flatMap((h) => (h.stat === 'item_lost' ? [h.name] : [])));
   for (const name of s0.items) if (!s2.items.includes(name)) out.push({ stat: 'item_lost', name, reason: lostByHit.has(name) ? 'ถูกแย่งไป' : ACTION });

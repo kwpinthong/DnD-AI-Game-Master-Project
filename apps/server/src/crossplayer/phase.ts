@@ -33,6 +33,7 @@ import { originEffects, treatChronicIllness } from '../game/origin.ts';
 import { TREATMENT_VERBS } from '../game/start-rules.ts';
 import { publicRepScaleOf, startStaminaCut } from '../game/location-actions.ts';
 import { activeCurses, recordCurses } from '../statuses/curses.ts';
+import { changeNpcAffinity } from '../companions/store.ts';
 
 /** Who a successful HEAL / CLEANSE action treated: its player target, else the actor (self-treatment). */
 export function patientsTreated(outcomes: readonly ActionOutcome[]): string[] {
@@ -57,8 +58,8 @@ export function patientsTreated(outcomes: readonly ActionOutcome[]): string[] {
  *    narration and the socket (GEN-056). Other players appear as `OtherCharacterView` (appearance;
  *    the real name only once the viewer knows it), never by member id, so AI prompts stay free of names (Q-045).
  *
- * Not stored here yet: event statuses and NPC Affinity from the actions (no store before GEN-054),
- * NPC HP (NPCs start each call at their grade's max). Players identify targets by member id.
+ * NPC Affinity from the actions is stored with `tagging` (GEN-182, `changeNpcAffinity`). Not stored here yet: event
+ * statuses, NPC HP (NPCs start each call at their grade's max). Players identify targets by member id.
  */
 
 export interface PhaseEventRecord {
@@ -305,6 +306,14 @@ export function applyPhaseActions(
       if (after.locationId !== before.locationId) moveCharacter(tx, after.id, after.locationId, now);
       for (const item of after.items) {
         if (!before.items.some((i) => i.id === item.id)) transferItem(tx, gameId, item.id, after.id, now);
+      }
+    }
+    // GEN-182: the engine's affinity change (already ±10 / -100..100) goes to npc_bond with the reveal / evolution rules,
+    // after the karma write so evolution reads this turn's karma.
+    if (tagging !== undefined) {
+      for (const o of result.log.outcomes) {
+        if (o.status !== 'resolved') continue;
+        for (const a of o.log.affinity) if (a.after !== a.before) changeNpcAffinity(tx, tagging.assets, o.actorId, a.npcId, a.after - a.before, { day: tagging.day, now });
       }
     }
     const events = result.log.outcomes.map((outcome) => ({ outcome, witnesses: witnessesOfOutcome(outcome) }));
