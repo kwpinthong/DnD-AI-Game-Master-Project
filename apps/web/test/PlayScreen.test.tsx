@@ -529,7 +529,9 @@ describe('the hit card, the socket, travel and skills', () => {
     expect(await screen.findByRole('heading', { name: 'น้ำพุกลางเมือง' })).toBeTruthy();
     expect(screen.getByText('โซนใจกลางเมือง')).toBeTruthy();
     const people = await screen.findByRole('list', { name: 'คนที่อยู่ที่นี่' });
-    await waitFor(() => expect(within(people).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['ชายผมแดง ผ้าพันแผล · บาดเจ็บ · คนคุ้นหน้า', 'เด็กชายตัวผอม']));
+    await waitFor(() => expect(within(people).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['ชายผมแดง ผ้าพันแผล · บาดเจ็บ · คนคุ้นหน้า', 'เด็กชายตัวผอมคุย']));
+    // GEN-149: the NPC chip carries [คุย].
+    expect(within(people).getByRole('button', { name: 'คุยกับ เด็กชายตัวผอม' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'เดินทาง' }));
     const sheet = await screen.findByRole('dialog', { name: 'เดินทาง' });
     fireEvent.click(await within(sheet).findByRole('button', { name: 'ไป โบสถ์' }));

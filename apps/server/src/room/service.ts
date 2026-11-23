@@ -148,6 +148,8 @@ export interface RoomService {
   approve(gameId: string, edit: (turn: HeldTurn) => PhaseResolution): boolean;
   /** Starts resolving a closed turn nobody works on (after a restart, before anyone entered the room). */
   wake(gameId: string): void;
+  /** GEN-149: sends entries stored outside the turn (the NPC chat) to the open sockets of their recipients. */
+  publish(gameId: string, rows: readonly { row: RoomEntryRow; recipients: ReadonlySet<string> }[]): void;
   /** Shutdown: forgets every socket (their close events no longer touch the database), then waits for running resolves. */
   stop(): Promise<void>;
 }
@@ -949,6 +951,8 @@ export function createRoomService(
       startResolving(gameId, async () => openPeriodWeather(gameId));
       return true;
     },
+
+    publish: deliver,
 
     wake(gameId) {
       const state = ensurePhaseState(db, gameId, now());

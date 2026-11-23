@@ -24,6 +24,7 @@ import { assetFileLabel, buildGameAssets, DEFAULT_ASSETS_DIR, readRawDataSets, t
 import { openGameData, type GameDataStore } from './assets/game-data.ts';
 import { dirname, join } from 'node:path';
 import { registerCompanionRoutes } from './companions/routes.ts';
+import { registerNpcChatRoutes } from './npc-chat/routes.ts';
 import { registerAdminRoutes } from './admin/routes.ts';
 import { createStyleReview, type StyleReview } from './admin/style-review.ts';
 import { registerInventoryRoutes } from './skills/routes.ts';
@@ -170,6 +171,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     ...(options.aiLog ? { log: options.aiLog } : {}),
   });
   registerCompanionRoutes(app, db, now, assets);
+  registerNpcChatRoutes(app, { db, ai, assets, now, log: options.aiLog ?? ((line) => console.log(line)), styleRewriteMs: aiConfig.styleRewriteMs, publish: room.publish });
   registerAdminRoutes(app, db, now, {
     ai: aiConfig,
     log: options.aiLog ?? ((line) => console.log(line)),

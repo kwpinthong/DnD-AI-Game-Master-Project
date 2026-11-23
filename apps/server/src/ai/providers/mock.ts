@@ -43,7 +43,7 @@ export function createMockProvider(config: AiConfig, script?: MockScript, answer
               ? cannedWeather(requests.filter((r) => r.purpose === 'gm_weather').length)
               : req.output.name === 'origin_narration'
                 ? cannedOrigin(req)
-                : ((await answer?.(req)) ?? sampleFor(req.output.jsonSchema));
+                : ((await answer?.(req)) ?? (req.purpose === 'npc_chat' ? cannedNpcChat(req) : sampleFor(req.output.jsonSchema)));
         return {
           ok: true,
           json,
@@ -86,6 +86,17 @@ function cannedOrigin(req: AiCallRequest) {
   const token = /\{\{p:[^}]+\}\}/.exec(prompt)?.[0] ?? 'คุณ';
   const arrival = /^จุดเกิด: (.*)$/m.exec(prompt)?.[1] ?? 'ที่ไหนสักแห่ง';
   return { narration: `แสงสีขาวกลืน ${token} หายไปจากโลกเดิม เมื่อลืมตาขึ้นอีกครั้ง คุณคือ${arrival}` };
+}
+
+/** A readable NPC chat answer for offline dev (GEN-149); asking for something gets the "do it as an action" hint. */
+function cannedNpcChat(req: AiCallRequest) {
+  const message = String((JSON.parse(req.messages[0]?.text ?? '{}') as { message?: unknown }).message ?? '');
+  const asks = /ขอ|ให้|ซื้อ|ขาย/.test(message);
+  return {
+    reply: asks ? 'เรื่องนั้นพูดกันปากเปล่าไม่ได้หรอกนะ' : 'อืม ฟังดูน่าสนใจดี เล่าต่อสิ',
+    suggestion: asks ? 'ถ้าอยากได้จริง ลองทำเป็น action ของเทิร์นนี้' : null,
+    mood: 'same',
+  };
 }
 
 function cannedLoot(req: AiCallRequest, n: number) {

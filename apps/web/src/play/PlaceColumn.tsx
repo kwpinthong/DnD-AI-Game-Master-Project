@@ -12,10 +12,11 @@ const t = playText;
 const MAX_CHIPS = 5;
 const MAX_COMPANIONS = 3;
 
-/** `npc` = the ref of an NPC chip (it can carry [บันทึก]). */
+/** `npc` = the ref of an NPC chip (it can carry [บันทึก]); `chat` = the ref of any NPC chip (GEN-149: [คุย]). */
 interface HereChip {
   text: string;
   npc?: string;
+  chat?: string;
 }
 
 function hereChips(data: PlayData, allies: RoomState['you']['allies']): HereChip[] {
@@ -26,7 +27,7 @@ function hereChips(data: PlayData, allies: RoomState['you']['allies']): HereChip
       .filter((s, i, all): s is string => Boolean(s) && all.indexOf(s) === i)
       .join(' · '),
   }));
-  return [...people, ...data.npcs.map((n) => ({ text: n.name, npc: n.nameRevealed ? n.ref : undefined }))];
+  return [...people, ...data.npcs.map((n) => ({ text: n.name, npc: n.nameRevealed ? n.ref : undefined, chat: n.ref }))];
 }
 
 /** The place's name, zone, who sees it and [เดินทาง] (the "สถานที่" tab). */
@@ -55,8 +56,21 @@ export function PlaceTitle({ room, onTravel }: { room: RoomState; onTravel: (() 
   );
 }
 
-/** Who is here (people by the name the payload gives or how they look, NPCs); an NPC not yet yours can be saved (Q-268b). */
-export function HereList({ room, data, onSave }: { room: RoomState; data: PlayData; onSave: ((ref: string) => void) | null }) {
+/**
+ * Who is here (people by the name the payload gives or how they look, NPCs); an NPC not yet yours can be saved (Q-268b).
+ * GEN-149: every NPC here can be talked to ([คุย]); an NPC elsewhere has no chip, so no chat (C5).
+ */
+export function HereList({
+  room,
+  data,
+  onSave,
+  onChat = null,
+}: {
+  room: RoomState;
+  data: PlayData;
+  onSave: ((ref: string) => void) | null;
+  onChat?: ((npc: { ref: string; name: string }) => void) | null;
+}) {
   const { you } = room;
   const chips = hereChips(data, you.allies);
   const mine = new Set((data.companions ?? []).map((c) => c.ref));
@@ -71,6 +85,11 @@ export function HereList({ room, data, onSave }: { room: RoomState; data: PlayDa
           {canSave && chip.npc && !mine.has(chip.npc) && (
             <Button aria-label={t.companions.saveName(chip.text)} onClick={() => onSave(chip.npc!)}>
               {t.companions.save}
+            </Button>
+          )}
+          {onChat && chip.chat && (
+            <Button aria-label={t.npcChat.openName(chip.text)} onClick={() => onChat({ ref: chip.chat!, name: chip.text })}>
+              {t.npcChat.open}
             </Button>
           )}
         </li>

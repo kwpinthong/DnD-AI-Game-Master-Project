@@ -34,6 +34,8 @@ export interface InfoData {
   whisper: WhisperText;
   whisperProblem: string | undefined;
   onWhisper: (to: string) => void;
+  /** GEN-149: open the chat box with an NPC here; null = no chat (an Astral Spirit). */
+  onChat?: ((npc: { ref: string; name: string }) => void) | null;
 }
 
 function Fold({ title, open, children }: { title: string; open?: boolean; children: ReactNode }) {
@@ -46,13 +48,13 @@ function Fold({ title, open, children }: { title: string; open?: boolean; childr
 }
 
 /** สถานที่: the place (art, name, zone, [เดินทาง]) and who is here. */
-export function PlacePanel({ room, data, onTravel, onSave }: Pick<InfoData, 'room' | 'data' | 'onTravel' | 'onSave'>) {
+export function PlacePanel({ room, data, onTravel, onSave, onChat }: Pick<InfoData, 'room' | 'data' | 'onTravel' | 'onSave' | 'onChat'>) {
   const place = room.you.astral ? null : room.you.place;
   return (
     <div className="info-body">
       {place && <PlaceArt place={place} phase={room.phase} weather={room.weather} />}
       <PlaceTitle room={room} onTravel={onTravel} />
-      <HereList room={room} data={data} onSave={onSave} />
+      <HereList room={room} data={data} onSave={onSave} onChat={onChat ?? null} />
     </div>
   );
 }
@@ -156,12 +158,12 @@ export function BagPanel({ data, onUse }: Pick<InfoData, 'data' | 'onUse'>) {
 }
 
 /** คนรอบตัว: who is here, your companions, and Whisper to an ally. */
-export function PeoplePanel({ room, data, entries, onSave, onRelease, companionProblem, whisper, whisperProblem, onWhisper }: Pick<InfoData, 'room' | 'data' | 'entries' | 'onSave' | 'onRelease' | 'companionProblem' | 'whisper' | 'whisperProblem' | 'onWhisper'>) {
+export function PeoplePanel({ room, data, entries, onSave, onRelease, companionProblem, whisper, whisperProblem, onWhisper, onChat }: Pick<InfoData, 'room' | 'data' | 'entries' | 'onSave' | 'onRelease' | 'companionProblem' | 'whisper' | 'whisperProblem' | 'onWhisper' | 'onChat'>) {
   const whispers = entries.filter((e) => e.kind === 'whisper');
   return (
     <div className="info-body">
       <h3>{t.around}</h3>
-      <HereList room={room} data={data} onSave={onSave} />
+      <HereList room={room} data={data} onSave={onSave} onChat={onChat ?? null} />
       <Part label={playText.companions.label} value={data.companions}>
         {(companions) => <Companions companions={companions} onRelease={onRelease} problem={companionProblem} />}
       </Part>
