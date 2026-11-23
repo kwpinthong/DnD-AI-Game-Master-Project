@@ -6,12 +6,16 @@ import { monthStartUtc } from '../ai/core/usage.ts';
 import type { Db } from '../db/client.ts';
 import { game } from '../db/schema.ts';
 import { aiUsage } from '../db/schema-ai.ts';
+import { SYSTEM_USAGE_ID } from './style-review.ts';
 
 /**
  * Sums of the ai_usage table for the server owner's dashboard (GEN-061). Reads numbers, purposes,
  * periods and models only: the failure reason is cut to its kind (`timeout`, `refusal`, ...) in SQL,
  * so its detail never leaves the database.
  */
+
+/** Server-wide calls (GEN-178) have no game row; name them for the owner (GEN-196). */
+const usageName = (id: string, name: string | undefined) => name ?? (id === SYSTEM_USAGE_ID ? 'ระบบ' : null);
 
 const PERIOD_ORDER: readonly string[] = PERIODS;
 /** Warning from this share of the ceiling (C3). */
@@ -139,7 +143,7 @@ export function gameUsageReport(db: Db, config: AiConfig, now: number, gameId: s
 
   return {
     generatedAt: new Date(now).toISOString(),
-    game: { id: gameId, name: row?.name ?? null },
+    game: { id: gameId, name: usageName(gameId, row?.name) },
     ceiling: ceiling(list, config),
     totals,
     byPurpose: byPurpose(list, priced),
@@ -172,7 +176,7 @@ export function overviewUsageReport(db: Db, config: AiConfig, now: number): AiUs
     for (const g of mine) add(gameTotals, g, priced(g));
     const lastAt = mine.reduce<number | null>((m, g) => (g.lastAt !== null && (m === null || g.lastAt > m) ? g.lastAt : m), null);
     return {
-      game: { id, name: names.get(id) ?? null },
+      game: { id, name: usageName(id, names.get(id)) },
       totals: gameTotals,
       ceiling: ceiling(mine, config),
       lastCallAt: lastAt === null ? null : new Date(lastAt).toISOString(),
