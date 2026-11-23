@@ -245,6 +245,23 @@ describe('GEN-059 finale', { timeout: 60_000 }, () => {
     expect(prompt).not.toContain('-45');
   });
 
+  it('GEN-194 C1+C2: the finale prompt has the game tone (B) in its cached start; the repair call starts byte-identical', async () => {
+    // The first answer misses every player, so the finale is asked again (repair) with the same system blocks.
+    await boot((req, n) => (isFinale(req) ? (finaleRequests().length === 1 ? mockReply.ok({ overall: 'จบ', players: [] }) : markedFinale(req)) : turnWith()(req, n)));
+    const t = await startedTable(server!, false, { tone: 'B' });
+    const clients = await playLastTurn(t);
+    for (const c of clients) await privateEnding(c);
+    const [first, repair] = finaleRequests();
+    expect(repair).toBeDefined();
+    const tones = server!.assets.voice.tones;
+    expect(first!.system.map((b) => b.id)).toEqual(['finale-rules', 'tone']);
+    const tone = first!.system.find((b) => b.id === 'tone')!;
+    expect(tone.cache).toBe(true);
+    expect(tone.text).toContain(tones.B.samples[0]);
+    expect(tone.text).not.toContain(tones.A.samples[0]);
+    expect(JSON.stringify(repair!.system)).toBe(JSON.stringify(first!.system));
+  });
+
   it('C5: after the end the summary reveals real names, karma, Secret actions and spawn points of everyone; an action is refused', async () => {
     await boot((req, n) => (isFinale(req) ? markedFinale(req) : turnWith()(req, n)));
     const t = await startedTable(server!, false);

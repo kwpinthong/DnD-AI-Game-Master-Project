@@ -159,6 +159,22 @@ describe('language tone (GEN-177)', { timeout: 90_000 }, () => {
     for (const r of dialogue.slice(1)) expect(JSON.stringify(r.system)).toBe(JSON.stringify(dialogue[0]!.system));
   });
 
+  it('GEN-194 C1+C2: the period-change scene prompt has tone B in its cached start, byte-identical call to call', async () => {
+    const t = await startedTable(server, false, { tone: 'B' });
+    await playAtFountain(t, 1);
+    await playAtFountain(t, 2);
+    const scenes = requests.filter((r) => r.output.name === 'gm_scene');
+    expect(scenes.length).toBeGreaterThanOrEqual(1);
+    for (const r of scenes) {
+      expect(r.system.map((b) => b.id)).toEqual(['scene-rules', 'tone']);
+      const block = toneOf(r)!;
+      expect(block.cache).toBe(true);
+      expect(block.text).toContain(server.assets.voice.tones.B.samples[0]);
+      expect(block.text).not.toContain(server.assets.voice.tones.A.samples[0]);
+      expect(JSON.stringify(r.system)).toBe(JSON.stringify(scenes[0]!.system));
+    }
+  });
+
   it('the NPC speech profiles are the same for every tone (one profile set, no per-tone copy)', () => {
     const voice = server.assets.voice;
     expect(Object.keys(voice.tones).sort()).toEqual(['A', 'B', 'C']);
