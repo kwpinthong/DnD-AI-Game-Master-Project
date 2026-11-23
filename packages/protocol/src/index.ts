@@ -38,3 +38,6 @@ export * from './origin.ts';
 
 // GEN-168: the server owner's review of 👎 messages + "แก้เป็น" pairs, own file for the same reason.
 export * from './vote-review.ts';
+
+// GEN-183: game data enums shared by the server's asset schemas and the admin form.
+export * from './asset-enums.ts';

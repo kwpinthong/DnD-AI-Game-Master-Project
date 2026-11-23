@@ -1,3 +1,4 @@
+import { ASSET_ALIGNMENTS as ALIGNMENTS, ASSET_PERIODS as PERIODS, ASSET_RANKS as RANKS, ASSET_WEATHERS as WEATHERS } from '@isekai/protocol';
 import { useEffect, useId, useState, type InputHTMLAttributes } from 'react';
 
 /**
@@ -11,12 +12,6 @@ type Field =
   | { key: string; label: string; kind: 'text' | 'long' | 'list' }
   | { key: string; label: string; kind: 'choice' | 'set'; options: readonly string[]; hint?: string };
 
-// shortcut: copies of the server's asset enums (apps/server/src/assets/model.ts); a value the server does not
-// know is refused at save with the field named. Move them to @isekai/protocol if they start to change.
-const PERIODS = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'];
-const WEATHERS = ['Clear', 'Clear Morning', 'Clear Night', 'Rain', 'Storm', 'Fog', 'Dark Night', 'Disaster'];
-const RANKS = ['F', 'B', 'A', 'S', 'SS'];
-const ALIGNMENTS = ['Good', 'Evil', 'Neutral'];
 
 interface FormSet {
   fields: readonly Field[];
