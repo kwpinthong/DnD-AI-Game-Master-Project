@@ -13,6 +13,9 @@ import {
   GameDataListResponse,
   GameDataSetResponse,
   LearningLibraryResponse,
+  StyleFlagsResponse,
+  StyleSettingsResponse,
+  type StyleSettingsRequest,
 } from '@isekai/protocol';
 import { apiUrl, fetchWithTimeout } from './session.ts';
 
@@ -118,6 +121,19 @@ export function postCorrection(baseUrl: string, token: string, body: AdminCorrec
 
 export function fetchCorrectionsExport(baseUrl: string, token: string) {
   return call(baseUrl, '/api/admin/corrections-export', { headers: auth(token) }, AdminCorrectionsExportResponse);
+}
+
+/** GEN-169: the style checker's flag counts and settings (server owner only). */
+export function fetchStyleFlags(baseUrl: string, token: string) {
+  return call(baseUrl, '/api/admin/style-flags', { headers: auth(token) }, StyleFlagsResponse);
+}
+
+export function fetchStyleSettings(baseUrl: string, token: string) {
+  return call(baseUrl, '/api/admin/style-settings', { headers: auth(token) }, StyleSettingsResponse);
+}
+
+export function saveStyleSettings(baseUrl: string, token: string, body: StyleSettingsRequest) {
+  return call(baseUrl, '/api/admin/style-settings', { method: 'PUT', headers: { ...auth(token), 'content-type': 'application/json' }, body: JSON.stringify(body) }, StyleSettingsResponse);
 }
 
 export async function postAdminLogout(baseUrl: string, token: string): Promise<void> {

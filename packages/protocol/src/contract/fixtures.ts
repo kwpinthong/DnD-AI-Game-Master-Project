@@ -584,4 +584,16 @@ export const CONTRACT_FIXTURES: Fixtures = {
       jsonl: '{"npc":"โนอา","scene":"npc-dialogue","reasons":["out_of_character"],"original":"ข้าไม่ไว้ใจ {{PLAYER_1}} หรอกนะ","edited":"ข้ายังไม่ไว้ใจ {{PLAYER_1}}","libraryCandidate":true}\n',
     },
   ],
+  // GEN-169: the style checker
+  StyleFlagsResponse: [
+    {
+      stats: [
+        { npc: { id: 'archbishop', alias: 'นักบวชผู้ใจบุญประจำเมือง' }, reason: 'pronoun_mismatch', count: 3 },
+        { npc: null, reason: 'dai_tham_kan', count: 1 },
+      ],
+    },
+    { stats: [] },
+  ],
+  StyleSettingsRequest: [{ rewrite: true }, {}],
+  StyleSettingsResponse: [{ settings: { rewrite: false } }],
 };

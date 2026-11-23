@@ -42,6 +42,8 @@ export interface AiConfig {
   anthropic: { apiKey?: string; baseUrl?: string };
   /** Only read by the offline Mock (dev / localhost): purposes it fails with that error (AI_MOCK_FAIL, Q-177). */
   mockFail: Partial<Record<AiPurpose, AiErrorKind>>;
+  /** GEN-169: the time a style rewrite may take before the original text goes out (AI_STYLE_REWRITE_MS). */
+  styleRewriteMs: number;
 }
 
 const PURPOSES = [
@@ -74,7 +76,7 @@ function parseMockFail(raw: string | undefined): Partial<Record<AiPurpose, AiErr
 /**
  * Reads AI_PROVIDER (default anthropic), AI_MODEL (claude-sonnet-5-5), AI_SUMMARY_MODEL
  * (claude-haiku-5-5), AI_TIMEOUT_MS (60000), AI_MAX_RETRIES (2), AI_RETRY_DELAY_MS (1000),
- * AI_GAME_MONTHLY_USD (20), ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL.
+ * AI_GAME_MONTHLY_USD (20), AI_STYLE_REWRITE_MS (8000), ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL.
  * A missing key is not an error here: the server starts and the AI service reports why it is not
  * ready (GEN-038 C4). A wrong value is an error naming the variable.
  */
@@ -109,5 +111,6 @@ export function loadAiConfig(env: Record<string, string | undefined>): AiConfig 
     prices: DEFAULT_PRICES,
     anthropic: { ...(apiKey ? { apiKey } : {}), ...(baseUrl ? { baseUrl } : {}) },
     mockFail: parseMockFail(value('AI_MOCK_FAIL')),
+    styleRewriteMs: number('AI_STYLE_REWRITE_MS', 8_000, 1, true),
   };
 }

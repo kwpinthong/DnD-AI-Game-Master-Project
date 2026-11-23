@@ -76,6 +76,10 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/admin/downvotes': { method: 'GET', path: '/api/admin/downvotes' },
     'POST /api/admin/corrections': { method: 'POST', path: '/api/admin/corrections', body: { gameId: 'g', seq: 1, edited: 'x' } },
     'GET /api/admin/corrections-export': { method: 'GET', path: '/api/admin/corrections-export' },
+    // GEN-169: the style checker (server owner); a player's session is 403.
+    'GET /api/admin/style-flags': { method: 'GET', path: '/api/admin/style-flags' },
+    'GET /api/admin/style-settings': { method: 'GET', path: '/api/admin/style-settings' },
+    'PUT /api/admin/style-settings': { method: 'PUT', path: '/api/admin/style-settings', body: { rewrite: true } },
     // GEN-055: the player's own skills, held items and library discoveries (no condition or progress).
     'GET /api/game/inventory': { method: 'GET', path: '/api/game/inventory' },
     // GEN-058: the Human GM console. Players get 403 (scanned for karma like every other answer).
@@ -117,6 +121,9 @@ const ADMIN_DATA_ROUTES = [
   'GET /api/admin/downvotes',
   'POST /api/admin/corrections',
   'GET /api/admin/corrections-export',
+  'GET /api/admin/style-flags',
+  'GET /api/admin/style-settings',
+  'PUT /api/admin/style-settings',
 ];
 
 /** The join name the fixture gave each seat (A is "นก" in both table kinds). */

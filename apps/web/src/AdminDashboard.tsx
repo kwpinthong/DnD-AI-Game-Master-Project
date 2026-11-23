@@ -4,6 +4,7 @@ import { fetchGameUsage, fetchUsageOverview, postAdminLogout, postAdminSession }
 import { GameDataEditor } from './GameDataEditor.tsx';
 import { LearningLibrary } from './LearningLibrary.tsx';
 import { VoteReview } from './VoteReview.tsx';
+import { StylePanel } from './StylePanel.tsx';
 import { libraryText } from './ui/strings.ts';
 
 /**
@@ -130,6 +131,7 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
             <section aria-label={libraryText.adminNav.votes}>
               <h2>{libraryText.adminNav.votes}</h2>
               <VoteReview apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
+              <StylePanel apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
             </section>
           ) : (
             <section aria-label={libraryText.adminNav.data}>

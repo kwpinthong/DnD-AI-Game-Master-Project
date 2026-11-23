@@ -71,6 +71,7 @@ import { capTotal, cleanNpcLines, lingerAfter, lingersNow, npcAnswers, npcLineLi
 import { npcFarewellFor } from './server-lines.ts';
 import { periodScenes } from './scene.ts';
 import { GM_OUTPUT, GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
+import { gateStyle, styleIssues, type StyleScope } from './style-check.ts';
 import {
   activeConstraints,
   addConstraint,
@@ -112,6 +113,8 @@ export interface AiGmDeps {
   now: Clock;
   /** Metadata only: never prompt text, names or action text. */
   log: (line: string) => void;
+  /** GEN-169: how long a style rewrite may take (AI_STYLE_REWRITE_MS); default 8 s. */
+  styleRewriteMs?: number;
 }
 
 const STUCK_MESSAGE = 'AI GM ติดขัด สรุปผลเทิร์นนี้ไม่ได้ action ทุกอันยังอยู่ กด "ลองใหม่" ได้';
@@ -251,6 +254,58 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     }
     if (opts.fallback) return useFallback('invalid');
     return stuck(`still invalid after repair (${opts.purpose})`, opts.gameId);
+  }
+
+  /**
+   * GEN-169: the style check of an answer the server already accepted (`value`, built from the AI's `answer`); a
+   * block hit with the rewrite setting on asks once more with the issues, and `accept` turns that answer into what
+   * goes out (undefined = refused, the original goes out). The message is never dropped.
+   */
+  function styled<R, T>(opts: {
+    gameId: string;
+    at: TurnAt;
+    purpose: AiPurpose;
+    system: PromptBlock[];
+    context: unknown;
+    output: { name: string; schema: z.ZodType<R> };
+    maxOutputTokens: number;
+    answer: R;
+    value: T;
+    scope: StyleScope;
+    texts: (value: T) => { text: string; npcId: string | null }[];
+    accept: (answer: R) => T | undefined;
+    label: string;
+    signal?: AbortSignal;
+  }): Promise<T> {
+    return gateStyle({
+      db,
+      value: opts.value,
+      timeoutMs: deps.styleRewriteMs ?? 8_000,
+      label: `game=${opts.gameId} purpose=${opts.purpose} audience=${opts.label}`,
+      log,
+      ...(opts.signal ? { signal: opts.signal } : {}),
+      issuesOf: (v) => opts.texts(v).flatMap((t) => styleIssues(assets.voice, t.text, opts.scope, t.npcId)),
+      rewrite: async (issues, signal) => {
+        const result = await ai.call({
+          gameId: opts.gameId,
+          purpose: opts.purpose,
+          day: opts.at.day,
+          phase: opts.at.phase,
+          turn: opts.at.turn,
+          system: opts.system,
+          messages: [
+            { role: 'user', text: JSON.stringify(opts.context) },
+            { role: 'assistant', text: JSON.stringify(opts.answer) },
+            { role: 'user', text: JSON.stringify({ styleIssues: issues.map((i) => ({ rule: i.reason, fix: i.fix })), instruction: 'แก้สำนวนตาม fix แล้วตอบใหม่ทั้งก้อนในรูปแบบเดิม' }) },
+          ],
+          output: opts.output,
+          maxOutputTokens: opts.maxOutputTokens,
+          maxRetries: 0,
+          signal,
+        });
+        return result.ok ? opts.accept(result.value) : undefined;
+      },
+    }).then((r) => r.value);
   }
 
   async function resolveTurn(input: ClosedPhase): Promise<PhaseResolution> {
@@ -453,24 +508,50 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       const saved = stored.narrations[audience.key];
       const forbidden = forbiddenNamesFor(world, audience.readers);
       const aliases = aliasesOf(world, forbidden);
+      const purpose = 'player' in ctx.audience ? 'narrate_player' : 'narrate_place';
+      const output = { name: GM_OUTPUT.narration, schema: GmNarration };
+      const sanitize = (n: GmNarration): GmNarration => ({ ...n, segments: n.segments.map((s) => ({ ...s, text: maskNames(s.text, aliases) })) });
+      const check = (n: GmNarration) => checkNarration(ctx, n, forbidden);
       const out: StoredNarration =
         saved ??
         (await ask({
           gameId,
           at,
-          purpose: 'player' in ctx.audience ? 'narrate_player' : 'narrate_place',
-          repairPurpose: 'player' in ctx.audience ? 'narrate_player' : 'narrate_place',
+          purpose,
+          repairPurpose: purpose,
           system: [NARRATOR_BLOCK],
           context: ctx,
-          output: { name: GM_OUTPUT.narration, schema: GmNarration },
+          output,
           maxOutputTokens: 1_500,
           budget: 'player' in ctx.audience ? CONTEXT_BUDGET.narrate_player : CONTEXT_BUDGET.narrate_place,
-          sanitize: (n) => ({ ...n, segments: n.segments.map((s) => ({ ...s, text: maskNames(s.text, aliases) })) }),
-          check: (n) => checkNarration(ctx, n, forbidden),
+          sanitize,
+          check,
           fallback: { label: audience.key, make: () => templateNarration(ctx) },
           timer: { timer, stage: 'narrate_calls' },
           ...(signal ? { signal } : {}),
-        }).then(({ value, fallback }) => (fallback === null ? value : { ...value, fallback })));
+        }).then(({ value, fallback }) =>
+          fallback === null
+            ? styled({
+                gameId,
+                at,
+                purpose,
+                system: [NARRATOR_BLOCK],
+                context: ctx,
+                output,
+                maxOutputTokens: 1_500,
+                answer: value,
+                value,
+                scope: 'narration',
+                texts: (n) => n.segments.map((s) => ({ text: s.text, npcId: null })),
+                accept: (n) => {
+                  const clean = sanitize(n);
+                  return check(clean).length === 0 ? clean : undefined;
+                },
+                label: audience.key,
+                ...(signal ? { signal } : {}),
+              })
+            : { ...value, fallback },
+        ));
       if (!saved) timer.time('db', () => saveNarration(db, gameId, at, audience.key, out, now()));
       return { key: audience.key, ctx, out, forbidden, readers: audience.readers };
     })));
@@ -563,16 +644,39 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
               return;
             }
             dialogueTimer.addTokens(result.usage);
-            const lines = capTotal(
-              cleanNpcLines(result.value.npcLines, {
-                present: new Set(ctx.npcs.filter((n) => n.here).map((n) => n.id)),
-                audience: reader === null ? 'public' : 'private',
-                forbidden: [...forbidden, ...realNpcNames],
-                cast: new Set(ctx.cast.map((c) => c.ref)),
+            const clean = (npcLines: GmDialogue['npcLines']) =>
+              capTotal(
+                cleanNpcLines(npcLines, {
+                  present: new Set(ctx.npcs.filter((n) => n.here).map((n) => n.id)),
+                  audience: reader === null ? 'public' : 'private',
+                  forbidden: [...forbidden, ...realNpcNames],
+                  cast: new Set(ctx.cast.map((c) => c.ref)),
+                  level,
+                  askers: new Map(ctx.answers.map((a) => [a.npcId, a.actionIds.length])),
+                }),
                 level,
-                askers: new Map(ctx.answers.map((a) => [a.npcId, a.actionIds.length])),
-              }),
-              level,
+              );
+            // GEN-169: each line against its NPC's speech profile; a rewrite that leaves nobody speaking is refused.
+            const lines = (
+              await styled({
+                gameId,
+                at,
+                purpose: 'npc_dialogue',
+                system: [DIALOGUE_BLOCK],
+                context,
+                output: { name: GM_OUTPUT.dialogue, schema: GmDialogue },
+                maxOutputTokens: 1_000,
+                answer: result.value,
+                value: clean(result.value.npcLines),
+                scope: 'dialogue',
+                texts: (ls) => ls.map((l) => ({ text: l.text, npcId: l.npcId })),
+                accept: (d) => {
+                  const again = clean(d.npcLines);
+                  return again.length > 0 ? again : undefined;
+                },
+                label: key,
+                ...(signal ? { signal } : {}),
+              })
             ).slice(0, lineBudget);
             lineBudget -= lines.length;
             publish(

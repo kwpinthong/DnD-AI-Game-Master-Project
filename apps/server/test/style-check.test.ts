@@ -99,7 +99,7 @@ describe('style checker (GEN-169)', { timeout: 120_000 }, () => {
 
     // A rewrite that hangs is cut at the time budget and the original goes out.
     const started = performance.now();
-    const hung = await gateStyle({ db, value: original, issuesOf, timeoutMs: 200, rewrite: (_issues, signal) => new Promise((resolve) => signal.addEventListener('abort', () => resolve(undefined)) && setTimeout(() => resolve({ text: 'ช้าไป' }), 10_000)) });
+    const hung = await gateStyle({ db, value: original, issuesOf, timeoutMs: 200, rewrite: () => new Promise<{ text: string } | undefined>((resolve) => setTimeout(() => resolve({ text: 'ช้าไป' }), 10_000)) });
     expect(hung.value).toEqual(original);
     expect(performance.now() - started).toBeLessThan(2_000);
 
