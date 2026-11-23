@@ -4,6 +4,7 @@ import { memberRowForToken, type Clock } from '../auth/join.ts';
 import { bearerToken, sendError } from '../auth/routes.ts';
 import type { Db } from '../db/client.ts';
 import type { MemberRow } from '../game/service.ts';
+import { syncExamples } from '../learning/examples.ts';
 import { gameEnded, ratingViewFor, saveRating, setRulingVote } from './store.ts';
 
 /**
@@ -60,6 +61,8 @@ export function registerRatingRoutes(app: FastifyInstance, db: Db, now: Clock, o
     if (!setRulingVote(db, me, request.params.sourceRef, parsed.data.vote, now())) {
       return sendError(reply, 404, { code: 'ruling_not_found', message: 'ไม่พบการตัดสินนี้ในหน้าสรุปของเกม' });
     }
+    // GEN-081: a ruling vote may make (or unmake) a good / avoid example.
+    syncExamples(db, me.gameId, now());
     return send(reply, me);
   });
 }

@@ -32,6 +32,7 @@ import { startBackupSchedule, type BackupSchedule } from './backup/schedule.ts';
 import { registerHistoryRoutes } from './history/routes.ts';
 import { registerRatingRoutes } from './rating/routes.ts';
 import { createLearningExtractor, everyoneRated } from './learning/extract.ts';
+import { syncExamples } from './learning/examples.ts';
 import { registerVoteRoutes } from './room/vote-routes.ts';
 import type { Rng } from '@isekai/rules';
 import { CryptoRng } from './rng.ts';
@@ -167,6 +168,8 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
       void backups?.gameEnded(gameId, status);
       // GEN-178: every 5th ended game starts a style review round (in the background).
       void styleReview.gameEnded(gameId);
+      // GEN-081: the votes of play become good / avoid examples.
+      syncExamples(db, gameId, now());
     },
     budgetNotice: (gameId) => ai.budgetNotice(gameId),
     ...(options.aiLog ? { log: options.aiLog } : {}),
