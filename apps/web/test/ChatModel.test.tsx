@@ -46,6 +46,8 @@ describe('entries as chat', () => {
     // GEN-129: another player's public action is the left PlayerBubble; without its actor it is plain text.
     expect(look({ kind: 'player', actor: { name: 'ชายผมแดง' } })).toBe('player-action');
     expect(look({ kind: 'player' })).toBe('narration');
+    // GEN-145: the server's time announcement is its own centred line.
+    expect(look({ kind: 'time' })).toBe('time');
   });
 
   it('badges: the roll, each change with its reason, coins gained in the gain tone', () => {

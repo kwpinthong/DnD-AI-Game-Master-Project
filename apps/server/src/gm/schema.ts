@@ -202,4 +202,9 @@ export const GM_OUTPUT = {
   daySummary: 'gm_day_summary',
   journal: 'gm_journal',
   finale: 'gm_finale',
+  scene: 'gm_scene',
 } as const;
+
+/** GEN-145: the scene of one place when a new period begins (2-3 sentences, NPCs as {{n:id}} tokens). */
+export const GmScene = z.object({ text: z.string().min(1).max(600) });
+export type GmScene = z.infer<typeof GmScene>;

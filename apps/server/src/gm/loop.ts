@@ -67,6 +67,7 @@ import {
 import { createStageTimer, type StageTimer } from './timing.ts';
 import { capTotal, cleanNpcLines, lingerAfter, lingersNow, npcAnswers, npcLineLimits, npcPlacesNow, npcPrompt, npcsPresentAt, saveLingers } from './npc-lines.ts';
 import { npcFarewellFor } from './server-lines.ts';
+import { periodScenes } from './scene.ts';
 import { GM_OUTPUT, GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
 import {
   activeConstraints,
@@ -774,6 +775,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       }
     },
     catchUp: ({ gameId, signal }) => summarizeFinishedDays(gameId, signal),
+    scene: (input) => periodScenes({ db, ai, assets, log }, input),
   };
 }
 

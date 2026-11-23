@@ -429,6 +429,14 @@
   color: var(--muted);
 }
 
+/* GEN-145: the server's announcement of a new period. */
+.chat-time {
+  margin: 0;
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--highlight);
+}
+
 .chat-row {
   display: flex;
   gap: var(--space-3);

@@ -119,6 +119,8 @@ const entries: In<typeof p.RoomEntry>[] = [
   { seq: 20, kind: 'npc', ...AT, place: null, text: 'ข้าเห็นว่าเจ้าไม่ได้มาที่นี่เพื่อน้ำพุเท่านั้น', npc: { ref: 'n-ref-lucia', name: 'ลูเซีย', kind: 'dialogue', private: true } },
   // GEN-129: another player's public action; the actor is the alias (Social Title) until the viewer knows the name
   { seq: 21, kind: 'player', ...AT, place: FOUNTAIN_ZONED, text: 'โยนเหรียญลงในหมวกของคุณ แล้วเดินจากไป', actor: { name: 'ผู้มาเยือนเสื้อคลุมแดง' } },
+  // GEN-145: a new period began (server text, no votes)
+  { seq: 23, kind: 'time', day: 6, phase: 'HESPERION', turn: 1, place: null, text: 'ระฆังหอคอยดังกังวานไปทั่วเมือง บัดนี้เข้าสู่ช่วง HESPERION (ค่ำ 18:00-23:59) แล้ว' },
 ];
 
 const you: In<typeof p.RoomYou> = {

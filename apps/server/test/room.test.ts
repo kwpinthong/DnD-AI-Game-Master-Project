@@ -344,7 +344,9 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
     }
 
     a = await enter(t.a, lastSeq);
-    const missed = a.entries().filter((e) => e.kind !== 'player');
+    // GEN-145: the SOLARION announcement is in the history too; this case is about the feed / narration.
+    const missed = a.entries().filter((e) => e.kind !== 'player' && e.kind !== 'time');
+    expect(a.entries().filter((e) => e.kind === 'time').map((e) => e.phase)).toEqual(['SOLARION']);
     expect(missed.map((e) => e.text)).toEqual(['ฟีดรอบ 2', 'เล่าให้ A รอบ 2', 'ฟีดรอบ 3', 'เล่าให้ A รอบ 3']);
     expect(missed.every((e) => e.seq > lastSeq)).toBe(true);
     expect(new Set(missed.map((e) => e.seq)).size).toBe(missed.length);
@@ -353,7 +355,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
 
     // A fresh tab (afterSeq 0) gets the whole history once; B never got A's narration.
     const fresh = await enter(t.a, 0);
-    expect(fresh.entries().filter((e) => e.kind !== 'player').map((e) => e.text)).toEqual([
+    expect(fresh.entries().filter((e) => e.kind !== 'player' && e.kind !== 'time').map((e) => e.text)).toEqual([
       'ฟีดรอบ 1',
       'เล่าให้ A รอบ 1',
       'ฟีดรอบ 2',
@@ -361,7 +363,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
       'ฟีดรอบ 3',
       'เล่าให้ A รอบ 3',
     ]);
-    expect(b.entries().filter((e) => e.kind !== 'player').map((e) => e.text)).toEqual(['ฟีดรอบ 1', 'ฟีดรอบ 2', 'ฟีดรอบ 3']);
+    expect(b.entries().filter((e) => e.kind !== 'player' && e.kind !== 'time').map((e) => e.text)).toEqual(['ฟีดรอบ 1', 'ฟีดรอบ 2', 'ฟีดรอบ 3']);
     expectNoForbiddenKeys(a, b, c, fresh);
   });
 

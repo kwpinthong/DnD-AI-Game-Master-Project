@@ -64,6 +64,7 @@ import { settleTurnProgress, withPeriodEndEffects } from '../skills/progress.ts'
 import type { ClosedAction, FinaleResolution, PhaseResolution, PhaseResolver, ResolverStuck } from './resolver.ts';
 import { getEnding, markNarrated, settleEnding } from '../finale/store.ts';
 import { templateFinaleEntries } from '../gm/finale.ts';
+import { periodAnnouncement } from '../gm/scene.ts';
 import {
   ensurePhaseState,
   entriesFor,
@@ -201,6 +202,8 @@ export function createRoomService(
   /** GEN-157: after-turn work (the day summary) still running, awaited on shutdown; the games whose catch-up ran. */
   const afters = new Set<Promise<void>>();
   const caughtUp = new Set<string>();
+  /** GEN-145: the period-change scene being written per game; the turn it opens waits for it before resolving. */
+  const scenes = new Map<string, Promise<void>>();
   let stopped = false;
 
   function memberOf(socket: RoomSocket): MemberRow | undefined {
@@ -513,7 +516,14 @@ export function createRoomService(
             // GEN-059: the ending is decided with the end itself (positions and items as this turn left them).
             settleEnding(tx, assets, gameId, next, t);
           } else advanceTimeline(tx, gameId, { day: next.day, phase: next.phase, turn: next.turn }, t);
-          return { rows, ended: isEnded(next) };
+          // GEN-145: a new period began: the server's announcement for the whole room, under the new period's first turn.
+          const opened = !isEnded(next) && (next.day !== current.day || next.phase !== current.phase) ? { day: next.day, phase: next.phase, turn: next.turn } : null;
+          if (opened) {
+            const text = periodAnnouncement(assets, opened, current, rng);
+            const recipients = recipientsOf(tx, gameId, next, { kind: 'feed', locationId: null, actorMemberId: null, text });
+            rows.push({ row: insertEntry(tx, gameId, { kind: 'time', at: opened, locationId: null, text }, [...recipients], t), recipients });
+          }
+          return { rows, ended: isEnded(next), opened };
         });
     let published: ReturnType<typeof publish>;
     const dbStart = performance.now();
@@ -534,6 +544,7 @@ export function createRoomService(
     // GEN-115: counts only, never text.
     log(`[room] game=${gameId} publish db_ms=${Math.round(socketStart - dbStart)} socket_ms=${Math.round(performance.now() - socketStart)}`);
     if (resolution.dialogue) startDialogue(gameId, turn.at, resolution.dialogue, placeAudience);
+    if (published.opened) startScene(gameId, published.opened);
     if (published.ended) startFinale(gameId);
     if (outcome.ended !== null) {
       try {
@@ -575,6 +586,32 @@ export function createRoomService(
       .catch((error) => log(`[room] game=${gameId} dialogue stage failed: ${error instanceof Error ? error.name : 'unknown error'}`))
       .finally(() => dialogues.delete(task));
     dialogues.add(task);
+  }
+
+  /**
+   * GEN-145: the scene of each place with players for the period that just opened, in the background (the next turn's
+   * resolve waits for it, so it comes before that turn's results). A failure only costs the scene; the announcement stays.
+   */
+  function startScene(gameId: string, at: HeldTurn['at']): void {
+    if (!resolver.scene || stopped) return;
+    const task: Promise<void> = (async () => {
+      const weatherNow = await weatherFor(gameId, ensurePhaseState(db, gameId, now()));
+      const entries = await resolver.scene!({ gameId, at, weather: weatherNow, signal: shutdown.signal });
+      if (stopped || entries.length === 0) return;
+      const rows = db.transaction((tx) => {
+        const t = now();
+        const state = ensurePhaseState(tx, gameId, t);
+        return entries.map((entry) => {
+          const recipients = recipientsOf(tx, gameId, state, entry);
+          const locationId = entry.kind === 'narration' ? null : entry.locationId;
+          return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text }, [...recipients], t), recipients };
+        });
+      });
+      deliver(gameId, rows);
+    })()
+      .catch((error) => log(`[room] game=${gameId} scene failed: ${error instanceof Error ? error.name : 'unknown error'}`))
+      .finally(() => scenes.delete(gameId));
+    scenes.set(gameId, task);
   }
 
   /**
@@ -672,6 +709,8 @@ export function createRoomService(
 
         // The resolver always gets the period's weather: picked now if the period opened without one.
         const periodWeather = await weatherFor(gameId, state);
+        // GEN-145: the period's scene goes out before the results of its first turn.
+        await scenes.get(gameId);
 
         const at = { day: state.day, phase: state.phase, turn: state.turn };
         let resolution: PhaseResolution;
@@ -930,7 +969,7 @@ export function createRoomService(
       rooms.clear();
       shutdown.abort();
       while (resolving.size > 0 || picking.size > 0 || finaling.size > 0 || dialogues.size > 0 || afters.size > 0)
-        await Promise.allSettled([...resolving.values(), ...picking, ...finaling.values(), ...dialogues, ...afters]);
+        await Promise.allSettled([...resolving.values(), ...picking, ...finaling.values(), ...dialogues, ...afters, ...scenes.values()]);
     },
   };
 }

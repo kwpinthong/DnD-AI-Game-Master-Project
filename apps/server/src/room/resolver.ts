@@ -24,6 +24,12 @@ export interface PhaseResolver {
   finale?(input: { readonly gameId: string; readonly signal?: AbortSignal }): Promise<FinaleResolution>;
   /** GEN-157: redoes the after-turn work a restart cut short (the summaries of finished days); the room runs it once per game in the background. */
   catchUp?(input: { readonly gameId: string; readonly signal?: AbortSignal }): Promise<void>;
+  /**
+   * GEN-145: the scene of each place with players when a new period began (`at` = its turn 1), as feed entries. The room
+   * runs it in the background after the time announcement and holds that turn's resolve until it is done; a scene the AI
+   * could not write is simply missing.
+   */
+  scene?(input: { readonly gameId: string; readonly at: TurnPoint; readonly weather: PeriodWeather | null; readonly signal?: AbortSignal }): Promise<readonly ResolutionEntry[]>;
 }
 
 /** The ending as entries (whole-town feed + one narration per player), or why it could not be told (retry). */

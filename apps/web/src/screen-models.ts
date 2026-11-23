@@ -21,6 +21,8 @@ const SECTION: Record<RoomEntry['kind'], EntrySection> = {
   npc: 'place',
   // GEN-129: another player's public action, at the place.
   player: 'place',
+  // GEN-145: the new period's announcement, for the whole room.
+  time: 'place',
 };
 export const entrySection = (entry: Pick<RoomEntry, 'kind'>): EntrySection => SECTION[entry.kind];
 

@@ -203,8 +203,10 @@ export type RoomState = z.infer<typeof RoomState>;
  * `omen`: an Astral Spirit's one-sentence omen to you (GEN-070, Q-193); `place` null, the sender is not named.
  * `player` (GEN-129): another player's PUBLIC action at `place`, `text` = what they did, `actor.name` = the Social Title
  * (alias) until you know them, their real name after (GEN-117). Never sent for a Secret action or to the actor.
+ * `time` (GEN-145): the server's announcement that a new period began (a GEN-150 `time_announce` line naming it, and the
+ * day when a new day began), once per room under turn 1 of the new period, `place` null; no AI, no votes.
  */
-export const RoomEntryKind = z.enum(['feed', 'narration', 'whisper', 'omen', 'hit', 'changes', 'npc', 'player']);
+export const RoomEntryKind = z.enum(['feed', 'narration', 'whisper', 'omen', 'hit', 'changes', 'npc', 'player', 'time']);
 export type RoomEntryKind = z.infer<typeof RoomEntryKind>;
 
 /**
