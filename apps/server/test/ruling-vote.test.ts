@@ -68,7 +68,7 @@ describe('GEN-171 ruling 👍/👎 on the end page', { timeout: 60_000 }, () => 
     expect(res.status).toBe(403);
     expect(ApiError.parse(res.body).code).toBe('forbidden');
     expect(rows()).toEqual([]);
-    const viewOf = async (s: Seat) => GameRatingResponse.parse((await t.call('GET', '/api/game/rating', { token: s.token })).body).rating;
+    const viewOf = async (s: { token: string }) => GameRatingResponse.parse((await t.call('GET', '/api/game/rating', { token: s.token })).body).rating;
     expect((await viewOf(t.gm!)).canVote).toBe(false);
     expect((await viewOf(t.a)).canVote).toBe(true);
   });

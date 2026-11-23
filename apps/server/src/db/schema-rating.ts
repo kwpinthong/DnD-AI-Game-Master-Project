@@ -26,6 +26,8 @@ export const gameRating = sqliteTable(
 /**
  * A member's 👍 on one ruling (an action → result row of the end page). `source_ref` is
  * `${day}-${phase}-${turn}-${actionSeq}`; the row exists = the 👍 is on, so one member counts once.
+ * GEN-171: no longer read or written; migration 0038 copied every row into `response_vote` as
+ * `ruling-${source_ref}` = 'up'. The table stays (additive migrations only).
  */
 export const rulingVote = sqliteTable(
   'ruling_vote',
@@ -44,7 +46,8 @@ export const rulingVote = sqliteTable(
 
 /**
  * GEN-107: a member's 👍 / 👎 on one AI-written room entry during play (and after). `source_ref` is
- * `entry-${room_entry.id}` (the response id); the row exists = a vote, cancelling deletes it, so a member
+ * `entry-${room_entry.id}` (the response id), or `ruling-${day}-${phase}-${turn}-${actionSeq}` for a ruling of
+ * the end page (GEN-171, Q-325); the row exists = a vote, cancelling deletes it, so a member
  * has at most one per entry. Kept per game for learning (the counts are not sent to players).
  */
 export const responseVote = sqliteTable(

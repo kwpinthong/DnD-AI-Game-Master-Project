@@ -263,8 +263,7 @@ export const CONTRACT: readonly ContractItem[] = [
   // --- after the end ---
   http('GET', '/api/game/rating', null, 'GameRatingResponse', ready('GEN-078', 'player', ['ending-rating'], 'หลังเกมจบเท่านั้น (ก่อนจบ 409); ไม่ใช่สมาชิก 403; `eligible` / `blocker` เป็นของ GEN-079')),
   http('PUT', '/api/game/rating', 'GameRatingRequest', 'GameRatingResponse', ready('GEN-078', 'player', ['ending-rating'], 'คนละ 1 คะแนน ส่งใหม่ = แทนค่าเดิม')),
-  http('PUT', '/api/game/rating/likes/:sourceRef', null, 'GameRatingResponse', ready('GEN-078', 'player', ['ending-rating'], '👍 action → ผล ด้วย `sourceRef` (ADR GEN-077); ref ที่หน้าสรุปไม่เปิด = 404 `ruling_not_found`')),
-  http('DELETE', '/api/game/rating/likes/:sourceRef', null, 'GameRatingResponse', ready('GEN-078', 'player', ['ending-rating'], 'ยกเลิก 👍')),
+  http('PUT', '/api/game/rating/votes/:sourceRef', 'ResponseVoteRequest', 'GameRatingResponse', ready('GEN-171', 'player', ['ending-rating'], '👍/👎 action → ผล ด้วย `sourceRef` (ADR GEN-077) แบบ GEN-107, `vote: null` = ยกเลิก; เก็บใน response_vote เป็น `ruling-${sourceRef}` (Q-325); เห็นแค่ `myVotes` ของตัวเอง ไม่มียอดรวม; GM คน / ไม่ใช่สมาชิก 403; ก่อนจบ 409; ref ที่หน้าสรุปไม่เปิด = 404 `ruling_not_found`')),
 
   // --- server owner ---
   http('POST', '/api/admin/session', 'AdminSessionRequest', 'AdminSessionResponse', ready('GEN-061', 'any', ['ai-usage', 'learning-library', 'game-data'])),

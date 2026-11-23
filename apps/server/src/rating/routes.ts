@@ -1,10 +1,10 @@
-import { GameRatingRequest, type GameRatingResponse } from '@isekai/protocol';
+import { GameRatingRequest, ResponseVoteRequest, type GameRatingResponse } from '@isekai/protocol';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { memberRowForToken, type Clock } from '../auth/join.ts';
 import { bearerToken, sendError } from '../auth/routes.ts';
 import type { Db } from '../db/client.ts';
 import type { MemberRow } from '../game/service.ts';
-import { gameEnded, ratingViewFor, saveRating, setLike } from './store.ts';
+import { gameEnded, ratingViewFor, saveRating, setRulingVote } from './store.ts';
 
 /**
  * After the end (GEN-078): each member's score 1–10 + comment, and their 👍 on the rulings of the end page.
@@ -49,18 +49,16 @@ export function registerRatingRoutes(app: FastifyInstance, db: Db, now: Clock) {
     return send(reply, me);
   });
 
-  for (const method of ['PUT', 'DELETE'] as const) {
-    app.route<{ Params: { sourceRef: string } }>({
-      method,
-      url: '/api/game/rating/likes/:sourceRef',
-      handler: async (request, reply) => {
-        const me = rater(request, reply);
-        if (!me) return reply;
-        if (!setLike(db, me, request.params.sourceRef, method === 'PUT', now())) {
-          return sendError(reply, 404, { code: 'ruling_not_found', message: 'ไม่พบการตัดสินนี้ในหน้าสรุปของเกม' });
-        }
-        return send(reply, me);
-      },
-    });
-  }
+  /** GEN-171: the 👍/👎 of GEN-107 on a ruling (`vote: null` cancels); players only, the Human GM gets 403. */
+  app.put<{ Params: { sourceRef: string } }>('/api/game/rating/votes/:sourceRef', async (request, reply) => {
+    const me = rater(request, reply);
+    if (!me) return reply;
+    if (me.role !== 'player') return sendError(reply, 403, { code: 'forbidden', message: 'เฉพาะผู้เล่นเท่านั้นที่โหวตการตัดสินได้' });
+    const parsed = ResponseVoteRequest.safeParse(request.body ?? {});
+    if (!parsed.success) return sendError(reply, 400, { code: 'invalid_input', message: 'เลือก ถูกใจ หรือ ไม่ถูกใจ', fields: { vote: 'เลือก ถูกใจ หรือ ไม่ถูกใจ' } });
+    if (!setRulingVote(db, me, request.params.sourceRef, parsed.data.vote, now())) {
+      return sendError(reply, 404, { code: 'ruling_not_found', message: 'ไม่พบการตัดสินนี้ในหน้าสรุปของเกม' });
+    }
+    return send(reply, me);
+  });
 }

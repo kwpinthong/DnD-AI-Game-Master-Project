@@ -58,7 +58,6 @@ export const endText = {
   fates: 'ชะตาของแต่ละคน',
   byDay: 'ดูวัน',
   allDays: 'ทุกวัน',
-  thumbsLabel: (count: number) => `👍 ${count} คน`,
   rate: 'ให้คะแนน',
   player: (name: string) => `ผู้เล่น: ${name}`,
   spawn: 'จุดเกิด',
@@ -71,9 +70,7 @@ export const endText = {
   noSecrets: 'ไม่มี Secret action',
   filter: 'ดูของ',
   everyone: 'ทุกคน',
-  like: 'ชอบ',
-  liked: 'ชอบแล้ว',
-  likeLabel: (text: string) => `ชอบการตัดสินนี้: ${text}`,
+  voteLabel: (text: string) => `โหวตการตัดสินนี้: ${text}`,
   rateTitle: 'ให้คะแนนเกมนี้',
   score: 'คะแนน 1 (แย่) ถึง 10 (ดีมาก)',
   comment: 'ความเห็น (ไม่บังคับ)',
@@ -95,7 +92,7 @@ export const endText = {
   waiting: (more: number) => `รอคะแนนอีก ${more} คน`,
   waitingNote: 'ต้องมีคนให้คะแนนอย่างน้อยครึ่งหนึ่งของสมาชิก (นับผู้เล่นและ GM)',
   notYet: 'ยังไม่ผ่านเกณฑ์',
-  likes: (count: number) => `👍 การตัดสินที่ชอบ: กดที่รายการในส่วนความลับด้านบน (คุณกดไป ${count})`,
+  likes: (count: number) => `👍/👎 การตัดสิน: กดที่รายการในส่วนความลับด้านบน (คุณกดไป ${count})`,
   fullLog: 'ดู log เต็ม',
 } as const;
 

@@ -5,6 +5,7 @@ import { CONTRACT_FIXTURES } from '@isekai/protocol/contract';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GameLog } from '../src/GameHistory.tsx';
+import { mockHttp } from '../src/mock/http.ts';
 import { scenarioById } from '../src/mock/scenarios.ts';
 
 const ENDED = GameLogResponse.parse(CONTRACT_FIXTURES.GameLogResponse[1]);
@@ -104,10 +105,23 @@ describe('GEN-091 end page', () => {
     expect(calls.at(-1)).toMatchObject({ method: 'PUT', path: `/api/game/rating/votes/${REF}`, body: { vote: null } });
   });
 
-  it('GEN-171 C4: the Human GM (canVote false) gets no vote buttons', async () => {
-    ratingServer({ ...NOT_RATED, canVote: false });
+  it.each([
+    ['ended-rated', 'true', 'false'],
+    ['ended-down', 'false', 'true'],
+    ['ended', 'false', 'false'],
+  ])('GEN-171: mock scenario %s shows 👍 %s / 👎 %s', async (id, up, down) => {
+    const rating = mockHttp(scenarioById(id), { method: 'GET', path: '/api/game/rating' }) as { body: { rating: GameRatingView } };
+    ratingServer(rating.body.rating);
     openPage();
-    await ratingRegion().findAllByRole('radio');
+    const group = within(await screen.findByRole('group', { name: /โหวตการตัดสินนี้/ }));
+    expect(group.getByRole('button', { name: 'ถูกใจ' }).getAttribute('aria-pressed')).toBe(up);
+    expect(group.getByRole('button', { name: 'ไม่ถูกใจ' }).getAttribute('aria-pressed')).toBe(down);
+  });
+
+  it('GEN-171 C4: the Human GM (canVote false) gets no vote buttons', async () => {
+    ratingServer(CONTRACT_FIXTURES.GameRatingResponse[3]!.rating);
+    openPage();
+    await ratingRegion().findByText('ส่งแล้ว · แก้ได้');
     expect(screen.queryByRole('group', { name: /โหวตการตัดสินนี้/ })).toBeNull();
   });
 

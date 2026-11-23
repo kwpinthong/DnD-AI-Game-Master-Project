@@ -1,9 +1,10 @@
-import type { GameRatingView } from '@isekai/protocol';
+import type { EntryVote, GameRatingView } from '@isekai/protocol';
 import { restorePhaseState } from '@isekai/rules';
 import { and, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
-import { gamePhase, gameRating, phaseAction, rulingVote } from '../db/schema.ts';
+import { gamePhase, gameRating, phaseAction, responseVote } from '../db/schema.ts';
 import { activeMembers, type MemberRow } from '../game/service.ts';
+import { voteVerdict } from '../room/vote.ts';
 
 const PERIOD_ORDER = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
 
@@ -51,15 +52,34 @@ export function rulingsOf(db: DbOrTx, gameId: string): Ruling[] {
     }));
 }
 
-/** sourceRef → how many current members gave it a 👍 (GEN-081 keeps a ruling from this). */
-export function thumbsOf(db: DbOrTx, gameId: string): Map<string, number> {
-  const members = new Set(activeMembers(db, gameId).map((m) => m.id));
-  const rulings = new Set(rulingsOf(db, gameId).map((r) => r.sourceRef));
-  const counts = new Map<string, number>();
-  for (const vote of db.select().from(rulingVote).where(eq(rulingVote.gameId, gameId)).all()) {
-    if (members.has(vote.memberId) && rulings.has(vote.sourceRef)) counts.set(vote.sourceRef, (counts.get(vote.sourceRef) ?? 0) + 1);
+/** GEN-171 (Q-325): a ruling's row in response_vote; `ruling_vote` (GEN-078) is no longer read (migration 0038 copied it). */
+export const rulingRef = (sourceRef: string) => `ruling-${sourceRef}`;
+const RULING_PREFIX = rulingRef('');
+
+/** The member's own votes on rulings that still stand: sourceRef → 👍/👎. */
+function myRulingVotes(db: DbOrTx, me: MemberRow): Record<string, EntryVote> {
+  const rulings = new Set(rulingsOf(db, me.gameId).map((r) => r.sourceRef));
+  const out: Record<string, EntryVote> = {};
+  for (const v of db.select().from(responseVote).where(and(eq(responseVote.gameId, me.gameId), eq(responseVote.memberId, me.id))).all()) {
+    const ref = v.sourceRef.slice(RULING_PREFIX.length);
+    if (v.sourceRef.startsWith(RULING_PREFIX) && rulings.has(ref)) out[ref] = v.vote;
   }
-  return counts;
+  return out;
+}
+
+/** sourceRef → the players' 👍/👎 with the GEN-126 verdict out of the players of the game now (GEN-081 keeps a ruling from this). */
+export function rulingVotes(db: DbOrTx, gameId: string): Map<string, { up: number; down: number; good: boolean; avoid: boolean }> {
+  const players = new Set(activeMembers(db, gameId).filter((m) => m.role === 'player').map((m) => m.id));
+  const rulings = new Set(rulingsOf(db, gameId).map((r) => r.sourceRef));
+  const counts = new Map<string, { up: number; down: number }>();
+  for (const v of db.select().from(responseVote).where(eq(responseVote.gameId, gameId)).all()) {
+    const ref = v.sourceRef.slice(RULING_PREFIX.length);
+    if (!v.sourceRef.startsWith(RULING_PREFIX) || !players.has(v.memberId) || !rulings.has(ref)) continue;
+    const c = counts.get(ref) ?? { up: 0, down: 0 };
+    c[v.vote] += 1;
+    counts.set(ref, c);
+  }
+  return new Map([...counts].map(([ref, c]) => [ref, { ...c, ...voteVerdict(c, players.size) }]));
 }
 
 /**
@@ -77,21 +97,12 @@ export function ratingViewFor(db: DbOrTx, me: MemberRow): GameRatingView {
     .filter((r) => members.has(r.memberId));
   const mine = ratings.find((r) => r.memberId === me.id);
   const average = ratings.length === 0 ? null : ratings.reduce((sum, r) => sum + r.score, 0) / ratings.length;
-  const thumbs = thumbsOf(db, me.gameId);
-  const liked = db
-    .select({ sourceRef: rulingVote.sourceRef })
-    .from(rulingVote)
-    .where(and(eq(rulingVote.gameId, me.gameId), eq(rulingVote.memberId, me.id)))
-    .all()
-    .map((v) => v.sourceRef)
-    .filter((ref) => thumbs.has(ref))
-    .sort();
   const enoughRaters = ratings.length > 0 && ratings.length * 2 >= members.size;
   const highEnough = average !== null && average > 8;
   return {
     mine: mine ? { score: mine.score, comment: mine.comment } : null,
-    liked,
-    thumbs: Object.fromEntries(thumbs),
+    myVotes: myRulingVotes(db, me),
+    canVote: me.role === 'player',
     average,
     raters: ratings.length,
     members: members.size,
@@ -108,14 +119,16 @@ export function saveRating(db: DbOrTx, me: MemberRow, rating: { score: number; c
     .run();
 }
 
-/** Turns the member's 👍 on a ruling on or off (both idempotent). False = `sourceRef` is not a ruling of their game. */
-export function setLike(db: DbOrTx, me: MemberRow, sourceRef: string, on: boolean, now: number): boolean {
+/** Sets (null = cancels) a player's 👍/👎 on a ruling, idempotent. False = `sourceRef` is not a ruling of their game. */
+export function setRulingVote(db: DbOrTx, me: MemberRow, sourceRef: string, vote: EntryVote | null, now: number): boolean {
   if (!rulingsOf(db, me.gameId).some((r) => r.sourceRef === sourceRef)) return false;
-  if (on) {
-    db.insert(rulingVote).values({ gameId: me.gameId, memberId: me.id, sourceRef, createdAt: now }).onConflictDoNothing().run();
+  const ref = rulingRef(sourceRef);
+  if (vote === null) {
+    db.delete(responseVote).where(and(eq(responseVote.gameId, me.gameId), eq(responseVote.memberId, me.id), eq(responseVote.sourceRef, ref))).run();
   } else {
-    db.delete(rulingVote)
-      .where(and(eq(rulingVote.gameId, me.gameId), eq(rulingVote.memberId, me.id), eq(rulingVote.sourceRef, sourceRef)))
+    db.insert(responseVote)
+      .values({ gameId: me.gameId, memberId: me.id, sourceRef: ref, vote, updatedAt: now })
+      .onConflictDoUpdate({ target: [responseVote.gameId, responseVote.memberId, responseVote.sourceRef], set: { vote, updatedAt: now } })
       .run();
   }
   return true;

@@ -267,6 +267,13 @@
       "when": 1795410503259,
       "tag": "0037_game_data",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1795411303577,
+      "tag": "0038_ruling_vote_copy",
+      "breakpoints": true
     }
   ]
 }
