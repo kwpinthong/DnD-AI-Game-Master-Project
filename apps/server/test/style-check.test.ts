@@ -3,10 +3,13 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
+import { voiceFormOf, type VoiceForm } from '../src/assets/voice.ts';
+import { loadWorld } from '../src/gm/context.ts';
+import { npcPrompt } from '../src/gm/npc-lines.ts';
 import { gateStyle, getStyleSettings, recordStyleFlags, setStyleSettings, styleIssues } from '../src/gm/style-check.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
 import { makeTempDir } from './helpers.ts';
-import { caller, CLOCK, CREATE_CODE, type Call } from './visibility-fixture.ts';
+import { caller, CLOCK, CREATE_CODE, startedTable, type Call } from './visibility-fixture.ts';
 
 // GEN-169: the server's style checker (no AI cost): forbidden phrases of the Voice set + an NPC's pronouns.
 
@@ -136,5 +139,44 @@ describe('style checker (GEN-169)', { timeout: 120_000 }, () => {
     expect(getStyleSettings(server.orm).rewrite).toBe(true);
     expect((await call('PUT', '/api/admin/style-settings', { token, body: { rewrite: 'yes' } })).status).toBe(400);
     expect((await call('PUT', '/api/admin/style-settings', { body: { rewrite: true } })).status).toBe(403);
+  });
+
+  // GEN-193: the form an NPC speaks in comes from the player's evolution (npc_bond), not "any of its forms".
+  const ssGood = voiceFormOf({ evolvedGrade: 'SS', evolvedAlignment: 'Good' });
+  const reasonsIn = (text: string, npcId: string, form: VoiceForm | null) => styleIssues(voice(), text, 'dialogue', npcId, form).map((i) => i.reason);
+
+  it('GEN-193 C1: an NPC in its SS form using its normal-form pronoun is a pronoun mismatch', () => {
+    expect(ssGood).toBe('ss_good');
+    expect(reasonsIn('ผมจะช่วยท่านเอง', 'beggar', ssGood)).toContain('pronoun_mismatch');
+    expect(reasonsIn('เราจะช่วยท่านเอง', 'beggar', ssGood)).not.toContain('pronoun_mismatch');
+    // The rewrite hint names the form's pronoun.
+    expect(styleIssues(voice(), 'ผมจะช่วย', 'dialogue', 'beggar', ssGood).find((i) => i.reason === 'pronoun_mismatch')?.fix).toContain('เรา');
+    // An SS form the NPC has no profile for (the amnesiac evolved on a Good path) is its plain SS form.
+    const amnesiacSs = voiceFormOf({ evolvedGrade: 'SS', evolvedAlignment: 'Good' });
+    expect(reasonsIn('ข้ายังจำได้', 'amnesiac', amnesiacSs)).not.toContain('pronoun_mismatch');
+    expect(reasonsIn('ข้ายังจำได้', 'amnesiac', null)).toContain('pronoun_mismatch');
+    expect(voiceFormOf({ evolvedGrade: 'SS', evolvedAlignment: null })).toBe('ss');
+  });
+
+  it('GEN-193 C2: an NPC in its normal form is checked against its main profile only', () => {
+    for (const bond of [undefined, { evolvedGrade: null, evolvedAlignment: null }, { evolvedGrade: 'S' as const, evolvedAlignment: null }]) expect(voiceFormOf(bond)).toBeNull();
+    expect(reasonsIn('เราจะช่วยท่านเอง', 'beggar', null)).toContain('pronoun_mismatch');
+    expect(reasonsIn('ผมจะช่วยพี่เองครับ', 'beggar', null)).not.toContain('pronoun_mismatch');
+  });
+
+  it('GEN-193: the dialogue prompt carries the speech profile of the form each player sees', async () => {
+    const t = await startedTable(server, false);
+    const gameId = (server.db.prepare('select game_id as id from member where id = ?').get(t.a.memberId) as { id: string }).id;
+    const world = loadWorld(server.orm, gameId, server.assets);
+    const beggar = world.npcs.filter((n) => n.id === 'beggar');
+    const evolve = server.db.prepare("insert into npc_bond (member_id, npc_id, updated_at, evolved_grade, evolved_alignment) values (?, 'beggar', 0, 'SS', 'Good')");
+    evolve.run(t.a.memberId);
+    const view = (members: string[]) => npcPrompt(server.orm, server.assets, world, beggar, new Set(['beggar']), members)[0]!;
+    expect(view([t.a.memberId])).toMatchObject({ form: 'ss_good', voice: { self: ['เรา'], you: { default: 'ท่าน' }, note: voice().npcs.beggar!.note } });
+    expect(view([t.b.memberId])).toMatchObject({ form: null, voice: { self: ['ผม'] } });
+    // Players who see different forms in one scene: no form is assumed (the checker accepts any of them).
+    expect(view([t.a.memberId, t.b.memberId]).form).toBeUndefined();
+    // The checker's word list and the other forms stay out of the prompt.
+    expect(JSON.stringify(view([t.a.memberId]))).not.toMatch(/neverWords|forms/);
   });
 });
