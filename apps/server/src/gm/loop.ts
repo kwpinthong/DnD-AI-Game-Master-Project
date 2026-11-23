@@ -929,7 +929,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       at: { day: SCENARIO_DAYS, phase: 'NOCTHERION', turn: 2 },
       purpose: 'finale',
       repairPurpose: 'finale',
-      system: [FINALE_BLOCK],
+      // GEN-194: the game's tone in the cached start, as narration (GEN-177).
+      system: [FINALE_BLOCK, toneBlock(assets.voice, gameTone(db, gameId))],
       context,
       output: { name: GM_OUTPUT.finale, schema: GmFinale },
       maxOutputTokens: 4_000,

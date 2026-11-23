@@ -37,7 +37,7 @@ function callFor(context: StyleSceneContext, assets: GameAssets): Call<unknown> 
   const tone = toneBlock(assets.voice, assets.voice.tone);
   switch (context.kind) {
     case 'gm_scene':
-      return call({ system: [SCENE_BLOCK], output: { name: GM_OUTPUT.scene, schema: GmScene }, maxOutputTokens: 600, scope: 'narration', texts: (v) => [{ text: v.text, npcId: null }] });
+      return call({ system: [SCENE_BLOCK, tone], output: { name: GM_OUTPUT.scene, schema: GmScene }, maxOutputTokens: 600, scope: 'narration', texts: (v) => [{ text: v.text, npcId: null }] });
     case 'gm_narration':
       return call({
         system: [NARRATOR_BLOCK, tone],
@@ -61,7 +61,7 @@ function callFor(context: StyleSceneContext, assets: GameAssets): Call<unknown> 
       return call({ system: [SUMMARY_BLOCK], output: { name: GM_OUTPUT.daySummary, schema: GmDaySummary }, maxOutputTokens: 1_500, scope: 'narration', texts: (v) => [{ text: v.recap, npcId: null }, { text: v.saga, npcId: null }] });
     case 'gm_finale':
       return call({
-        system: [FINALE_BLOCK],
+        system: [FINALE_BLOCK, tone],
         output: { name: GM_OUTPUT.finale, schema: GmFinale },
         maxOutputTokens: 4_000,
         scope: 'narration',
