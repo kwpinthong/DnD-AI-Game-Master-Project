@@ -47,12 +47,13 @@ function gatedResolver() {
   };
 }
 
-/** Plays the engine forward to `to` (everyone acts), as if the turns were played. */
+/** Plays the engine forward to `to` (everyone acts; in NOCTHERION everyone sleeps), as if the turns were played. */
 function advance(state: PhaseState, to: TurnPoint): PhaseState {
   let s = state;
   for (let guard = 0; guard < 200 && turnNumber(s) < turnNumber(to); guard++) {
     for (const id of s.order) {
-      const r = phaseStep(s, { type: 'submit', playerId: id, action: { text: 'เดินเล่น', visibility: 'public' } }, new SeededRng(1));
+      const action = { text: 'เดินเล่น', visibility: 'public' as const, rest: s.phase === 'NOCTHERION' };
+      const r = phaseStep(s, { type: 'submit', playerId: id, action }, new SeededRng(1));
       if (!r.ok) throw new Error(r.error.code);
       s = r.state;
     }
@@ -445,7 +446,7 @@ describe('ISK-015 join a started game', { timeout: 90_000 }, () => {
 
     const own = await enter(n);
     const first = turnNumber({ day: 1, phase: 'SOLARION', turn: 1 });
-    for (const e of own.entries()) expect(turnNumber(e), e.text).toBeGreaterThanOrEqual(first);
+    for (const e of own.entries()) expect(turnNumber({ day: e.day, phase: e.phase, turn: e.turn === 2 ? 2 : 1 }), e.text).toBeGreaterThanOrEqual(first);
     const log = await t.call('GET', '/api/game/log', { token: n.token });
     expect(log.status).toBe(200);
     expect(JSON.stringify(log.body)).not.toContain('เดินดูรอบเมือง');

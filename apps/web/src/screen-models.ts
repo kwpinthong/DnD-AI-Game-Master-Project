@@ -122,6 +122,7 @@ export function lockDetail(room: Pick<RoomState, 'day' | 'phase' | 'turn'>, code
   const detail: Record<RoomViewLockCode, string | null> = {
     exhausted: `${back} ${playText.lockDetail.exhausted}`,
     traveling: back,
+    arriving: back,
     unconscious: playText.lockDetail.unconscious,
     recovering: playText.lockDetail.recovering,
     resolving: playText.lockDetail.resolving,

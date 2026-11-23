@@ -3,13 +3,13 @@ import { karmaTitle, socialTitle, STARTING_STATS, type KarmaTier } from '@isekai
 import { eq } from 'drizzle-orm';
 import type { Clock } from '../auth/join.ts';
 import type { Db } from '../db/client.ts';
-import { character, game } from '../db/schema.ts';
+import { character } from '../db/schema.ts';
 import { curseLabelsOf } from '../statuses/curses.ts';
+import { setupLocked } from './late-join.ts';
 import { clearLoot, keptTraits } from './loot.ts';
 import type { MemberRow } from './service.ts';
 
 type CharacterRow = typeof character.$inferSelect;
-type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 /**
  * The title others and the player see (GEN-065): the start scenario's Initial_Title while Reputation is still in
@@ -21,7 +21,7 @@ export function titleOf(row: Pick<CharacterRow, 'reputation' | 'initialTitle'>):
 }
 
 /** What the player sees of their own character: no Karma or Reputation number; their own Karma word (GEN-067). */
-function toView(row: CharacterRow, gameStarted: boolean, karmaTiers: readonly KarmaTier[], statuses: string[] = [], traits: Pick<CharacterView, 'strength' | 'weakness'> = { strength: null, weakness: null }): CharacterView {
+function toView(row: CharacterRow, locked: boolean, karmaTiers: readonly KarmaTier[], statuses: string[] = [], traits: Pick<CharacterView, 'strength' | 'weakness'> = { strength: null, weakness: null }): CharacterView {
   return {
     ...traits,
     name: row.name,
@@ -33,7 +33,7 @@ function toView(row: CharacterRow, gameStarted: boolean, karmaTiers: readonly Ka
     socialTitle: titleOf(row),
     conduct: karmaTitle(row.karma, karmaTiers),
     statuses,
-    editable: !gameStarted,
+    editable: !locked,
   };
 }
 
@@ -44,15 +44,10 @@ export type CharacterOutcome =
   | { kind: 'character_not_found' }
   | { kind: 'game_started' };
 
-function gameStarted(db: Db | Tx, gameId: string): boolean {
-  const row = db.select({ startedAt: game.startedAt }).from(game).where(eq(game.id, gameId)).get();
-  return (row?.startedAt ?? null) !== null;
-}
-
 export function getCharacter(db: Db, me: MemberRow, karmaTiers: readonly KarmaTier[]): CharacterView | null {
   const row = db.select().from(character).where(eq(character.memberId, me.id)).get();
   // GEN-095: timed statuses as words only.
-  return row ? toView(row, gameStarted(db, me.gameId), karmaTiers, curseLabelsOf(db, me.gameId, me.id), keptTraits(db, me.id, row.name)) : null;
+  return row ? toView(row, setupLocked(db, me), karmaTiers, curseLabelsOf(db, me.gameId, me.id), keptTraits(db, me.id, row.name)) : null;
 }
 
 /**
@@ -62,7 +57,7 @@ export function getCharacter(db: Db, me: MemberRow, karmaTiers: readonly KarmaTi
 export function createCharacter(db: Db, me: MemberRow, input: CharacterRequest, now: Clock, karmaTiers: readonly KarmaTier[]): CharacterOutcome {
   if (me.role === 'gm') return { kind: 'gm_has_no_character' };
   return db.transaction((tx) => {
-    if (gameStarted(tx, me.gameId)) return { kind: 'game_started' };
+    if (setupLocked(tx, me)) return { kind: 'game_started' };
     // better-sqlite3 transactions run one at a time, so this check cannot race another create.
     const existing = tx.select({ memberId: character.memberId }).from(character).where(eq(character.memberId, me.id)).get();
     if (existing) return { kind: 'character_exists' };
@@ -92,7 +87,7 @@ export function updateCharacter(db: Db, me: MemberRow, input: CharacterRequest, 
   return db.transaction((tx) => {
     const existing = tx.select().from(character).where(eq(character.memberId, me.id)).get();
     if (!existing) return { kind: 'character_not_found' };
-    if (gameStarted(tx, me.gameId)) return { kind: 'game_started' };
+    if (setupLocked(tx, me)) return { kind: 'game_started' };
     const identity = { name: input.name, appearance: input.appearance, personality: input.personality, updatedAt: now() };
     tx.update(character).set(identity).where(eq(character.memberId, me.id)).run();
     if (input.personality !== existing.personality) clearLoot(tx, me.id, identity.updatedAt);

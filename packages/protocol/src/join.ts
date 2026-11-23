@@ -115,6 +115,12 @@ export const ApiError = z.discriminatedUnion('code', [
   z.object({ code: z.literal('game_full'), message: z.string() }),
   /** 409: mode and members are locked once the game has started. */
   z.object({ code: z.literal('game_started'), message: z.string() }),
+  /** 409 (ISK-015): a started Single game takes nobody new. */
+  z.object({ code: z.literal('single_mode'), message: z.string() }),
+  /** 409 (ISK-015): a started game takes newcomers up to day 9 only (checked at join time). */
+  z.object({ code: z.literal('join_closed_day'), message: z.string() }),
+  /** 409 (ISK-015): the game has ended (finale / game over); POST /api/join and POST /api/game/spawn. */
+  z.object({ code: z.literal('game_ended'), message: z.string() }),
   /** 403: wrong create code (POST /api/games). */
   z.object({ code: z.literal('wrong_create_code'), message: z.string() }),
   /** 429: too many wrong create codes on this server; try again after `retryAt`. */

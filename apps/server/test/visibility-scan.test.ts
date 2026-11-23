@@ -34,6 +34,8 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/game/log': { method: 'GET', path: '/api/game/log' },
     // GEN-065: the player's own start scenario and crossing narration.
     'GET /api/game/origin': { method: 'GET', path: '/api/game/origin' },
+    // ISK-015: spawning after a late join (a seated player gets 409, scanned too).
+    'POST /api/game/spawn': { method: 'POST', path: '/api/game/spawn' },
     // GEN-056: the play room's WebSocket (a plain GET is 404, no body). Its events are scanned in room.test.ts.
     'GET /api/game/room': { method: 'GET', path: '/api/game/room' },
     'GET /api/game/scenario': { method: 'GET', path: '/api/game/scenario' },

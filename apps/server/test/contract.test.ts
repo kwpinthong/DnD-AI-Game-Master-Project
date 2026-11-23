@@ -119,6 +119,13 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'GET /api/game/origin', { token: p1.token });
     await hit(call, 'GET /api/game/origin', { token: gm });
 
+    // ISK-015: a newcomer joins a started game (its own table, so the turns below never wait for them) and spawns.
+    const lateTable = await startedTable(server!, false);
+    const late = JoinResponse.parse((await hit(call, 'POST /api/join', { body: { inviteCode: lateTable.inviteCode, name: 'มาสาย', pin: '1111' } })).body);
+    await hit(call, 'POST /api/game/character', { token: late.token, body: { ...DARIN, name: 'อรุณ' } });
+    seedChosenLoot(server!.db, late.member.id);
+    await hit(call, 'POST /api/game/spawn', { token: late.token });
+
     // --- Playing: a started table with a Human GM (A ลิน, B ดาริน, C เมฆา) ---
     const t = await startedTable(server!, true);
     const tgm = t.gm!.token;

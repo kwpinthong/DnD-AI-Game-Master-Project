@@ -32,8 +32,12 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, now: Clock) {
     switch (outcome.kind) {
       case 'game_not_found':
         return sendError(reply, 404, { code: 'game_not_found', message: 'ไม่พบเกมจากโค้ดนี้ ตรวจตัวอักษรอีกครั้ง' });
-      case 'game_started':
-        return sendError(reply, 409, { code: 'game_started', message: GAME_STARTED_JOIN });
+      case 'single_mode':
+        return sendError(reply, 409, { code: 'single_mode', message: 'เกมนี้เล่นคนเดียวและเริ่มไปแล้ว รับคนเพิ่มไม่ได้' });
+      case 'join_closed_day':
+        return sendError(reply, 409, { code: 'join_closed_day', message: 'เกมนี้เลยวันที่ 9 ไปแล้ว รับคนเพิ่มไม่ได้' });
+      case 'game_ended':
+        return sendError(reply, 409, { code: 'game_ended', message: 'เกมนี้จบไปแล้ว รับคนเพิ่มไม่ได้' });
       case 'game_full':
         return sendError(reply, 409, {
           code: 'game_full',
@@ -85,8 +89,6 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, now: Clock) {
     return reply.code(204).send();
   });
 }
-
-export const GAME_STARTED_JOIN = 'เกมนี้เริ่มไปแล้ว รับคนเพิ่มไม่ได้';
 
 export function bearerToken(header: string | undefined): string | undefined {
   return /^Bearer (\S+)$/.exec(header ?? '')?.[1];

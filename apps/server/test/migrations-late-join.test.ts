@@ -29,7 +29,8 @@ describe('migration late_join (ISK-015 C16)', () => {
       .split('\n')
       .filter((line) => !line.trim().startsWith('--'))
       .join('\n');
-    expect(code).not.toMatch(/\bdrop\b|\bdelete\b|\balter\b/i);
+    // `ON DELETE cascade` of a new table's foreign key is fine; a DELETE statement is not.
+    expect(code).not.toMatch(/\bdrop\b|\bdelete\s+from\b|\balter\b/i);
   });
 
   it('a started game from before keeps its members and state; nobody is a late joiner', () => {

@@ -239,6 +239,7 @@ export const CONTRACT: readonly ContractItem[] = [
   http('POST', '/api/game/character/loot', null, 'LootResponse', ready('GEN-048 + GEN-073', 'player', ['character'], 'วิเคราะห์ / สุ่มใหม่ (AI)')),
   http('POST', '/api/game/character/loot/choose', 'LootChooseRequest', 'LootResponse', ready('GEN-048 + GEN-073', 'player', ['character'])),
   http('GET', '/api/game/origin', null, 'OriginResponse', ready('GEN-065', 'player', ['origin-card', 'play-self', 'ending'])),
+  http('POST', '/api/game/spawn', null, 'OriginResponse', ready('ISK-015', 'player', ['character', 'origin-card'], 'คนที่ join หลังเกมเริ่ม: มีตัวละคร + เลือก Loot แล้ว → สุ่มจุดเกิด (Karma 0) แล้วตอบบรรยายข้ามโลก (มีสรุปเรื่องสาธารณะ ≤ 400 ถ้ามี saga) / เล่นได้จากเทิร์นที่เปิดถัดไป / ไม่ใช่คนมาใหม่หรือยังไม่เลือก Loot = 409 `not_allowed`, เกมจบ = 409 `game_ended`')),
 
   // --- play ---
   http('GET', '/api/game/timeline', null, 'GameTimelineResponse', ready('GEN-053', 'player', ['play-feed', 'gm-console'])),

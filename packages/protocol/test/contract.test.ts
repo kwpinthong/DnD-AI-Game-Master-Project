@@ -172,7 +172,7 @@ describe('C6: docs/contract.md matches the code', () => {
   });
 
   it('every item has an owner task: ready = the task that built it, pending = the task that will', () => {
-    for (const item of [...CONTRACT, ...PENDING_FIELDS]) expect(item.owner, JSON.stringify(item)).toMatch(/^(GEN-\d{3}[a-z]?|new)( \+ GEN-\d{3})*$/);
+    for (const item of [...CONTRACT, ...PENDING_FIELDS]) expect(item.owner, JSON.stringify(item)).toMatch(/^((?:GEN|ISK)-\d{3}[a-z]?|new)( \+ (?:GEN|ISK)-\d{3})*$/);
   });
 
   it('the socket events are exactly the messages of the room unions (ready = on the wire today)', () => {

@@ -22,6 +22,7 @@ import { playerKeyOf, saveJoinStyle } from '../learning/style.ts';
 import { readScenario, resetScenario, saveScenario, type ScenarioEditOutcome } from '../scenario/editor.ts';
 import { createCharacter, getCharacter, updateCharacter, type CharacterOutcome } from './character.ts';
 import { createCodeChecker } from './create-code.ts';
+import { spawnLateJoiner } from './late-join.ts';
 import { chooseLoot, getLoot, LOOT_AI_FAILED, rollLoot, type LootOutcome } from './loot.ts';
 import { getOrigin, narrateOrigins } from './origin.ts';
 import {
@@ -251,6 +252,29 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
     if (!me) return reply;
     const body: OriginResponse = await getOrigin(db, options.ai, options.assets, me, now);
     return reply.send(body);
+  });
+
+  // ISK-015: a late joiner with a character and a loot choice spawns; the answer is their crossing narration.
+  app.post('/api/game/spawn', async (request, reply) => {
+    const me = caller(request, reply);
+    if (!me) return reply;
+    const outcome = spawnLateJoiner(db, me, options.assets, options.rng, now);
+    switch (outcome.kind) {
+      case 'ok': {
+        const body: OriginResponse = await getOrigin(db, options.ai, options.assets, me, now);
+        return reply.send(body);
+      }
+      case 'gm_has_no_character':
+        return sendError(reply, 403, { code: 'forbidden', message: 'GM ไม่มีตัวละคร' });
+      case 'character_not_found':
+        return sendError(reply, 404, { code: 'character_not_found', message: 'ยังไม่ได้สร้างตัวละคร' });
+      case 'not_preparing':
+        return sendError(reply, 409, { code: 'not_allowed', message: 'คุณอยู่ในเกมแล้ว ไม่ต้องเกิดใหม่' });
+      case 'no_loot':
+        return sendError(reply, 409, { code: 'not_allowed', message: 'ยังไม่ได้เลือกของติดตัว เลือกก่อนแล้วค่อยเข้าเมือง' });
+      case 'game_ended':
+        return sendError(reply, 409, { code: 'game_ended', message: 'เกมนี้จบไปแล้ว เข้าเล่นไม่ได้' });
+    }
   });
 
   // --- Character (GEN-047): the caller's own character in their game. ---

@@ -21,8 +21,9 @@ import type { PromptBlock } from '../ai/provider.ts';
 import type { GameAssets } from '../assets/load.ts';
 import type { AbilityRecord, ItemRecord } from '../assets/model.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
-import { character, characterLoot, game } from '../db/schema.ts';
+import { character, characterLoot } from '../db/schema.ts';
 import { forAi, THAI_OUTPUT } from '../gm/language.ts';
+import { setupLocked } from './late-join.ts';
 import type { MemberRow } from './service.ts';
 import { resolveOwnTokens } from './tokens.ts';
 
@@ -214,11 +215,6 @@ export type LootOutcome =
 
 type LootRow = typeof characterLoot.$inferSelect;
 
-function gameStarted(db: DbOrTx, gameId: string): boolean {
-  const row = db.select({ startedAt: game.startedAt }).from(game).where(eq(game.id, gameId)).get();
-  return (row?.startedAt ?? null) !== null;
-}
-
 /** The AI writes {{p:id}} in a trait (RULES_PROMPT); the token stays stored and is the character name only here (GEN-109). */
 const publicTrait = (t: StoredTrait, memberId: string, name: string): TraitView => ({
   label: resolveOwnTokens(t.label, memberId, name),
@@ -283,12 +279,12 @@ const isOutcome = (value: unknown): value is LootOutcome => typeof value === 'ob
 export function getLoot(db: Db, me: MemberRow): LootOutcome {
   const pre = precheck(db, me);
   if (isOutcome(pre)) return pre;
-  return { kind: 'ok', loot: toView(lootRow(db, me.id), gameStarted(db, me.gameId), me.id, pre.name) };
+  return { kind: 'ok', loot: toView(lootRow(db, me.id), setupLocked(db, me), me.id, pre.name) };
 }
 
 /** Why a new set cannot be made now, if any. */
 function closedReason(db: DbOrTx, me: MemberRow): LootOutcome | null {
-  if (gameStarted(db, me.gameId)) return { kind: 'game_started' };
+  if (setupLocked(db, me)) return { kind: 'game_started' };
   const view = toView(lootRow(db, me.id), false, me.id, '');
   return view.canReroll ? null : { kind: 'loot_closed' };
 }
@@ -373,7 +369,7 @@ export function chooseLoot(db: Db, me: MemberRow, input: LootChooseRequest, now:
   const pre = precheck(db, me);
   if (isOutcome(pre)) return pre;
   return db.transaction((tx) => {
-    if (gameStarted(tx, me.gameId)) return { kind: 'game_started' };
+    if (setupLocked(tx, me)) return { kind: 'game_started' };
     const offer = currentOffer(lootRow(tx, me.id));
     if (!offer) return { kind: 'loot_no_offer' };
     const skill = offer.skills.find((o) => o.id === input.skillIds[0]);
