@@ -44,6 +44,7 @@ function detail(d: Partial<AiUsageGameResponse> = {}): AiUsageGameResponse {
     ],
     byModel: [{ model: 'claude-sonnet-5-5', priced: true, totals: C1_TOTALS }],
     failures: [],
+    refusals: [],
     ...d,
   };
 }
@@ -188,6 +189,29 @@ describe('AI usage dashboard (GEN-061)', () => {
     expect(within(failures).getByRole('row', { name: /หมดเวลา \(timeout\) 2/ })).toBeTruthy();
     expect(within(failures).getByRole('row', { name: /AI ปฏิเสธ \(refusal\) 1/ })).toBeTruthy();
     expect(within(failures).getByRole('row', { name: /JSON ผิด \(invalid_json\) 1/ })).toBeTruthy();
+  });
+
+  it('GEN-199 C1 / C3: the admin sees each refused answer: the path, what the AI gave, the expected value and the scrubbed answer', async () => {
+    const proposal = '{"actions":[{"actionId":"act-1","staminaCost":99,"reason":"{{p:r1}} ค้นห้อง"}]}';
+    fakeServer({
+      overview: overview(),
+      detail: detail({
+        refusals: [
+          {
+            at: '2026-11-22T11:58:00.000Z',
+            purpose: 'gm_adjudicate',
+            stage: 'first',
+            errors: [{ code: 'stamina_cost_mismatch', path: 'actions[0].staminaCost', message: 'general costs 3, got 99', got: '99' }],
+            proposal,
+          },
+        ],
+      }),
+    });
+    await login();
+    const game = await openGame();
+    const table = within(game).getByRole('table', { name: 'คำตอบ AI ที่ถูกตีกลับ' });
+    expect(within(table).getByRole('row', { name: /ตัดสินผล \(resolve phase\).*stamina_cost_mismatch.*actions\[0\]\.staminaCost.*99.*general costs 3, got 99/ })).toBeTruthy();
+    expect(within(game).getByText(proposal)).toBeTruthy();
   });
 
   it('C5: a 403 (expired or not the server owner) goes back to the admin code form', async () => {

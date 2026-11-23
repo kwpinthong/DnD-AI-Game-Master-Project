@@ -586,6 +586,15 @@ export const CONTRACT_FIXTURES: Fixtures = {
       byPeriod: [{ day: 3, phase: 'SOLARION', totals }, { day: null, phase: null, totals }],
       byModel: [{ model: 'claude-sonnet-5-5', priced: true, totals }],
       failures: [],
+      refusals: [
+        {
+          at: '2026-11-22T11:58:00.000Z',
+          purpose: 'gm_adjudicate',
+          stage: 'first',
+          errors: [{ code: 'stamina_cost_mismatch', path: 'actions[0].staminaCost', message: 'general costs 3, got 9', got: '9' }],
+          proposal: '{"actions":[{"actionId":"act-1","actor":"r1","staminaCost":9,"reason":"{{p:r1}} ค้นห้องเก็บของ…"}]}',
+        },
+      ],
     },
   ],
   GameDataListResponse: [

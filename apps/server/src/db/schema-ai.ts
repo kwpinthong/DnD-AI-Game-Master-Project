@@ -39,3 +39,25 @@ export const aiUsage = sqliteTable(
   },
   (t) => [index('ai_usage_game_created').on(t.gameId, t.createdAt)],
 );
+
+/**
+ * GEN-199: an AI GM answer the server refused (one row per refusal, the repair stage too). Scrubbed before it is
+ * stored: tokens for real names and lobby names, every text cut short, the whole answer capped; only the newest
+ * rows are kept (gm/refusal-log.ts). No foreign key, like ai_usage.
+ */
+export const gmRefusal = sqliteTable(
+  'gm_refusal',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    gameId: text('game_id').notNull(),
+    purpose: text('purpose').notNull(),
+    /** 'first' | 'repair' */
+    stage: text('stage').notNull(),
+    /** JSON: [{ code, path, message, got }] */
+    errors: text('errors').notNull(),
+    /** The scrubbed answer as JSON, cut to REFUSAL_PROPOSAL_CHARS. */
+    proposal: text('proposal').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('gm_refusal_game').on(t.gameId, t.id)],
+);
