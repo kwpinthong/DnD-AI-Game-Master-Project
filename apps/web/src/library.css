@@ -294,3 +294,34 @@
     min-height: 44px;
   }
 }
+
+/* GEN-151: the NPC example library under the Learning library (Q-322). */
+.npc-lib {
+  margin-top: var(--space-4);
+}
+
+.npc-lib__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.npc-lib__add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.npc-lib__add label {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.npc-lib__add select,
+.npc-lib__add .btn {
+  min-height: 44px;
+  max-width: 100%;
+}

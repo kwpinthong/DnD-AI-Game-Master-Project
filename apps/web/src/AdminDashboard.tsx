@@ -3,8 +3,9 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { fetchGameUsage, fetchUsageOverview, postAdminLogout, postAdminSession } from './admin-api.ts';
 import { GameDataEditor } from './GameDataEditor.tsx';
 import { LearningLibrary } from './LearningLibrary.tsx';
+import { NpcLibrary } from './NpcLibrary.tsx';
 import { VoteReview } from './VoteReview.tsx';
-import { libraryText } from './ui/strings.ts';
+import { libraryText, npcLibraryText } from './ui/strings.ts';
 
 /**
  * The server owner's AI usage dashboard at <web>/admin (GEN-061, Q-058). Numbers and purposes only:
@@ -125,6 +126,9 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
             <section aria-label={libraryText.title}>
               <h2>{libraryText.title}</h2>
               <LearningLibrary apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
+              {/* GEN-151 / Q-322: the NPC example library shares the page. */}
+              <h2>{npcLibraryText.title}</h2>
+              <NpcLibrary apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
             </section>
           ) : page === 'votes' ? (
             <section aria-label={libraryText.adminNav.votes}>

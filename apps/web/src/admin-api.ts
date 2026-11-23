@@ -13,6 +13,8 @@ import {
   GameDataListResponse,
   GameDataSetResponse,
   LearningLibraryResponse,
+  NpcLibraryResponse,
+  type NpcExampleAddRequest,
 } from '@isekai/protocol';
 import { apiUrl, fetchWithTimeout } from './session.ts';
 
@@ -118,6 +120,19 @@ export function postCorrection(baseUrl: string, token: string, body: AdminCorrec
 
 export function fetchCorrectionsExport(baseUrl: string, token: string) {
   return call(baseUrl, '/api/admin/corrections-export', { headers: auth(token) }, AdminCorrectionsExportResponse);
+}
+
+/** GEN-151: the NPC example library (server owner only); every answer is the whole library. */
+export function fetchNpcLibrary(baseUrl: string, token: string) {
+  return call(baseUrl, '/api/admin/npc-library', { headers: auth(token) }, NpcLibraryResponse);
+}
+
+export function addNpcExample(baseUrl: string, token: string, body: NpcExampleAddRequest) {
+  return call(baseUrl, '/api/admin/npc-library', { method: 'POST', headers: { ...auth(token), 'content-type': 'application/json' }, body: JSON.stringify(body) }, NpcLibraryResponse);
+}
+
+export function deleteNpcExample(baseUrl: string, token: string, id: number) {
+  return call(baseUrl, `/api/admin/npc-library/${id}`, { method: 'DELETE', headers: auth(token) }, NpcLibraryResponse);
 }
 
 export async function postAdminLogout(baseUrl: string, token: string): Promise<void> {

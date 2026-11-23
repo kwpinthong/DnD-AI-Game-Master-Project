@@ -93,3 +93,26 @@ export const responseCorrection = sqliteTable(
   },
   (t) => [index('response_correction_entry').on(t.gameId, t.entryId)],
 );
+
+/**
+ * GEN-151: the NPC example library. A 👍 message or a "แก้เป็น" pair's edited text given to one NPC, with a scene
+ * kind. `text` holds tokens only (`{{n:id}}`, `{{p:player}}`). No foreign keys: an example outlives its game.
+ * `correction_id`: the pair it came from (source `correction`).
+ */
+export const npcExample = sqliteTable(
+  'npc_example',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    npcId: text('npc_id').notNull(),
+    /** The NPC's real name when added, for the owner's page only (never a prompt). */
+    npcName: text('npc_name').notNull(),
+    scene: text('scene', { enum: ['feed', 'narration', 'npc-dialogue', 'npc-reaction'] }).notNull(),
+    text: text('text').notNull(),
+    source: text('source', { enum: ['vote', 'correction'] }).notNull(),
+    gameId: text('game_id').notNull(),
+    entryId: integer('entry_id').notNull(),
+    correctionId: integer('correction_id'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('npc_example_npc').on(t.npcId)],
+);

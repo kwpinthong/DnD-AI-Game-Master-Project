@@ -42,7 +42,6 @@ import { buildFinaleContext, checkFinale, finaleCheckInput, finaleEntries, templ
 import { checkNarration, checkTurnProposal, containsName, maskNames, type GmError } from './check.ts';
 import {
   CONTEXT_BUDGET,
-  DIALOGUE_BLOCK,
   FINALE_BLOCK,
   JOURNAL_BLOCK,
   JOURNAL_BUDGET,
@@ -67,6 +66,7 @@ import {
 } from './context.ts';
 import { createStageTimer, type StageTimer } from './timing.ts';
 import { introduceNpcs } from './npc-intro.ts';
+import { dialoguePrompt } from './npc-examples.ts';
 import { capTotal, cleanNpcLines, lingerAfter, lingersNow, npcAnswers, npcLineLimits, npcPlacesNow, npcPrompt, npcsPresentAt, saveLingers } from './npc-lines.ts';
 import { npcFarewellFor } from './server-lines.ts';
 import { periodScenes } from './scene.ts';
@@ -536,9 +536,11 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           if (!ctx.npcs.some((n) => n.here) || (reader !== null && !ctx.privateLines)) return;
           try {
             const { journal: _journal, kind: _kind, ...rest } = ctx;
-            const context: DialogueContext = { ...rest, kind: 'gm_dialogue', narration: out.segments.map((s) => s.text), limits };
+            // GEN-151: the rules + each NPC's persona and library first (cached), the turn after.
+            const { system, npcs } = dialoguePrompt(db, assets, world, rest.npcs);
+            const context: DialogueContext = { ...rest, npcs, kind: 'gm_dialogue', narration: out.segments.map((s) => s.text), limits };
             const messages = [{ role: 'user' as const, text: JSON.stringify(context) }];
-            if (requestTokens([DIALOGUE_BLOCK], messages) > CONTEXT_BUDGET.npc_dialogue) {
+            if (requestTokens(system, messages) > CONTEXT_BUDGET.npc_dialogue) {
               log(`[gm] game=${gameId} purpose=npc_dialogue audience=${key} skipped: limit_exceeded`);
               return;
             }
@@ -549,7 +551,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
               day: at.day,
               phase: at.phase,
               turn: at.turn,
-              system: [DIALOGUE_BLOCK],
+              system,
               messages,
               output: { name: GM_OUTPUT.dialogue, schema: GmDialogue },
               maxOutputTokens: 1_000,

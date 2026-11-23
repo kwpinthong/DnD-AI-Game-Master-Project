@@ -132,6 +132,33 @@ export const libraryText = {
   adminNav: { usage: 'การใช้ AI', library: 'Learning library', data: 'ข้อมูลเกม', votes: 'ข้อความที่ถูก 👎' },
 } as const;
 
+// GEN-151: the NPC example library (on the Learning library page, Q-322).
+export const npcLibraryText = {
+  title: 'คลังตัวอย่าง NPC',
+  intro: 'บทที่ได้ 👍 หรือฉบับแก้ของคุณ AI ใช้ตัวอย่างล่าสุด 3 บทต่อ NPC เป็นแนวน้ำเสียงในบทพูด',
+  npcRegion: (name: string, n: number) => `${name} (${n} ตัวอย่าง)`,
+  none: 'ยังไม่มีตัวอย่างในคลัง',
+  player: 'ผู้เล่น',
+  source: { vote: 'จาก 👍', correction: 'จากฉบับแก้' },
+  remove: 'ลบ',
+  removeLabel: (text: string) => `ลบตัวอย่าง: ${text}`,
+  confirm: 'ลบตัวอย่างนี้?',
+  confirmText: 'บทพูดถัดไปของ NPC นี้จะไม่ใช้ตัวอย่างนี้อีก',
+  cancel: 'ยกเลิก',
+  upvotedTitle: 'เพิ่มจากข้อความที่ได้ 👍',
+  noUpvoted: 'ยังไม่มีข้อความที่ได้ 👍',
+  up: (n: number) => `👍 ${n} คน`,
+  candidatesTitle: 'เพิ่มจากฉบับแก้ที่ส่งเข้าคลัง (ยังไม่มี NPC)',
+  npc: 'NPC',
+  pickNpc: 'เลือก NPC',
+  scene: 'ชนิดฉาก',
+  add: 'เพิ่มเข้าคลัง',
+  addLabel: (text: string) => `เพิ่มเข้าคลัง: ${text}`,
+  added: 'อยู่ในคลังแล้ว',
+  failed: 'ทำไม่สำเร็จ ลองอีกครั้ง',
+  loadFailed: 'โหลดคลังตัวอย่างไม่ได้',
+} as const;
+
 // GEN-168: the server owner's 👎 review + "แก้เป็น".
 export const reviewText = {
   reason: 'เหตุผล',
@@ -144,7 +171,7 @@ export const reviewText = {
   edit: (text: string) => `แก้เป็น: ${text}`,
   editLabel: 'แก้เป็น',
   edited: 'ฉบับที่ควรเป็น',
-  toLibrary: 'ส่งเข้าคลังตัวอย่าง NPC (เก็บเป็นผู้สมัครไว้ก่อน คลังเป็นงานของ GEN-151)',
+  toLibrary: 'ส่งเข้าคลังตัวอย่าง NPC (เข้าคลังทันทีด้วยฉบับแก้ ข้อความที่ไม่ใช่ของ NPC รอเลือก NPC ในหน้า Learning library)',
   save: 'บันทึกฉบับแก้',
   cancel: 'ยกเลิก',
   saved: 'บันทึกแล้ว ข้อความในเกมไม่เปลี่ยน',

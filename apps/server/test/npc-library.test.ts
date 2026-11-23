@@ -65,7 +65,8 @@ describe('GEN-151 NPC example library', { timeout: 60_000 }, () => {
     await vote(t, t.a, line, 'up');
     await vote(t, t.b, feed, 'up');
     for (const [method, path] of [['GET', '/api/admin/npc-library'], ['POST', '/api/admin/npc-library'], ['DELETE', '/api/admin/npc-library/1']] as const) {
-      expect((await t.call(method, path, { token: t.a.token, body: { from: 'vote', gameId, seq: line, npcId: npc.id, scene: 'npc-dialogue' } })).status).toBe(403);
+      const body = method === 'POST' ? { body: { from: 'vote', gameId, seq: line, npcId: npc.id, scene: 'npc-dialogue' } } : {};
+      expect((await t.call(method, path, { token: t.a.token, ...body })).status).toBe(403);
     }
 
     const before = await library(t, admin);

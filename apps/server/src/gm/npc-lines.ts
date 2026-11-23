@@ -204,13 +204,19 @@ const PERSONA_TOKENS = 150;
  * every real name of the NPC swapped for its token) and the bond with each player of the cast: affinity and whether
  * they have met (a row exists). `members`: the players the narration is about. `lingering`: here past the schedule (GEN-144).
  */
+/** Every real name of one NPC (scenario, sheet, evolved), longest first. */
+export function npcRealNames(assets: GameAssets, n: GmWorld['npcs'][number]): string[] {
+  const sheet = sheetNpcFor(assets, n);
+  const names = [...n.names, sheet?.realName, sheet?.evolvedName('Good'), sheet?.evolvedName('Evil'), sheet?.evolvedName('Neutral')].filter((s): s is string => !!s && s.trim().length > 0);
+  return [...new Set(names)].sort((a, b) => b.length - a.length);
+}
+
 export function npcPrompt(db: DbOrTx, assets: GameAssets, world: GmWorld, npcs: GmWorld['npcs'], here: ReadonlySet<string>, members: readonly string[], lingering: ReadonlySet<string> = new Set()): NarrationContext['npcs'] {
   const bonds = new Map(members.map((m) => [m, new Map(npcBondsOf(db, m).map((b) => [b.npcId, b.affinity]))] as const));
   return npcs.map((n) => {
     const sheet = sheetNpcFor(assets, n);
-    const names = [...n.names, sheet?.realName, sheet?.evolvedName('Good'), sheet?.evolvedName('Evil'), sheet?.evolvedName('Neutral')].filter((s): s is string => !!s && s.trim().length > 0);
     const lore = here.has(n.id) ? (sheet?.record.lore ?? '') : '';
-    const persona = lore.length === 0 ? null : withinTokens([...new Set(names)].sort((a, b) => b.length - a.length).reduce((t, name) => t.split(name).join(npcToken(n.id)), world.tokenise(lore)), PERSONA_TOKENS);
+    const persona = lore.length === 0 ? null : withinTokens(npcRealNames(assets, n).reduce((t, name) => t.split(name).join(npcToken(n.id)), world.tokenise(lore)), PERSONA_TOKENS);
     return {
       id: n.id,
       alias: n.alias,

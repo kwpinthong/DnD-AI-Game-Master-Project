@@ -133,6 +133,8 @@ export const CONTRACT_SCHEMAS = {
   AdminCorrectionRequest: p.AdminCorrectionRequest,
   AdminCorrectionResponse: p.AdminCorrectionResponse,
   AdminCorrectionsExportResponse: p.AdminCorrectionsExportResponse,
+  NpcLibraryResponse: p.NpcLibraryResponse,
+  NpcExampleAddRequest: p.NpcExampleAddRequest,
 } as const;
 export type ContractSchemaName = keyof typeof CONTRACT_SCHEMAS;
 
@@ -291,6 +293,11 @@ export const CONTRACT: readonly ContractItem[] = [
   http('GET', '/api/admin/downvotes', null, 'AdminDownvotesResponse', ready('GEN-168', 'admin', ['vote-review'], 'ข้อความ AI ที่มี 👎 ทุกเกม พร้อม NPC / เหตุผล (นับ) / คู่ "แก้เป็น" ที่บันทึกไว้')),
   http('POST', '/api/admin/corrections', 'AdminCorrectionRequest', 'AdminCorrectionResponse', ready('GEN-168', 'admin', ['vote-review'], 'เก็บคู่ข้อความเดิม → ฉบับแก้ (+ NPC, ฉาก, เหตุผล) แบบเพิ่มอย่างเดียว + log 1 บรรทัด; ข้อความในเกมไม่เปลี่ยน; `toLibrary` = แค่ติดธงผู้สมัครคลังตัวอย่าง NPC (คลังเป็นของ GEN-151); ไม่มีข้อความ = 404 `response_not_found`')),
   http('GET', '/api/admin/corrections-export', null, 'AdminCorrectionsExportResponse', ready('GEN-168', 'admin', ['vote-review'], 'JSONL ทุกคู่ ชื่อจริงของผู้เล่นแทนด้วย `{{PLAYER_n}}`')),
+
+  // --- GEN-151: NPC example library (server owner, on the Learning library page, Q-322) ---
+  http('GET', '/api/admin/npc-library', null, 'NpcLibraryResponse', ready('GEN-151', 'admin', ['learning-library'], 'ตัวอย่างต่อ NPC (token เท่านั้น) + ข้อความที่ได้ 👍 + คู่ "แก้เป็น" ที่ติดธงแต่ยังไม่มี NPC')),
+  http('POST', '/api/admin/npc-library', 'NpcExampleAddRequest', 'NpcLibraryResponse', ready('GEN-151', 'admin', ['learning-library'], 'เพิ่มตัวอย่างจากข้อความที่ได้ 👍 (+ NPC + ชนิดฉาก) หรือจากคู่ "แก้เป็น" (ใช้ฉบับแก้); ชื่อจริงแทนด้วย token ก่อนเก็บ; ซ้ำ = ไม่เพิ่ม; ไม่มีข้อความ / ไม่มี 👍 / NPC ไม่รู้จัก = 404 `response_not_found`; dialogue prompt ใส่ ≤ 3 ต่อ NPC')),
+  http('DELETE', '/api/admin/npc-library/:id', null, 'NpcLibraryResponse', ready('GEN-151', 'admin', ['learning-library'], 'ลบตัวอย่าง มีผลกับ prompt ถัดไป; ไม่มี = 404 `response_not_found`')),
 
   // --- player style (player code, Q-167) ---
   http('POST', '/api/style', 'PlayerStyleRequest', 'PlayerStyleResponse', pending('GEN-082', 'any', ['my-style'])),
