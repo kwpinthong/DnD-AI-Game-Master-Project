@@ -212,9 +212,13 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'PUT /api/game/rating', { token: t.a.token, body: { score: 0 } });
     await hit(call, 'PUT /api/game/rating', { token: t.a.token, body: { score: 9, comment: 'สนุกมาก' } });
     await hit(call, 'PUT /api/game/rating', { token: tgm, body: { score: 8 } });
-    await hit(call, 'PUT /api/game/rating/likes/:sourceRef', { token: t.a.token, path: `/api/game/rating/likes/${likedRef}` });
-    await hit(call, 'PUT /api/game/rating/likes/:sourceRef', { token: t.a.token, path: '/api/game/rating/likes/none' });
-    await hit(call, 'DELETE /api/game/rating/likes/:sourceRef', { token: t.a.token, path: `/api/game/rating/likes/${likedRef}` });
+    const rulingVote = (token: string, ref: string, vote: 'up' | 'down' | null) =>
+      hit(call, 'PUT /api/game/rating/votes/:sourceRef', { token, path: `/api/game/rating/votes/${ref}`, body: { vote } });
+    await rulingVote(t.a.token, likedRef!, 'down');
+    await rulingVote(t.a.token, likedRef!, 'up');
+    await rulingVote(t.a.token, 'none', 'up');
+    await rulingVote(tgm, likedRef!, 'up');
+    await rulingVote(t.a.token, likedRef!, null);
     await hit(call, 'GET /api/game/rating');
 
     // --- Server owner ---

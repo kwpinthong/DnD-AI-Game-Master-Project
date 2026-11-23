@@ -82,7 +82,7 @@ const playingLog: GameLogResponse = {
 function stubServer() {
   const calls: string[] = [];
   const ratingCalls: { method: string; path: string; body: unknown }[] = [];
-  const rating: GameRatingView = { mine: null, liked: [], thumbs: {}, average: null, raters: 0, members: 2, eligible: false, blocker: 'too_few_raters' };
+  const rating: GameRatingView = { mine: null, myVotes: {}, canVote: true, average: null, raters: 0, members: 2, eligible: false, blocker: 'too_few_raters' };
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -102,14 +102,11 @@ function stubServer() {
           rating.raters = 1;
           rating.average = sent.score;
         }
-        const ref = decodeURIComponent(path.split('/likes/')[1] ?? '');
-        if (ref && method === 'PUT') {
-          rating.liked = [ref];
-          rating.thumbs = { [ref]: 3 };
-        }
-        if (ref && method === 'DELETE') {
-          rating.liked = [];
-          rating.thumbs = { [ref]: 2 };
+        const ref = decodeURIComponent(path.split('/votes/')[1] ?? '');
+        if (ref) {
+          const { vote } = body as { vote: 'up' | 'down' | null };
+          const { [ref]: _gone, ...others } = rating.myVotes;
+          rating.myVotes = vote ? { ...others, [ref]: vote } : others;
         }
         return Response.json({ rating });
       }
@@ -274,23 +271,17 @@ describe('C3: game list and the summary + log of a finished game', () => {
     expect(form.getAllByRole('radio').map((o) => (o as HTMLInputElement).value)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']);
   });
 
-  it('GEN-078 C7: 👍 on a revealed action marks it liked; pressing again takes it back', async () => {
+  it('GEN-171: 👍 on a revealed action marks it; pressing again takes it back; no totals are shown', async () => {
     const { server } = await openEnded();
-    const lin = within(await screen.findByRole('list', { name: 'สิ่งที่ทำไว้ลับ ๆ' }));
-    const like = await lin.findByRole('button', { name: /ชอบการตัดสินนี้: แอบขโมยแผนที่ดาว/ });
-    const count = (n: number) => lin.getByLabelText(`👍 ${n} คน`);
-    expect(count(0)).toBeTruthy();
-    expect(like.getAttribute('aria-pressed')).toBe('false');
-    fireEvent.click(like);
-    await lin.findByRole('button', { name: /ชอบการตัดสินนี้: แอบขโมยแผนที่ดาว/, pressed: true });
-    // Q-261: the total 👍 count (from the server) goes up when liked and down when taken back
-    expect(count(3)).toBeTruthy();
-    fireEvent.click(lin.getByRole('button', { name: /ชอบการตัดสินนี้: แอบขโมยแผนที่ดาว/ }));
-    await lin.findByRole('button', { name: /ชอบการตัดสินนี้: แอบขโมยแผนที่ดาว/, pressed: false });
-    expect(count(2)).toBeTruthy();
+    const lin = within(await screen.findByRole('group', { name: /โหวตการตัดสินนี้: แอบขโมยแผนที่ดาว/ }));
+    fireEvent.click(lin.getByRole('button', { name: 'ถูกใจ', pressed: false }));
+    await lin.findByRole('button', { name: 'ถูกใจ', pressed: true });
+    fireEvent.click(lin.getByRole('button', { name: 'ถูกใจ' }));
+    await lin.findByRole('button', { name: 'ถูกใจ', pressed: false });
+    expect(screen.queryByLabelText(/👍 \d+ คน/)).toBeNull();
     expect(server.ratingCalls).toEqual([
-      { method: 'PUT', path: '/api/game/rating/likes/3-NOCTHERION-1-1', body: undefined },
-      { method: 'DELETE', path: '/api/game/rating/likes/3-NOCTHERION-1-1', body: undefined },
+      { method: 'PUT', path: '/api/game/rating/votes/3-NOCTHERION-1-1', body: { vote: 'up' } },
+      { method: 'PUT', path: '/api/game/rating/votes/3-NOCTHERION-1-1', body: { vote: null } },
     ]);
   });
 

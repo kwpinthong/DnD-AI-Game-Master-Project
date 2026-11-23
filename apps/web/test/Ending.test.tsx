@@ -19,7 +19,7 @@ interface Call {
   body: unknown;
 }
 
-/** A rating server: GET gives `start`; PUT stores the score; likes add / remove the ref. */
+/** A rating server: GET gives `start`; PUT stores the score; a ruling vote sets / clears the ref (GEN-171). */
 function ratingServer(start: GameRatingView | 'down', afterPut: Partial<GameRatingView> = {}) {
   let rating = start === 'down' ? NOT_RATED : start;
   const state = { down: start === 'down' };
@@ -34,11 +34,11 @@ function ratingServer(start: GameRatingView | 'down', afterPut: Partial<GameRati
       if (path === '/api/game/rating' && method === 'PUT') {
         const body = JSON.parse(String(init?.body)) as { score: number; comment?: string };
         rating = { ...rating, mine: { score: body.score, comment: body.comment ?? '' }, raters: rating.raters + (rating.mine ? 0 : 1), ...afterPut };
-      } else if (path.startsWith('/api/game/rating/likes/')) {
+      } else if (path.startsWith('/api/game/rating/votes/')) {
         const ref = decodeURIComponent(path.split('/').pop()!);
-        const n = (rating.thumbs?.[ref] ?? 0) + (method === 'PUT' ? 1 : -1);
-        const { [ref]: _gone, ...others } = rating.thumbs ?? {};
-        rating = { ...rating, liked: method === 'PUT' ? [...rating.liked, ref] : rating.liked.filter((r) => r !== ref), thumbs: n > 0 ? { ...others, [ref]: n } : others };
+        const { vote } = JSON.parse(String(init?.body)) as { vote: 'up' | 'down' | null };
+        const { [ref]: _gone, ...others } = rating.myVotes;
+        rating = { ...rating, myVotes: vote ? { ...others, [ref]: vote } : others };
       } else if (path !== '/api/game/rating') {
         return Response.json({ code: 'not_found', message: 'ไม่พบ' }, { status: 404 });
       }
@@ -81,22 +81,34 @@ describe('GEN-091 end page', () => {
     expect(scores.map((r) => (r as HTMLInputElement).value)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']);
     expect(calls[0]).toMatchObject({ method: 'GET', path: '/api/game/rating', auth: 'Bearer tok' });
 
-    // 👍 is a toggle on the action row, above the form
-    const like = secrets.getByRole('button', { name: /ชอบการตัดสินนี้.*แอบเข้าโบสถ์ชั้นใต้ดิน/ });
-    expect(before(like, rating)).toBe(true);
-    expect(like.getAttribute('aria-pressed')).toBe('false');
-    const row = within(like.closest('li')!);
-    expect(row.getByLabelText('👍 0 คน')).toBeTruthy();
-    fireEvent.click(like);
-    await waitFor(() => expect(like.getAttribute('aria-pressed')).toBe('true'));
-    // Q-261: the total 👍 of the ruling goes up with the press and down with the take-back
-    expect(row.getByLabelText('👍 1 คน')).toBeTruthy();
-    expect(calls.at(-1)).toMatchObject({ method: 'PUT', path: `/api/game/rating/likes/${REF}` });
+    // GEN-171: the 👍/👎 set of GEN-107 on the action row, above the form; no totals anywhere
+    const group = await secrets.findByRole('group', { name: /โหวตการตัดสินนี้: .*แอบเข้าโบสถ์ชั้นใต้ดิน/ });
+    expect(before(group, rating)).toBe(true);
+    const up = within(group).getByRole('button', { name: 'ถูกใจ' });
+    const down = within(group).getByRole('button', { name: 'ไม่ถูกใจ' });
+    expect([up.getAttribute('aria-pressed'), down.getAttribute('aria-pressed')]).toEqual(['false', 'false']);
+    expect(screen.queryByLabelText(/👍 \d+ คน/)).toBeNull();
+    // C1: 👎
+    fireEvent.click(down);
+    await waitFor(() => expect(down.getAttribute('aria-pressed')).toBe('true'));
+    expect(calls.at(-1)).toMatchObject({ method: 'PUT', path: `/api/game/rating/votes/${REF}`, body: { vote: 'down' } });
+    // C2: the other one switches
+    fireEvent.click(up);
+    await waitFor(() => expect(up.getAttribute('aria-pressed')).toBe('true'));
+    expect(down.getAttribute('aria-pressed')).toBe('false');
+    expect(calls.at(-1)).toMatchObject({ body: { vote: 'up' } });
     expect(ratingRegion().getByText(/คุณกดไป 1/)).toBeTruthy();
-    fireEvent.click(like);
-    await waitFor(() => expect(like.getAttribute('aria-pressed')).toBe('false'));
-    expect(calls.at(-1)).toMatchObject({ method: 'DELETE', path: `/api/game/rating/likes/${REF}` });
-    expect(row.getByLabelText('👍 0 คน')).toBeTruthy();
+    // C3: the same one again cancels
+    fireEvent.click(up);
+    await waitFor(() => expect(up.getAttribute('aria-pressed')).toBe('false'));
+    expect(calls.at(-1)).toMatchObject({ method: 'PUT', path: `/api/game/rating/votes/${REF}`, body: { vote: null } });
+  });
+
+  it('GEN-171 C4: the Human GM (canVote false) gets no vote buttons', async () => {
+    ratingServer({ ...NOT_RATED, canVote: false });
+    openPage();
+    await ratingRegion().findAllByRole('radio');
+    expect(screen.queryByRole('group', { name: /โหวตการตัดสินนี้/ })).toBeNull();
   });
 
   it('Q-270: every secret is in one list in time order across players; the day filter narrows it', () => {
@@ -148,7 +160,8 @@ describe('GEN-091 end page', () => {
     openPage();
     expect(await ratingRegion().findByText('ส่งแล้ว · แก้ได้')).toBeTruthy();
     expect(ratingRegion().getByText(/คุณกดไป 1/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: /ชอบการตัดสินนี้/ }).getAttribute('aria-pressed')).toBe('true');
+    const group = within(screen.getByRole('group', { name: /โหวตการตัดสินนี้/ }));
+    expect(group.getByRole('button', { name: 'ถูกใจ' }).getAttribute('aria-pressed')).toBe('true');
   });
 
   it.each([
@@ -186,7 +199,7 @@ describe('GEN-091 end page', () => {
     expect((await r.findByRole('alert')).textContent).toMatch(/โหลดคะแนนของเกมนี้ไม่ได้/);
     expect(screen.getByRole('article', { name: 'นก' })).toBeTruthy();
     // no 👍 without the rating
-    expect(screen.queryByRole('button', { name: /ชอบการตัดสินนี้/ })).toBeNull();
+    expect(screen.queryByRole('group', { name: /โหวตการตัดสินนี้/ })).toBeNull();
     state.down = false;
     fireEvent.click(r.getByRole('button', { name: 'ลองอีกครั้ง' }));
     expect(await r.findAllByRole('radio')).toHaveLength(10);

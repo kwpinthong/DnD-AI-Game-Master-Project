@@ -86,8 +86,7 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/game/rating': { method: 'GET', path: '/api/game/rating' },
     'PUT /api/game/rating': { method: 'PUT', path: '/api/game/rating', body: { score: 9, comment: 'สนุก' } },
     'PUT /api/game/entries/:seq/vote': { method: 'PUT', path: '/api/game/entries/1/vote', body: { vote: 'up' } },
-    'PUT /api/game/rating/likes/:sourceRef': { method: 'PUT', path: '/api/game/rating/likes/1-EOSORIA-1-1' },
-    'DELETE /api/game/rating/likes/:sourceRef': { method: 'DELETE', path: '/api/game/rating/likes/1-EOSORIA-1-1' },
+    'PUT /api/game/rating/votes/:sourceRef': { method: 'PUT', path: '/api/game/rating/votes/1-EOSORIA-1-1', body: { vote: 'up' } },
     'POST /api/join': { method: 'POST', path: '/api/join', body: { inviteCode: t.inviteCode, name: playerNameOf(t, me), pin: '1111' } },
     'POST /api/games': {
       method: 'POST',
