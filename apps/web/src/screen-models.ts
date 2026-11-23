@@ -150,7 +150,11 @@ export function hitChangeText(change: HitChange): string {
 export function turnChangeText(change: TurnChange): string {
   const label = playText.changes.stat[change.stat];
   const what =
-    'delta' in change ? `${label} ${change.delta > 0 ? '+' : ''}${change.delta}` : change.stat === 'conduct' ? `${label} ${change.from} → ${change.to}` : `${label}: ${change.name}`;
+    'delta' in change ? `${label} ${change.delta > 0 ? '+' : ''}${change.delta}` : change.stat === 'conduct'
+        ? `${label} ${change.from} → ${change.to}`
+        : change.stat === 'bond'
+          ? `${label} ${change.name} ${change.from} → ${change.to}`
+          : `${label}: ${change.name}`;
   return `${what} · ${change.reason}`;
 }
 

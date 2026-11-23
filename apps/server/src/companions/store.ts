@@ -386,6 +386,16 @@ export function npcViewsAt(db: DbOrTx, assets: GameAssets, memberId: string, gam
   });
 }
 
+/** GEN-182: each NPC this player has a bond with: the name they may see and the bond word (never the number). */
+export function bondWordsOf(db: DbOrTx, assets: GameAssets, memberId: string): Record<string, { name: string; word: string }> {
+  const out: Record<string, { name: string; word: string }> = {};
+  for (const b of db.select().from(npcBond).where(eq(npcBond.memberId, memberId)).all()) {
+    const ctx = contextFor(db, assets, memberId, b.npcId);
+    if (ctx) out[b.npcId] = { name: displayName(ctx, b).name, word: bondFor(b.affinity).word };
+  }
+  return out;
+}
+
 /**
  * An NPC as `memberId` reads it in a line it says (GEN-110): the opaque ref, the name this player may see (alias until the
  * real name is known, Q-219) and the grade only once that name is shown (a hidden name keeps its grade hidden too).

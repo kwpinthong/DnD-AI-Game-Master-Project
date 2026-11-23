@@ -377,7 +377,7 @@ export const playText = {
     label: 'ค่าที่เปลี่ยนในเทิร์นนี้',
     none: 'ไม่มีค่าเปลี่ยน',
     kind: 'ค่าที่เปลี่ยน',
-    stat: { hp: 'HP', stamina: 'แรง', coins: 'เหรียญ', conduct: 'ความประพฤติ', item_gained: 'ได้ของ', item_lost: 'ของหาย', status_gained: 'ติดสถานะ', status_lost: 'พ้นสถานะ' },
+    stat: { hp: 'HP', stamina: 'แรง', coins: 'เหรียญ', conduct: 'ความประพฤติ', item_gained: 'ได้ของ', item_lost: 'ของหาย', status_gained: 'ติดสถานะ', status_lost: 'พ้นสถานะ', bond: 'ความสัมพันธ์กับ' },
   },
   whisper: {
     form: 'ส่ง Whisper',

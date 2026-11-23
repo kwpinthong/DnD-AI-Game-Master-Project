@@ -61,7 +61,7 @@ function befriend(who: Seat, npcId: string, delta: number): PhaseAction {
 }
 
 describe('GEN-182 change log: the bond word, like conduct', () => {
-  const snap = (bonds: StatSnapshot['bonds']): StatSnapshot => ({ hp: 100, stamina: 30, coins: 20, conduct: 'เป็นกลาง', items: [], statuses: [], bonds });
+  const snap = (bonds: NonNullable<StatSnapshot['bonds']>): StatSnapshot => ({ hp: 100, stamina: 30, coins: 20, conduct: 'เป็นกลาง', items: [], statuses: [], bonds });
   const why = { log: [], hazard: new Map<string, number>(), hits: new Map() };
 
   it('lists a bond only when its word changed (a new bond starts at the word of 0)', () => {

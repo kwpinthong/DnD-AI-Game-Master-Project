@@ -102,6 +102,7 @@ const turnChanges: In<typeof p.TurnChange>[] = [
   { stat: 'coins', delta: -5, reason: 'ค่าที่พักโรงเตี๊ยม' },
   { stat: 'conduct', from: 'เป็นกลาง', to: 'ใจดี', reason: 'การกระทำของคุณ' },
   { stat: 'status_gained', name: 'ง่วงซึม', reason: 'อดนอน' },
+  { stat: 'bond', name: 'เด็กขอทานตาบอดข้างหนึ่ง', from: 'ห่างเหิน', to: 'คุ้นเคย', reason: 'การกระทำในเทิร์นนี้' },
 ];
 const narration: In<typeof p.RoomEntry> = { seq: 12, kind: 'narration', ...AT, place: null, text: 'คุณสังเกตว่านักบวชแจกขนมปังเฉพาะบ้านที่มีเด็ก', roll, myVote: 'down', myReasons: ['too_long'] };
 const entries: In<typeof p.RoomEntry>[] = [
