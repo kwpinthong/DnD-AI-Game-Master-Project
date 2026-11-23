@@ -141,7 +141,7 @@ export function templateFinale(ctx: FinaleContext): GmFinale {
 }
 
 /** After the end every secret is revealed (GEN-059): tokens become real names for everyone. */
-function revealTokens(world: GmWorld, text: string): string {
+export function revealTokens(world: GmWorld, text: string): string {
   return text.replace(TOKEN_PATTERN, (_all, kind: string, id: string) => {
     if (kind === 'n') return world.npcs.find((n) => n.id === id)?.name ?? '';
     return world.byRef.get(id)?.name ?? '';
