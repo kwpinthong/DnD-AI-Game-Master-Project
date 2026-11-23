@@ -1,5 +1,5 @@
 import { ACTION_MAX_LENGTH, type ActionVisibility, type PlaceActionId, type RoomState } from '@isekai/protocol';
-import { useId, useRef, useState, type FormEvent } from 'react';
+import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import attackIcon from '../../assets/icons/action-attack.svg';
 import defendIcon from '../../assets/icons/action-defend.svg';
 import investigateIcon from '../../assets/icons/action-investigate.svg';
@@ -26,6 +26,10 @@ export interface ActionDraft {
   editing: boolean;
 }
 export const EMPTY_DRAFT: ActionDraft = { text: '', visibility: 'public', rest: false, train: false, placeAction: null, editing: false };
+
+/** GEN-134: the phone row shows the four the mobile mockup shows; the rest go under [อื่นๆ] (eight x 44 do not fit 390). */
+const PHONE_ROW: readonly QuickWord[] = ['พูดคุย', 'สังเกต', 'ลอบเร้น', 'พัก'];
+const PHONE_REST = QUICK_WORDS.filter((word) => !PHONE_ROW.includes(word));
 
 const QUICK_ICON: Record<QuickWord, string> = { พูดคุย: persuadeIcon, สังเกต: observeIcon, สืบค้น: investigateIcon, โจมตี: attackIcon, ป้องกัน: defendIcon, สวด: prayIcon, ลอบเร้น: stealthIcon, พัก: restIcon };
 
@@ -64,6 +68,7 @@ export function ActionBar({ room, seenBy, draft, setDraft, problem, sending, onS
   const [more, setMore] = useState(false);
   const textId = useId();
   const input = useRef<HTMLInputElement>(null);
+  const moreBtn = useRef<HTMLButtonElement>(null);
   const quota = secretQuota(room);
   const lock = you.lock;
   const sent = you.action;
@@ -83,6 +88,13 @@ export function ActionBar({ room, seenBy, draft, setDraft, problem, sending, onS
     setDraft({ ...draft, rest: false, train: false, placeAction: null, text: prefillAction(draft.text, word) });
     setMore(false);
     input.current?.focus();
+  }
+
+  /** Escape on [อื่นๆ] or inside its list closes the list and puts focus back on [อื่นๆ]. */
+  function closeOnEscape(event: KeyboardEvent) {
+    if (event.key !== 'Escape' || !more) return;
+    setMore(false);
+    moreBtn.current?.focus();
   }
 
   function pickChip(id: PlaceActionId, label: string) {
@@ -145,16 +157,16 @@ export function ActionBar({ room, seenBy, draft, setDraft, problem, sending, onS
       )}
       {compact ? (
         <>
-          {/* Phone: the eight words as 44 x 44 icons (the word is the aria-label) and [อื่นๆ], which lists every action with words. */}
+          {/* Phone: four words as 44 x 44 icons (the word is the aria-label) and [อื่นๆ], which lists the rest with words. */}
           <div className="chat-quick chat-quick--icons" role="group" aria-label={bar.group}>
-            <div className="chat-quick__scroll">{QUICK_WORDS.map((word) => wordButton(word, true))}</div>
-            <button type="button" className="chat-quick__more" aria-expanded={more} aria-haspopup="true" onClick={() => setMore(!more)}>
+            {PHONE_ROW.map((word) => wordButton(word, true))}
+            <button ref={moreBtn} type="button" className="chat-quick__more" aria-expanded={more} onClick={() => setMore(!more)} onKeyDown={closeOnEscape}>
               {bar.more}
             </button>
           </div>
           {more && (
-            <div className="chat-quick chat-quick--list" role="group" aria-label={bar.moreGroup}>
-              {QUICK_WORDS.map((word) => wordButton(word, false))}
+            <div className="chat-quick chat-quick--list" role="group" aria-label={bar.moreGroup} onKeyDown={closeOnEscape}>
+              {PHONE_REST.map((word) => wordButton(word, false))}
               {extraButtons}
             </div>
           )}
