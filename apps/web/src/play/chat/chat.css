@@ -459,6 +459,11 @@
   gap: var(--space-2);
 }
 
+/* mockup: another player's alias is the soft text colour, not the muted one */
+.chat-who--player {
+  color: var(--text-soft);
+}
+
 .chat-who--npc {
   color: var(--highlight);
   font-weight: 600;
@@ -584,6 +589,14 @@
   line-height: 1;
   border-radius: var(--radius-pill);
   opacity: 0.7;
+}
+
+/* mockup: a vote button not pressed is transparent with the line border and muted text */
+.play .chat-narration .vote-btn[aria-pressed='false'],
+.play .chat-col .vote-btn[aria-pressed='false'] {
+  background: none;
+  border-color: var(--line);
+  color: var(--muted);
 }
 
 .play .chat-narration .vote-btn > span,

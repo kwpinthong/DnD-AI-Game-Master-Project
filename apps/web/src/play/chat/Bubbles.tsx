@@ -64,7 +64,7 @@ export function PlayerBubble({ alias, text }: { alias: string; text: string }) {
     <div className="chat-row chat-row--left">
       <Avatar name={alias} />
       <div className="chat-col">
-        <span className="chat-who">{alias}</span>
+        <span className="chat-who chat-who--player">{alias}</span>
         <p className="chat-box chat-box--player">{text}</p>
       </div>
     </div>

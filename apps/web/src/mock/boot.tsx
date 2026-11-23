@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AdminDashboard } from '../AdminDashboard.tsx';
 import { App } from '../App.tsx';
+import { ChatColours } from '../dev/ChatColours.tsx';
 import { GALLERY_PATH, Gallery, MockBar } from '../dev/Gallery.tsx';
 import { rememberToken, saveToken } from '../session.ts';
 import { MOCK_TOKEN, installMock, mockBaseUrl } from './install.ts';
@@ -27,6 +28,15 @@ export function bootMock(root: HTMLElement): void {
     createRoot(root).render(
       <StrictMode>
         <Gallery search={search} />
+      </StrictMode>,
+    );
+    return;
+  }
+
+  if (path === '/dev/chat-colours') {
+    createRoot(root).render(
+      <StrictMode>
+        <ChatColours />
       </StrictMode>,
     );
     return;
