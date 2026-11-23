@@ -327,7 +327,7 @@ export interface NarrationContext {
    */
   cast: { ref: string; looks: string; title: string; self: boolean; karmaBand: number }[];
   /**
-   * The NPCs of the place (tokens may name any of them). `here`: at the place now by NPC_Schedule + period + weather (GEN-110):
+   * The NPCs of the place (tokens may name any of them). `here`: at the place now by NPC_Schedule + period + weather (GEN-110), or with no schedule row now at its scenario place (GEN-137):
    * only these may speak (`npcLines`). `persona`: the sheet's personality (only when `here`), names as tokens;
    * `bonds`: each cast player's affinity (-/+) and whether they have met.
    */
