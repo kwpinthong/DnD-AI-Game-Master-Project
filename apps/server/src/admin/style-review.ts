@@ -22,6 +22,8 @@ import { gameVotes } from '../room/vote.ts';
 import type { EntryMeta, RoomEntryRow } from '../room/store.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { memberNames, npcOf, sceneOf } from './vote-review.ts';
+import { npcCandidates } from '../learning/examples.ts';
+import { gameEnded } from '../rating/store.ts';
 
 /**
  * GEN-178 (ADR "Learning Across Games" R7, Q-335..Q-338): the style review round. The server counts the 👎 (with
@@ -241,12 +243,14 @@ const proposalView = (p: typeof styleRuleProposal.$inferSelect): StyleProposal =
   decidedAt: p.decidedAt === null ? null : iso(p.decidedAt),
 });
 
-/** R13: NPC lines most of their game's players liked (GEN-126 voteVerdict good), not yet in the GEN-151 library. */
+/**
+ * R13: NPC lines most of their game's players liked (GEN-126 voteVerdict good), not yet in the GEN-151 library. An
+ * ended game's lines come from GEN-081's kept good examples (one list, so no line twice); a game still playing is read live.
+ */
 function goodCandidates(db: DbOrTx): StyleGoodCandidate[] {
-  // shortcut: GEN-081 has no candidate list yet, so this one dedupes against the library only; merge with it when it lands.
   const inLibrary = new Set(db.select().from(npcExample).where(eq(npcExample.source, 'vote')).all().map((r) => `${r.gameId}/${r.entryId}`));
-  const games = [...new Set(db.select({ gameId: responseVote.gameId }).from(responseVote).where(and(eq(responseVote.vote, 'up'), like(responseVote.sourceRef, 'entry-%'))).all().map((r) => r.gameId))];
-  return games.flatMap((gameId) => {
+  const games = [...new Set(db.select({ gameId: responseVote.gameId }).from(responseVote).where(and(eq(responseVote.vote, 'up'), like(responseVote.sourceRef, 'entry-%'))).all().map((r) => r.gameId))].filter((g) => !gameEnded(db, g));
+  return [...npcCandidates(db), ...games.flatMap((gameId) => {
     const good = gameVotes(db, gameId).entries.filter((e) => e.good && e.kind === 'npc' && !inLibrary.has(`${gameId}/${e.seq}`));
     if (good.length === 0) return [];
     const rows = new Map(db.select().from(roomEntry).where(inArray(roomEntry.id, good.map((e) => e.seq))).all().map((r) => [r.id, r]));
@@ -255,7 +259,7 @@ function goodCandidates(db: DbOrTx): StyleGoodCandidate[] {
       const npc = row && isVotableEntry(row) ? npcOf(db, row, metaOf(row)) : null;
       return npc ? [{ gameId, seq: e.seq, npc, text: e.text, up: e.up }] : [];
     });
-  });
+  })];
 }
 
 export type StyleDecision =
