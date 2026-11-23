@@ -606,6 +606,40 @@ export const CONTRACT_FIXTURES: Fixtures = {
   ],
   StyleSettingsRequest: [{ rewrite: true }, { defaultTone: 'C' }, {}],
   StyleSettingsResponse: [{ settings: { rewrite: false, defaultTone: 'A' } }],
+  // GEN-167: two eval rounds side by side (a failed scene, a real-name flag), and no round yet.
+  StyleEvalResponse: [
+    {
+      previous: {
+        id: 1,
+        createdAt: 1_795_400_000_000,
+        provider: 'anthropic',
+        models: ['claude-sonnet-5-5'],
+        voiceVersion: 1,
+        costUsdMicros: 182_000,
+        scenes: [
+          { sceneId: 'greeting', title: 'ทักทายเด็กขอทานที่น้ำพุ', purpose: 'npc_dialogue', ok: true, text: '{{n:beggar}}: สวัสดีขอรับ ท่านมาจากไหนหรือ', failure: null, flags: [], costUsdMicros: 12_000 },
+          { sceneId: 'ask-way', title: 'ถามทางไปโบสถ์', purpose: 'narrate_player', ok: true, text: 'ทหารยามชี้ไปทางหอระฆังโดยไม่พูดสักคำ', failure: null, flags: [], costUsdMicros: 15_000 },
+        ],
+      },
+      current: {
+        id: 2,
+        createdAt: 1_795_500_000_000,
+        provider: 'anthropic',
+        models: ['claude-sonnet-5-5'],
+        voiceVersion: 2,
+        costUsdMicros: 170_000,
+        scenes: [
+          { sceneId: 'greeting', title: 'ทักทายเด็กขอทานที่น้ำพุ', purpose: 'npc_dialogue', ok: true, text: '{{n:beggar}}: พี่ใจดีจัง… ขอบคุณนะ', failure: null, flags: [], costUsdMicros: 11_000 },
+          { sceneId: 'ask-way', title: 'ถามทางไปโบสถ์', purpose: 'narrate_player', ok: false, text: null, failure: 'timeout: timeout', flags: [], costUsdMicros: 0 },
+          { sceneId: 'sad', title: 'ฉากเศร้าที่โบสถ์', purpose: 'narrate_place', ok: true, text: 'โนอานั่งเงียบอยู่หน้าแท่นบูชา', failure: null, flags: ['real_name'], costUsdMicros: 14_000 },
+        ],
+      },
+      marks: { greeting: 'better' },
+      summary: { better: 1, same: 0, worse: 0, unmarked: 2 },
+    },
+    { current: null, previous: null, marks: {}, summary: { better: 0, same: 0, worse: 0, unmarked: 0 } },
+  ],
+  StyleEvalMarkRequest: [{ mark: 'better' }, { mark: 'worse' }, { mark: null }],
   // GEN-151: the NPC example library
   NpcLibraryResponse: [
     {

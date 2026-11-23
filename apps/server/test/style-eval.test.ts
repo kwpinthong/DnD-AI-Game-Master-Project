@@ -103,9 +103,9 @@ describe('GEN-167 runner and admin page', { timeout: 120_000 }, () => {
   });
 
   it('C5: a result with a real NPC name is flagged real_name', async () => {
-    const leaky = mock([], (req, json) => (req.purpose === 'narrate_place' ? { ...(json as object), text: 'โนอานั่งอยู่ริมน้ำพุ' } : json));
+    const leaky = mock([], (req, json) => (req.output.name === 'gm_scene' ? { text: 'โนอานั่งอยู่ริมน้ำพุ' } : json));
     const result = await run(leaky);
-    const place = result.scenes.filter((s) => STYLE_SCENES.find((x) => x.id === s.sceneId)!.purpose === 'narrate_place');
+    const place = result.scenes.filter((s) => STYLE_SCENES.find((x) => x.id === s.sceneId)!.context.kind === 'gm_scene');
     expect(place.length).toBeGreaterThan(0);
     expect(place.every((s) => s.flags.includes('real_name'))).toBe(true);
     expect(result.scenes.filter((s) => s.flags.includes('real_name')).length).toBe(place.length);
@@ -130,7 +130,7 @@ describe('GEN-167 runner and admin page', { timeout: 120_000 }, () => {
     expect(view.summary).toEqual({ better: 0, same: 0, worse: 0, unmarked: STYLE_SCENES.length });
     expect(JSON.stringify(view)).not.toContain('"prompt"');
 
-    const mark = (sceneId: string, m: 'better' | 'same' | 'worse' | null, t: string | undefined = token) =>
+    const mark = (sceneId: string, m: 'better' | 'same' | 'worse' | null, t = token) =>
       call('PUT', `/api/admin/style-eval/${second.id}/marks/${sceneId}`, { ...(t ? { token: t } : {}), body: { mark: m } });
     const [a, b, c] = STYLE_SCENES;
     expect((await mark(a!.id, 'better')).status).toBe(200);
@@ -144,7 +144,7 @@ describe('GEN-167 runner and admin page', { timeout: 120_000 }, () => {
     // Saved: a fresh read has the marks.
     expect(StyleEvalResponse.parse((await call('GET', '/api/admin/style-eval', { token })).body).marks).toEqual({ [a!.id]: 'better', [b!.id]: 'better' });
 
-    expect((await mark(a!.id, 'better', undefined)).status).toBe(403);
+    expect((await mark(a!.id, 'better', '')).status).toBe(403);
     const unknown = await mark('no-such-scene', 'better');
     expect(unknown.status).toBe(404);
     expect(ApiError.parse(unknown.body).code).toBe('response_not_found');

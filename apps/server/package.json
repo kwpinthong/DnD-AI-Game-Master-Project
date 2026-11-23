@@ -15,7 +15,8 @@
     "db:restore": "node src/backup/restore-cli.ts",
     "create-code:hash": "node src/auth/create-code-hash-cli.ts",
     "admin-code:hash": "node src/auth/create-code-hash-cli.ts admin",
-    "assets:import": "node src/assets/import-cli.ts"
+    "assets:import": "node src/assets/import-cli.ts",
+    "eval:style": "node src/eval/style-eval-cli.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.6.0",

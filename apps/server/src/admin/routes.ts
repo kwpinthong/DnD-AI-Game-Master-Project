@@ -13,6 +13,7 @@ import { registerGameDataRoutes } from './game-data-routes.ts';
 import { registerVoteReviewRoutes } from './vote-review-routes.ts';
 import { registerStyleRoutes } from './style-routes.ts';
 import { registerNpcLibraryRoutes } from './npc-library-routes.ts';
+import { registerStyleEvalRoutes } from './style-eval-routes.ts';
 
 export interface AdminRouteOptions {
   /** scrypt hash of the server owner's admin code (ADMIN_CODE_HASH); without it the dashboard is closed. */
@@ -88,6 +89,7 @@ export function registerAdminRoutes(app: FastifyInstance, db: Db, now: Clock, op
   registerVoteReviewRoutes(app, db, refuse, now, options.log ?? (() => {}));
   registerStyleRoutes(app, db, refuse, options.gameData);
   registerNpcLibraryRoutes(app, db, refuse, now);
+  registerStyleEvalRoutes(app, db, refuse);
 
   app.get<{ Params: { gameId: string } }>('/api/admin/ai-usage/:gameId', async (request, reply) => {
     if (refuse(request, reply)) return reply;

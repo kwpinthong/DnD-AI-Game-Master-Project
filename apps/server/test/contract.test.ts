@@ -3,7 +3,9 @@ import { CONTRACT, CONTRACT_SCHEMAS, type HttpItem, type SocketItem } from '@ise
 import { SeededRng } from '@isekai/rules';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
+import { providerFor } from '../src/ai/registry.ts';
 import { hashPin } from '../src/auth/pin.ts';
+import { runStyleEval } from '../src/eval/style-eval.ts';
 import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
 import { ASTRAL_PLANE, moveCharacter, presenceOf, setPlayerBond } from '../src/visibility/store.ts';
@@ -251,10 +253,14 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'GET /api/admin/style-flags', { token: adminToken });
     await hit(call, 'GET /api/admin/style-settings', { token: adminToken });
     await hit(call, 'PUT /api/admin/style-settings', { token: adminToken, body: { rewrite: false } });
-    // GEN-167: the style eval rounds (no round yet: empty view; marking a round that does not exist = 404).
+    // GEN-167: the style eval rounds: none yet, then two (Mock AI) and a mark on the second.
     await hit(call, 'GET /api/admin/style-eval', { token: adminToken });
     await hit(call, 'PUT /api/admin/style-eval/:runId/marks/:sceneId', { token: adminToken, path: '/api/admin/style-eval/1/marks/greeting', body: { mark: 'better' } });
-    await hit(call, 'PUT /api/admin/style-eval/:runId/marks/:sceneId', { token: adminToken, path: '/api/admin/style-eval/1/marks/greeting', body: { mark: 'great' } });
+    const evalConfig = { ...loadAiConfig({ AI_PROVIDER: 'mock' }), retryDelayMs: 0 };
+    for (let i = 0; i < 2; i++) await runStyleEval({ db: server!.orm, assets: server!.assets, provider: providerFor(evalConfig), config: evalConfig, now: () => CLOCK, log: () => {}, maxUsd: 1 });
+    await hit(call, 'GET /api/admin/style-eval', { token: adminToken });
+    await hit(call, 'PUT /api/admin/style-eval/:runId/marks/:sceneId', { token: adminToken, path: '/api/admin/style-eval/2/marks/greeting', body: { mark: 'better' } });
+    await hit(call, 'PUT /api/admin/style-eval/:runId/marks/:sceneId', { token: adminToken, path: '/api/admin/style-eval/2/marks/greeting', body: { mark: 'great' } });
     // GEN-151: the NPC example library.
     await hit(call, 'PUT /api/game/entries/:seq/vote', { token: t.a.token, path: `/api/game/entries/${votable!.seq}/vote`, body: { vote: 'up' } });
     const npcLibrary = await hit(call, 'GET /api/admin/npc-library', { token: adminToken });

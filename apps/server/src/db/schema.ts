@@ -171,3 +171,5 @@ export * from './schema-statuses.ts';
 export * from './schema-rating.ts';
 // GEN-147: the game data (seeded once from the asset files) and its edit log, own file for the same reason.
 export * from './schema-game-data.ts';
+// GEN-167: the Thai style eval rounds, own file for the same reason.
+export * from './schema-style-eval.ts';

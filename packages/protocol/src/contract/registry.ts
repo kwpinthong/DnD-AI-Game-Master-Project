@@ -136,6 +136,8 @@ export const CONTRACT_SCHEMAS = {
   StyleFlagsResponse: p.StyleFlagsResponse,
   StyleSettingsRequest: p.StyleSettingsRequest,
   StyleSettingsResponse: p.StyleSettingsResponse,
+  StyleEvalResponse: p.StyleEvalResponse,
+  StyleEvalMarkRequest: p.StyleEvalMarkRequest,
   NpcLibraryResponse: p.NpcLibraryResponse,
   NpcExampleAddRequest: p.NpcExampleAddRequest,
 } as const;
@@ -300,6 +302,9 @@ export const CONTRACT: readonly ContractItem[] = [
   http('GET', '/api/admin/style-flags', null, 'StyleFlagsResponse', ready('GEN-169', 'admin', ['vote-review'], 'จำนวนธงตรวจสำนวนต่อ NPC (id + alias ไม่ใช่ชื่อจริง) ต่อเหตุผล ไม่มีข้อความ; `npc: null` = บรรยาย')),
   http('GET', '/api/admin/style-settings', null, 'StyleSettingsResponse', ready('GEN-169', 'admin', ['vote-review'])),
   http('PUT', '/api/admin/style-settings', 'StyleSettingsRequest', 'StyleSettingsResponse', ready('GEN-169', 'admin', ['vote-review'], '`rewrite` = กฎ block ให้ AI เขียนใหม่ 1 ครั้ง (ค่าเริ่ม false = แค่ติดธง); GEN-177 `defaultTone` = โทนของเกมใหม่ที่ไม่ได้เลือก (บันทึกลง `tone` ของชุดข้อมูล Voice มี backup / audit / undo)')),
+  // --- GEN-167: the Thai style eval set (`pnpm eval:style` writes the rounds; server owner) ---
+  http('GET', '/api/admin/style-eval', null, 'StyleEvalResponse', ready('GEN-167', 'admin', ['vote-review'], 'รอบล่าสุด + รอบก่อน เทียบทีละฉาก (ข้อความที่ AI เขียน, เวอร์ชัน Voice, model, USD, ธง `real_name` / กฎสำนวน) + คะแนนที่ Nok ให้; prompt เก็บใน server ไม่ส่งมา; ยังไม่มีรอบ = `current: null`')),
+  http('PUT', '/api/admin/style-eval/:runId/marks/:sceneId', 'StyleEvalMarkRequest', 'StyleEvalResponse', ready('GEN-167', 'admin', ['vote-review'], 'ดีขึ้น / เท่าเดิม / แย่ลง ของฉากนั้นในรอบนั้นเทียบรอบก่อน (null = ล้าง) บันทึกทันที; ไม่มีรอบ/ฉาก = 404 `response_not_found`; รอบแรก (ไม่มีรอบก่อน) = 409 `not_allowed`')),
 
   // --- GEN-151: NPC example library (server owner, on the Learning library page, Q-322) ---
   http('GET', '/api/admin/npc-library', null, 'NpcLibraryResponse', ready('GEN-151', 'admin', ['learning-library'], 'ตัวอย่างต่อ NPC (token เท่านั้น) + ข้อความที่ได้ 👍 + คู่ "แก้เป็น" ที่ติดธงแต่ยังไม่มี NPC')),

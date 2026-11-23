@@ -16,6 +16,9 @@ import {
   StyleFlagsResponse,
   StyleSettingsResponse,
   type StyleSettingsRequest,
+  StyleEvalResponse,
+  type StyleEvalMark,
+  type StyleEvalMarkRequest,
   NpcLibraryResponse,
   type NpcExampleAddRequest,
 } from '@isekai/protocol';
@@ -136,6 +139,17 @@ export function fetchStyleSettings(baseUrl: string, token: string) {
 
 export function saveStyleSettings(baseUrl: string, token: string, body: StyleSettingsRequest) {
   return call(baseUrl, '/api/admin/style-settings', { method: 'PUT', headers: { ...auth(token), 'content-type': 'application/json' }, body: JSON.stringify(body) }, StyleSettingsResponse);
+}
+
+/** GEN-167: the style eval rounds side by side and Nok's marks (server owner only). */
+export function fetchStyleEval(baseUrl: string, token: string) {
+  return call(baseUrl, '/api/admin/style-eval', { headers: auth(token) }, StyleEvalResponse);
+}
+
+export function saveStyleEvalMark(baseUrl: string, token: string, runId: number, sceneId: string, mark: StyleEvalMark | null) {
+  const body: StyleEvalMarkRequest = { mark };
+  const path = `/api/admin/style-eval/${runId}/marks/${encodeURIComponent(sceneId)}`;
+  return call(baseUrl, path, { method: 'PUT', headers: { ...auth(token), 'content-type': 'application/json' }, body: JSON.stringify(body) }, StyleEvalResponse);
 }
 
 /** GEN-151: the NPC example library (server owner only); every answer is the whole library. */

@@ -43,11 +43,12 @@ describe('GEN-167 style eval page', () => {
     const row = within(await screen.findByRole('group', { name: first.title }));
     expect(row.getByText(TWO_ROUNDS.previous!.scenes[0]!.text!)).toBeTruthy();
     expect(row.getByText(first.text!)).toBeTruthy();
-    expect(screen.getByText(/Voice v/)).toBeTruthy();
+    expect(screen.getByText(/^รอบนี้: รอบ #2 .*Voice v2/)).toBeTruthy();
+    expect(screen.getByText(/^รอบก่อน: รอบ #1 .*Voice v1/)).toBeTruthy();
   });
 
   it('C3: Nok marks better / same / worse; pressing the same again clears it; the summary follows', async () => {
-    const puts = stub(TWO_ROUNDS);
+    const puts = stub({ ...TWO_ROUNDS, marks: {}, summary: { better: 0, same: 0, worse: 0, unmarked: 3 } });
     render(<StyleEval apiBaseUrl="http://api" token="tok" onForbidden={() => {}} />);
     const scene = TWO_ROUNDS.current!.scenes[0]!;
     const row = within(await screen.findByRole('group', { name: scene.title }));

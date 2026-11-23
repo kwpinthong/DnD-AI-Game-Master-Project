@@ -1,0 +1,181 @@
+import { defaultScenario, type StyleEvalMark, type StyleEvalResponse, type StyleEvalRun, type StyleEvalSceneResult } from '@isekai/protocol';
+import { desc, eq, lt } from 'drizzle-orm';
+import type { z } from 'zod';
+import type { AiConfig } from '../ai/config.ts';
+import { createAiService } from '../ai/core/service.ts';
+import { createUsageStore } from '../ai/core/usage.ts';
+import type { AiProvider, PromptBlock } from '../ai/provider.ts';
+import type { GameAssets } from '../assets/load.ts';
+import type { Db, DbOrTx } from '../db/client.ts';
+import { styleEvalRun } from '../db/schema.ts';
+import { DIALOGUE_BLOCK, FINALE_BLOCK, JOURNAL_BLOCK, NARRATOR_BLOCK, SUMMARY_BLOCK } from '../gm/context.ts';
+import { SCENE_BLOCK } from '../gm/scene.ts';
+import { GM_OUTPUT, GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmScene } from '../gm/schema.ts';
+import { styleIssues } from '../gm/style-check.ts';
+import { toneBlock } from '../gm/tone.ts';
+import { STYLE_SCENES, type StyleScene, type StyleSceneContext } from './style-scenes.ts';
+
+/**
+ * GEN-167: runs the eval set once against the configured AI and saves the round (results, prompts, Voice version,
+ * models, USD). Its AiUsage rows go under the pseudo game id below, so no real game is read or written.
+ */
+export const STYLE_EVAL_GAME_ID = 'style-eval';
+
+/** One scene's call: the prompt the game would send for this context, and how to read the answer back as text. */
+interface Call<T> {
+  system: PromptBlock[];
+  output: { name: string; schema: z.ZodType<T> };
+  maxOutputTokens: number;
+  scope: 'narration' | 'dialogue';
+  texts: (value: T) => { text: string; npcId: string | null }[];
+}
+
+const call = <T>(c: Call<T>) => c as Call<unknown>;
+
+/** The same system blocks, output schema and token cap as the game's own call for that context kind. */
+function callFor(context: StyleSceneContext, assets: GameAssets): Call<unknown> {
+  const tone = toneBlock(assets.voice, assets.voice.tone);
+  switch (context.kind) {
+    case 'gm_scene':
+      return call({ system: [SCENE_BLOCK], output: { name: GM_OUTPUT.scene, schema: GmScene }, maxOutputTokens: 600, scope: 'narration', texts: (v) => [{ text: v.text, npcId: null }] });
+    case 'gm_narration':
+      return call({
+        system: [NARRATOR_BLOCK, tone],
+        output: { name: GM_OUTPUT.narration, schema: GmNarration },
+        maxOutputTokens: 1_500,
+        scope: 'narration',
+        texts: (v) => v.segments.map((s) => ({ text: s.text, npcId: null })),
+      });
+    case 'gm_dialogue':
+      // shortcut: no NPC example library block (GEN-151) in the eval, so a round does not depend on the DB's library; add it when the library is part of what is judged.
+      return call({
+        system: [DIALOGUE_BLOCK, tone],
+        output: { name: GM_OUTPUT.dialogue, schema: GmDialogue },
+        maxOutputTokens: 1_000,
+        scope: 'dialogue',
+        texts: (v) => v.npcLines.map((l) => ({ text: l.text, npcId: l.npcId })),
+      });
+    case 'gm_journal':
+      return call({ system: [JOURNAL_BLOCK], output: { name: GM_OUTPUT.journal, schema: GmJournal }, maxOutputTokens: 3_000, scope: 'narration', texts: (v) => [{ text: v.journal, npcId: null }, { text: v.saga, npcId: null }] });
+    case 'gm_day':
+      return call({ system: [SUMMARY_BLOCK], output: { name: GM_OUTPUT.daySummary, schema: GmDaySummary }, maxOutputTokens: 1_500, scope: 'narration', texts: (v) => [{ text: v.recap, npcId: null }, { text: v.saga, npcId: null }] });
+    case 'gm_finale':
+      return call({
+        system: [FINALE_BLOCK],
+        output: { name: GM_OUTPUT.finale, schema: GmFinale },
+        maxOutputTokens: 4_000,
+        scope: 'narration',
+        texts: (v) => [{ text: v.overall, npcId: null }, ...v.players.map((p) => ({ text: p.text, npcId: null }))],
+      });
+  }
+}
+
+/** Real NPC names of the scenario: the eval's readers know every NPC only by alias. */
+const realNpcNames = () => defaultScenario().npcs.flatMap((n) => [n.name, ...(n.otherNames ?? [])]).filter((n) => n.trim().length > 1);
+
+interface StoredScene extends StyleEvalSceneResult {
+  prompt: { system: PromptBlock[]; user: string };
+}
+
+export interface StyleEvalDeps {
+  db: Db;
+  assets: GameAssets;
+  provider: AiProvider;
+  config: AiConfig;
+  now?: () => number;
+  log?: (line: string) => void;
+  /** The round stops calling once its spend reaches this (USD); the scenes left are reported as `budget`. */
+  maxUsd: number;
+}
+
+export async function runStyleEval(deps: StyleEvalDeps, scenes: readonly StyleScene[] = STYLE_SCENES): Promise<StyleEvalRun> {
+  const { db, assets, provider, config, maxUsd } = deps;
+  const now = deps.now ?? Date.now;
+  const store = createUsageStore(db);
+  let sceneCost = 0;
+  const models = new Set<string>();
+  const ai = createAiService({
+    provider,
+    config,
+    now,
+    ...(deps.log ? { log: deps.log } : {}),
+    usage: {
+      record(row) {
+        sceneCost += row.costUsdMicros;
+        models.add(row.model);
+        store.record(row);
+      },
+      spentThisMonth: (gameId, at) => store.spentThisMonth(gameId, at),
+    },
+  });
+  const names = realNpcNames();
+  const limit = Math.round(maxUsd * 1_000_000);
+  let spent = 0;
+  const results: StoredScene[] = [];
+  for (const scene of scenes) {
+    const c = callFor(scene.context, assets);
+    const user = JSON.stringify(scene.context);
+    const base = { sceneId: scene.id, title: scene.title, purpose: scene.purpose, prompt: { system: c.system, user } };
+    if (spent >= limit) {
+      results.push({ ...base, ok: false, text: null, failure: 'budget', flags: [], costUsdMicros: 0 });
+      continue;
+    }
+    sceneCost = 0;
+    // C4: one failed scene is reported and the set goes on.
+    const result = await ai.call({ gameId: STYLE_EVAL_GAME_ID, purpose: scene.purpose, system: c.system, messages: [{ role: 'user', text: user }], output: c.output, maxOutputTokens: c.maxOutputTokens });
+    spent += sceneCost;
+    if (!result.ok) {
+      results.push({ ...base, ok: false, text: null, failure: result.error.detail ?? result.error.code, flags: [], costUsdMicros: sceneCost });
+      continue;
+    }
+    const parts = c.texts(result.value);
+    const text = parts.map((p) => (p.npcId ? `{{n:${p.npcId}}}: ${p.text}` : p.text)).join('\n');
+    // C5: a real name the reader should not know, then the Voice rules the game's checker flags (GEN-169).
+    const flags = [...new Set([...(names.some((n) => text.includes(n)) ? ['real_name'] : []), ...parts.flatMap((p) => styleIssues(assets.voice, p.text, c.scope, p.npcId).map((i) => i.reason))])];
+    results.push({ ...base, ok: true, text, failure: null, flags, costUsdMicros: sceneCost });
+  }
+  const row = db
+    .insert(styleEvalRun)
+    .values({ createdAt: now(), provider: provider.id, models: JSON.stringify([...models]), voiceVersion: assets.voice.version, costUsdMicros: spent, scenes: JSON.stringify(results) })
+    .returning()
+    .get();
+  return runOf(row);
+}
+
+type RunRow = typeof styleEvalRun.$inferSelect;
+
+/** The round as the admin page reads it: no prompts. */
+function runOf(row: RunRow): StyleEvalRun {
+  const scenes = (JSON.parse(row.scenes) as StoredScene[]).map(({ prompt: _prompt, ...s }) => s);
+  return { id: row.id, createdAt: row.createdAt, provider: row.provider, models: JSON.parse(row.models) as string[], voiceVersion: row.voiceVersion, costUsdMicros: row.costUsdMicros, scenes };
+}
+
+function viewOf(db: DbOrTx, current: RunRow | undefined): StyleEvalResponse {
+  if (!current) return { current: null, previous: null, marks: {}, summary: { better: 0, same: 0, worse: 0, unmarked: 0 } };
+  const previous = db.select().from(styleEvalRun).where(lt(styleEvalRun.id, current.id)).orderBy(desc(styleEvalRun.id)).limit(1).get();
+  const marks = JSON.parse(current.marks) as Record<string, StyleEvalMark>;
+  const run = runOf(current);
+  const count = (m: StyleEvalMark) => Object.values(marks).filter((v) => v === m).length;
+  return {
+    current: run,
+    previous: previous ? runOf(previous) : null,
+    marks,
+    summary: { better: count('better'), same: count('same'), worse: count('worse'), unmarked: run.scenes.length - Object.keys(marks).length },
+  };
+}
+
+/** The latest round against the one before it. */
+export const styleEvalView = (db: Db): StyleEvalResponse => viewOf(db, db.select().from(styleEvalRun).orderBy(desc(styleEvalRun.id)).limit(1).get());
+
+/** Nok's mark of one scene of a round against the round before (null clears it). */
+export function markStyleEval(db: Db, runId: number, sceneId: string, mark: StyleEvalMark | null): StyleEvalResponse | 'not_found' | 'no_previous' {
+  return db.transaction((tx) => {
+    const row = tx.select().from(styleEvalRun).where(eq(styleEvalRun.id, runId)).get();
+    if (!row || !(JSON.parse(row.scenes) as StoredScene[]).some((s) => s.sceneId === sceneId)) return 'not_found';
+    if (!tx.select({ id: styleEvalRun.id }).from(styleEvalRun).where(lt(styleEvalRun.id, runId)).limit(1).get()) return 'no_previous';
+    const { [sceneId]: _old, ...rest } = JSON.parse(row.marks) as Record<string, StyleEvalMark>;
+    const marks = JSON.stringify(mark ? { ...rest, [sceneId]: mark } : rest);
+    tx.update(styleEvalRun).set({ marks }).where(eq(styleEvalRun.id, runId)).run();
+    return viewOf(tx, { ...row, marks });
+  });
+}
