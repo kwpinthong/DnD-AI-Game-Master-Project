@@ -1,6 +1,5 @@
 import { NPC_CHAT_DEFAULT_PER_PERIOD, NPC_CHAT_MAX_LENGTH, normalizeActionText, type ApiError, type NpcChatResponse, type NpcChatStatus } from '@isekai/protocol';
 import { and, count, desc, eq, ne } from 'drizzle-orm';
-import { z } from 'zod';
 import type { AiService } from '../ai/core/service.ts';
 import type { GameAssets } from '../assets/load.ts';
 import type { SystemRuleRecord } from '../assets/model.ts';
@@ -18,7 +17,7 @@ import { gameTone, toneBlock } from '../gm/tone.ts';
 import { ensurePhaseState, insertEntry, karmaOf, type RoomEntryRow } from '../room/store.ts';
 import { npcBondsOf, presenceOf, presencesInGame } from '../visibility/store.ts';
 import { weatherAt } from '../weather/service.ts';
-import { NPC_CHAT_BLOCK } from './prompt.ts';
+import { NPC_CHAT_BLOCK, NpcChatAnswer, type NpcChatContext } from './prompt.ts';
 import { closureOf } from '../admin/games.ts';
 
 /**
@@ -26,14 +25,6 @@ import { closureOf } from '../admin/games.ts';
  * (purpose `npc_chat`), a quota per player per period, and only the relationship and the NPC's memory change; the
  * other players at the place get the talk as `player` + `npc` entries (a whisper only the speaker, and the Human GM).
  */
-
-/** What the AI answers. */
-const NpcChatAnswer = z.object({
-  reply: z.string().min(1).describe('The NPC answer in Thai, 1-3 sentences, names only as tokens.'),
-  suggestion: z.string().nullable().describe('Thai: try it as your action this turn; null unless the player asked for a world effect.'),
-  mood: z.enum(['warmer', 'same', 'colder']).describe('How the talk left the NPC about this player.'),
-});
-type NpcChatAnswer = z.infer<typeof NpcChatAnswer>;
 
 /** Characters of a reply / suggestion that go out. */
 const REPLY_CHARS = 300;
@@ -130,10 +121,10 @@ export async function sendNpcChat(deps: NpcChatDeps, me: MemberRow, input: { npc
     .limit(RECENT / 2)
     .all()
     .reverse()
-    .flatMap((r) => [{ from: 'player', text: r.text }, { from: 'npc', text: r.reply }]);
+    .flatMap((r) => [{ from: 'player' as const, text: r.text }, { from: 'npc' as const, text: r.reply }]);
   const others = presencesInGame(db, me.gameId).filter((p) => p.locationId === here.locationId && p.memberId !== me.id);
-  const context = {
-    npc: { token: npcToken(npc.id), ...npcView },
+  const context: NpcChatContext = {
+    npc: { token: npcToken(npc.id), ...npcView! },
     player: { token: playerToken(player.ref), look: player.appearance, socialTitle: player.socialTitle },
     scene: {
       place: world.places.find((p) => p.id === here.locationId)?.name ?? here.locationId,

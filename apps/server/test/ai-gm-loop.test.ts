@@ -965,6 +965,16 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       expect(provider.requests.filter(isNarration).every((r) => r.messages.length === 1)).toBe(true);
     });
 
+    it('ISK-025 C12: a 150 code point NPC line of 3 sentences reaches the players at most 120, ending a sentence, with no repair', async () => {
+      const long = `${'ก'.repeat(49)}. ${'ข'.repeat(49)}. ${'ค'.repeat(47)}.`;
+      await boot({}, withLines((audience) => ('place' in audience ? [{ npcId: 'amnesiac', kind: 'dialogue', text: long }] : [])));
+      const { clients } = await atFountain();
+      await playTurn(clients, ['ทักลูเซีย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+      expect(npcEntries(clients[0]!).map((e) => e.text)).toEqual([`${'ก'.repeat(49)}. ${'ข'.repeat(49)}.`]);
+      expect(provider.requests.filter((r) => r.purpose === 'gm_repair')).toEqual([]);
+      expect(provider.requests.filter((r) => isDialogue(r) || isNarration(r)).every((r) => r.messages.length === 1)).toBe(true);
+    });
+
     it('GEN-137 C1 (was GEN-110 C3, strict): at EOSORIA Lucia has no schedule row, so she is at her scenario place, the fountain, and may speak there', async () => {
       await boot({}, withLines(() => [{ npcId: 'amnesiac', kind: 'dialogue', text: 'ข้ามาแล้ว' }]));
       const t = await startedTable(server!, false);

@@ -473,6 +473,8 @@ const NARRATOR_TEXT = [
   THAI_OUTPUT,
 ].join('\n');
 
+export const NPC_SPEECH_RULES = '';
+
 /** GEN-116: the second stage. Same rules as GEN-110 had inside the narration; the narration is given so the lines follow it. */
 const DIALOGUE_TEXT = [
   'You write the NPC lines for the Game Master. The players have already read the turn\'s results and the narration: write only the NPC lines that follow it, never retell it',

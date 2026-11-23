@@ -67,6 +67,8 @@ function callFor(context: StyleSceneContext, assets: GameAssets): Call<unknown> 
         scope: 'narration',
         texts: (v) => [{ text: v.overall, npcId: null }, ...v.players.map((p) => ({ text: p.text, npcId: null }))],
       });
+    case 'npc_chat':
+      throw new Error('not yet');
   }
 }
 
@@ -140,6 +142,32 @@ export async function runStyleEval(deps: StyleEvalDeps, scenes: readonly StyleSc
     .returning()
     .get();
   return runOf(row);
+}
+
+/** ISK-025: what the judge said of one NPC reply / line (null = not judged). */
+export interface NpcReplyVerdict {
+  persona: boolean;
+  feeling: boolean;
+  reaction: boolean;
+  place: boolean;
+}
+
+/** ISK-025 C8: the NPC replies of a round against the bar (every reply ≤ 120, all 4 parts in ≥ 80%). */
+export interface NpcReplyReport {
+  replies: number;
+  withinLength: number;
+  /** Replies the judge found all 4 parts in. */
+  complete: number;
+  completeRate: number;
+  pass: boolean;
+  /** Up to 5 replies to show in the task result. */
+  samples: string[];
+}
+
+export function npcReplyReport(db: DbOrTx, runId: number): NpcReplyReport {
+  void db;
+  void runId;
+  return { replies: 0, withinLength: 0, complete: 0, completeRate: 0, pass: false, samples: [] };
 }
 
 type RunRow = typeof styleEvalRun.$inferSelect;

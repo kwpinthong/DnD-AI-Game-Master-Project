@@ -11,6 +11,13 @@ import { z } from 'zod';
 export const NPC_CHAT_MAX_LENGTH = 300;
 /** Q-309: messages per player per period when the game data says nothing. */
 export const NPC_CHAT_DEFAULT_PER_PERIOD = 5;
+/** ISK-025: longest NPC reply / turn line a player gets, in code points (`clampReply`). */
+export const NPC_REPLY_MAX_LENGTH = 120;
+
+export function clampReply(text: string, max: number = NPC_REPLY_MAX_LENGTH): string {
+  void max;
+  return text;
+}
 
 /** Body of POST /api/game/npc-chat. `npc` = the NPC's `ref` (`NpcView.ref`); `whisper` = only you hear it. */
 export const NpcChatRequest = z.strictObject({

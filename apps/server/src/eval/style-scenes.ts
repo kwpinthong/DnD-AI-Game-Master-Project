@@ -3,6 +3,7 @@ import type { Beat, DayContext, DialogueContext, JournalContext, NarrationContex
 import type { FinaleContext } from '../gm/finale.ts';
 import { npcLineLimits } from '../gm/npc-lines.ts';
 import type { SceneContext } from '../gm/scene.ts';
+import type { NpcChatContext } from '../npc-chat/prompt.ts';
 
 /**
  * GEN-167: the fixed Thai style eval set (Nok 2026-11-23). Each scene is the state + action of one AI call, written
@@ -11,10 +12,16 @@ import type { SceneContext } from '../gm/scene.ts';
  */
 
 /** Every purpose whose answer is Thai prose a player reads. */
-export const THAI_PURPOSES = ['narrate_place', 'narrate_player', 'npc_dialogue', 'summarize_journal', 'summarize_day', 'finale'] as const satisfies readonly AiPurpose[];
+export const THAI_PURPOSES = ['narrate_place', 'narrate_player', 'npc_dialogue', 'summarize_journal', 'summarize_day', 'finale', 'npc_chat'] as const satisfies readonly AiPurpose[];
 export type ThaiPurpose = (typeof THAI_PURPOSES)[number];
 
-export type StyleSceneContext = SceneContext | NarrationContext | DialogueContext | JournalContext | DayContext | FinaleContext;
+/** ISK-025: a chat with an NPC outside the turn; `chat` is the message JSON the game sends. */
+export interface ChatSceneContext {
+  kind: 'npc_chat';
+  chat: NpcChatContext;
+}
+
+export type StyleSceneContext = SceneContext | NarrationContext | DialogueContext | JournalContext | DayContext | FinaleContext | ChatSceneContext;
 
 export interface StyleScene {
   id: string;
