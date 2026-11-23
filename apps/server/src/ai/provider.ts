@@ -14,7 +14,9 @@ export type AiPurpose =
   | 'summarize_day'
   | 'summarize_journal'
   | 'finale'
-  | 'character_analyze';
+  | 'character_analyze'
+  /** GEN-178: the style review round (server-wide, not a game's; usage under the `system` game id). */
+  | 'style_review';
 
 /** The period of the day (GEN-063), as `Phase` in `@isekai/protocol`. */
 export type AiPhase = 'EOSORIA' | 'SOLARION' | 'HESPERION' | 'NOCTHERION';

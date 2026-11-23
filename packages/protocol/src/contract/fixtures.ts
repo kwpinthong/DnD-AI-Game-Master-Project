@@ -633,4 +633,62 @@ export const CONTRACT_FIXTURES: Fixtures = {
     { from: 'correction', correctionId: 2, npcId: 'npc-mira' },
     { from: 'correction', correctionId: 1 },
   ],
+  // GEN-178: the style review round
+  StyleReviewResponse: [
+    {
+      running: false,
+      minSignals: 20,
+      gamesPerRound: 5,
+      gamesSinceRound: 2,
+      waiting: { downvotes: 3, flags: 4, reasons: { too_long: 2 }, rules: { dai_tham_kan: 4 }, npcs: { '': 5, 'npc-noa': 2 } },
+      rounds: [
+        {
+          id: 2,
+          trigger: 'manual',
+          status: 'done',
+          signals: 27,
+          counts: { downvotes: 12, flags: 15, reasons: { out_of_character: 4, wrong_story: 8 }, rules: { dai_tham_kan: 10, pronoun_mismatch: 5 }, npcs: { '': 16, 'npc-noa': 11 } },
+          patterns: [{ summary: 'บรรยายใช้ "ได้ทำการ" ซ้ำ', evidence: [41, 44] }],
+          error: null,
+          createdAt: '2026-11-23T10:00:00.000Z',
+        },
+        { id: 1, trigger: 'games', status: 'skipped', signals: 19, counts: { downvotes: 9, flags: 10, reasons: {}, rules: { loanword: 10 }, npcs: { '': 19 } }, patterns: [], error: null, createdAt: '2026-11-22T10:00:00.000Z' },
+      ],
+      proposals: [
+        { id: 2, roundId: 2, kind: 'pair', npcId: null, content: { bad: 'เขามีความโกรธ', good: 'เขาโกรธ' }, reason: 'ตัด มีความ ที่ไม่จำเป็น', evidence: [44], status: 'proposed', voiceVersion: null, decidedAt: null },
+        {
+          id: 1,
+          roundId: 2,
+          kind: 'forbid',
+          npcId: null,
+          content: { id: 'tham_kan', match: { type: 'literal', value: 'ทำการ' }, scope: 'all', severity: 'block', fix: 'ตัด ทำการ' },
+          reason: 'เจอซ้ำในบรรยาย',
+          evidence: [41],
+          status: 'approved',
+          voiceVersion: 2,
+          decidedAt: '2026-11-23T10:05:00.000Z',
+        },
+      ],
+      voice: {
+        version: 2,
+        versions: [
+          { version: 2, at: '2026-11-23T10:05:00.000Z', current: true },
+          { version: 1, at: '2026-11-20T08:00:00.000Z', current: false },
+        ],
+      },
+      goodCandidates: [{ gameId: 'g-1', seq: 48, npc: { id: 'npc-noa', name: 'โนอา' }, text: 'เจ้าหนูนี่กล้าดีนะ', up: 2 }],
+    },
+    {
+      running: true,
+      minSignals: 20,
+      gamesPerRound: 5,
+      gamesSinceRound: 0,
+      waiting: { downvotes: 0, flags: 0, reasons: {}, rules: {}, npcs: {} },
+      rounds: [],
+      proposals: [],
+      voice: { version: 1, versions: [{ version: 1, at: '2026-11-20T08:00:00.000Z', current: true }] },
+      goodCandidates: [],
+    },
+  ],
+  StyleProposalApproveRequest: [{}, { content: { bad: 'เขามีความสุข', good: 'เขาสุขใจ' } }],
 };

@@ -124,7 +124,7 @@ export const libraryText = {
   thumbs: (thumbs: number, players: number) => `👍 ${thumbs}/${players}`,
   topVerbs: 'ทำบ่อย',
   secretShare: (share: number) => `ลงมือแบบลับ ${Math.round(share * 100)}%`,
-  adminNav: { usage: 'การใช้ AI', library: 'Learning library', data: 'ข้อมูลเกม', votes: 'ข้อความที่ถูก 👎' },
+  adminNav: { usage: 'การใช้ AI', library: 'Learning library', data: 'ข้อมูลเกม', votes: 'ข้อความที่ถูก 👎', style: 'ทบทวนสำนวน' },
 } as const;
 
 // GEN-151: the NPC example library (on the Learning library page, Q-322).

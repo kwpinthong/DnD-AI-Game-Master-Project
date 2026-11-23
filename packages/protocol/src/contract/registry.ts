@@ -138,6 +138,8 @@ export const CONTRACT_SCHEMAS = {
   StyleSettingsResponse: p.StyleSettingsResponse,
   NpcLibraryResponse: p.NpcLibraryResponse,
   NpcExampleAddRequest: p.NpcExampleAddRequest,
+  StyleReviewResponse: p.StyleReviewResponse,
+  StyleProposalApproveRequest: p.StyleProposalApproveRequest,
 } as const;
 export type ContractSchemaName = keyof typeof CONTRACT_SCHEMAS;
 
@@ -305,6 +307,13 @@ export const CONTRACT: readonly ContractItem[] = [
   http('GET', '/api/admin/npc-library', null, 'NpcLibraryResponse', ready('GEN-151', 'admin', ['learning-library'], 'ตัวอย่างต่อ NPC (token เท่านั้น) + ข้อความที่ได้ 👍 + คู่ "แก้เป็น" ที่ติดธงแต่ยังไม่มี NPC')),
   http('POST', '/api/admin/npc-library', 'NpcExampleAddRequest', 'NpcLibraryResponse', ready('GEN-151', 'admin', ['learning-library'], 'เพิ่มตัวอย่างจากข้อความที่ได้ 👍 (+ NPC + ชนิดฉาก) หรือจากคู่ "แก้เป็น" (ใช้ฉบับแก้); ชื่อจริงแทนด้วย token ก่อนเก็บ; ซ้ำ = ไม่เพิ่ม; ไม่มีข้อความ / ไม่มี 👍 / NPC ไม่รู้จัก = 404 `response_not_found`; dialogue prompt ใส่ ≤ 3 ต่อ NPC')),
   http('DELETE', '/api/admin/npc-library/:id', null, 'NpcLibraryResponse', ready('GEN-151', 'admin', ['learning-library'], 'ลบตัวอย่าง มีผลกับ prompt ถัดไป; ไม่มี = 404 `response_not_found`')),
+
+  // --- GEN-178: style review round (server owner; its own admin tab, listed with the 👎 review screen) ---
+  http('GET', '/api/admin/style-review', null, 'StyleReviewResponse', ready('GEN-178', 'admin', ['vote-review'], 'สัญญาณที่รอ (👎 ตามชิป + flag ตาม rule id + ตาม NPC) / รอบ / ข้อเสนอ / เวอร์ชัน Voice / บทพูด NPC ที่ voteVerdict good ยังไม่อยู่ในคลัง')),
+  http('POST', '/api/admin/style-review/run', null, 'StyleReviewResponse', ready('GEN-178', 'admin', ['vote-review'], '"รันตอนนี้": เริ่มรอบเบื้องหลังแล้วตอบทันที (`running`); สัญญาณใหม่ < 20 = `skipped` ไม่เรียก AI; AI 1 call purpose `style_review`; AI ล้ม = `failed` สัญญาณรอรอบหน้า')),
+  http('POST', '/api/admin/style-review/proposals/:id/approve', 'StyleProposalApproveRequest', 'StyleReviewResponse', ready('GEN-178', 'admin', ['vote-review'], 'อนุมัติ (หรือแก้ `content` แล้วอนุมัติ) = Voice เวอร์ชันใหม่ บันทึกแบบ game data (backup / audit); ไม่มี = 404 `response_not_found`; ตัดสินแล้ว = 409 `not_allowed`; ไม่ผ่าน schema = 400 `invalid_input`')),
+  http('POST', '/api/admin/style-review/proposals/:id/reject', null, 'StyleReviewResponse', ready('GEN-178', 'admin', ['vote-review'], 'ไม่อนุมัติ: Voice ไม่เปลี่ยน; ไม่มี = 404 / ตัดสินแล้ว = 409')),
+  http('POST', '/api/admin/style-review/voice/:version/restore', null, 'StyleReviewResponse', ready('GEN-178', 'admin', ['vote-review'], 'ย้อน Voice เป็นเวอร์ชันนั้น (บันทึกเป็น edit ใหม่ เวอร์ชันใหม่กว่ายังอยู่ในประวัติ); ไม่มี = 404 `response_not_found`')),
 
   // --- player style (player code, Q-167) ---
   http('POST', '/api/style', 'PlayerStyleRequest', 'PlayerStyleResponse', pending('GEN-082', 'any', ['my-style'])),

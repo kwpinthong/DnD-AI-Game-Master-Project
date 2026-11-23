@@ -25,6 +25,7 @@ import { openGameData, type GameDataStore } from './assets/game-data.ts';
 import { dirname, join } from 'node:path';
 import { registerCompanionRoutes } from './companions/routes.ts';
 import { registerAdminRoutes } from './admin/routes.ts';
+import { createStyleReview, type StyleReview } from './admin/style-review.ts';
 import { registerInventoryRoutes } from './skills/routes.ts';
 import { registerGmConsoleRoutes } from './gm-console/routes.ts';
 import { startBackupSchedule, type BackupSchedule } from './backup/schedule.ts';
@@ -50,6 +51,8 @@ export interface RunningServer {
   routes: readonly string[];
   /** Game data from the DB (GEN-147; seeded once from apps/server/assets), always the latest admin edit. */
   assets: GameAssets;
+  /** GEN-178: the style review round (tests end games through `gameEnded`). */
+  styleReview: StyleReview;
   /** The backup job (GEN-037) when `config.backup` is set. */
   backups?: BackupSchedule;
   close(): Promise<void>;
@@ -152,12 +155,17 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   const resolver = options.phaseResolver ?? createAiGmResolver({ db, ai, assets, now, log: options.aiLog ?? ((line) => console.log(line)), styleRewriteMs: aiConfig.styleRewriteMs });
   // The backup job starts after `listen`; the room reaches it through this late binding (Q-185).
   let backups: BackupSchedule | undefined;
+  const styleReview = createStyleReview({ db, ai, gameData, now, log: options.aiLog ?? ((line) => console.log(line)) });
   const room = registerRoomRoutes(app, db, now, {
     resolver,
     assets,
     webOrigins: config.webOrigins ?? [],
     weather,
-    onGameEnded: (gameId, status) => void backups?.gameEnded(gameId, status),
+    onGameEnded: (gameId, status) => {
+      void backups?.gameEnded(gameId, status);
+      // GEN-178: every 5th ended game starts a style review round (in the background).
+      void styleReview.gameEnded(gameId);
+    },
     budgetNotice: (gameId) => ai.budgetNotice(gameId),
     ...(options.aiLog ? { log: options.aiLog } : {}),
   });
@@ -166,6 +174,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     ai: aiConfig,
     log: options.aiLog ?? ((line) => console.log(line)),
     gameData,
+    styleReview,
     ...(config.adminCodeHash ? { adminCodeHash: config.adminCodeHash } : {}),
   });
   registerInventoryRoutes(app, db, now, assets);
@@ -198,10 +207,12 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     weather,
     routes,
     assets,
+    styleReview,
     ...(backups ? { backups } : {}),
     async close() {
       await app.close();
       await weather.idle();
+      await styleReview.idle();
       // After the room and the weather picks stopped writing: the shutdown backup has everything.
       await backups?.stop();
       if (sqlite.open) sqlite.close();
