@@ -606,6 +606,69 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(ownerStatus(clients[0]!)).toBeNull();
   });
 
+  describe('GEN-190b (Q-384 = B): the day summary keeps the money for the narration it runs next to', () => {
+    const tokens = (inputTokens: number) => ({ inputTokens, cachedInputTokens: 0, cacheWriteTokens: 0, outputTokens: 0 });
+    // Only the narrations and the day summary cost; the summary costs as much as many narrations.
+    const priced: Handler = async (req, n) => {
+      if (isTurn(req)) {
+        const r = await noRoll(req, n);
+        return r && r.ok ? { ...r, usage: tokens(0) } : r;
+      }
+      const cost = isNarration(req) ? 1_000 : req.purpose === 'summarize_day' ? 100_000 : 0;
+      return mockReply.ok(await cannedGmAnswer(req), tokens(cost));
+    };
+    const turn2Narrations = (c: RoomClient) => turnEntries(c, 1, 'NOCTHERION', 2).filter((e) => e.kind === 'narration' || e.kind === 'feed');
+    const daySummaries = () => server!.db.prepare("select day from gm_memory where kind = 'day'").all();
+
+    /** Day 1's last two turns; `squeeze` runs between them. */
+    async function lastTurns(env: Record<string, string>, squeeze: (gameId: string) => void = () => {}) {
+      await boot(env, priced);
+      const t = await startedTable(server!, false);
+      jumpTo(t, { day: 1, phase: 'NOCTHERION', turn: 1 });
+      const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+      await playTurn(clients, ['เฝ้ายาม', 'นับดาว', 'จุดไฟ'], { day: 1, phase: 'NOCTHERION', turn: 2 });
+      squeeze(gameIdOf(t));
+      await playTurn(clients, ['เฝ้ายามต่อ', 'นับดาวต่อ', 'ดับไฟ'], { day: 2, phase: 'EOSORIA', turn: 1 });
+      return clients;
+    }
+
+    it('C1: what is left covers only the last turn\'s narration: the narration is the AI\'s, the day summary is refused (reserve) and waits', async () => {
+      const ceiling = 1_000_000;
+      const clients = await lastTurns({ AI_GAME_MONTHLY_USD: '1' }, (gameId) => {
+        // Leave a bit less than turn 1's narration cost (= the reserve), so the summary is refused but every narration still fits.
+        const rows = server!.db.prepare("select cost_usd_micros as cost from ai_usage where game_id = ? and purpose in ('narrate_place', 'narrate_player')").all(gameId) as { cost: number }[];
+        const total = rows.reduce((s, r) => s + r.cost, 0);
+        const left = total - Math.floor(rows[0]!.cost / 2);
+        server!.db
+          .prepare(
+            "insert into ai_usage (game_id, purpose, provider, model, input_tokens, cached_input_tokens, cache_write_tokens, output_tokens, cost_usd_micros, ok, attempt, latency_ms, created_at) select game_id, 'gm_weather', provider, model, 0, 0, 0, 0, ?, 1, 1, 0, created_at from ai_usage where game_id = ? limit 1",
+          )
+          .run(ceiling - total - left, gameId);
+      });
+
+      expect(provider.requests.filter((r) => r.purpose === 'summarize_day')).toEqual([]);
+      expect(logs.some((l) => l.includes('summarize_day day=1 failed: budget_reached (reserve)'))).toBe(true);
+      expect(daySummaries()).toEqual([]);
+      for (const c of clients) {
+        expect(turn2Narrations(c).length).toBeGreaterThan(0);
+        for (const e of turn2Narrations(c)) expect(e.fallback).toBeFalsy();
+      }
+    });
+
+    it('C2: with budget to spare both run as before: the AI narration and one day summary of day 1', async () => {
+      const clients = await lastTurns({});
+      await until(() => daySummaries().length > 0);
+
+      expect(provider.requests.filter((r) => r.purpose === 'summarize_day')).toHaveLength(1);
+      expect(daySummaries()).toEqual([{ day: 1 }]);
+      expect(logs.some((l) => l.includes('budget_reached'))).toBe(false);
+      for (const c of clients) {
+        expect(turn2Narrations(c).length).toBeGreaterThan(0);
+        for (const e of turn2Narrations(c)) expect(e.fallback).toBeFalsy();
+      }
+    });
+  });
+
   it('Q-221: with a Human GM the GM sees the budget gmStatus, players do not; it ends with the game', async () => {
     await boot({ AI_GAME_MONTHLY_USD: '0' });
     const t = await startedTable(server!, true);
