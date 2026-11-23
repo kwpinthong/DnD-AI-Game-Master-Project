@@ -84,6 +84,12 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/admin/npc-library': { method: 'GET', path: '/api/admin/npc-library' },
     'POST /api/admin/npc-library': { method: 'POST', path: '/api/admin/npc-library', body: { from: 'correction', correctionId: 1 } },
     'DELETE /api/admin/npc-library/:id': { method: 'DELETE', path: '/api/admin/npc-library/1' },
+    // GEN-178: the style review round; a player's session is 403 (checked below).
+    'GET /api/admin/style-review': { method: 'GET', path: '/api/admin/style-review' },
+    'POST /api/admin/style-review/run': { method: 'POST', path: '/api/admin/style-review/run' },
+    'POST /api/admin/style-review/proposals/:id/approve': { method: 'POST', path: '/api/admin/style-review/proposals/1/approve', body: {} },
+    'POST /api/admin/style-review/proposals/:id/reject': { method: 'POST', path: '/api/admin/style-review/proposals/1/reject' },
+    'POST /api/admin/style-review/voice/:version/restore': { method: 'POST', path: '/api/admin/style-review/voice/1/restore' },
     // GEN-055: the player's own skills, held items and library discoveries (no condition or progress).
     'GET /api/game/inventory': { method: 'GET', path: '/api/game/inventory' },
     // GEN-058: the Human GM console. Players get 403 (scanned for karma like every other answer).
@@ -131,6 +137,11 @@ const ADMIN_DATA_ROUTES = [
   'GET /api/admin/npc-library',
   'POST /api/admin/npc-library',
   'DELETE /api/admin/npc-library/:id',
+  'GET /api/admin/style-review',
+  'POST /api/admin/style-review/run',
+  'POST /api/admin/style-review/proposals/:id/approve',
+  'POST /api/admin/style-review/proposals/:id/reject',
+  'POST /api/admin/style-review/voice/:version/restore',
 ];
 
 /** The join name the fixture gave each seat (A is "นก" in both table kinds). */
