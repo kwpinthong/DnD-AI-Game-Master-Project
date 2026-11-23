@@ -439,6 +439,8 @@ describe('C3 words, never the hidden numbers', () => {
       name: 'ลิน',
       appearance: 'หญิงผ้าคลุมเทา',
       personality: '',
+      avatarId: null,
+      appearanceTraits: null,
       hp: { current: 7, max: 30 },
       stamina: { current: 0, max: 30 },
       coins: 3,

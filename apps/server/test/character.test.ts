@@ -4,17 +4,18 @@ import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
 import { containsName } from '../src/gm/check.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
-import { makeTempDir, seedChosenLoot } from './helpers.ts';
+import { makeTempDir, seedChosenLoot, withLooks } from './helpers.ts';
 
 const CREATE_CODE = 'ลับเฉพาะ-2026';
 
 type Body = Record<string, unknown>;
 
-const lin = {
+// ISK-006: with avatar + chips; `appearance` is the sentence the server builds (the old text as the extra).
+const lin = withLooks({
   name: 'ลิน',
   appearance: 'หญิงผ้าคลุมเทา แผลเป็นที่คาง ถือย่ามผ้า',
   personality: 'ช่างสังเกต พูดน้อย ขี้ระแวง กลัวความมืด',
-};
+});
 
 describe('character: name, appearance, personality + starting values (GEN-047)', { timeout: 60_000 }, () => {
   let createCodeHash = '';
@@ -117,13 +118,13 @@ describe('character: name, appearance, personality + starting values (GEN-047)',
   it('GEN-094 C1: a name with ำ is stored with U+0E33 and shown as typed', async () => {
     await start();
     const created = await createGame();
-    const kham = { name: 'คำแก้ว', appearance: 'ผิวคล้ำ ตาดำ', personality: 'ทำอะไรช้าแต่จำแม่น' };
+    const kham = withLooks({ name: 'คำแก้ว', appearance: 'ผิวคล้ำ ตาดำ', personality: 'ทำอะไรช้าแต่จำแม่น' });
 
     const res = await postCharacter(created.token, kham);
 
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     expect(CharacterResponse.parse(res.body).character).toMatchObject(kham);
-    expect(storedRow(created.member.id)).toMatchObject(kham);
+    expect(storedRow(created.member.id)).toMatchObject({ name: kham.name, appearance: kham.appearance, personality: kham.personality });
     expect(String(storedRow(created.member.id)?.name)).not.toContain('ํา');
     expect(CharacterResponse.parse((await getCharacter(created.token)).body).character?.name).toBe('คำแก้ว');
   });
@@ -176,11 +177,9 @@ describe('character: name, appearance, personality + starting values (GEN-047)',
     await start();
     const created = await createGame();
 
+    // ISK-006: the appearance text is no longer needed (the chips are, see character-appearance.test.ts).
     const missing = await postCharacter(created.token, { name: 'ลิน' });
-    expect(error(missing.body)).toMatchObject({
-      code: 'invalid_input',
-      fields: { appearance: 'กรุณาใส่ลักษณะภายนอก', personality: 'กรุณาใส่บุคลิก' },
-    });
+    expect(error(missing.body)).toMatchObject({ code: 'invalid_input', fields: { personality: 'กรุณาใส่บุคลิก' } });
 
     expect((await postCharacter(created.token, lin)).status).toBe(201);
     const edit = await putCharacter(created.token, { ...lin, name: '' });
@@ -188,31 +187,29 @@ describe('character: name, appearance, personality + starting values (GEN-047)',
     expect(error(edit.body)).toMatchObject({ fields: { name: 'กรุณาใส่ชื่อจริงของตัวละคร' } });
   });
 
-  it('C2: lengths are Unicode code points: exactly 40 / 500 / 1000 are accepted (Thai marks count)', async () => {
+  it('C2: lengths are Unicode code points: exactly 40 / 1000 are accepted (Thai marks count)', async () => {
     await start();
     const created = await createGame();
     // 'กิ' is 2 code points (ก + sara i), so 20 of them make exactly 40.
-    const body = { name: 'กิ'.repeat(20), appearance: 'ข'.repeat(500), personality: 'ค'.repeat(1000) };
+    const body = { name: 'กิ'.repeat(20), personality: 'ค'.repeat(1000) };
 
-    const res = await postCharacter(created.token, body);
+    const res = await postCharacter(created.token, { ...lin, ...body });
 
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     expect(CharacterResponse.parse(res.body).character).toMatchObject(body);
   });
 
-  it('C2: the name is trimmed and inner spaces folded; text keeps its line breaks', async () => {
+  it('C2: the name is trimmed and inner spaces folded; the appearance extra\'s line break is one space (ISK-006)', async () => {
     await start();
     const created = await createGame();
+    const body = withLooks({ name: '  ลิน   ดารา ', appearance: ' ผ้าคลุมเทา\nแผลเป็นที่คาง ', personality: '\nพูดน้อย\n' });
 
-    const res = await postCharacter(created.token, {
-      name: '  ลิน   ดารา ',
-      appearance: ' ผ้าคลุมเทา\nแผลเป็นที่คาง ',
-      personality: '\nพูดน้อย\n',
-    });
+    const res = await postCharacter(created.token, body);
 
+    expect(body.appearance).toMatch(/ ผ้าคลุมเทา แผลเป็นที่คาง$/);
     expect(CharacterResponse.parse(res.body).character).toMatchObject({
       name: 'ลิน ดารา',
-      appearance: 'ผ้าคลุมเทา\nแผลเป็นที่คาง',
+      appearance: body.appearance,
       personality: 'พูดน้อย',
     });
   });

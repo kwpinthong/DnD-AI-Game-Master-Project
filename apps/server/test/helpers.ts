@@ -1,10 +1,27 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { appearanceLabels, composeAppearance, type AppearanceLabels, type AppearanceOption, type AppearanceTraits } from '@isekai/protocol';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type Database from 'better-sqlite3';
-import { loadGameAssets, type GameAssets } from '../src/assets/load.ts';
+import { DEFAULT_ASSETS_DIR, loadGameAssets, type GameAssets } from '../src/assets/load.ts';
 import { offerFrom } from '../src/game/loot.ts';
+
+/** ISK-006: the seed labels of apps/server/assets/appearance-options.json, grouped as GET /api/appearance-options gives them. */
+export function seedAppearanceLabels(): AppearanceLabels {
+  return appearanceLabels(JSON.parse(readFileSync(join(DEFAULT_ASSETS_DIR, 'appearance-options.json'), 'utf8')) as AppearanceOption[]);
+}
+
+export const DEFAULT_CHIPS = { hairColor: 'black', hairStyle: 'short', eyes: 'black', build: 'average', outfit: 'commoner', feature: 'none' } as const;
+
+/**
+ * ISK-006: a character body with chips from an old free-text identity: avatar + the default chips, the old text as
+ * the extra. `appearance` becomes the sentence the server stores (the server ignores it in the body).
+ */
+export function withLooks<T extends { appearance: string }>(identity: T, avatarId = 'avatar-01'): T & { avatarId: string; appearanceTraits: AppearanceTraits } {
+  const appearanceTraits: AppearanceTraits = { ...DEFAULT_CHIPS, extra: identity.appearance };
+  return { ...identity, avatarId, appearanceTraits, appearance: composeAppearance(appearanceTraits, seedAppearanceLabels()) };
+}
 
 /** Fresh empty directory per test; removed by the returned cleanup. */
 export function makeTempDir(): { dir: string; cleanup: () => void } {

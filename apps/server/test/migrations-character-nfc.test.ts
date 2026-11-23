@@ -67,9 +67,11 @@ describe('migration character_nfc (GEN-094 C2)', () => {
     migrate(drizzle(sqlite), { migrationsFolder });
 
     const after = sqlite.prepare('select * from character order by member_id').all() as Record<string, unknown>[];
+    // ISK-006 (later migration, also run here): an old character gets no avatar and no chips, its text kept.
+    const noChips = { avatar_id: null, appearance_traits: null };
     expect(after).toEqual([
-      { ...before[0], name: 'คำแก้ว', appearance: 'ผิวคล้ำ ตาดำ\nผมสั้น', personality: 'ทำอะไรช้า แต่จำแม่น ก่ำ' },
-      before[1],
+      { ...before[0], name: 'คำแก้ว', appearance: 'ผิวคล้ำ ตาดำ\nผมสั้น', personality: 'ทำอะไรช้า แต่จำแม่น ก่ำ', ...noChips },
+      { ...before[1], ...noChips },
     ]);
     expect(String(after[0]!.name)).toContain('ำ');
     // Player names (member) are joined by the later name_nfc migration (GEN-106), also run here.

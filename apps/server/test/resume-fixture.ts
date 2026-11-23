@@ -2,13 +2,13 @@ import { CharacterResponse, CreateGameResponse, JoinResponse, type RoomServerMes
 import type Database from 'better-sqlite3';
 import { expect } from 'vitest';
 import type { RunningServer } from '../src/server.ts';
-import { seedChosenLoot } from './helpers.ts';
+import { seedChosenLoot, withLooks } from './helpers.ts';
 import { isReady, openRoom, type RoomClient } from './room-client.ts';
 import { caller, CREATE_CODE, DARIN, LIN, MEKHA, type Call, type Seat } from './visibility-fixture.ts';
 
 /** GEN-037: a started online game with four players, the size of the C1 table. */
 
-export const NARA = { name: 'นารา', appearance: 'หญิงสาวถือพิณไม้ ผมเปีย', personality: 'ร่าเริง ชอบร้องเพลง' };
+export const NARA = withLooks({ name: 'นารา', appearance: 'หญิงสาวถือพิณไม้ ผมเปีย', personality: 'ร่าเริง ชอบร้องเพลง' }, 'avatar-04');
 
 export interface FourTable {
   call: Call;

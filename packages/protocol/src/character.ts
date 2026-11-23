@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AppearanceTraits } from './appearance.ts';
 import { TraitView } from './loot.ts';
 
 /** Longest values, counted in Unicode code points after normalisation (Thai marks count). */
@@ -40,21 +41,43 @@ export const CharacterRequest = z.object({
     'กรุณาใส่ชื่อจริงของตัวละคร',
     `ชื่อจริงยาวได้ไม่เกิน ${CHARACTER_NAME_MAX_LENGTH} ตัวอักษร`,
   ),
+  /**
+   * ISK-006: ignored by the server, which builds the appearance from `appearanceTraits`.
+   * shortcut: kept optional so the GEN-047 form still compiles, drop it when ISK-007 moves the form to chips.
+   */
   appearance: text(
     normalizeText,
     APPEARANCE_MAX_LENGTH,
     'กรุณาใส่ลักษณะภายนอก',
     `ลักษณะภายนอกยาวได้ไม่เกิน ${APPEARANCE_MAX_LENGTH} ตัวอักษร`,
-  ),
+  ).optional(),
   personality: text(
     normalizeText,
     PERSONALITY_MAX_LENGTH,
     'กรุณาใส่บุคลิก',
     `บุคลิกยาวได้ไม่เกิน ${PERSONALITY_MAX_LENGTH} ตัวอักษร`,
   ),
+  /**
+   * ISK-006: one of AVATAR_IDS, and one chip id per category of GET /api/appearance-options (+ `extra` ≤ 80 code
+   * points). Both are required; the server checks them against the current data (400 `invalid_avatar` /
+   * `invalid_trait` + `field` / `extra_too_long` / `extra_forbidden`), so they are optional here.
+   */
+  avatarId: z.string().optional(),
+  appearanceTraits: z
+    .object({
+      hairColor: z.string().optional(),
+      hairStyle: z.string().optional(),
+      eyes: z.string().optional(),
+      build: z.string().optional(),
+      outfit: z.string().optional(),
+      feature: z.string().optional(),
+      extra: z.string().optional(),
+    })
+    .optional(),
 });
 export type CharacterRequest = z.infer<typeof CharacterRequest>;
-export type CharacterField = keyof z.input<typeof CharacterRequest>;
+/** The text fields of the form (ISK-006's avatar and chips come back as their own 400 codes). */
+export type CharacterField = 'name' | 'appearance' | 'personality';
 
 /** First message per wrong field; empty object when the input is valid. */
 export function characterFieldErrors(input: unknown): Partial<Record<CharacterField, string>> {
@@ -78,6 +101,9 @@ export const CharacterView = z.strictObject({
   name: z.string(),
   appearance: z.string(),
   personality: z.string(),
+  /** ISK-006: the preset avatar and the chips it was made with; null for a character made before ISK-006. */
+  avatarId: z.string().nullable(),
+  appearanceTraits: AppearanceTraits.nullable(),
   hp: Gauge,
   stamina: Gauge,
   /** Coins the character holds (the start scenario's Start_Coins, GEN-065; 0 before the game starts). */

@@ -4,10 +4,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
-import { makeTempDir, seedChosenLoot } from './helpers.ts';
+import { makeTempDir, seedChosenLoot, withLooks } from './helpers.ts';
 
 const CREATE_CODE = 'ลับเฉพาะ-2026';
-const lin = { name: 'ลิน', appearance: 'หญิงผ้าคลุมเทา', personality: 'ช่างสังเกต พูดน้อย' };
+const lin = withLooks({ name: 'ลิน', appearance: 'หญิงผ้าคลุมเทา', personality: 'ช่างสังเกต พูดน้อย' });
 
 describe('GEN-130 strength / weakness in the character view', { timeout: 60_000 }, () => {
   let createCodeHash = '';

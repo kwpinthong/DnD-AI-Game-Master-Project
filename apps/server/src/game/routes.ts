@@ -8,6 +8,8 @@ import {
   type LootResponse,
   type OriginResponse,
   UpdateGameRequest,
+  appearanceLabels,
+  type AppearanceOptionsResponse,
   type CreateGameResponse,
 } from '@isekai/protocol';
 import type { KarmaTier, Rng } from '@isekai/rules';
@@ -20,6 +22,7 @@ import type { Db } from '../db/client.ts';
 import { checkedMemory, ownerKeyOf } from '../learning/memory.ts';
 import { playerKeyOf, saveJoinStyle } from '../learning/style.ts';
 import { readScenario, resetScenario, saveScenario, type ScenarioEditOutcome } from '../scenario/editor.ts';
+import { checkLooks, type Looks } from './appearance.ts';
 import { createCharacter, getCharacter, updateCharacter, type CharacterOutcome } from './character.ts';
 import { createCodeChecker } from './create-code.ts';
 import { chooseLoot, getLoot, LOOT_AI_FAILED, rollLoot, type LootOutcome } from './loot.ts';
@@ -274,17 +277,30 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
     }
   }
 
-  /** The parsed body, or a 400 naming each wrong field already sent. */
-  function characterInput(request: FastifyRequest, reply: FastifyReply): CharacterRequest | undefined {
+  /** The parsed body and its checked avatar + chips (ISK-006), or a 400 already sent. */
+  function characterInput(request: FastifyRequest, reply: FastifyReply, me: MemberRow): { input: CharacterRequest; looks: Looks } | undefined {
     const parsed = CharacterRequest.safeParse(request.body ?? {});
-    if (parsed.success) return parsed.data;
-    void sendError(reply, 400, {
-      code: 'invalid_input',
-      message: 'ข้อมูลไม่ถูกต้อง',
-      fields: characterFieldErrors(request.body),
-    });
-    return undefined;
+    if (!parsed.success) {
+      void sendError(reply, 400, {
+        code: 'invalid_input',
+        message: 'ข้อมูลไม่ถูกต้อง',
+        fields: characterFieldErrors(request.body),
+      });
+      return undefined;
+    }
+    const checked = checkLooks(db, me.gameId, options.assets, parsed.data);
+    if (!checked.ok) {
+      void sendError(reply, 400, checked.problem);
+      return undefined;
+    }
+    return { input: parsed.data, looks: checked.looks };
   }
+
+  // ISK-006: the chip values a new character may pick (no login: nothing secret in it).
+  app.get('/api/appearance-options', async (_request, reply) => {
+    const body: AppearanceOptionsResponse = { categories: appearanceLabels(options.assets.appearanceOptions) };
+    return reply.send(body);
+  });
 
   app.get('/api/game/character', async (request, reply) => {
     const me = caller(request, reply);
@@ -296,17 +312,17 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
   app.post('/api/game/character', async (request, reply) => {
     const me = caller(request, reply);
     if (!me) return reply;
-    const input = characterInput(request, reply);
-    if (!input) return reply;
-    return sendCharacter(reply, createCharacter(db, me, input, now, options.karmaTiers), 201);
+    const body = characterInput(request, reply, me);
+    if (!body) return reply;
+    return sendCharacter(reply, createCharacter(db, me, body.input, body.looks, now, options.karmaTiers), 201);
   });
 
   app.put('/api/game/character', async (request, reply) => {
     const me = caller(request, reply);
     if (!me) return reply;
-    const input = characterInput(request, reply);
-    if (!input) return reply;
-    return sendCharacter(reply, updateCharacter(db, me, input, now, options.karmaTiers), 200);
+    const body = characterInput(request, reply, me);
+    if (!body) return reply;
+    return sendCharacter(reply, updateCharacter(db, me, body.input, body.looks, now, options.karmaTiers), 200);
   });
 
   // --- Loot (GEN-048, GEN-073): the caller's own strength / weakness + Rank B skill / item. ---

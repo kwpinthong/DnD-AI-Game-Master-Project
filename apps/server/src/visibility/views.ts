@@ -44,6 +44,7 @@ type CharacterRow = typeof character.$inferSelect;
 export function otherCharacterView(subject: CharacterRow, presence: PresenceRow, knowsName: boolean): OtherCharacterView {
   return {
     ref: presence.ref,
+    avatarId: subject.avatarId,
     appearance: subject.appearance,
     injury: injuryText(subject.hp, subject.hpMax),
     socialTitle: titleOf(subject),

@@ -70,7 +70,7 @@ describe('visibility layer: who sees what (GEN-050)', { timeout: 60_000 }, () =>
 
     expect(view.place).not.toBeNull();
     const b = view.people.find((p) => p.appearance === t.b.appearance);
-    expect(b).toEqual({ ref: expect.any(String), appearance: t.b.appearance, injury: 'บาดเจ็บ', socialTitle: 'คนแปลกหน้า', name: null });
+    expect(b).toEqual({ ref: expect.any(String), avatarId: t.b.avatarId, appearance: t.b.appearance, injury: 'บาดเจ็บ', socialTitle: 'คนแปลกหน้า', name: null });
     expect(raw).not.toContain(t.b.name);
     expect(raw).not.toContain(t.b.personality);
     expect(raw).not.toContain(t.b.memberId);

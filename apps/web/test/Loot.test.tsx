@@ -48,6 +48,8 @@ const saved: CharacterView = {
   name: 'ลิน',
   appearance: 'หญิงผ้าคลุมเทา',
   personality: 'ช่างสังเกต กลัวความมืด',
+  avatarId: null,
+  appearanceTraits: null,
   hp: { current: 100, max: 100 },
   stamina: { current: 30, max: 30 },
   coins: 0,
