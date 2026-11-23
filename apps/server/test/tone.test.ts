@@ -164,7 +164,8 @@ describe('language tone (GEN-177)', { timeout: 90_000 }, () => {
     await playAtFountain(t, 1);
     await playAtFountain(t, 2);
     const scenes = requests.filter((r) => r.output.name === 'gm_scene');
-    expect(scenes.length).toBeGreaterThanOrEqual(1);
+    // A and B at the fountain, C elsewhere: one scene per place, so two calls to compare.
+    expect(scenes.length).toBeGreaterThanOrEqual(2);
     for (const r of scenes) {
       expect(r.system.map((b) => b.id)).toEqual(['scene-rules', 'tone']);
       const block = toneOf(r)!;

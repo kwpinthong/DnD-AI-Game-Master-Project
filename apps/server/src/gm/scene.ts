@@ -15,6 +15,7 @@ import { THAI_OUTPUT } from './language.ts';
 import { renderTokens } from './loop.ts';
 import { lingersNow, lingersOf, npcsPresentAt, type PresenceNow } from './npc-lines.ts';
 import { GM_OUTPUT, GmScene } from './schema.ts';
+import { gameTone, toneBlock } from './tone.ts';
 
 /**
  * GEN-145 (Nok 2026-11-23): when a new period begins, before the results of its first turn, the room gets the server's
@@ -103,6 +104,8 @@ export async function periodScenes(
     if (world.players.has(memberId) && world.places.some((p) => p.id === placeId)) readers.set(placeId, [...(readers.get(placeId) ?? []), memberId]);
   }
   const realNames = [...[...world.players.values()].map((p) => p.name), ...world.npcs.flatMap((n) => n.names.filter((name) => name !== n.alias))].filter((n) => n.trim().length > 0);
+  // GEN-194: the game's tone after the fixed rules, in the cached start of every scene call (as narration, GEN-177).
+  const system = [SCENE_BLOCK, toneBlock(assets.voice, gameTone(db, gameId))];
 
   const scenes = await Promise.all(
     [...readers].map(async ([placeId, members]): Promise<ResolutionEntry[]> => {
@@ -117,7 +120,7 @@ export async function periodScenes(
       };
       const messages = [{ role: 'user' as const, text: JSON.stringify(ctx) }];
       const audience = `scene:${placeId}`;
-      if (requestTokens([SCENE_BLOCK], messages) > CONTEXT_BUDGET.narrate_place) {
+      if (requestTokens(system, messages) > CONTEXT_BUDGET.narrate_place) {
         log(`[gm] game=${gameId} purpose=narrate_place audience=${audience} skipped: limit_exceeded`);
         return [];
       }
@@ -127,7 +130,7 @@ export async function periodScenes(
         day: at.day,
         phase: at.phase,
         turn: at.turn,
-        system: [SCENE_BLOCK],
+        system,
         messages,
         output: { name: GM_OUTPUT.scene, schema: GmScene },
         maxOutputTokens: 600,
