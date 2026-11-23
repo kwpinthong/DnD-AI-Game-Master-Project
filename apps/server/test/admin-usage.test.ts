@@ -1,6 +1,7 @@
 import { AdminSessionResponse, AiUsageGameResponse, AiUsageOverviewResponse, CreateGameResponse } from '@isekai/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ADMIN_SESSION_TTL_MS } from '../src/admin/session.ts';
+import { SYSTEM_USAGE_ID } from '../src/admin/style-review.ts';
 import { loadAiConfig } from '../src/ai/config.ts';
 import { createUsageStore, type UsageRecord } from '../src/ai/core/usage.ts';
 import { hashPin } from '../src/auth/pin.ts';
@@ -391,5 +392,19 @@ describe('AI usage dashboard (GEN-061)', { timeout: 60_000 }, () => {
     const models = Object.fromEntries(usage.byModel.map((m) => [m.model, m]));
     expect(models['mystery-model-9']).toMatchObject({ priced: false, totals: { inputTokens: 4000, unpricedCalls: 1 } });
     expect(models['claude-sonnet-5-5']).toMatchObject({ priced: true, totals: { unpricedCalls: 0 } });
+  });
+
+  it('GEN-196 C1+C2: server-wide calls (game id system) are named ระบบ; a normal game keeps its own name', async () => {
+    await boot();
+    const { gameId } = await newGame();
+    record(gameId);
+    record(SYSTEM_USAGE_ID, { purpose: 'style_review', day: null, phase: null, turn: null });
+    const token = await adminToken();
+
+    const overview = AiUsageOverviewResponse.parse((await call('GET', '/api/admin/ai-usage', { token })).body);
+    expect(overview.games.find((g) => g.game.id === SYSTEM_USAGE_ID)?.game).toEqual({ id: SYSTEM_USAGE_ID, name: 'ระบบ' });
+    expect(overview.games.find((g) => g.game.id === gameId)?.game).toEqual({ id: gameId, name: 'เกมทดสอบ' });
+    expect((await gameUsage(SYSTEM_USAGE_ID, token)).game).toEqual({ id: SYSTEM_USAGE_ID, name: 'ระบบ' });
+    expect((await gameUsage(gameId, token)).game).toEqual({ id: gameId, name: 'เกมทดสอบ' });
   });
 });
