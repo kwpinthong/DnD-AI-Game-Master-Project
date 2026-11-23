@@ -6,8 +6,12 @@
  * ("พักแล้วค่อยออกไปล่า") stay normal actions until a real intent parser replaces this.
  */
 const VERB = '(?:พักผ่อน|พัก|เข้านอน|นอนหลับ|นอน|งีบ|rest|sleep|nap)';
-const TAIL = '(?:สัก(?:พัก|ครู่|หน่อย|งีบ)|หน่อย|ก่อน|ที่(?:นี่|นี้|โรงเตี๊ยม|โรงเตี้ยม|ห้องพัก)?|ใน(?:ห้อง|ป่า|โรงเตี๊ยม)|here|a (?:bit|while)|for a (?:bit|while)|at the inn)';
-const OWN_REST = new RegExp(`^(?:(?:ขอ|จะ|ไป|ฉัน|ผม|หนู|i(?:'ll| will)?|let me|i want to|i'd like to)\\s*)?${VERB}(?:\\s*${TAIL})*$`, 'i');
+// GEN-159: "ที่<place>" is any one word, cut at a word that starts another action ("พักที่โรงเตี๊ยมแล้วออกไปล่า").
+const AT_PLACE = 'ที่(?:(?!แล้ว|ค่อย|และ|จากนั้น|ไป|ไม่)\\S)*';
+const TAIL = `(?:สัก(?:พัก|ครู่|หน่อย|งีบ)|หน่อย|ก่อน|${AT_PLACE}|ใน(?:ห้อง|ป่า|โรงเตี๊ยม)|here|a (?:bit|while)|for a (?:bit|while)|at the inn)`;
+// GEN-159: the rest button fills "พัก"; the player may type more rest after it ("พัก นอนที่โรงเตี๊ยม").
+const REST = `${VERB}(?:\\s*${TAIL})*`;
+const OWN_REST = new RegExp(`^(?:(?:ขอ|จะ|ไป|ฉัน|ผม|หนู|i(?:'ll| will)?|let me|i want to|i'd like to)\\s*)?${REST}(?:\\s+${REST})*$`, 'i');
 
 export function isOwnRestText(text: string): boolean {
   return OWN_REST.test(text.trim().replace(/[\s!.。~ๆ]+$/u, ''));
