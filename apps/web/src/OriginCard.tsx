@@ -1,6 +1,7 @@
 import type { CharacterView, OriginKind, OriginView } from '@isekai/protocol';
 import { useEffect, useId, useRef, useState } from 'react';
 import { characterCall, originCall } from './game-api.ts';
+import { FeedbackButton } from './ui/FeedbackDialog.tsx';
 import { Button, Skeleton, VisibilityBadge } from './ui/index.ts';
 import './pregame.css';
 
@@ -54,6 +55,7 @@ export function OriginCard({
 
   return (
     <div className="origin-veil">
+      <FeedbackButton apiBaseUrl={apiBaseUrl} token={token} page="spawn" />
       <div
         className="origin-card panel--ornament"
         role="dialog"

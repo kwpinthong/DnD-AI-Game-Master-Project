@@ -1,0 +1,129 @@
+/* ISK-011: the report box and its corner button. Tokens only; the backdrop and the action row come from confirm-dialog.css.
+   Two classes on purpose: .btn and .dialog-backdrop may load after this file. */
+
+.btn.feedback-corner {
+  position: fixed;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 15;
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: center;
+  padding: 0;
+  font-size: var(--text-md);
+}
+
+.dialog-backdrop.feedback-backdrop {
+  z-index: 30;
+}
+
+.feedback-dialog {
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--space-3);
+  width: min(100%, 520px);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: var(--space-5);
+  background: var(--panel);
+  color: var(--text);
+  border: var(--line-w) solid var(--accent);
+  border-radius: var(--radius-md);
+}
+
+.feedback-dialog form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.feedback-dialog__title,
+.feedback-dialog p {
+  margin: 0;
+}
+
+.feedback-type {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.feedback-type legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+}
+
+.feedback-type label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: var(--line-w) solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.feedback-dialog__field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.feedback-dialog textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 8rem;
+  resize: vertical;
+  font: inherit;
+}
+
+.feedback-dialog__count {
+  justify-self: end;
+  color: var(--muted);
+}
+
+.feedback-dialog .btn {
+  min-height: 44px;
+}
+
+/* the toast after sending sits above the page, not in its flow */
+.feedback-thanks {
+  position: fixed;
+  left: var(--space-2);
+  right: var(--space-2);
+  bottom: var(--space-2);
+  z-index: 30;
+}
+
+.feedback-thanks .btn {
+  min-height: 44px;
+}
+
+/* the owner's ฟีดแบ็ก tab (FeedbackAdmin) */
+.feedback-admin select,
+.feedback-admin button {
+  min-height: 44px;
+}
+
+.feedback-admin td button {
+  font: inherit;
+  text-align: start;
+}
+
+/* phones: the box is the whole screen */
+@media (max-width: 767.98px) {
+  .dialog-backdrop.feedback-backdrop {
+    padding: 0;
+  }
+
+  .feedback-dialog {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+    padding: var(--space-4);
+    align-content: start;
+  }
+}

@@ -50,6 +50,9 @@ const V2_SCREENS = [
   'vote-review',
   // ISK-002: the server owner's game list + early close.
   'admin-games',
+  // ISK-011: the player's report box and the owner's ฟีดแบ็ก tab.
+  'feedback',
+  'admin-feedback',
 ];
 
 const schemaNames = Object.keys(CONTRACT_SCHEMAS) as (keyof typeof CONTRACT_SCHEMAS)[];

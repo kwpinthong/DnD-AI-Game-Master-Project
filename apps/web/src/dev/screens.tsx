@@ -16,7 +16,8 @@ import { OriginCard } from '../OriginCard.tsx';
 import { PlayRoom } from '../PlayRoom.tsx';
 import { ScenarioEditor } from '../ScenarioEditor.tsx';
 import { VoteReview } from '../VoteReview.tsx';
-import { GmConsoleFrame } from './previews.tsx';
+import { FeedbackAdmin } from '../FeedbackAdmin.tsx';
+import { FeedbackFrame, GmConsoleFrame } from './previews.tsx';
 
 /**
  * What the gallery renders for each contract screen (GEN-100): the page that exists today (pre-v2) or a
@@ -159,6 +160,17 @@ export const SCREEN_VIEWS: Record<ScreenId, ScreenView> = {
     render: ({ baseUrl }) => (
       <div className="preview gallery-inline">
         <AdminGames apiBaseUrl={baseUrl} token={MOCK_ADMIN_TOKEN} onForbidden={noop} />
+      </div>
+    ),
+  },
+  // ISK-011
+  feedback: { page: 'FeedbackDialog', socket: false, render: ({ baseUrl, token }) => <FeedbackFrame apiBaseUrl={baseUrl} token={token} /> },
+  'admin-feedback': {
+    page: 'FeedbackAdmin',
+    socket: false,
+    render: ({ baseUrl }) => (
+      <div className="preview">
+        <FeedbackAdmin apiBaseUrl={baseUrl} token={MOCK_ADMIN_TOKEN} onForbidden={noop} />
       </div>
     ),
   },

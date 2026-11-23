@@ -38,6 +38,8 @@ export const CONTRACT_SCREENS = [
   { id: 'game-data', title: '10. ข้อมูลเกม (ผู้ดูแล)' },
   { id: 'vote-review', title: '11. ข้อความที่ถูก 👎 + แก้เป็น (ผู้ดูแล)' },
   { id: 'admin-games', title: '12. รายการเกม + ปิดเกม (ผู้ดูแล)' },
+  { id: 'feedback', title: '13. รายงาน / ข้อเสนอ (กล่องของผู้เล่น ทุกหน้าในเกม)' },
+  { id: 'admin-feedback', title: '14. ฟีดแบ็กจากผู้เล่น (ผู้ดูแล)' },
 ] as const;
 export type ScreenId = (typeof CONTRACT_SCREENS)[number]['id'];
 
@@ -352,10 +354,10 @@ export const CONTRACT: readonly ContractItem[] = [
   http('PUT', '/api/style/opt-out', 'PlayerStyleRequest', 'PlayerStyleResponse', ready('GEN-082', 'any', ['my-style', 'join'], '"ไม่ให้เก็บสไตล์ฉัน" ของรหัสนั้นทุกเกม (`optOut` จำเป็น); เกมที่จบหลังจากนี้ไม่สร้างสไตล์ใหม่ และ AI ไม่ได้สไตล์นี้')),
   http('POST', '/api/style/delete', 'PlayerStyleRequest', 'PlayerStyleResponse', ready('GEN-082', 'any', ['my-style'], 'ลบสไตล์ทั้งหมดของรหัสนั้น (ลบจริง ไม่มี undo) แล้วตอบ `style: null`')),
 
-  // --- ISK-010: Report & Feedback (screens of ISK-011 come later: listed on the nearest existing ones) ---
-  http('POST', '/api/feedback', 'FeedbackInput', 'FeedbackRow', ready('ISK-010', 'player', ['lobby', 'play-action', 'ending'], '201; ทุกสมาชิกที่มี session (ไม่มี = 401); เกม / สมาชิกจาก session; day / period / turn จาก state ของเกม (ยังไม่มีเทิร์น = null) ไม่เชื่อ body; 400 `text_required` / `text_too_long` (> 1000 code point) / `invalid_type` / `invalid_page`; userAgent ตัดที่ 300; 5 ครั้ง / 10 นาที / สมาชิก (นับจากตาราง) = 429 `rate_limited`; ไม่ส่งถึงผู้เล่นอื่น ไม่ log ข้อความ')),
-  http('GET', '/api/admin/feedback', null, 'AdminFeedbackResponse', ready('ISK-010', 'admin', ['learning-library'], 'ล่าสุด 200 แถว ใหม่ก่อน ไม่แบ่งหน้า; `?status=` / `?type=` กรอง (ค่านอกรายการ = 400 `invalid_status` / `invalid_type`); ไม่มี token = 401, token ที่ไม่ใช่ admin = 403; `text` แสดงแบบ escape')),
-  http('PATCH', '/api/admin/feedback/:id', 'AdminFeedbackStatusRequest', 'FeedbackRow', ready('ISK-010', 'admin', ['learning-library'], 'เปลี่ยนสถานะ + updatedAt + audit 1 แถว (from / to / เวลา); สถานะนอกรายการ = 400 `invalid_status`; ไม่มี id = 404 `feedback_not_found`; ไม่มีการลบ')),
+  // --- ISK-010: Report & Feedback (screens: ISK-011) ---
+  http('POST', '/api/feedback', 'FeedbackInput', 'FeedbackRow', ready('ISK-010', 'player', ['feedback'], '201; ทุกสมาชิกที่มี session (ไม่มี = 401); เกม / สมาชิกจาก session; day / period / turn จาก state ของเกม (ยังไม่มีเทิร์น = null) ไม่เชื่อ body; 400 `text_required` / `text_too_long` (> 1000 code point) / `invalid_type` / `invalid_page`; userAgent ตัดที่ 300; 5 ครั้ง / 10 นาที / สมาชิก (นับจากตาราง) = 429 `rate_limited`; ไม่ส่งถึงผู้เล่นอื่น ไม่ log ข้อความ')),
+  http('GET', '/api/admin/feedback', null, 'AdminFeedbackResponse', ready('ISK-010', 'admin', ['admin-feedback'], 'ล่าสุด 200 แถว ใหม่ก่อน ไม่แบ่งหน้า; `?status=` / `?type=` กรอง (ค่านอกรายการ = 400 `invalid_status` / `invalid_type`); ไม่มี token = 401, token ที่ไม่ใช่ admin = 403; `text` แสดงแบบ escape')),
+  http('PATCH', '/api/admin/feedback/:id', 'AdminFeedbackStatusRequest', 'FeedbackRow', ready('ISK-010', 'admin', ['admin-feedback'], 'เปลี่ยนสถานะ + updatedAt + audit 1 แถว (from / to / เวลา); สถานะนอกรายการ = 400 `invalid_status`; ไม่มี id = 404 `feedback_not_found`; ไม่มีการลบ')),
 ];
 
 /**

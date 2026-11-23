@@ -5,6 +5,7 @@ import { fetchGameLog } from './history-api.ts';
 import { forgetToken, loadKnownTokens } from './session.ts';
 import { TurnChangesList } from './play/TurnChanges.tsx';
 import { Button } from './ui/Button.tsx';
+import { FeedbackButton } from './ui/FeedbackDialog.tsx';
 import { ErrorState, Skeleton } from './ui/parts.tsx';
 import { endText, gameClosedText } from './ui/strings.ts';
 
@@ -122,6 +123,8 @@ export function GameLog({ log, onBack, apiBaseUrl, token }: { log: GameLogRespon
   const ids = { ending: `${id}ending`, fates: `${id}fates`, secrets: `${id}secrets`, rating: `${id}rating` };
   return (
     <section aria-label={`สรุปเกม ${log.game.name}`} className="end">
+      {/* ISK-011: the report goes with the session of this game, so only a page that has one shows the button. */}
+      {ended && apiBaseUrl !== undefined && token && <FeedbackButton apiBaseUrl={apiBaseUrl} token={token} page="ending" />}
       <header className="end__head">
         <h2 className="end__name">{log.game.name}</h2>
         <p className="end__status">

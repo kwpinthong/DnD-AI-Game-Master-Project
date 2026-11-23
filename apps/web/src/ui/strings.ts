@@ -131,7 +131,7 @@ export const libraryText = {
   votes: (up: number, down: number, players: number) => `👍 ${up} · 👎 ${down} · ผู้เล่น ${players}`,
   topVerbs: 'ทำบ่อย',
   secretShare: (share: number) => `ลงมือแบบลับ ${Math.round(share * 100)}%`,
-  adminNav: { usage: 'การใช้ AI', games: 'เกม', library: 'Learning library', data: 'ข้อมูลเกม', votes: 'ข้อความที่ถูก 👎', style: 'ทบทวนสำนวน' },
+  adminNav: { usage: 'การใช้ AI', games: 'เกม', library: 'Learning library', data: 'ข้อมูลเกม', votes: 'ข้อความที่ถูก 👎', style: 'ทบทวนสำนวน', feedback: 'ฟีดแบ็ก' },
   // GEN-084 (Q-322): the two tabs of the library page.
   tabs: { entries: 'ความรู้ที่เก็บไว้', npc: 'คลังบทพูดต่อ NPC' },
 } as const;
@@ -165,6 +165,37 @@ export const gameClosedText = {
   home: 'กลับหน้าแรก',
   closedEarly: 'ปิดก่อนกำหนด',
   byOwner: 'ปิดโดยผู้ดูแล',
+} as const;
+
+// ISK-011: the player's report box (every in-game page) and the owner's ฟีดแบ็ก tab.
+export const feedbackText = {
+  open: 'รายงาน / ข้อเสนอ',
+  type: { bug: 'บั๊ก', idea: 'ข้อเสนอ', other: 'อื่นๆ' },
+  typeLegend: 'ประเภท',
+  text: 'ข้อความ',
+  count: (n: number, max: number) => `${n}/${max}`,
+  send: 'ส่ง',
+  sending: 'กำลังส่ง…',
+  close: 'ปิด',
+  thanks: 'ขอบคุณ ได้รับแล้ว',
+  rateLimited: 'ส่งบ่อยเกินไป ลองอีกครั้งในอีกสักครู่',
+  sessionLost: 'session หมดอายุ กรุณาเข้าเกมใหม่ แล้วค่อยส่งอีกครั้ง',
+  unreachable: 'ติดต่อ server ไม่ได้ ข้อความยังอยู่ ลองส่งอีกครั้ง',
+  failed: 'ส่งไม่สำเร็จ ข้อความยังอยู่ ลองส่งอีกครั้ง',
+  // the owner's tab
+  table: 'รายงานจากผู้เล่น',
+  filterStatus: 'กรองสถานะ',
+  filterType: 'กรองประเภท',
+  all: 'ทั้งหมด',
+  status: { new: 'ใหม่', reviewing: 'กำลังดู', done: 'เสร็จ' },
+  head: { date: 'วันที่', type: 'ประเภท', game: 'เกม', at: 'วัน-ช่วง', text: 'ข้อความ', status: 'สถานะ' },
+  statusOf: (id: number) => `สถานะของ #${id}`,
+  noTurn: 'ก่อนเริ่มเทิร์น',
+  loading: 'กำลังโหลดรายงาน…',
+  empty: 'ยังไม่มีรายงาน',
+  emptyText: 'เมื่อผู้เล่นกด รายงาน / ข้อเสนอ ในเกม รายงานจะมาอยู่ที่นี่',
+  emptyFilter: 'ไม่มีรายงานที่ตรงกับตัวกรอง',
+  saveFailed: (message: string) => `เปลี่ยนสถานะไม่สำเร็จ: ${message}`,
 } as const;
 
 // GEN-151: the NPC example library (on the Learning library page, Q-322).

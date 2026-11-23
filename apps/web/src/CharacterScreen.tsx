@@ -11,6 +11,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useFieldErrors } from './form-state.ts';
 import { characterCall } from './game-api.ts';
 import { LootStep, lootSummary } from './LootStep.tsx';
+import { FeedbackButton } from './ui/FeedbackDialog.tsx';
 import { Button, Field, Panel, Skeleton, Stepper, VisibilityBadge, type Visibility } from './ui/index.ts';
 import './pregame.css';
 
@@ -156,6 +157,7 @@ export function CharacterScreen({
 
   return (
     <div className="pregame pregame--wide">
+      <FeedbackButton apiBaseUrl={apiBaseUrl} token={token} page={step === 1 ? 'loot' : 'character'} />
       <div className="wizard__head">
         {back}
         <h2 className="pregame__title">สร้างตัวละคร</h2>

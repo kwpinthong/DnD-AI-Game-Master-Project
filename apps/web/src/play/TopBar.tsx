@@ -1,6 +1,7 @@
 import { PHASE_LABEL, type RoomState } from '@isekai/protocol';
 import { topBar, type TurnDot } from '../screen-models.ts';
 import { Button, playText } from '../ui/index.ts';
+import { feedbackText } from '../ui/strings.ts';
 
 const t = playText.top;
 
@@ -52,7 +53,20 @@ export function TopBar({ room, menuOpen, onMenu, onHistory }: { room: RoomState;
 }
 
 /** The menu under [เมนู]: who is in the room (names + online, never who has sent: Q-195) and the way back. */
-export function RoomMenu({ room, onBack, onGameList, onHistory }: { room: RoomState; onBack: () => void; onGameList: () => void; onHistory?: () => void }) {
+export function RoomMenu({
+  room,
+  onBack,
+  onGameList,
+  onHistory,
+  onFeedback,
+}: {
+  room: RoomState;
+  onBack: () => void;
+  onGameList: () => void;
+  onHistory?: () => void;
+  /** ISK-011: the report box. */
+  onFeedback?: () => void;
+}) {
   const gmView = room.you.role === 'gm';
   return (
     <div className="play-menu panel panel--ornament">
@@ -76,6 +90,7 @@ export function RoomMenu({ room, onBack, onGameList, onHistory }: { room: RoomSt
       {onHistory && <Button onClick={onHistory}>{t.history}</Button>}
       <Button onClick={onBack}>{playText.back}</Button>
       <Button onClick={onGameList}>{t.gameList}</Button>
+      {onFeedback && <Button onClick={onFeedback}>{feedbackText.open}</Button>}
     </div>
   );
 }

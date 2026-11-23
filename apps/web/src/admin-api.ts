@@ -5,6 +5,9 @@ import {
   AdminCorrectionResponse,
   AdminCorrectionsExportResponse,
   AdminDownvotesResponse,
+  AdminFeedbackResponse,
+  type AdminFeedbackStatusRequest,
+  FeedbackRow,
   type AdminCorrectionRequest,
   AdminSessionResponse,
   AiUsageGameResponse,
@@ -203,6 +206,15 @@ export function fetchAdminGames(baseUrl: string, token: string) {
 /** ISK-001/002: closes a game early; answers the game's row after the close. */
 export function closeAdminGame(baseUrl: string, token: string, id: string, body: AdminCloseGameRequest) {
   return call(baseUrl, `/api/admin/games/${encodeURIComponent(id)}/close`, { method: 'POST', headers: { ...auth(token), 'content-type': 'application/json' }, body: JSON.stringify(body) }, AdminGameRow);
+}
+
+/** ISK-010: the players' reports (latest 200, newest first) and their status. */
+export function fetchFeedback(baseUrl: string, token: string) {
+  return call(baseUrl, '/api/admin/feedback', { headers: auth(token) }, AdminFeedbackResponse);
+}
+
+export function saveFeedbackStatus(baseUrl: string, token: string, id: number, body: AdminFeedbackStatusRequest) {
+  return call(baseUrl, `/api/admin/feedback/${id}`, { method: 'PATCH', headers: { ...auth(token), 'content-type': 'application/json' }, body: JSON.stringify(body) }, FeedbackRow);
 }
 
 export async function postAdminLogout(baseUrl: string, token: string): Promise<void> {
