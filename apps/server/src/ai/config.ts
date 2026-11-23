@@ -57,6 +57,7 @@ const PURPOSES = [
   'summarize_journal',
   'finale',
   'character_analyze',
+  'style_review',
 ] as const satisfies readonly AiPurpose[];
 const ERROR_KINDS = ['refusal', 'max_tokens', 'invalid_json', 'rate_limited', 'timeout', 'provider_error'] as const satisfies readonly AiErrorKind[];
 

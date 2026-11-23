@@ -171,3 +171,5 @@ export * from './schema-statuses.ts';
 export * from './schema-rating.ts';
 // GEN-147: the game data (seeded once from the asset files) and its edit log, own file for the same reason.
 export * from './schema-game-data.ts';
+// GEN-178: the style review rounds and their proposed Voice rules, own file for the same reason.
+export * from './schema-style-review.ts';

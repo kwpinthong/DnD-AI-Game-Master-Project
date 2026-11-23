@@ -261,6 +261,18 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     const exampleId = (withExample.body as { npcs: { examples: { id: number }[] }[] }).npcs[0]!.examples[0]!.id;
     await hit(call, 'DELETE /api/admin/npc-library/:id', { token: adminToken, path: `/api/admin/npc-library/${exampleId}` });
     await hit(call, 'DELETE /api/admin/npc-library/:id', { token: adminToken, path: `/api/admin/npc-library/${exampleId}` });
+    // GEN-178: the style review round (too few signals here: skipped); two proposals stored as a round would.
+    await hit(call, 'GET /api/admin/style-review', { token: adminToken });
+    await hit(call, 'POST /api/admin/style-review/run', { token: adminToken });
+    const round = server!.db.prepare("insert into style_review_round (trigger, status, signals, counts, to_at, flag_snapshot, created_at) values ('manual', 'done', 20, ?, 0, '{}', 0)").run(JSON.stringify({ downvotes: 20, flags: 0, reasons: {}, rules: {}, npcs: {} }));
+    const propose = () => Number(server!.db.prepare("insert into style_rule_proposal (round_id, kind, content, reason, status) values (?, 'pair', ?, 'สั้นลง', 'proposed')").run(round.lastInsertRowid, JSON.stringify({ bad: 'เขามีความโกรธ', good: 'เขาโกรธ' })).lastInsertRowid);
+    const [approveId, rejectId] = [propose(), propose()];
+    await hit(call, 'POST /api/admin/style-review/proposals/:id/approve', { token: adminToken, path: `/api/admin/style-review/proposals/${approveId}/approve`, body: {} });
+    await hit(call, 'POST /api/admin/style-review/proposals/:id/approve', { token: adminToken, path: `/api/admin/style-review/proposals/${approveId}/approve`, body: {} });
+    await hit(call, 'POST /api/admin/style-review/proposals/:id/reject', { token: adminToken, path: `/api/admin/style-review/proposals/${rejectId}/reject` });
+    await hit(call, 'POST /api/admin/style-review/proposals/:id/reject', { token: adminToken, path: '/api/admin/style-review/proposals/99999/reject' });
+    await hit(call, 'POST /api/admin/style-review/voice/:version/restore', { token: adminToken, path: '/api/admin/style-review/voice/1/restore' });
+    await hit(call, 'POST /api/admin/style-review/voice/:version/restore', { token: adminToken, path: '/api/admin/style-review/voice/99/restore' });
     await hit(call, 'POST /api/admin/logout', { token: adminToken });
     await hit(call, 'POST /api/logout', { token: p1.token });
     await hit(call, 'DELETE /api/game', { token: gm, body: { confirmName: 'เกมสัญญา 2' } });

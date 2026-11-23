@@ -18,6 +18,8 @@ import {
   type StyleSettingsRequest,
   NpcLibraryResponse,
   type NpcExampleAddRequest,
+  StyleReviewResponse,
+  type StyleProposalApproveRequest,
 } from '@isekai/protocol';
 import { apiUrl, fetchWithTimeout } from './session.ts';
 
@@ -149,6 +151,24 @@ export function addNpcExample(baseUrl: string, token: string, body: NpcExampleAd
 
 export function deleteNpcExample(baseUrl: string, token: string, id: number) {
   return call(baseUrl, `/api/admin/npc-library/${id}`, { method: 'DELETE', headers: auth(token) }, NpcLibraryResponse);
+}
+
+/** GEN-178: the style review round (server owner only); every answer is the whole tab. */
+export function fetchStyleReview(baseUrl: string, token: string) {
+  return call(baseUrl, '/api/admin/style-review', { headers: auth(token) }, StyleReviewResponse);
+}
+
+export function runStyleReview(baseUrl: string, token: string) {
+  return call(baseUrl, '/api/admin/style-review/run', { method: 'POST', headers: auth(token) }, StyleReviewResponse);
+}
+
+export function decideStyleProposal(baseUrl: string, token: string, id: number, decision: 'approve' | 'reject', body?: StyleProposalApproveRequest) {
+  const json = decision === 'approve' ? { headers: { ...auth(token), 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}) } : { headers: auth(token) };
+  return call(baseUrl, `/api/admin/style-review/proposals/${id}/${decision}`, { method: 'POST', ...json }, StyleReviewResponse);
+}
+
+export function restoreVoiceVersion(baseUrl: string, token: string, version: number) {
+  return call(baseUrl, `/api/admin/style-review/voice/${version}/restore`, { method: 'POST', headers: auth(token) }, StyleReviewResponse);
 }
 
 export async function postAdminLogout(baseUrl: string, token: string): Promise<void> {

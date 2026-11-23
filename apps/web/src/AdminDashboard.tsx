@@ -6,6 +6,7 @@ import { LearningLibrary } from './LearningLibrary.tsx';
 import { NpcLibrary } from './NpcLibrary.tsx';
 import { VoteReview } from './VoteReview.tsx';
 import { StylePanel } from './StylePanel.tsx';
+import { StyleReview } from './StyleReview.tsx';
 import { libraryText, npcLibraryText } from './ui/strings.ts';
 
 /**
@@ -45,6 +46,7 @@ const PURPOSE_LABEL: Record<string, string> = {
   summarize_journal: 'สรุปบันทึก',
   finale: 'ฉากจบ (finale)',
   character_analyze: 'loot ตอนสร้างตัวละคร',
+  style_review: 'ทบทวนสำนวน (ทั้ง server)',
 };
 
 const FAILURE_LABEL: Record<string, string> = {
@@ -86,7 +88,7 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
     return token ? { state: 'dashboard', token } : { state: 'login' };
   });
 
-  const [page, setPage] = useState<'usage' | 'library' | 'data' | 'votes'>('usage');
+  const [page, setPage] = useState<'usage' | 'library' | 'data' | 'votes' | 'style'>('usage');
 
   function signedIn(token: string) {
     saveAdminToken(token);
@@ -107,7 +109,7 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
         <>
           {/* GEN-091: both pages sit behind the same admin code (Q-168). */}
           <nav className="admin__nav" aria-label="ผู้ดูแล">
-            {(['usage', 'library', 'data', 'votes'] as const).map((p) => (
+            {(['usage', 'library', 'data', 'votes', 'style'] as const).map((p) => (
               <button key={p} type="button" aria-pressed={page === p} onClick={() => setPage(p)}>
                 {libraryText.adminNav[p]}
               </button>
@@ -136,6 +138,11 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
               <h2>{libraryText.adminNav.votes}</h2>
               <VoteReview apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
               <StylePanel apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
+            </section>
+          ) : page === 'style' ? (
+            <section aria-label={libraryText.adminNav.style}>
+              <h2>{libraryText.adminNav.style}</h2>
+              <StyleReview apiBaseUrl={apiBaseUrl} token={view.token} onForbidden={signedOut} />
             </section>
           ) : (
             <section aria-label={libraryText.adminNav.data}>

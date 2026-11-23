@@ -47,3 +47,6 @@ export * from './asset-enums.ts';
 
 // GEN-151: the NPC example library (server owner), own file for the same reason.
 export * from './npc-library.ts';
+
+// GEN-178: the style review round (server owner), own file for the same reason.
+export * from './style-review.ts';
