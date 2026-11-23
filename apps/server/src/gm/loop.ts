@@ -24,6 +24,7 @@ import type { Db, DbOrTx } from '../db/client.ts';
 import { game, gamePhase } from '../db/schema.ts';
 import type { GmFallbackCause } from '@isekai/protocol';
 import type { ClosedPhase, PhaseResolution, PhaseResolver, ResolutionEntry, ResolutionHit, ResolverStuck } from '../room/resolver.ts';
+import { actionCausesOf } from '../room/turn-changes.ts';
 import { itemsInGame, skillsInGame } from '../crossplayer/items.ts';
 import { castCurseLabels } from '../statuses/curses.ts';
 import { checkViewOf, hitOf, rollViewOf } from './roll-view.ts';
@@ -516,6 +517,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       entries,
       dialogue,
       hits,
+      causes: actionCausesOf(resolved.log.outcomes, nameOf),
       checks,
       apply: (tx) => {
         const applied = applyPhaseActions(tx, gameId, actions, new ReplayRng(rolls), now(), tagging, drowsy, crises);

@@ -1,5 +1,5 @@
 import type { HitChange, TurnChange } from '@isekai/protocol';
-import { isDrowsy, karmaTitle, type PhaseLogEntry, type PhaseState } from '@isekai/rules';
+import { isDrowsy, karmaTitle, type ActionOutcome, type PhaseLogEntry, type PhaseState } from '@isekai/rules';
 import { eq, inArray } from 'drizzle-orm';
 import type { GameAssets } from '../assets/load.ts';
 import { heldItemsOf } from '../crossplayer/items.ts';
@@ -50,9 +50,37 @@ export function nameOf(db: DbOrTx, memberId: string): string {
 const ACTION = 'การกระทำในเทิร์นนี้';
 const HIT = 'ถูกคนอื่นลงมือ';
 
+/** GEN-124: why the resolver moved the actor's own HP / Stamina (the delta is signed, in the status bar's units). */
+export interface ActionCause {
+  readonly stat: 'hp' | 'stamina';
+  readonly delta: number;
+  readonly kind: 'attack' | 'skill';
+  readonly name?: string;
+}
+
+/** The causes the resolver's outcomes name, by actor: an attack on someone (its Stamina and HP), each skill's Stamina. */
+export function actionCausesOf(outcomes: readonly ActionOutcome[], nameOf: (ref: string) => string | undefined): Map<string, ActionCause[]> {
+  const out = new Map<string, ActionCause[]>();
+  const add = (id: string, c: ActionCause) => out.set(id, [...(out.get(id) ?? []), c]);
+  for (const o of outcomes) {
+    if (o.status === 'no_target') add(o.actorId, { stat: 'stamina', delta: -o.stamina.net, kind: 'attack' });
+    if (o.status !== 'resolved') continue;
+    const { log } = o;
+    for (const a of log.tagging?.activated ?? []) if (a.stamina > 0) add(o.actorId, { stat: 'stamina', delta: -a.stamina, kind: 'skill', name: nameOf(a.ref) ?? 'ทักษะ' });
+    if (o.target === null && log.hp.target === null) continue;
+    add(o.actorId, { stat: 'stamina', delta: -log.stamina.net, kind: 'attack' });
+    add(o.actorId, { stat: 'hp', delta: log.hp.actor.after - log.hp.actor.before, kind: 'attack' });
+  }
+  return out;
+}
+
+const causeReason = (c: ActionCause) => (c.kind === 'skill' ? `ใช้ทักษะ ${c.name ?? ''}`.trim() : 'โจมตีศัตรู');
+
 /** What the turn's engine log, hazards and the hits on this player say about why. */
 export interface TurnReasons {
   readonly log: readonly PhaseLogEntry[];
+  /** GEN-124: what the resolver says about each actor's own HP / Stamina. Missing = the generic reason. */
+  readonly causes?: ReadonlyMap<string, readonly ActionCause[]>;
   /** Stamina lost to a hazard place this turn, by member. */
   readonly hazard: ReadonlyMap<string, number>;
   readonly hits: ReadonlyMap<string, readonly HitChange[]>;
@@ -86,10 +114,11 @@ export function turnChangesOf(memberId: string, s0: StatSnapshot, s1: StatSnapsh
   const rested = (stat: 'hp' | 'stamina') => recovered.reduce((sum, e) => sum + e[stat].gain, 0);
   const drowsyCost = mine.reduce((sum, e) => sum + (e.type === 'drowsy_cost' ? e.stamina.before - e.stamina.after : 0), 0);
   const out: TurnChange[] = [];
+  const causes = (stat: 'hp' | 'stamina') => (why.causes?.get(memberId) ?? []).filter((c) => c.stat === stat).map((c): [number, string] => [c.delta, causeReason(c)]);
 
-  for (const c of split(s2.hp - s0.hp, [[rested('hp'), 'พักผ่อน'], [hitDelta('hp'), 'ถูกโจมตี']], ACTION)) out.push({ stat: 'hp', ...c });
+  for (const c of split(s2.hp - s0.hp, [[rested('hp'), 'พักผ่อน'], [hitDelta('hp'), 'ถูกโจมตี'], ...causes('hp')], ACTION)) out.push({ stat: 'hp', ...c });
   const hazard = why.hazard.get(memberId) ?? 0;
-  for (const c of split(s2.stamina - s0.stamina, [[rested('stamina'), 'พักผ่อน'], [-drowsyCost, DROWSY_LABEL], [-hazard, 'พื้นที่อันตราย'], [hitDelta('stamina'), 'ถูกโจมตี']], ACTION)) {
+  for (const c of split(s2.stamina - s0.stamina, [[rested('stamina'), 'พักผ่อน'], [-drowsyCost, DROWSY_LABEL], [-hazard, 'พื้นที่อันตราย'], [hitDelta('stamina'), 'ถูกโจมตี'], ...causes('stamina')], ACTION)) {
     out.push({ stat: 'stamina', ...c });
   }
   // Coins: what the resolver wrote (s0 -> s1), then the inn / clinic at the turn's close (s1 -> s2).

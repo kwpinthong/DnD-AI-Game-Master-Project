@@ -486,7 +486,7 @@ export function createRoomService(
           for (const id of current.order) {
             const [b0, b1, b2] = [s0.get(id), s1.get(id), s2.get(id)];
             if (!b0 || !b1 || !b2) continue;
-            const changes = turnChangesOf(id, b0, b1, b2, { log: step.log, hazard, hits });
+            const changes = turnChangesOf(id, b0, b1, b2, { log: step.log, hazard, hits, ...(resolution.causes ? { causes: resolution.causes } : {}) });
             if (changes.length === 0) continue;
             const recipients = new Set([id, ...gmIds]);
             rows.push({ row: insertEntry(tx, gameId, { kind: 'changes', at, locationId: null, text: nameOf(tx, id), meta: { changes } }, [...recipients], t), recipients });
