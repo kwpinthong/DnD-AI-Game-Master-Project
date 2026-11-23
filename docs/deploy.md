@@ -49,7 +49,7 @@ checklist ข้อ 4: ใช้ `<api>` = `<web>` = URL ของ service, C2 /
 |---|---|---|---|
 | Railway | `NODE_ENV` | `production` | ทำให้ `WEB_ORIGIN` กับ `DB_PATH` เป็นค่าบังคับ ขาดตัวไหน server ไม่ start และ log ชื่อตัวที่ขาด |
 | Railway | `DB_PATH` | `/data/isekai.sqlite` | ต้องอยู่ใน mount path ของ Volume ไม่งั้นข้อมูลหายทุก deploy |
-| Railway | `WEB_ORIGIN` | `https://<site>.netlify.app` | origin ของ web ไม่มี path (มี `/` ท้ายได้) ใส่หลาย origin คั่นด้วย `,` |
+| Railway | `WEB_ORIGIN` | `https://<site>.netlify.app` | origin ของ web ไม่มี path (มี `/` ท้ายได้) ใส่หลาย origin คั่นด้วย `,` (ทั้ง CORS และ WebSocket Origin รับเฉพาะที่ listed ไม่มี wildcard) ทดสอบ dev สองเบราว์เซอร์ต่าง origin: `WEB_ORIGIN=http://localhost:5173,http://127.0.0.1:5173` |
 | Railway | `BACKUP_DIR` | `/data/backups` | ที่เก็บ backup (GEN-037) ต้องอยู่ใน volume ไม่ตั้ง = `backups/` ข้างไฟล์ DB (ผลเท่ากัน) ดูข้อ 6 |
 | Railway | `BACKUP_INTERVAL_HOURS` / `BACKUP_KEEP` | ไม่ต้องตั้ง (ค่าเริ่ม 6 / 28) | ทุก 6 ชม. เก็บ 28 ไฟล์ล่าสุด (7 วัน) / `BACKUP_INTERVAL_HOURS=0` = ปิด backup ค่าผิด = server ไม่ start และ log ชื่อตัวแปร |
 | Railway | `RAILPACK_NODE_VERSION` | `26` | ให้ Railpack ใช้ Node 26 ตรงกับ `engines.node` |
