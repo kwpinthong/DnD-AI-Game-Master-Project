@@ -25,6 +25,8 @@ export function registerCompanionRoutes(app: FastifyInstance, db: Db, now: Clock
         return sendError(reply, 404, { code: 'npc_not_found', message: outcome.message });
       case 'already_companion':
         return sendError(reply, 409, { code: 'not_allowed', message: 'บันทึก NPC คนนี้ไว้แล้ว' });
+      case 'not_acquainted':
+        return sendError(reply, 403, { code: 'not_acquainted', message: 'ยังไม่รู้จัก NPC คนนี้ จึงบันทึกเป็นคู่หูไม่ได้' });
       case 'companion_limit':
         return sendError(reply, 409, { code: 'companion_limit', message: 'บันทึก NPC ได้สูงสุด 3 คน ปล่อยคนเดิมก่อนจึงบันทึกคนใหม่ได้' });
     }

@@ -250,6 +250,7 @@ const LAYOUTS: Record<TabName, TabLayout> = {
     ],
     derive: (r) => {
       r.aliases = npcAliases(r.name as string, r.trueName as string);
+      r.publicAlias = outwardLook(r.publicAlias as string, r.aliases as string[]);
       return undefined;
     },
   },
@@ -390,6 +391,19 @@ export function npcAliases(nameCell: string, trueNameCell: string): string[] {
     if (english) out.push(english);
   }
   return [...new Set(out)];
+}
+
+/**
+ * GEN-121: a Public_Alias is what players see before they know the NPC, so it must not hold a name from the row
+ * ("โนอา — เด็กขอทาน" → "เด็กขอทาน"). An alias that is itself the whole name cell (grade B) is left as it is.
+ */
+export function outwardLook(publicAlias: string, names: readonly string[]): string {
+  let out = publicAlias;
+  if (!names.includes(publicAlias)) {
+    for (const name of [...names].filter((n) => n.length > 2).sort((x, y) => y.length - x.length)) out = out.split(name).join(' ');
+  }
+  out = out.replace(/^[\s—–-]+|[\s—–-]+$/g, '').replace(/^\((.*)\)$/, '$1').trim();
+  return out;
 }
 
 function periodsIn(when: string): Array<(typeof PERIODS)[number]> {

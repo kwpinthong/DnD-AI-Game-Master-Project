@@ -127,6 +127,10 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'GET /api/game/travel', { token: tgm });
     const npcRef = seen.view === 'player' ? seen.npcs[0]?.ref : undefined;
     expect(npcRef, 'an NPC at the merchant place').toBeTypeOf('string');
+    // GEN-121: only a known NPC can be saved.
+    for (const n of defaultScenario().npcs.filter((x) => x.locationId === merchant.locationId)) {
+      server!.db.prepare('insert into npc_bond (member_id, npc_id, name_revealed, updated_at) values (?, ?, 1, ?)').run(t.a.memberId, n.id, CLOCK);
+    }
     await hit(call, 'POST /api/game/companions', { token: t.a.token, body: { ref: npcRef } });
     await hit(call, 'GET /api/game/companions', { token: t.a.token });
     await hit(call, 'DELETE /api/game/companions/:ref', { token: t.a.token, path: `/api/game/companions/${encodeURIComponent(npcRef!)}` });

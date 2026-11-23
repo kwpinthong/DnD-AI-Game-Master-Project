@@ -147,6 +147,8 @@ export const ApiError = z.discriminatedUnion('code', [
   z.object({ code: z.literal('loot_no_offer'), message: z.string() }),
   /** 409: the player already keeps 3 NPCs; release one first (GEN-054). */
   z.object({ code: z.literal('companion_limit'), message: z.string() }),
+  /** 403 (GEN-121): the caller does not know that NPC yet (its name is still hidden), so it cannot be saved as a companion. */
+  z.object({ code: z.literal('not_acquainted'), message: z.string() }),
   /** 404: no NPC with that ref at the caller's place, or (release) not one of the caller's companions. */
   z.object({ code: z.literal('npc_not_found'), message: z.string() }),
   /** 404 (GEN-078): the `sourceRef` names no action → result row the end page of the caller's game shows. */
