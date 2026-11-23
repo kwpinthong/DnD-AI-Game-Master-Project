@@ -8,6 +8,7 @@ import { cannedGmAnswer, contextOf, mockNpcLines, mockTurnProposal } from '../sr
 import { mockReply } from '../src/ai/providers/mock.ts';
 import { CONTEXT_BUDGET, requestTokens, type DialogueContext, type JournalContext, type NarrationContext, type TurnContext } from '../src/gm/context.ts';
 import type { GmTurnProposal } from '../src/gm/schema.ts';
+import type { SceneContext } from '../src/gm/scene.ts';
 import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
 import type { RunningServer } from '../src/server.ts';
 import { moveCharacter, presenceOf } from '../src/visibility/store.ts';
@@ -1448,6 +1449,113 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
         expect(logs.some((l) => l.includes('purpose=npc_dialogue') && l.includes('budget_reached'))).toBe(true);
         expect(server!.db.prepare("select count(*) as n from ai_usage where purpose = 'npc_dialogue'").get()).toEqual({ n: 0 });
       });
+    });
+  });
+
+  describe('GEN-145 the period-change scene: the time announcement, then one description per place with players', () => {
+    const isScene = (req: AiCallRequest) => req.output.name === 'gm_scene';
+    const timeEntries = (c: RoomClient) => c.entries().filter((e) => e.kind === 'time');
+    const scenesOf = (c: RoomClient, day: number, phase: Period) => turnEntries(c, day, phase, 1).filter((e) => e.kind === 'feed');
+    /** A and B at the fountain (unless `aAt`), C at the inn, on the last turn of the period. */
+    async function lastTurnOf(day: number, phase: Period, aAt = 'fountain'): Promise<RoomClient[]> {
+      const t = await startedTable(server!, false);
+      move(t.a, aAt);
+      move(t.b, 'fountain');
+      jumpTo(t, { day, phase, turn: 2 });
+      return [await enter(t.a), await enter(t.b), await enter(t.c)];
+    }
+
+    it('C1 + C2: SOLARION → HESPERION: one announcement per room naming the period, then one scene per place (asked in parallel), before the results of turn 1', async () => {
+      let inFlight = 0;
+      let most = 0;
+      await boot({}, async (req, n) => {
+        if (!isScene(req)) return noRoll(req, n);
+        most = Math.max(most, ++inFlight);
+        await pause(80);
+        inFlight--;
+        return undefined;
+      });
+      const clients = await lastTurnOf(1, 'SOLARION');
+      await playTurn(clients, ['ยืนมองน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 1 });
+      await until(() => clients.every((c) => scenesOf(c, 1, 'HESPERION').length > 0));
+
+      for (const c of clients) {
+        const times = timeEntries(c);
+        expect(times).toHaveLength(1);
+        expect(times[0]).toMatchObject({ day: 1, phase: 'HESPERION', turn: 1, place: null });
+        expect(times[0]!.text).toContain('HESPERION (ค่ำ 18:00-23:59)');
+        // The server's own text: no votes.
+        expect(times[0]!.myVote).toBeUndefined();
+        const scenes = scenesOf(c, 1, 'HESPERION');
+        expect(scenes).toHaveLength(1);
+        expect(scenes[0]!.seq).toBeGreaterThan(times[0]!.seq);
+      }
+      // Everyone at one place reads one scene.
+      expect(scenesOf(clients[0]!, 1, 'HESPERION')[0]!.text).toBe(scenesOf(clients[1]!, 1, 'HESPERION')[0]!.text);
+      expect(scenesOf(clients[0]!, 1, 'HESPERION')[0]!.place?.id).toBe('fountain');
+      expect(scenesOf(clients[2]!, 1, 'HESPERION')[0]!.place?.id).toBe('inn');
+      const asked = provider.requests.filter(isScene).map((r) => contextOf<SceneContext>(r));
+      expect(asked.map((s) => s.place.id).sort()).toEqual(['fountain', 'inn']);
+      expect(asked.every((s) => s.turn.day === 1 && s.turn.phase === 'HESPERION' && s.turn.turn === 1)).toBe(true);
+      for (const s of asked) expect(Object.keys(s.npcs).sort()).toEqual(['arrived', 'left', 'lingering']);
+      expect(most).toBe(2);
+      expectNoNamesInPrompts();
+
+      // The results of HESPERION turn 1 come after its scene.
+      await playTurn(clients, ['ยืนมองน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 2 });
+      const turn1 = turnEntries(clients[0]!, 1, 'HESPERION', 1);
+      const scene = scenesOf(clients[0]!, 1, 'HESPERION')[0]!;
+      expect(turn1.filter((e) => e.kind === 'narration').every((e) => e.seq > scene.seq)).toBe(true);
+      // Not a period change: no other announcement.
+      expect(timeEntries(clients[0]!)).toHaveLength(1);
+    });
+
+    it('C4: the scene AI times out: the announcement is there, no scene, and the game goes on', async () => {
+      await boot({}, (req, n) => (isScene(req) ? mockReply.fail('timeout') : noRoll(req, n)));
+      const clients = await lastTurnOf(1, 'SOLARION');
+      await playTurn(clients, ['ยืนมองน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 1 });
+      await playTurn(clients, ['ยืนมองน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 2 });
+      for (const c of clients) {
+        expect(timeEntries(c)).toHaveLength(1);
+        // Nothing at turn 1 before its own results: no scene.
+        const turn1 = turnEntries(c, 1, 'HESPERION', 1);
+        const firstResult = Math.min(...turn1.filter((e) => e.kind === 'narration').map((e) => e.seq));
+        expect(turn1.filter((e) => e.kind === 'feed' && e.seq < firstResult)).toEqual([]);
+      }
+      expect(provider.requests.filter(isScene).length).toBeGreaterThan(0);
+      expect(logs.some((l) => l.includes('scene') && l.includes('timeout'))).toBe(true);
+    });
+
+    it('C5: NOCTHERION → EOSORIA: the announcement names the new day', async () => {
+      await boot({}, noRoll);
+      const clients = await lastTurnOf(1, 'NOCTHERION');
+      await playTurn(clients, ['ยืนมองน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], { day: 2, phase: 'EOSORIA', turn: 1 });
+      for (const c of clients) {
+        const times = timeEntries(c);
+        expect(times).toHaveLength(1);
+        expect(times[0]).toMatchObject({ day: 2, phase: 'EOSORIA', turn: 1 });
+        expect(times[0]!.text).toContain('วันที่ 2');
+        expect(times[0]!.text).toContain('EOSORIA (เช้า 06:00-11:59)');
+      }
+    });
+
+    it('C6: a player who moved in the last turn of the period reads the scene of the place they arrived at', async () => {
+      await boot({}, (req, n) => {
+        if (!isTurn(req)) return undefined;
+        const ctx = contextOf<TurnContext>(req);
+        const proposal = mockTurnProposal(ctx);
+        for (const a of proposal.actions) {
+          a.check = { type: 'none' };
+          if (ctx.actions.find((x) => x.actionId === a.actionId)?.text.includes('เดินไปน้ำพุ')) a.moveTo = 'fountain';
+        }
+        return mockReply.ok(proposal);
+      });
+      const clients = await lastTurnOf(1, 'SOLARION', 'inn');
+      await playTurn(clients, ['เดินไปน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 1 });
+      await until(() => clients.every((c) => scenesOf(c, 1, 'HESPERION').length > 0));
+      const mine = scenesOf(clients[0]!, 1, 'HESPERION');
+      expect(mine.map((e) => e.place?.id)).toEqual(['fountain']);
+      expect(mine[0]!.text).toBe(scenesOf(clients[1]!, 1, 'HESPERION')[0]!.text);
     });
   });
 });
