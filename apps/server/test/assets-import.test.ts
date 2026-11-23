@@ -272,7 +272,7 @@ describe('Q-161 Location Connects_To / Safety / Rest_Quality and NPC Public_Alia
     expect(rule).toMatchObject({ connectsTo: [], safety: null, restQuality: null, note: 'แถวกฎ' });
     expect(square!.extra).toBeUndefined();
     const [nova, merchant] = result.files.NPC as NpcRecord[];
-    expect(nova).toMatchObject({ publicAlias: 'โนวา — เด็กผู้มาเยือน', note: 'ตัดภูมิหลังออก' });
+    expect(nova).toMatchObject({ publicAlias: 'เด็กผู้มาเยือน', note: 'ตัดภูมิหลังออก' });
     expect(merchant).toMatchObject({ publicAlias: '', note: '' });
     expect(result.warnings.filter((w) => w.tab === 'Location' || w.tab === 'NPC').map(formatIssue)).toEqual([]);
   });

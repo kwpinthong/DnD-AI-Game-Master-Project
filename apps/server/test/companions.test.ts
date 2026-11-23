@@ -95,7 +95,17 @@ describe('NPC companions from the sheet NPC tab (GEN-054)', { timeout: 60_000 },
     return CompanionsResponse.parse(res.body).companions;
   }
 
-  const save = (t: Table, who: Seat, ref: string) => t.call('POST', '/api/game/companions', { token: who.token, body: { ref } });
+  const saveRaw = (t: Table, who: Seat, ref: string) => t.call('POST', '/api/game/companions', { token: who.token, body: { ref } });
+  /** GEN-121: saving needs a known NPC, so this makes the NPC known to the player first (as a talk would), then saves. */
+  const save = (t: Table, who: Seat, ref: string) => {
+    const npcId = Object.values(IDS).find((id) => npcStateFor(server!.orm, server!.assets, who.memberId, id)?.ref === ref);
+    if (npcId) {
+      server!.db
+        .prepare('insert into npc_bond (member_id, npc_id, name_revealed, updated_at) values (?, ?, 1, ?) on conflict (member_id, npc_id) do update set name_revealed = 1')
+        .run(who.memberId, npcId, CLOCK);
+    }
+    return saveRaw(t, who, ref);
+  };
   const release = (t: Table, who: Seat, ref: string) => t.call('DELETE', `/api/game/companions/${ref}`, { token: who.token });
 
   const setKarma = (seat: Seat, karma: number) => server!.db.prepare('update character set karma = ? where member_id = ?').run(karma, seat.memberId);
@@ -183,7 +193,6 @@ describe('NPC companions from the sheet NPC tab (GEN-054)', { timeout: 60_000 },
   it('C3: the grade B nun shows her sheet alias until +9, then ซิสเตอร์เอเลน่า and gives her +9 rewards once', async () => {
     const t = await table();
     const r = await refs(t, t.a);
-    await save(t, t.a, r.elena!);
     const seen = async () => (await npcsSeenBy(t, t.a)).find((n) => n.ref === r.elena);
 
     raiseAffinity(t.a, 'elena', 8);
@@ -193,6 +202,7 @@ describe('NPC companions from the sheet NPC tab (GEN-054)', { timeout: 60_000 },
     const ninth = changeNpcAffinity(server!.orm, server!.assets, t.a.memberId, 'elena', 1, at(2));
     expect(ninth).toMatchObject({ ok: true, after: 9, nameRevealed: true });
     expect(await seen()).toEqual({ ref: r.elena, name: 'ซิสเตอร์เอเลน่า', nameRevealed: true });
+    await save(t, t.a, r.elena!);
     expect((await companions(t, t.a))[0]).toMatchObject({ name: 'ซิสเตอร์เอเลน่า', nameRevealed: true });
     expect(rewardRows(t.a)).toEqual(['elena:item:Blessed Loaf of Dawn', 'elena:item:Silver Rosary of Hearth']);
 
@@ -205,15 +215,43 @@ describe('NPC companions from the sheet NPC tab (GEN-054)', { timeout: 60_000 },
     expect((await npcsSeenBy(t, t.b)).find((n) => n.ref === r.elena)).toMatchObject({ name: 'แม่ชีผู้เหนื่อยล้าแห่งโบสถ์เก่า', nameRevealed: false });
   });
 
-  it('C3 (Q-103 / Q-220): grades F / A show their sheet name from the start; B its alias', async () => {
+  it('GEN-121 C1/C2/C3/C4: no grade shows its real name or can be saved before it is known; a talk makes it known to that player only', async () => {
     const t = await table();
     const r = await refs(t, t.a);
     const byRef = new Map((await npcsSeenBy(t, t.a)).map((n) => [n.ref, n]));
-    expect(byRef.get(r.noa!)).toEqual({ ref: r.noa, name: 'โนอา', nameRevealed: true });
-    expect(byRef.get(r.lucia!)).toEqual({ ref: r.lucia, name: 'ลูเซีย', nameRevealed: true });
-    expect(byRef.get(r.julian!)).toEqual({ ref: r.julian, name: 'ลอร์ดจูเลียน แวนเดอร์บิลต์', nameRevealed: true });
-    expect(byRef.get(r.serena!)).toEqual({ ref: r.serena, name: 'เลดี้เซเรน่า แห่งหอจดหมายเหตุ', nameRevealed: true });
+    expect(byRef.get(r.noa!)).toEqual({ ref: r.noa, name: 'เด็กขอทานตาบอดข้างหนึ่ง', nameRevealed: false });
+    expect(byRef.get(r.lucia!)).toEqual({ ref: r.lucia, name: 'หญิงสาวผู้พกนาฬิกาพกตาย', nameRevealed: false });
+    expect(byRef.get(r.julian!)).toMatchObject({ nameRevealed: false });
+    expect(byRef.get(r.serena!)).toMatchObject({ nameRevealed: false });
     expect(byRef.get(r.garrett!)).toMatchObject({ name: 'ทหารยามหน้าตาบึ้งตึง', nameRevealed: false });
+    const raw = JSON.stringify((await t.call('GET', '/api/game/surroundings', { token: t.a.token })).body);
+    for (const leak of ['โนอา', 'ลูเซีย', 'จูเลียน', 'มัลคอล์ม', 'เซเรน่า']) expect(raw).not.toContain(leak);
+
+    // C2: refused by the server, nothing created.
+    const refused = await saveRaw(t, t.a, r.noa!);
+    expect(refused.status).toBe(403);
+    expect(refused.body).toMatchObject({ code: 'not_acquainted' });
+    expect(await companions(t, t.a)).toEqual([]);
+
+    // C3 + C4: player A talks to Noa (an affinity step); B at the same place still sees the alias.
+    changeNpcAffinity(server!.orm, server!.assets, t.a.memberId, 'noa', 1, at(1));
+    expect((await npcsSeenBy(t, t.a)).find((n) => n.ref === r.noa)).toEqual({ ref: r.noa, name: 'โนอา', nameRevealed: true });
+    const rB = await refs(t, t.b);
+    expect((await npcsSeenBy(t, t.b)).find((n) => n.ref === rB.noa)).toMatchObject({ name: 'เด็กขอทานตาบอดข้างหนึ่ง', nameRevealed: false });
+    expect((await saveRaw(t, t.b, rB.noa!)).status).toBe(403);
+    expect((await saveRaw(t, t.a, r.noa!)).status).toBe(201);
+    // C7: the state is a stored row, so it survives a restart.
+    expect(npcBondsOf(server!.orm, t.a.memberId).find((b) => b.npcId === 'noa')?.nameRevealed).toBe(true);
+  });
+
+  it('GEN-121 C6: a companion saved before the fix (no reveal flag) stays and counts as known', async () => {
+    const t = await table();
+    const r = await refs(t, t.a);
+    server!.db
+      .prepare('insert into npc_bond (member_id, npc_id, companion_seq, updated_at) values (?, ?, 1, ?)')
+      .run(t.a.memberId, 'noa', CLOCK);
+    expect((await companions(t, t.a))[0]).toMatchObject({ ref: r.noa, name: 'โนอา', nameRevealed: true });
+    expect((await npcsSeenBy(t, t.a)).find((n) => n.ref === r.noa)).toMatchObject({ name: 'โนอา', nameRevealed: true });
   });
 
   it('Q-219: grade S shows its sheet Public_Alias until met / awakened; awakening reveals the real name to that player only', async () => {
