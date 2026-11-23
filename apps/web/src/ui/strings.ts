@@ -21,6 +21,7 @@ export const voteText = {
   group: 'ให้คะแนนข้อความของ AI GM',
   up: { label: 'ถูกใจ', icon: '👍' },
   down: { label: 'ไม่ถูกใจ', icon: '👎' },
+  reasons: 'เหตุผลที่ไม่ถูกใจ (ไม่บังคับ เลือกได้หลายข้อ)',
 } as const;
 
 // GM console v2 (GEN-091, Screens and Flows v2 §5).
@@ -128,7 +129,29 @@ export const libraryText = {
   thumbs: (thumbs: number, players: number) => `👍 ${thumbs}/${players}`,
   topVerbs: 'ทำบ่อย',
   secretShare: (share: number) => `ลงมือแบบลับ ${Math.round(share * 100)}%`,
-  adminNav: { usage: 'การใช้ AI', library: 'Learning library', data: 'ข้อมูลเกม' },
+  adminNav: { usage: 'การใช้ AI', library: 'Learning library', data: 'ข้อมูลเกม', votes: 'ข้อความที่ถูก 👎' },
+} as const;
+
+// GEN-168: the server owner's 👎 review + "แก้เป็น".
+export const reviewText = {
+  reason: 'เหตุผล',
+  npc: 'NPC',
+  any: 'ทั้งหมด',
+  none: 'ยังไม่มีข้อความที่ถูก 👎',
+  noMatch: 'ไม่มีข้อความที่ตรงตัวกรอง',
+  scene: { feed: 'feed', narration: 'บรรยาย', 'npc-dialogue': 'บทพูด NPC', 'npc-reaction': 'reaction NPC' },
+  down: (n: number) => `👎 ${n} คน`,
+  edit: (text: string) => `แก้เป็น: ${text}`,
+  editLabel: 'แก้เป็น',
+  edited: 'ฉบับที่ควรเป็น',
+  toLibrary: 'ส่งเข้าคลังตัวอย่าง NPC (เก็บเป็นผู้สมัครไว้ก่อน คลังเป็นงานของ GEN-151)',
+  save: 'บันทึกฉบับแก้',
+  cancel: 'ยกเลิก',
+  saved: 'บันทึกแล้ว ข้อความในเกมไม่เปลี่ยน',
+  pairs: (n: number) => `ฉบับแก้ที่บันทึกไว้ ${n}`,
+  export: 'ส่งออก JSONL',
+  download: (n: number) => `ดาวน์โหลด corrections.jsonl (${n} คู่ ชื่อผู้เล่นแทนด้วย token)`,
+  loadFailed: 'โหลดรายการไม่ได้',
 } as const;
 
 // Play screen v2 view-model text (GEN-099 contract; screens in GEN-088 / 089).

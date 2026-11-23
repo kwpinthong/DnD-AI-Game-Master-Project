@@ -166,7 +166,16 @@ export function PlayRoom({
   const online = connection === 'online';
   const pinned = entries.filter((e) => e.kind === 'hit' && !acked.has(e.seq));
   // Votes only for a player (the server leaves `myVote` out for the Human GM, so the feed has none to show anyway).
-  const voting = isPlayer ? { local: votes.local, busy: votes.busy, onVote: (entry: RoomEntry, next: Parameters<typeof votes.vote>[1]) => void votes.vote(entry, next) } : undefined;
+  const voting = isPlayer
+    ? {
+        local: votes.local,
+        busy: votes.busy,
+        onVote: (entry: RoomEntry, next: Parameters<typeof votes.vote>[1]) => void votes.vote(entry, next),
+        // GEN-168: the reason chips after a 👎.
+        reasons: votes.reasons,
+        onReasons: (entry: RoomEntry, next: Parameters<typeof votes.setReasons>[1]) => void votes.setReasons(entry, next),
+      }
+    : undefined;
 
   const notices = (
     <>

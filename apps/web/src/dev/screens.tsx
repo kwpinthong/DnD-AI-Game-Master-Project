@@ -12,6 +12,7 @@ import { Lobby } from '../Lobby.tsx';
 import { OriginCard } from '../OriginCard.tsx';
 import { PlayRoom } from '../PlayRoom.tsx';
 import { ScenarioEditor } from '../ScenarioEditor.tsx';
+import { VoteReview } from '../VoteReview.tsx';
 import { GmConsoleFrame } from './previews.tsx';
 
 /**
@@ -116,6 +117,16 @@ export const SCREEN_VIEWS: Record<ScreenId, ScreenView> = {
     render: ({ baseUrl }) => (
       <div className="preview">
         <GameDataEditor apiBaseUrl={baseUrl} token={MOCK_ADMIN_TOKEN} onForbidden={noop} />
+      </div>
+    ),
+  },
+  // GEN-168
+  'vote-review': {
+    page: 'VoteReview',
+    socket: false,
+    render: ({ baseUrl }) => (
+      <div className="preview">
+        <VoteReview apiBaseUrl={baseUrl} token={MOCK_ADMIN_TOKEN} onForbidden={noop} />
       </div>
     ),
   },

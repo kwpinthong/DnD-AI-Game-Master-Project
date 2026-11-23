@@ -106,7 +106,7 @@ describe('GEN-168 👎 reasons + admin "แก้เป็น"', { timeout: 60_0
     const before = server!.db.prepare('select text from room_entry where id = ?').get(line);
     const saved = await t.call('POST', '/api/admin/corrections', { token, body: { gameId, seq: line, edited: '  ลินจ๋า ระวังตัวด้วยนะ  ' } });
     expect(saved.status, JSON.stringify(saved.body)).toBe(200);
-    expect(AdminCorrectionResponse.parse(saved.body).correction).toMatchObject({ original: `ลินจ๋า ${npc.name} ขอเตือนนะ`, edited: 'ลินจ๋า ระวังตัวด้วยนะ', npc: npc.name, scene: 'npc-dialogue', reasons: ['too_long', 'translation'], libraryCandidate: false });
+    expect(AdminCorrectionResponse.parse(saved.body).correction).toMatchObject({ original: `ลินจ๋า ${npc.name} ขอเตือนนะ`, edited: 'ลินจ๋า ระวังตัวด้วยนะ', npc: npc.name, scene: 'npc-dialogue', reasons: ['translation', 'too_long'], libraryCandidate: false });
     expect(server!.db.prepare('select text from room_entry where id = ?').get(line)).toEqual(before);
     expect(logs.some((l) => l.startsWith('[admin] correction') && l.includes(`entry ${line}`))).toBe(true);
     expect(AdminDownvotesResponse.parse((await t.call('GET', '/api/admin/downvotes', { token })).body).entries[0]!.corrections).toHaveLength(1);

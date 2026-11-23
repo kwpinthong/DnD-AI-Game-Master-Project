@@ -10,6 +10,7 @@ import { createAdminSessions } from './session.ts';
 import { gameUsageReport, overviewUsageReport } from './usage-report.ts';
 import type { GameDataStore } from '../assets/game-data.ts';
 import { registerGameDataRoutes } from './game-data-routes.ts';
+import { registerVoteReviewRoutes } from './vote-review-routes.ts';
 
 export interface AdminRouteOptions {
   /** scrypt hash of the server owner's admin code (ADMIN_CODE_HASH); without it the dashboard is closed. */
@@ -82,6 +83,7 @@ export function registerAdminRoutes(app: FastifyInstance, db: Db, now: Clock, op
   });
 
   registerGameDataRoutes(app, options.gameData, refuse, now);
+  registerVoteReviewRoutes(app, db, refuse, now, options.log ?? (() => {}));
 
   app.get<{ Params: { gameId: string } }>('/api/admin/ai-usage/:gameId', async (request, reply) => {
     if (refuse(request, reply)) return reply;

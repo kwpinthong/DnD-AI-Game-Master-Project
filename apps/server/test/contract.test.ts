@@ -238,6 +238,13 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'GET /api/admin/game-data/:name', { token: adminToken, path: '/api/admin/game-data/Nope' });
     await hit(call, 'GET /api/admin/game-data-audit', { token: adminToken });
     await hit(call, 'GET /api/admin/game-data-export', { token: adminToken });
+    // GEN-168: a 👎 with reasons, then the owner's review of it.
+    await hit(call, 'PUT /api/game/entries/:seq/vote', { token: t.a.token, path: `/api/game/entries/${votable!.seq}/vote`, body: { vote: 'down', reasons: ['too_long'] } });
+    await hit(call, 'GET /api/admin/downvotes', { token: adminToken });
+    await hit(call, 'POST /api/admin/corrections', { token: adminToken, body: { gameId: tableGame, seq: votable!.seq, edited: 'ฉบับที่ควรเป็น', toLibrary: true } });
+    await hit(call, 'POST /api/admin/corrections', { token: adminToken, body: { gameId: tableGame, seq: 99_999, edited: 'x' } });
+    await hit(call, 'POST /api/admin/corrections', { token: adminToken, body: { gameId: tableGame, seq: votable!.seq, edited: ' ' } });
+    await hit(call, 'GET /api/admin/corrections-export', { token: adminToken });
     await hit(call, 'POST /api/admin/logout', { token: adminToken });
     await hit(call, 'POST /api/logout', { token: p1.token });
     await hit(call, 'DELETE /api/game', { token: gm, body: { confirmName: 'เกมสัญญา 2' } });

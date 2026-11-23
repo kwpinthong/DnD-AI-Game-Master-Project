@@ -239,11 +239,25 @@ export const isVotableEntry = (entry: { kind: RoomEntryKind; fallback?: true | n
 export const EntryVote = z.enum(['up', 'down']);
 export type EntryVote = z.infer<typeof EntryVote>;
 
-/** Body of PUT /api/game/entries/:seq/vote: `null` cancels the vote. */
-export const ResponseVoteRequest = z.strictObject({ vote: EntryVote.nullable() });
+/** GEN-168: why a 👎 (optional, several); shown with `VOTE_REASON_LABEL`, never to anyone but the voter and the server owner. */
+export const VoteReason = z.enum(['translation', 'out_of_character', 'too_long', 'wrong_story', 'other']);
+export type VoteReason = z.infer<typeof VoteReason>;
+export const VOTE_REASON_LABEL: Record<VoteReason, string> = {
+  translation: 'สำนวนแปล',
+  out_of_character: 'ไม่ใช่นิสัยตัวนี้',
+  too_long: 'ยาวไป',
+  wrong_story: 'ผิดเรื่อง',
+  other: 'อื่น ๆ',
+};
+
+/**
+ * Body of PUT /api/game/entries/:seq/vote: `null` cancels the vote. `reasons` (GEN-168) are kept only with
+ * `down` (👍 or a cancel clears them); left out = none. The end page's ruling votes ignore them.
+ */
+export const ResponseVoteRequest = z.strictObject({ vote: EntryVote.nullable(), reasons: z.array(VoteReason).max(VoteReason.options.length).optional() });
 export type ResponseVoteRequest = z.infer<typeof ResponseVoteRequest>;
-/** 200: the caller's vote on the entry after the change. */
-export const ResponseVoteResponse = z.strictObject({ seq: z.number().int().min(1), myVote: EntryVote.nullable() });
+/** 200: the caller's vote on the entry after the change; `myReasons` only with `down`. */
+export const ResponseVoteResponse = z.strictObject({ seq: z.number().int().min(1), myVote: EntryVote.nullable(), myReasons: z.array(VoteReason).optional() });
 export type ResponseVoteResponse = z.infer<typeof ResponseVoteResponse>;
 
 export const RoomEntry = z.strictObject({
@@ -280,6 +294,8 @@ export const RoomEntry = z.strictObject({
    * every other entry and for the Human GM, so "has the key" = "show the buttons". Others' votes are never sent.
    */
   myVote: EntryVote.nullable().optional(),
+  /** GEN-168: this player's own 👎 reasons, only when `myVote` is `down`. Never anyone else's. */
+  myReasons: z.array(VoteReason).optional(),
 });
 export type RoomEntry = z.infer<typeof RoomEntry>;
 
