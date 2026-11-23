@@ -75,6 +75,8 @@ export function registerAdminGameRoutes(app: FastifyInstance, db: Db, now: Clock
         return sendError(reply, 404, { code: 'member_not_found', message: 'ไม่พบผู้เล่นคนนี้ในเกมนี้' });
       case 'already_kicked':
         return sendError(reply, 409, { code: 'already_kicked', message: 'ผู้เล่นคนนี้ถูกเชิญออกไปแล้ว' });
+      case 'is_gm':
+        return sendError(reply, 409, { code: 'not_allowed', message: 'เชิญ GM ของเกมออกไม่ได้ เกมจะค้างรอ GM อนุมัติ' });
       case 'already_ended':
         return ended(reply);
       case 'kicked':

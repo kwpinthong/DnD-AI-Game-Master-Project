@@ -103,6 +103,7 @@ export type KickOutcome =
   | { kind: 'game_not_found' }
   | { kind: 'member_not_found' }
   | { kind: 'already_kicked' }
+  | { kind: 'is_gm' }
   | { kind: 'already_ended' }
   | { kind: 'kicked'; turnClosed: boolean };
 
@@ -114,9 +115,11 @@ export function kickFromGame(db: Db, gameId: string, memberId: string, now: numb
   return db.transaction((tx): KickOutcome => {
     if (!gameExists(tx, gameId)) return { kind: 'game_not_found' };
     if (hasEnded(tx, gameId)) return { kind: 'already_ended' };
-    const target = tx.select({ kickedAt: member.kickedAt }).from(member).where(and(eq(member.id, memberId), eq(member.gameId, gameId))).get();
+    const target = tx.select({ kickedAt: member.kickedAt, role: member.role }).from(member).where(and(eq(member.id, memberId), eq(member.gameId, gameId))).get();
     if (!target) return { kind: 'member_not_found' };
     if (target.kickedAt !== null) return { kind: 'already_kicked' };
+    // Q-397: without its Human GM a GM game would wait for approvals forever.
+    if (target.role === 'gm') return { kind: 'is_gm' };
     blockMember(tx, memberId, now);
     tx.insert(adminGameAudit).values({ action: 'kick', gameId, memberId, at: now }).run();
     // A turn being resolved keeps the seat until it is published (the room drops it then).

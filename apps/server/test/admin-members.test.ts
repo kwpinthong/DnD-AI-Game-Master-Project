@@ -214,6 +214,17 @@ describe('ISK-018 admin kick + members + invite code', { timeout: 120_000 }, () 
     expect(ApiError.parse((await renew(token, 'no-such-game')).body).code).toBe('game_not_found');
   });
 
+  it('Q-397: the Human GM cannot be kicked (409 not_allowed), so a GM game never waits forever for approvals', async () => {
+    const token = await admin();
+    const { t, gameId } = await playingGame(true);
+    const res = await kick(token, gameId, t.gm!.memberId);
+    expect(res.status).toBe(409);
+    expect(ApiError.parse(res.body).code).toBe('not_allowed');
+    expect(kickedAtOf(t.gm!.memberId)).toBeNull();
+    expect(auditRows().filter((r) => r.action === 'kick')).toHaveLength(0);
+    expect((await kick(token, gameId, t.a.memberId)).status).toBe(200);
+  });
+
   it('C5: a renewed code joins, the old one does not, and members already in stay', async () => {
     const g = await lobbyGame();
     const res = await renew(await admin(), g.gameId);
