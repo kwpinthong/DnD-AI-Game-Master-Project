@@ -803,10 +803,14 @@ export function createRoomService(
 
         // The resolver always gets the period's weather: picked now if the period opened without one.
         const periodWeather = await weatherFor(gameId, state);
-        // GEN-145: the period's scene goes out before the results of its first turn.
-        await scenes.get(gameId);
+        // GEN-145: the period's scene goes out before the results of its first turn. GEN-190: without a Human GM the turn
+        // is resolved while the scene is written (the resolver gets it) and only its publish waits for the scene.
+        const scene = scenes.get(gameId);
         // GEN-128: with a Human GM the NPC lines of the turn before reach the console first.
-        if (hasHumanGm(gameId)) await dialogueOf.get(gameId);
+        if (hasHumanGm(gameId)) {
+          await scene;
+          await dialogueOf.get(gameId);
+        }
         // GEN-186: a scene (or NPC lines) held for the Human GM goes first; approving it starts this turn again.
         if (held.has(gameId)) {
           broadcastRoom(gameId);
@@ -816,7 +820,8 @@ export function createRoomService(
         const at = { day: state.day, phase: state.phase, turn: state.turn };
         let resolution: PhaseResolution;
         try {
-          resolution = await resolver.resolve({ gameId, at, actions, state, signal: shutdown.signal, weather: periodWeather });
+          resolution = await resolver.resolve({ gameId, at, actions, state, signal: shutdown.signal, weather: periodWeather, ...(scene ? { scene } : {}) });
+          await scene;
         } catch (error) {
           // Stays `resolving`; after a restart the next player to enter starts it again, otherwise `retry` does.
           log(`[room] resolver failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
