@@ -812,8 +812,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       system,
       messages,
       output: { name: GM_OUTPUT.journal, schema: GmJournal },
-      // GEN-161 (Q-327): 800 hit max_tokens on every real call, so no journal was ever saved.
-      maxOutputTokens: 1_500,
+      // GEN-161 (Q-327): 800 hit max_tokens on every real call; GEN-180 (Q-342): 1500 still did 2 of 8 times.
+      maxOutputTokens: 3_000,
       ...(signal ? { signal } : {}),
     });
     if (!result.ok) {
