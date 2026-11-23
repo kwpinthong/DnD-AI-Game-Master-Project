@@ -285,7 +285,10 @@ export function cutLine(text: string, max: number = NPC_LINE_LIMITS.chars): stri
   return body.length === 0 ? '' : `${body}…`;
 }
 
-/** ISK-025: an NPC line / chat reply as players get it: whitespace tidied, then `clampReply` (120 code points, at a sentence end). */
+/**
+ * ISK-025: an NPC line / chat reply as players get it: whitespace tidied, then `clampReply` (120 code points, at a sentence end).
+ * shortcut: counted with names still as {{tokens}}, so a long alias can bring the rendered line a few past 120; clamp per reader after renderTokens if that matters.
+ */
 export const clampLine = (text: string): string => clampReply(text.normalize('NFC').replace(/\s+/g, ' ').trim());
 
 export interface CleanOptions {
