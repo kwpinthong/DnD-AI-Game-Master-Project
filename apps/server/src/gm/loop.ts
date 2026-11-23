@@ -123,6 +123,9 @@ function fallbackCause(error: AiServiceError): GmFallbackCause {
   return error.detail?.startsWith('timeout') ? 'timeout' : 'error';
 }
 
+/** GEN-162: the code plus the provider's error kind (`max_tokens`, `timeout`...), never its detail text, for a server log. */
+const failureOf = (error: AiServiceError) => (error.detail ? `${error.code} (${error.detail.split(':')[0]})` : error.code);
+
 /** What of a player's day goes into `summarize_journal` (cap 6k with the rules and the saga, ADR §6.2). */
 const JOURNAL_SEEN_TOKENS = 4_000;
 
@@ -221,6 +224,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       opts.timer?.timer.add(i === 0 ? opts.timer.stage : 'repair', performance.now() - callStart);
       if (result.ok) opts.timer?.timer.addTokens(result.usage);
       if (!result.ok) {
+        log(`[gm] game=${opts.gameId} purpose=${purpose} failed: ${failureOf(result.error)}`);
         // A shutdown is not a failure of the AI: the turn resumes after the restart (C6).
         // GEN-059 C7: the ending (onCallFailure: false) stays untold and retryable when the call fails; nothing waits on it.
         if (!opts.fallback || opts.fallback.onCallFailure === false || opts.signal?.aborted) throw new StuckError(stuckFrom(result.error));
@@ -513,7 +517,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
             dialogueTimer.add('dialogue_calls', performance.now() - callStart);
             if (!result.ok) {
               // C3: no lines, no repair, no more retries than the narration gets; the turn is complete without them.
-              log(`[gm] game=${gameId} purpose=npc_dialogue audience=${key} gave up: ${result.error.code}`);
+              log(`[gm] game=${gameId} purpose=npc_dialogue audience=${key} gave up: ${failureOf(result.error)}`);
               return;
             }
             dialogueTimer.addTokens(result.usage);
@@ -657,7 +661,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       ...(signal ? { signal } : {}),
     });
     if (!result.ok) {
-      log(`[gm] game=${gameId} summarize_journal day=${d} player=${p.ref} failed: ${result.error.code}`);
+      log(`[gm] game=${gameId} summarize_journal day=${d} player=${p.ref} failed: ${failureOf(result.error)}`);
       return false;
     }
     saveJournal(db, gameId, p.memberId, d, result.value, now());
@@ -685,7 +689,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       ...(signal ? { signal } : {}),
     });
     if (!result.ok) {
-      log(`[gm] game=${gameId} summarize_day day=${d} failed: ${result.error.code}`);
+      log(`[gm] game=${gameId} summarize_day day=${d} failed: ${failureOf(result.error)}`);
       return false;
     }
     saveDaySummary(db, gameId, d, result.value, now());
