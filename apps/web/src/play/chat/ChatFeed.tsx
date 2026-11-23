@@ -171,6 +171,9 @@ function entryView(e: RoomEntry, look: ReturnType<typeof entryLook>, vote: (entr
           <ResultBadge tone="hit">{[t.chat.hit, e.text, ...(e.hit?.changes.map(hitChangeText) ?? [])].join(' · ')}</ResultBadge>
         </div>
       );
+    case 'time':
+      // GEN-145: the server's announcement of a new period, a centred line (no box, no votes).
+      return <p className="chat-time">{e.text}</p>;
     case 'skip':
       return null;
   }

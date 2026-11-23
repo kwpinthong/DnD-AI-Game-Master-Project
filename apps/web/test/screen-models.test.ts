@@ -7,7 +7,7 @@ import { bondBar, entrySection, injuryWord, lockTitle, nextTurn, omenBlocked, ro
 describe('screen view-models over the contract fixtures', () => {
   it('UI-I3: every entry kind goes to its section (feed → place, narration / whisper / omen → private, hit → pin)', () => {
     const sections = CONTRACT_FIXTURES.RoomEntry.map((e) => [e.kind, entrySection(e)]);
-    expect(Object.fromEntries(sections)).toEqual({ feed: 'place', narration: 'private', whisper: 'private', omen: 'private', hit: 'pin', changes: 'private', npc: 'place', player: 'place' });
+    expect(Object.fromEntries(sections)).toEqual({ feed: 'place', narration: 'private', whisper: 'private', omen: 'private', hit: 'pin', changes: 'private', npc: 'place', player: 'place', time: 'place' });
   });
 
   it('GEN-114: a turn change reads "what +/-n · why"; karma only as the status bar word', () => {

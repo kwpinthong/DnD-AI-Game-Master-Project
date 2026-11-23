@@ -1303,7 +1303,8 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
         const seqs = clients[0]!.entries().map((e) => e.seq);
         expect(new Set(seqs).size).toBe(seqs.length);
         // Nothing of turn 2 was held back or confused by the late lines.
-        expect(turnEntries(clients[0]!, 1, 'HESPERION', 1).length).toBe(0);
+        // (HESPERION turn 1 has only its GEN-145 announcement and scene so far.)
+        expect(turnEntries(clients[0]!, 1, 'HESPERION', 1).filter((e) => e.kind !== 'time' && e.kind !== 'feed')).toEqual([]);
         expect(turnEntries(clients[0]!, 1, 'SOLARION', 2).some((e) => e.kind === 'narration' || e.kind === 'feed')).toBe(true);
         // C at the inn never hears the fountain's lines.
         expect(npcEntries(clients[2]!).filter((e) => e.place?.id === 'fountain')).toEqual([]);
@@ -1514,16 +1515,17 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       await boot({}, (req, n) => (isScene(req) ? mockReply.fail('timeout') : noRoll(req, n)));
       const clients = await lastTurnOf(1, 'SOLARION');
       await playTurn(clients, ['ยืนมองน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 1 });
-      await playTurn(clients, ['ยืนมองน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 2 });
+      const gaveUp = () => logs.filter((l) => l.includes('audience=scene:') && l.includes('timeout')).length;
+      await until(() => gaveUp() === 2);
+      await pause(50);
+      expect(gaveUp()).toBe(2);
       for (const c of clients) {
         expect(timeEntries(c)).toHaveLength(1);
-        // Nothing at turn 1 before its own results: no scene.
-        const turn1 = turnEntries(c, 1, 'HESPERION', 1);
-        const firstResult = Math.min(...turn1.filter((e) => e.kind === 'narration').map((e) => e.seq));
-        expect(turn1.filter((e) => e.kind === 'feed' && e.seq < firstResult)).toEqual([]);
+        // Nothing of turn 1 yet but the announcement: no scene.
+        expect(turnEntries(c, 1, 'HESPERION', 1).map((e) => e.kind)).toEqual(['time']);
       }
-      expect(provider.requests.filter(isScene).length).toBeGreaterThan(0);
-      expect(logs.some((l) => l.includes('scene') && l.includes('timeout'))).toBe(true);
+      // The game goes on.
+      await playTurn(clients, ['ยืนมองน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 2 });
     });
 
     it('C5: NOCTHERION → EOSORIA: the announcement names the new day', async () => {

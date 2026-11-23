@@ -1,6 +1,7 @@
 import type { AiCallRequest } from '../ai/provider.ts';
 import type { DayContext, DialogueContext, JournalContext, NarrationContext, TurnContext } from './context.ts';
 import { templateFinale, type FinaleContext } from './finale.ts';
+import type { SceneContext } from './scene.ts';
 import { GM_OUTPUT, type GmAction, type GmJournal, type GmNarration, type GmNpcLine, type GmTurnProposal } from './schema.ts';
 
 /**
@@ -215,6 +216,13 @@ export async function cannedGmAnswer(req: AiCallRequest): Promise<unknown> {
       return mockJournal(contextOf<JournalContext>(req));
     case GM_OUTPUT.finale:
       return templateFinale(contextOf<FinaleContext>(req));
+    case GM_OUTPUT.scene: {
+      // GEN-145: one sentence for the place, one per NPC group member.
+      const ctx = contextOf<SceneContext>(req);
+      const npc = (list: { id: string }[], what: string) => list.map((n) => `{{n:${n.id}}} ${what}`);
+      const lines = [`ช่วงเวลาใหม่มาเยือน${ctx.place.name}`, ...npc(ctx.npcs.arrived, 'เพิ่งมาถึง'), ...npc(ctx.npcs.left, 'เพิ่งจากไป'), ...npc(ctx.npcs.lingering, 'ยังอยู่ต่อ')];
+      return { text: lines.join(' ').slice(0, 600) };
+    }
     default:
       return undefined;
   }
