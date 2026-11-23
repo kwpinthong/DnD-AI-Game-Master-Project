@@ -38,3 +38,6 @@ export * from './origin.ts';
 
 // GEN-168: the server owner's review of 👎 messages + "แก้เป็น" pairs, own file for the same reason.
 export * from './vote-review.ts';
+
+// GEN-169: the style checker's settings and flag counts (server owner), own file for the same reason.
+export * from './style-check.ts';

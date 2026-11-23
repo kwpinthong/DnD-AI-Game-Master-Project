@@ -162,6 +162,9 @@ export function containsName(text: string, name: string): boolean {
   return nameOccurrences(text.normalize('NFC'), name.normalize('NFC').trim()).length > 0;
 }
 
+/** GEN-169: how many times `text` has `word` as a whole word (same rule as `containsName`). */
+export const wordCount = (text: string, word: string): number => nameOccurrences(text.normalize('NFC'), word.normalize('NFC').trim()).length;
+
 /** Start offsets in `t` (already NFC) of the whole-word occurrences of `n` (NFC, trimmed); see `containsName`. */
 function nameOccurrences(t: string, n: string): number[] {
   const found: number[] = [];

@@ -149,7 +149,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerTimelineRoutes(app, db, now);
   registerVisibilityRoutes(app, db, now, assets);
   const weather = createWeatherService(db, ai, now, options.aiLog ?? ((line) => console.log(line)));
-  const resolver = options.phaseResolver ?? createAiGmResolver({ db, ai, assets, now, log: options.aiLog ?? ((line) => console.log(line)) });
+  const resolver = options.phaseResolver ?? createAiGmResolver({ db, ai, assets, now, log: options.aiLog ?? ((line) => console.log(line)), styleRewriteMs: aiConfig.styleRewriteMs });
   // The backup job starts after `listen`; the room reaches it through this late binding (Q-185).
   let backups: BackupSchedule | undefined;
   const room = registerRoomRoutes(app, db, now, {
