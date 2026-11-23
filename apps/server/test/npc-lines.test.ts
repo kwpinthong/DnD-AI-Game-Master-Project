@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GmDialogue, GmNarration } from '../src/gm/schema.ts';
-import { NPC_LINE_LIMITS, capTotal, cleanNpcLines, cutLine, lingerAfter, lingerNow, npcAnswers, npcsPresentAt, type CleanLine, type Linger, type RawLine } from '../src/gm/npc-lines.ts';
+import { NPC_LINE_LIMITS, capTotal, cleanNpcLines, cutLine, lingerAfter, lingerNow, NPC_AWAY, npcAnswers, npcPlacesNow, npcsPresentAt, type CleanLine, type Linger, type RawLine } from '../src/gm/npc-lines.ts';
 import type { GameAssets } from '../src/assets/load.ts';
 import type { Beat, GmWorld } from '../src/gm/context.ts';
 
@@ -122,6 +122,48 @@ describe('GEN-144 the conversation partner stays past its schedule (at most 2 tu
     expect(lingerNow([], scheduledAt)).toEqual({ lingering: [], farewells: [] });
     expect(here('fountain', [])).toEqual(['noah']);
     expect(npcsPresentAt(world, assets, 'fountain', solarion).map((n) => n.id)).toEqual(['noah']);
+  });
+});
+
+describe('GEN-175 the rules engine places each NPC by the same "here" rule (schedule, else scenario place, plus linger)', () => {
+  const world = {
+    places: [
+      { id: 'fountain', name: 'น้ำพุกลางเมือง' },
+      { id: 'temple', name: 'โบสถ์' },
+    ],
+    npcs: [
+      { id: 'malcolm', names: ['มัลคอล์ม'], locationId: 'temple' },
+      { id: 'noah', names: ['โนอา'], locationId: 'fountain' },
+      { id: 'lucia', names: ['ลูเซีย'], locationId: 'temple' },
+    ],
+  } as unknown as GmWorld;
+  const row = (npc: string, location: string, periods: string[]) => ({ npc, location, periods, weathers: [], condition: '', note: '' });
+  // Malcolm at the fountain at EOSORIA; Noah somewhere that is not a scenario place at EOSORIA.
+  const assets = { npcSchedule: [row('มัลคอล์ม', 'น้ำพุกลางเมือง', ['EOSORIA']), row('โนอา', 'ป่าลึก', ['EOSORIA'])] } as unknown as GameAssets;
+  const eosoria = { phase: 'EOSORIA' as const, weather: null, karmas: [] };
+
+  it('C1: an NPC the schedule puts at the fountain is at the fountain for the rules, not at its scenario place', () => {
+    expect(npcPlacesNow(world, assets, eosoria).get('malcolm')).toBe('fountain');
+  });
+
+  it('C2: an NPC the schedule moves away is at none of its old places; one with no row stays at its scenario place', () => {
+    expect(npcPlacesNow(world, assets, eosoria).get('noah')).toBe(NPC_AWAY);
+    expect(npcPlacesNow(world, assets, eosoria).get('lucia')).toBe('temple');
+    expect(npcPlacesNow(world, assets, { ...eosoria, phase: 'SOLARION' }).get('malcolm')).toBe('temple');
+  });
+
+  it('C3: a lingering NPC is where it lingers', () => {
+    const lingering: Linger[] = [{ npcId: 'malcolm', placeId: 'fountain', used: 1, talked: false }];
+    expect(npcPlacesNow(world, assets, { ...eosoria, phase: 'SOLARION', lingering }).get('malcolm')).toBe('fountain');
+  });
+
+  it('C4: every NPC npcsPresentAt has at a place is placed there, and no other', () => {
+    for (const now of [eosoria, { ...eosoria, phase: 'SOLARION' as const }]) {
+      const places = npcPlacesNow(world, assets, now);
+      for (const p of world.places) {
+        expect(npcsPresentAt(world, assets, p.id, now).map((n) => n.id).sort()).toEqual([...places].filter(([, at]) => at === p.id).map(([id]) => id).sort());
+      }
+    }
   });
 });
 

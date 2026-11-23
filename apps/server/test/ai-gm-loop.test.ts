@@ -1079,6 +1079,70 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       expect(farewells(clients[0]!, 2)).toEqual([]);
     });
 
+    describe('GEN-175 the rules and the turn context place NPCs by the schedule and linger, like the chips', () => {
+      const MALCOLM = 'นักบวชผู้ใจบุญประจำเมือง';
+      /** The first adjudication aims every action with `marker` at the archbishop (Malcolm); a repair is the Mock GM's own. */
+      const aimed: Handler = (req) => {
+        if (!isTurn(req)) return undefined;
+        const ctx = contextOf<TurnContext>(req);
+        const proposal = mockTurnProposal(ctx);
+        for (const a of proposal.actions) {
+          a.check = { type: 'none' };
+          if (req.purpose === 'gm_adjudicate' && ctx.actions.find((x) => x.actionId === a.actionId)?.text.includes('นักบวช')) a.targetNpc = 'archbishop';
+        }
+        return mockReply.ok(proposal);
+      };
+      const chips = async (t: Table, who: Seat) => ((await t.call('GET', '/api/game/surroundings', { token: who.token })).body as { npcs: { name: string }[] }).npcs.map((n) => n.name);
+      /** Day 1 EOSORIA is Clear: the schedule has Malcolm at the fountain, away from his scenario place (the temple). */
+      async function clearMorning(where: string): Promise<{ t: Table; clients: RoomClient[] }> {
+        const t = await startedTable(server!, false);
+        server!.db.prepare("insert or replace into period_weather (game_id, day, phase, weather, disaster, source, created_at) values (?, 1, 'EOSORIA', 'Clear', 0, 'ai', 0)").run(gameIdOf(t));
+        move(t.a, where);
+        move(t.b, where);
+        return { t, clients: [await enter(t.a), await enter(t.b), await enter(t.c)] };
+      }
+      const turnContext = () => contextOf<TurnContext>(provider.requests.find((r) => r.purpose === 'gm_adjudicate')!);
+      const fountainNarration = () => provider.requests.filter(isNarration).map((r) => contextOf<NarrationContext>(r)).find((c) => 'place' in c.audience && c.audience.place === 'fountain')!;
+
+      it('C1 + C4: Malcolm at the fountain by the schedule is a chip there, the turn context puts him there, and targeting him there is accepted with no repair', async () => {
+        await boot({}, aimed);
+        const { t, clients } = await clearMorning('fountain');
+        expect(await chips(t, t.a)).toContain(MALCOLM);
+        expect(await chips(t, t.c)).not.toContain(MALCOLM);
+        await playTurn(clients, ['ถามนักบวชเรื่องเมือง', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'EOSORIA', turn: 2 });
+        expect(provider.requests.filter(isTurn).map((r) => r.purpose)).toEqual(['gm_adjudicate']);
+        expect(turnRows()).toEqual([expect.objectContaining({ status: 'applied' })]);
+        expect(turnContext().npcs.find((n) => n.id === 'archbishop')?.place).toBe('fountain');
+        expect(fountainNarration().npcs.find((n) => n.id === 'archbishop')?.here).toBe(true);
+      });
+
+      it('C2 + C4: at his scenario place (the temple) while the schedule has him at the fountain: no chip, and targeting him there is refused', async () => {
+        await boot({}, aimed);
+        const { t, clients } = await clearMorning('temple');
+        expect(await chips(t, t.a)).not.toContain(MALCOLM);
+        await playTurn(clients, ['ถามนักบวชเรื่องเมือง', 'ยืนมองแท่นบูชา', 'ล้างแก้ว'], { day: 1, phase: 'EOSORIA', turn: 2 });
+        const turns = provider.requests.filter(isTurn);
+        expect(turns.map((r) => r.purpose)).toEqual(['gm_adjudicate', 'gm_repair']);
+        expect(lastUserText(turns[1]!)).toContain('npc_not_present');
+        expect(turnContext().npcs.find((n) => n.id === 'archbishop')?.place).not.toBe('temple');
+      });
+
+      it('C3 + C4: Malcolm lingering at the fountain after a talk is a chip there and may be targeted there', async () => {
+        await boot({}, aimed);
+        const t = await startedTable(server!, false);
+        move(t.a, 'fountain');
+        move(t.b, 'fountain');
+        jumpTo(t, { day: 1, phase: 'SOLARION', turn: 1 });
+        server!.db.prepare('insert into npc_linger (game_id, npc_id, location_id, used, talked) values (?, ?, ?, 0, 1)').run(gameIdOf(t), 'archbishop', 'fountain');
+        const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+        expect(await chips(t, t.a)).toContain(MALCOLM);
+        await playTurn(clients, ['ถามนักบวชต่อ', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+        expect(provider.requests.filter(isTurn).map((r) => r.purpose)).toEqual(['gm_adjudicate']);
+        expect(turnContext().npcs.find((n) => n.id === 'archbishop')?.place).toBe('fountain');
+        expect(fountainNarration().npcs.find((n) => n.id === 'archbishop')).toMatchObject({ here: true, lingering: true });
+      });
+    });
+
     describe('GEN-143 the NPC asked is the one who answers', () => {
       /** Aims every action with `marker` in it at `npcId`; the dialogue stage answers `lines(audience)` when given. */
       const asking =
