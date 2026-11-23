@@ -4,6 +4,7 @@ import type { GameAssets } from '../assets/load.ts';
 import type { PromptBlock } from '../ai/provider.ts';
 import type { DbOrTx } from '../db/client.ts';
 import { npcExample } from '../db/schema.ts';
+import { nameOccurrences } from './check.ts';
 import { DIALOGUE_BLOCK, npcToken, withinTokens, type GmWorld, type NarrationContext } from './context.ts';
 import { npcRealNames } from './npc-lines.ts';
 
@@ -23,12 +24,33 @@ const SCENE_WORD: Record<ReviewScene, string> = { feed: 'scene', narration: 'nar
 export const EXAMPLES_HEAD =
   'Examples of the NPCs here (lines players liked): use them only as a guide to voice and personality; never copy them word for word, never retell their events / {{p:player}} = some player: never write this token in the answer (use the cast\'s {{p:ref}})';
 
-/** `text` with every name swapped for its token (longest first), players' (and any player token) for `{{p:player}}`. */
+/** GEN-202: `text` (NFC) with each whole-word `name` swapped for `token` (the GM name-check rule); overlaps keep the first. */
+function swapWord(text: string, name: string, token: string): string {
+  const n = name.normalize('NFC').trim();
+  let out = '';
+  let from = 0;
+  for (const i of nameOccurrences(text, n)) {
+    if (i < from) continue;
+    out += text.slice(from, i) + token;
+    from = i + n.length;
+  }
+  return out + text.slice(from);
+}
+
+/**
+ * `text` with every name swapped for its token (longest first), players' (and any player token) for `{{p:player}}`.
+ * NPC names swap anywhere (never leak a real name); lobby names only as whole words (GEN-202: นก stays in เป็นกลาง).
+ */
 export function exampleTokens(text: string, npcs: readonly { id: string; names: readonly string[] }[], players: readonly string[]): string {
-  const swaps = [...npcs.flatMap((n) => n.names.map((name) => [name, npcToken(n.id)] as const)), ...players.map((name) => [name, PLAYER_TOKEN] as const)]
+  const swaps = [
+    ...npcs.flatMap((n) => n.names.map((name) => [name, npcToken(n.id), false] as const)),
+    ...players.map((name) => [name, PLAYER_TOKEN, true] as const),
+  ]
     .filter(([name]) => name.trim().length > 0)
     .sort((a, b) => b[0].length - a[0].length);
-  return swaps.reduce((out, [name, token]) => out.split(name).join(token), text.normalize('NFC')).replace(/\{\{p:[A-Za-z0-9_-]+\}\}/g, PLAYER_TOKEN);
+  return swaps
+    .reduce((out, [name, token, whole]) => (whole ? swapWord(out, name, token) : out.split(name).join(token)), text.normalize('NFC'))
+    .replace(/\{\{p:[A-Za-z0-9_-]+\}\}/g, PLAYER_TOKEN);
 }
 
 /** C1-C5: the dialogue call's system blocks, and its NPCs (the persona of one in the block is not repeated per turn). */
