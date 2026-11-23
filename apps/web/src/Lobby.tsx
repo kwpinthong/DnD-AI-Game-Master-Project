@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { CharacterScreen } from './CharacterScreen.tsx';
 import { deleteGameCall, gameCall, type GameAction } from './game-api.ts';
 import { NpcDialoguePicker } from './NpcDialoguePicker.tsx';
-import { npcDialogueText } from './ui/strings.ts';
+import { npcDialogueText, toneText } from './ui/strings.ts';
+import { TonePicker } from './TonePicker.tsx';
 import { OriginCard } from './OriginCard.tsx';
 import { PlayRoom } from './PlayRoom.tsx';
 import { ScenarioEditor } from './ScenarioEditor.tsx';
@@ -297,6 +298,12 @@ export function Lobby({
           disabled={!owner || !lobby || busy}
           note={!lobby ? npcDialogueText.locked : owner ? undefined : npcDialogueText.ownerOnly}
           onChange={(npcDialogue) => void run({ method: 'PATCH', path: '/api/game', body: { npcDialogue } })}
+        />
+        <TonePicker
+          value={game.tone}
+          disabled={!owner || !lobby || busy}
+          note={!lobby ? toneText.locked : owner ? undefined : toneText.ownerOnly}
+          onChange={(tone) => void run({ method: 'PATCH', path: '/api/game', body: { tone } })}
         />
         {(game.canEditScenario || gmOfGame) && (
           <p className="lobby__row">

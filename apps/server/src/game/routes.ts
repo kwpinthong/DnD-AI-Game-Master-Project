@@ -101,7 +101,8 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
         break;
     }
 
-    const created = await createGame(db, parsed.data, now);
+    // GEN-177: no tone picked = the server default (the Voice data set, set at /admin).
+    const created = await createGame(db, parsed.data, now, options.assets.voice.tone);
     const body: CreateGameResponse = {
       token: created.token,
       expiresAt: new Date(created.expiresAt).toISOString(),

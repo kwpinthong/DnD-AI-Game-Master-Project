@@ -72,6 +72,7 @@ import { npcFarewellFor } from './server-lines.ts';
 import { periodScenes } from './scene.ts';
 import { GM_OUTPUT, GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
 import { gateStyle, styleIssues, type StyleScope } from './style-check.ts';
+import { gameTone, toneBlock } from './tone.ts';
 import {
   activeConstraints,
   addConstraint,
@@ -497,6 +498,10 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     const journalWait = writing.get(gameId)?.journals;
     if (journalWait) await timer.time('journal_wait', () => journalWait);
     // GEN-115: the narrations do not depend on each other, so they run together: the wait is the slowest one, not the sum.
+    // GEN-177: the game's tone right after the fixed rules, in the stable (cached) start of every narration / dialogue call.
+    const tone = toneBlock(assets.voice, gameTone(db, gameId));
+    const narratorSystem = [NARRATOR_BLOCK, tone];
+    const dialogueSystem = [DIALOGUE_BLOCK, tone];
     const narrations = await timer.time('narrate', () => Promise.all(audiences.map(async (audience): Promise<{ key: string; ctx: NarrationContext; out: StoredNarration; forbidden: string[]; readers: string[] }> => {
       const ctx: NarrationContext = {
         kind: 'gm_narration',
@@ -521,7 +526,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           at,
           purpose,
           repairPurpose: purpose,
-          system: [NARRATOR_BLOCK],
+          system: narratorSystem,
           context: ctx,
           output,
           maxOutputTokens: 1_500,
@@ -537,7 +542,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
                 gameId,
                 at,
                 purpose,
-                system: [NARRATOR_BLOCK],
+                system: narratorSystem,
                 context: ctx,
                 output,
                 maxOutputTokens: 1_500,
@@ -621,7 +626,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
             const { journal: _journal, kind: _kind, ...rest } = ctx;
             const context: DialogueContext = { ...rest, kind: 'gm_dialogue', narration: out.segments.map((s) => s.text), limits };
             const messages = [{ role: 'user' as const, text: JSON.stringify(context) }];
-            if (requestTokens([DIALOGUE_BLOCK], messages) > CONTEXT_BUDGET.npc_dialogue) {
+            if (requestTokens(dialogueSystem, messages) > CONTEXT_BUDGET.npc_dialogue) {
               log(`[gm] game=${gameId} purpose=npc_dialogue audience=${key} skipped: limit_exceeded`);
               return;
             }
@@ -632,7 +637,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
               day: at.day,
               phase: at.phase,
               turn: at.turn,
-              system: [DIALOGUE_BLOCK],
+              system: dialogueSystem,
               messages,
               output: { name: GM_OUTPUT.dialogue, schema: GmDialogue },
               maxOutputTokens: 1_000,
@@ -664,7 +669,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
                 gameId,
                 at,
                 purpose: 'npc_dialogue',
-                system: [DIALOGUE_BLOCK],
+                system: dialogueSystem,
                 context,
                 output: { name: GM_OUTPUT.dialogue, schema: GmDialogue },
                 maxOutputTokens: 1_000,

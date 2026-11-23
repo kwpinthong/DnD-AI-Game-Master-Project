@@ -405,3 +405,17 @@ export const npcDialogueText = {
   locked: 'ล็อกแล้ว เปลี่ยนระดับบทพูดไม่ได้หลังเริ่มเล่น',
   ownerOnly: 'เฉพาะเจ้าของเกมเปลี่ยนได้ก่อนเริ่มเกม',
 } as const;
+
+// GEN-177: the language tone of narration and NPC lines (game.tone); NPC speech profiles stay the same.
+export const toneText = {
+  group: 'โทนภาษา',
+  tones: [
+    { value: 'A', label: 'นิยายแฟนตาซีร่วมสมัย', hint: 'ภาษาเขียนกลาง ๆ กระชับ เห็นภาพ' },
+    { value: 'B', label: 'ตำนานโบราณ ภาษาสูง', hint: 'คำสูง ประโยคยาว จังหวะแบบพงศาวดาร' },
+    { value: 'C', label: 'ขี้เล่น เป็นกันเอง', hint: 'ภาษาพูด มีมุก ประโยคสั้น' },
+  ],
+  unset: 'ไม่เลือก = ใช้โทนเริ่มต้นของ server',
+  locked: 'ล็อกแล้ว เปลี่ยนโทนไม่ได้หลังเริ่มเล่น',
+  ownerOnly: 'เฉพาะเจ้าของเกมเปลี่ยนได้ก่อนเริ่มเกม',
+  adminDefault: 'โทนเริ่มต้นของเกมใหม่',
+} as const;

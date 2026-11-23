@@ -4,6 +4,7 @@ import {
   ONLINE_MIN_PLAYERS,
   type CreateGameRequest,
   type GameMode,
+  type GameTone,
   type GameView,
   type Member,
   type UpdateGameRequest,
@@ -107,6 +108,7 @@ export function gameView(db: Db | Tx, gameId: string, viewer: MemberRow): GameVi
     mode: row.mode,
     humanGm: row.humanGm,
     npcDialogue: row.npcDialogue,
+    tone: row.tone,
     inviteCode: row.inviteCode,
     status: row.startedAt === null ? 'lobby' : 'started',
     startedAt: row.startedAt === null ? null : new Date(row.startedAt).toISOString(),
@@ -136,7 +138,7 @@ export interface CreatedGame {
  * The create code is checked by the caller.
  * Human GM on: the owner is the GM (no character, no player slot). Off: the owner is a player.
  */
-export async function createGame(db: Db, input: CreateGameRequest, now: Clock): Promise<CreatedGame> {
+export async function createGame(db: Db, input: CreateGameRequest, now: Clock, defaultTone: GameTone = 'A'): Promise<CreatedGame> {
   const pinHash = await hashPin(input.pin);
   return db.transaction((tx) => {
     const t = now();
@@ -162,6 +164,7 @@ export async function createGame(db: Db, input: CreateGameRequest, now: Clock): 
           mode: input.mode,
           humanGm: input.humanGm,
           npcDialogue: input.npcDialogue ?? 'normal',
+          tone: input.tone ?? defaultTone,
           ownerMemberId: owner.id,
           startedAt: null,
           createdAt: t,
@@ -244,6 +247,7 @@ export function updateGame(db: Db, actor: MemberRow, change: UpdateGameRequest):
     if (change.gameName !== undefined) set.name = change.gameName;
     if (change.mode !== undefined) set.mode = change.mode;
     if (change.npcDialogue !== undefined) set.npcDialogue = change.npcDialogue;
+    if (change.tone !== undefined) set.tone = change.tone;
     if (Object.keys(set).length > 0) tx.update(game).set(set).where(eq(game.id, row.id)).run();
     return undefined;
   });

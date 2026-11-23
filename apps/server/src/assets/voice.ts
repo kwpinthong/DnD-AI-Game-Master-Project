@@ -5,7 +5,7 @@
  * NPC's real name (checked in buildGameAssets against the NPC set). Only "ทำการ" and emoji / markdown are `block`
  * rules (Q-334); every other rule is a flag.
  */
-import { defaultScenario } from '@isekai/protocol';
+import { defaultScenario, GameTone } from '@isekai/protocol';
 import { z } from 'zod';
 
 export const VOICE_FILE = 'voice.json';
@@ -68,9 +68,34 @@ export type NpcVoice = z.infer<typeof NpcVoice>;
 
 const npcIds = () => new Set(defaultScenario().npcs.map((n) => n.id));
 
+/** GEN-177: one tone of the GEN-166 section 0 (the same scene told three ways). NPC profiles are the same in every tone. */
+const ToneBlock = z.strictObject({ name: z.string().min(1).max(60), description: z.string().min(1).max(200), samples: z.array(z.string().min(1).max(300)).min(1).max(3) });
+export type ToneBlock = z.infer<typeof ToneBlock>;
+
+/** A Voice row saved before GEN-177 has no `tones`: these (= voice.json) fill it in, so the server still starts. */
+const DEFAULT_TONES: Record<GameTone, ToneBlock> = {
+  A: {
+    name: 'นิยายแฟนตาซีร่วมสมัย',
+    description: 'ภาษาเขียนกลางๆ กระชับ เห็นภาพ มีอารมณ์ขันได้นิดในบทพูด NPC',
+    samples: ['แสงสุดท้ายของ HESPERION ทาบลงบนขอบน้ำพุ คุณยื่นขนมปังให้เด็กขอทาน มือผอมสั่นรับไว้ ก่อนแบ่งครึ่งคืนให้คุณอย่างลังเล'],
+  },
+  B: {
+    name: 'ตำนานโบราณ ภาษาสูง',
+    description: 'คำสูง ประโยคยาว จังหวะแบบพงศาวดาร',
+    samples: ['ยามสนธยาแห่ง HESPERION ทอแสงทองลงเหนือธารน้ำพุ ท่านยื่นขนมปังแก่เด็กยากไร้ มือน้อยอันสั่นเทารับไว้ด้วยความเกรงใจยิ่ง'],
+  },
+  C: {
+    name: 'ขี้เล่น เป็นกันเอง',
+    description: 'ภาษาพูด มีมุก ประโยคสั้นมาก',
+    samples: ['ฟ้าเริ่มส้มแล้ว คุณยื่นขนมปังให้เด็กขอทานตรงน้ำพุ เจ้าหนูรับไปงงๆ แล้วแบ่งคืนครึ่งนึง ใจดีเกินตัวไปไหมเนี่ย'],
+  },
+};
+
 export const VoiceAsset = z.strictObject({
   version: z.number().int().min(1),
-  tone: z.enum(['A', 'B', 'C']),
+  /** The tone of a new game created without one (GEN-177: set from /admin). */
+  tone: GameTone,
+  tones: z.strictObject({ A: ToneBlock, B: ToneBlock, C: ToneBlock }).default(DEFAULT_TONES),
   guide: z.strictObject({ voice: z.string().max(400), register: z.string().max(300), length: z.string().max(200), use: z.array(z.string().max(80)).max(10) }),
   forbidden: z.array(ForbiddenRule).max(40),
   pairs: z.array(z.strictObject({ bad: z.string().max(120), good: z.string().max(120) })).max(15),

@@ -83,15 +83,18 @@ function readMeta(db: DbOrTx, key: string): unknown {
 const writeMeta = (db: DbOrTx, key: string, value: unknown) =>
   db.insert(appMeta).values({ key, value: JSON.stringify(value) }).onConflictDoUpdate({ target: appMeta.key, set: { value: JSON.stringify(value) } }).run();
 
-const DEFAULT_SETTINGS: StyleSettings = { rewrite: false };
+/** The settings kept in app_meta (GEN-177's default tone lives in the Voice data set instead). */
+type CheckerSettings = Pick<StyleSettings, 'rewrite'>;
+const CheckerSettings = StyleSettings.pick({ rewrite: true });
+const DEFAULT_SETTINGS: CheckerSettings = { rewrite: false };
 
-export function getStyleSettings(db: Db): StyleSettings {
+export function getStyleSettings(db: Db): CheckerSettings {
   const raw = readMeta(db, SETTINGS_KEY);
-  const saved = StyleSettings.safeParse({ ...DEFAULT_SETTINGS, ...(raw && typeof raw === 'object' ? raw : {}) });
+  const saved = CheckerSettings.safeParse({ ...DEFAULT_SETTINGS, ...(raw && typeof raw === 'object' ? raw : {}) });
   return saved.success ? saved.data : DEFAULT_SETTINGS;
 }
 
-export function setStyleSettings(db: Db, patch: Partial<StyleSettings>): StyleSettings {
+export function setStyleSettings(db: Db, patch: Partial<CheckerSettings>): CheckerSettings {
   const next = { ...getStyleSettings(db), ...patch };
   writeMeta(db, SETTINGS_KEY, next);
   return next;
