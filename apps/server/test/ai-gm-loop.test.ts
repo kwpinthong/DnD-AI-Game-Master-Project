@@ -1581,5 +1581,63 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       expect(mine.map((e) => e.place?.id)).toEqual(['fountain']);
       expect(mine[0]!.text).toBe(scenesOf(clients[1]!, 1, 'HESPERION')[0]!.text);
     });
+
+    describe('GEN-185 a scene a restart cut short is written on the first join', () => {
+      /** The scene calls hang until the server shuts down (the restart lands while the AI writes the scene). */
+      const hangScenes: Handler = (req, n) =>
+        isScene(req) ? new Promise<AiCallResult>((resolve) => req.signal?.addEventListener('abort', () => resolve(mockReply.fail('timeout')), { once: true })) : noRoll(req, n);
+      async function cutScene(): Promise<Table> {
+        await boot({}, hangScenes);
+        const t = await startedTable(server!, false);
+        move(t.a, 'fountain');
+        move(t.b, 'fountain');
+        jumpTo(t, { day: 1, phase: 'SOLARION', turn: 2 });
+        const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+        await playTurn(clients, ['ยืนมองน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 1 });
+        await expect.poll(() => provider.requests.filter(isScene).length, { timeout: 5_000 }).toBe(2);
+        await restart();
+        return t;
+      }
+      async function restart(handler: Handler = noRoll) {
+        await Promise.all(sockets.splice(0).map((s) => s.close()));
+        await server!.close();
+        await boot({}, handler);
+      }
+
+      it('C1: the restart lands while the AI writes the scene: on the first join every place with players gets its scene, once', async () => {
+        const t = await cutScene();
+        const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+        await until(() => clients.every((c) => scenesOf(c, 1, 'HESPERION').length > 0));
+        expect(scenesOf(clients[0]!, 1, 'HESPERION').map((e) => e.place?.id)).toEqual(['fountain']);
+        expect(scenesOf(clients[1]!, 1, 'HESPERION').map((e) => e.place?.id)).toEqual(['fountain']);
+        expect(scenesOf(clients[2]!, 1, 'HESPERION').map((e) => e.place?.id)).toEqual(['inn']);
+        expect(provider.requests.filter(isScene).map((r) => contextOf<SceneContext>(r).place.id).sort()).toEqual(['fountain', 'inn']);
+        for (const c of clients) expect(timeEntries(c)).toHaveLength(1);
+        // The turn it opened goes on, its results after the scene.
+        await playTurn(clients, ['ยืนมองน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 2 });
+        const scene = scenesOf(clients[0]!, 1, 'HESPERION')[0]!;
+        expect(turnEntries(clients[0]!, 1, 'HESPERION', 1).filter((e) => e.kind === 'narration').every((e) => e.seq > scene.seq)).toBe(true);
+      });
+
+      it('C2: the scene is there: a later restart and join write nothing again', async () => {
+        const t = await cutScene();
+        let clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+        await until(() => clients.every((c) => scenesOf(c, 1, 'HESPERION').length > 0));
+        await restart();
+        clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+        await pause(100);
+        expect(provider.requests.filter(isScene)).toEqual([]);
+        for (const c of clients) expect(scenesOf(c, 1, 'HESPERION')).toHaveLength(1);
+      });
+
+      it('C3: the next turn already started: no scene is written back in time', async () => {
+        const t = await cutScene();
+        jumpTo(t, { day: 1, phase: 'HESPERION', turn: 2 });
+        const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+        await pause(100);
+        expect(provider.requests.filter(isScene)).toEqual([]);
+        for (const c of clients) expect(scenesOf(c, 1, 'HESPERION')).toEqual([]);
+      });
+    });
   });
 });
