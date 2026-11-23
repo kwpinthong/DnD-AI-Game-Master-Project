@@ -190,17 +190,17 @@ describe('C2 every scenario shows its state', () => {
     expect(await screen.findByRole('region', { name: 'ความลับของทุกคน' })).toBeTruthy();
     expect(screen.getByText(/เส้นทาง Good/)).toBeTruthy();
     const rating = within(screen.getByRole('region', { name: 'ให้คะแนนเกม' }));
-    expect(await rating.findByText(/^รอคะแนนอีก 1 คน/)).toBeTruthy();
+    expect(await rating.findByText('ยังไม่มีคะแนน')).toBeTruthy();
     (await rating.findByRole('radio', { name: '9' })).click();
     rating.getByRole('button', { name: 'ส่งคะแนน' }).click();
     expect(await rating.findByText('ส่งแล้ว · แก้ได้')).toBeTruthy();
-    expect(rating.getByText(/^ผ่านเกณฑ์/)).toBeTruthy();
+    expect(rating.getByText('คะแนนเกม 8.60 จาก 3 คน')).toBeTruthy();
   });
 
   it.each([
-    ['ended-rated', /^ผ่านเกณฑ์/],
-    ['ended-low', /^ไม่ผ่านเกณฑ์/],
-  ])('%s: opens as sent with its learning status', async (scenario, status) => {
+    ['ended-rated', 'คะแนนเกม 8.60 จาก 3 คน'],
+    ['ended-low', 'คะแนนเกม 7.40 จาก 3 คน'],
+  ])('%s: opens as sent with its game score (GEN-079: no pass / fail gate)', async (scenario, status) => {
     render(<GameSummaryPage apiBaseUrl={mockBaseUrl(scenario, `t${++cell}`)} token={MOCK_TOKEN} onBack={noop} />);
     const rating = within(await screen.findByRole('region', { name: 'ให้คะแนนเกม' }));
     expect(await rating.findByText('ส่งแล้ว · แก้ได้')).toBeTruthy();

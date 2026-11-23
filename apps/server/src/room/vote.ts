@@ -1,4 +1,5 @@
 import { isVotableEntry, VoteReason, type EntryVote, type GmVoteEntry, type GmVotesResponse } from '@isekai/protocol';
+import { voteVerdict } from '@isekai/rules';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
 import { responseVote, roomEntry, roomEntryRecipient } from '../db/schema.ts';
@@ -18,12 +19,10 @@ export function myVoteFields(db: DbOrTx, gameId: string, memberId: string, seq: 
   return row.vote === 'down' ? { myVote: 'down', myReasons: JSON.parse(row.reasons) as VoteReason[] } : { myVote: row.vote };
 }
 
-/**
- * GEN-126: Q-286 good example = 👍 > half of all players (a non-voter counts as 👎, a tie does not pass);
- * Q-287 to avoid = real 👎 > half of all players (non-voters do not count).
- */
-export function voteVerdict(votes: { up: number; down: number }, players: number): { good: boolean; avoid: boolean } {
-  return { good: players > 0 && votes.up * 2 > players, avoid: players > 0 && votes.down * 2 > players };
+/** GEN-126's `good` / `avoid` flags from the one GEN-079 `voteVerdict` (packages/rules). */
+export function voteFlags(votes: { up: number; down: number }, players: number): { good: boolean; avoid: boolean } {
+  const verdict = voteVerdict({ players, ...votes });
+  return { good: verdict === 'good', avoid: verdict === 'avoid' };
 }
 
 /** GEN-126: every voted entry of the game with its counts out of the players of the game now (only their votes count), oldest first. */
@@ -41,7 +40,7 @@ export function gameVotes(db: DbOrTx, gameId: string): GmVotesResponse {
   const rows = seqs.length === 0 ? [] : db.select().from(roomEntry).where(and(eq(roomEntry.gameId, gameId), inArray(roomEntry.id, seqs))).orderBy(asc(roomEntry.id)).all();
   const entries = rows.map((row): GmVoteEntry => {
     const c = counts.get(entryRef(row.id))!;
-    return { seq: row.id, kind: row.kind, at: { day: row.day, phase: row.phase, turn: row.turn === 2 ? 2 : 1 }, text: row.text, ...c, ...voteVerdict(c, players.size) };
+    return { seq: row.id, kind: row.kind, at: { day: row.day, phase: row.phase, turn: row.turn === 2 ? 2 : 1 }, text: row.text, ...c, ...voteFlags(c, players.size) };
   });
   return { players: players.size, entries };
 }

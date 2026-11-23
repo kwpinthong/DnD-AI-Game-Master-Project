@@ -100,3 +100,4 @@ export { KARMA_MAX, KARMA_MIN, karmaTierProblems, karmaTitle, type KarmaTier } f
 export * from './companion.ts';
 export * from './weather.ts';
 export * from './skills.ts';
+export { voteVerdict, type VoteFacts, type VoteVerdict } from './learning/votes.ts';

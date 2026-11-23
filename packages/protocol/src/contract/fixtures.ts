@@ -313,7 +313,7 @@ const correction: In<typeof p.AdminCorrection> = {
   libraryCandidate: true,
   createdAt: '2026-11-23T09:30:00.000Z',
 };
-const rating: In<typeof p.GameRatingView> = { mine: { score: 9, comment: 'สนุกมาก' }, myVotes: { '2-HESPERION-1-7': 'up' }, canVote: true, average: 8.6, raters: 3, members: 4, eligible: true, blocker: null };
+const rating: In<typeof p.GameRatingView> = { mine: { score: 9, comment: 'สนุกมาก' }, myVotes: { '2-HESPERION-1-7': 'up' }, canVote: true, average: 8.6, raters: 3, members: 4 };
 const learningSource = { sourceGameId: 'g-old', sourceGameName: 'คืนจันทราโลหิต', sourceScore: 8.6, status: 'active', createdAt: 1_795_200_000_000 } as const;
 const scheduleRow = { npc: 'โนอา', location: 'น้ำพุกลางเมือง', periods: ['SOLARION', 'HESPERION'], weathers: [], condition: '', note: 'ช่วงบ่าย-ค่ำ' };
 const gameDataSummary: In<typeof p.GameDataSetSummary> = {
@@ -452,7 +452,7 @@ export const CONTRACT_FIXTURES: Fixtures = {
   GameRatingRequest: [{ score: 9, comment: 'สนุกมาก' }, { score: 7 }],
   GameRatingResponse: [
     { rating },
-    { rating: { mine: null, myVotes: {}, canVote: true, average: null, raters: 1, members: 4, eligible: false, blocker: 'too_few_raters' } },
+    { rating: { mine: null, myVotes: {}, canVote: true, average: null, raters: 0, members: 4 } },
     // GEN-171: a 👎, and the Human GM's view (rates, never votes).
     { rating: { ...rating, myVotes: { '2-HESPERION-1-7': 'down' } } },
     { rating: { ...rating, myVotes: {}, canVote: false } },

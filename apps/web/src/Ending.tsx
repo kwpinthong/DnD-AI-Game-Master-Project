@@ -231,7 +231,7 @@ export function EndingReveal({
   );
 }
 
-// ---------- rating: form, sent, learning status ----------
+// ---------- rating: form, sent, game score ----------
 
 const SCORES = Array.from({ length: RATING_MAX - RATING_MIN + 1 }, (_, i) => RATING_MIN + i);
 
@@ -277,24 +277,12 @@ function RatingForm({ mine, onSubmit, onCancel }: { mine: GameRatingView['mine']
   );
 }
 
-/** Q-163 / Q-164 / Q-222: passes when the average is over 8 and at least half the members (GM counted) rated. */
-function LearningStatus({ rating }: { rating: GameRatingView }) {
-  const need = Math.ceil(rating.members / 2);
-  const verdict = rating.eligible
-    ? { tone: 'passed', title: endText.passed, note: endText.passedNote }
-    : rating.blocker === 'too_few_raters'
-      ? { tone: 'waiting', title: endText.waiting(Math.max(1, need - rating.raters)), note: endText.waitingNote }
-      : rating.blocker === 'score_too_low'
-        ? { tone: 'failed', title: endText.failed, note: endText.failedNote }
-        : { tone: 'waiting', title: endText.notYet, note: endText.waitingNote };
+/** GEN-079 C14: the game score is supporting info only (no pass / fail gate since Q-286 / Q-287). */
+function GameScore({ rating }: { rating: GameRatingView }) {
   return (
-    <div role="status" aria-label={endText.learning} className={`learning learning--${verdict.tone}`}>
-      <p className="learning__verdict">{verdict.title}</p>
-      <p className="learning__note">{verdict.note}</p>
-      <p className="learning__average">
-        {rating.average === null ? endText.noAverage(rating.raters, rating.members) : endText.average(rating.average, rating.raters, rating.members)}
-      </p>
-    </div>
+    <p role="status" aria-label={endText.gameScore} className="rating__score">
+      {rating.average === null ? endText.noAverage : endText.average(rating.average, rating.raters)}
+    </p>
   );
 }
 
@@ -326,7 +314,7 @@ export function RatingSection({ rating: handle, id }: { rating: RatingHandle; id
           ) : (
             <RatingForm mine={mine} onSubmit={submit} {...(mine ? { onCancel: () => setEditing(false) } : {})} />
           )}
-          <LearningStatus rating={state.rating} />
+          <GameScore rating={state.rating} />
           <p className="rating__likes">{endText.likes(Object.keys(state.rating.myVotes).length)}</p>
         </>
       )}
