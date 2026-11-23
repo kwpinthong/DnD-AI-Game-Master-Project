@@ -1,7 +1,10 @@
 import { ApiError, CreateGameResponse, defaultScenario, GameView, JoinResponse, sortTimeline, type RoomServerMessage } from '@isekai/protocol';
 import { SeededRng } from '@isekai/rules';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
+import { migrationsFolder } from '../src/db/client.ts';
 import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
 import { getGameScenario } from '../src/scenario/store.ts';
 import type { RunningServer, ServerOptions } from '../src/server.ts';
@@ -16,6 +19,7 @@ import { caller, CLOCK, CREATE_CODE, startedTable, startTestServer, type Call } 
  */
 
 const AI_WITHOUT_KEY = loadAiConfig({ AI_PROVIDER: 'anthropic' });
+const journal = JSON.parse(readFileSync(join(migrationsFolder, 'meta', '_journal.json'), 'utf8')) as { entries: { tag: string }[] };
 
 interface Seat {
   token: string;
@@ -296,13 +300,15 @@ describe('ISK-017 ready + auto start, no owner', { timeout: 120_000 }, () => {
     const Database = (await import('better-sqlite3')).default;
     const sqlite = new Database(`${dir}/isekai.sqlite`);
     sqlite.prepare('alter table member drop column ready_at').run();
-    sqlite.prepare('delete from __drizzle_migrations where id = (select max(id) from __drizzle_migrations)').run();
+    expect(sqlite.prepare('delete from __drizzle_migrations where created_at = (select max(created_at) from __drizzle_migrations)').run().changes).toBe(1);
     const owner = (sqlite.prepare('select owner_member_id as o from game where id = ?').get(t.gameId) as { o: string }).o;
     sqlite.close();
     expect(owner).toBe(a.memberId);
 
     await boot();
-    const after = await view(b);
+    const res = await call('GET', '/api/game', { token: b.token });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    const after = GameView.parse(res.body);
     expect(after).toMatchObject({ id: t.gameId, name: 'ห้องรอ', status: 'lobby' });
     expect(after.members.map((m) => [m.id, m.ready, m.hasCharacter])).toEqual([
       [a.memberId, false, true],
@@ -310,5 +316,10 @@ describe('ISK-017 ready + auto start, no owner', { timeout: 120_000 }, () => {
     ]);
     expect((await ready(b)).status).toBe(200);
     expect(GameView.parse((await ready(a)).body).status).toBe('started');
+
+    // Additive only: the migration adds the column and touches no data.
+    const sql = readFileSync(join(migrationsFolder, `${journal.entries.find((e) => e.tag.endsWith('_member_ready'))!.tag}.sql`), 'utf8');
+    expect(sql).toMatch(/ADD `ready_at`/);
+    expect(sql).not.toMatch(/\bdrop\b|\bdelete\b|\bupdate\b/i);
   });
 });

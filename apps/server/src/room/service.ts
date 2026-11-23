@@ -302,19 +302,19 @@ export function createRoomService(
     return condition === 'awake' ? null : condition;
   }
 
-  function gmStatusFor(me: MemberRow, state: PhaseState, ownerMemberId: string | null): RoomGmStatus | null {
+  function gmStatusFor(me: MemberRow, state: PhaseState): RoomGmStatus | null {
     if (closureOf(db, me.gameId)) return null; // ISK-001: a closed game waits for nothing
     if (held.has(me.gameId) && (state.status === 'resolving' || isEnded(state))) {
       return { code: 'awaiting_gm', message: me.role === 'gm' ? AWAITING_GM_MESSAGE : AWAITING_GM_PLAYER_MESSAGE, canRetry: false };
     }
-    const toOwner = me.role === 'gm' || me.id === ownerMemberId;
     const s = stuck.get(me.gameId);
     // GEN-059: an untold ending of an ended game is stuck the same way (retry tells it).
     if (s && (state.status === 'resolving' || isEnded(state))) {
-      return { code: s.code, message: toOwner ? s.ownerMessage : s.message, canRetry: s.code === 'stuck' };
+      // ISK-017: no owner: every member sees what only the owner / Human GM saw (the reason, not the generic line).
+      return { code: s.code, message: s.ownerMessage, canRetry: s.code === 'stuck' };
     }
-    // Q-221: while the game runs over its AI budget the owner / Human GM keep seeing why (from the stored usage).
-    const notice = toOwner && !isEnded(state) ? (budgetNotice?.(me.gameId) ?? null) : null;
+    // Q-221: while the game runs over its AI budget everyone keeps seeing why (from the stored usage).
+    const notice = !isEnded(state) ? (budgetNotice?.(me.gameId) ?? null) : null;
     return notice === null ? null : { code: 'budget_reached', message: notice, canRetry: false };
   }
 
@@ -323,7 +323,7 @@ export function createRoomService(
     state: PhaseState,
     members: MemberRow[],
     online: Set<string>,
-    gameRow: { mode: 'online' | 'single'; ownerMemberId: string | null },
+    gameRow: { mode: 'online' | 'single' },
   ): RoomState {
     const { mode } = gameRow;
     // Q-229: the trip to another zone is this turn's action; shown as a lock, while `move` keeps its own refusal code.
@@ -359,7 +359,7 @@ export function createRoomService(
         allies: alliesOf(me),
         astral: me.role === 'gm' ? null : astralViewOf(db, me.gameId, state, me.id),
       },
-      gmStatus: gmStatusFor(me, state, gameRow.ownerMemberId),
+      gmStatus: gmStatusFor(me, state),
     };
   }
 
@@ -368,10 +368,7 @@ export function createRoomService(
     if (!sockets || sockets.size === 0) return;
     const state = ensurePhaseState(db, gameId, now());
     const members = activeMembers(db, gameId);
-    const gameRow = db.select({ mode: game.mode, ownerMemberId: game.ownerMemberId }).from(game).where(eq(game.id, gameId)).get() ?? {
-      mode: 'online' as const,
-      ownerMemberId: null,
-    };
+    const gameRow = db.select({ mode: game.mode }).from(game).where(eq(game.id, gameId)).get() ?? { mode: 'online' as const };
     const online = new Set([...sockets.values()].map((m) => m.id));
     for (const [socket, me] of sockets) send(socket, roomStateFor(me, state, members, online, gameRow));
   }

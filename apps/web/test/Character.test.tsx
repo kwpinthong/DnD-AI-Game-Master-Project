@@ -37,8 +37,8 @@ function view(patch: Partial<GameView> = {}): GameView {
     inviteCode: 'K7Q2MX',
     status: 'lobby',
     startedAt: null,
-    you: { memberId: me.id, role: 'player', isOwner: true },
-    members: [{ id: me.id, name: 'นก', role: 'player', isOwner: true, hasCharacter: false }],
+    you: { memberId: me.id, role: 'player' },
+    members: [{ id: me.id, name: 'นก', role: 'player', ready: false, hasCharacter: false }],
     players: { count: 1, min: 1, max: 1 },
     canEditScenario: false,
     startBlockers: ['ยังไม่สร้างตัวละคร: นก'],
@@ -322,8 +322,8 @@ describe('Character creation step 1 (GEN-047)', () => {
       view({
         mode: 'online',
         humanGm: true,
-        you: { memberId: me.id, role: 'gm', isOwner: true },
-        members: [{ id: me.id, name: 'นก', role: 'gm', isOwner: true, hasCharacter: false }],
+        you: { memberId: me.id, role: 'gm' },
+        members: [{ id: me.id, name: 'นก', role: 'gm', ready: false, hasCharacter: false }],
       }),
     );
 

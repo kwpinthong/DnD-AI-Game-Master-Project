@@ -1,4 +1,4 @@
-import { ApiError, CreateGameResponse, GameView, JoinResponse, MeResponse } from '@isekai/protocol';
+import { ApiError, CreateGameResponse, GameView, JoinResponse } from '@isekai/protocol';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { defaultScenario } from '@isekai/protocol';
 import { loadAiConfig } from '../src/ai/config.ts';
@@ -14,7 +14,7 @@ const AI_WITHOUT_KEY = loadAiConfig({ AI_PROVIDER: 'anthropic' });
 
 type Body = Record<string, unknown>;
 
-describe('games: create, members, invite code, kick, start (GEN-025)', { timeout: 60_000 }, () => {
+describe('games: create, members, ready + start (GEN-025, ISK-017)', { timeout: 60_000 }, () => {
   let createCodeHash = '';
   let dataDir = '';
   let cleanup = () => {};
@@ -96,6 +96,7 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
   }
 
   const error = (body: unknown) => ApiError.parse(body);
+  const ready = (token: string, value = true) => call('POST', '/api/game/ready', { token, body: { ready: value } });
 
   it('C1: a right create code + Online + Human GM gives an invite code and the creator is the GM', async () => {
     await start();
@@ -104,9 +105,9 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
 
     expect(created.game.inviteCode).toMatch(/^[A-Z0-9]{6}$/);
     expect(created.game).toMatchObject({ name: 'เมืองก่อนอุกกาบาต', mode: 'online', humanGm: true, status: 'lobby' });
-    expect(created.game.you).toEqual({ memberId: created.member.id, role: 'gm', isOwner: true });
+    expect(created.game.you).toEqual({ memberId: created.member.id, role: 'gm' });
     expect(created.game.members).toEqual([
-      { id: created.member.id, name: 'ต้น', role: 'gm', isOwner: true, hasCharacter: false },
+      { id: created.member.id, name: 'ต้น', role: 'gm', ready: false, hasCharacter: false },
     ]);
     // The GM has no character and is not a player.
     expect(created.game.players).toEqual({ count: 0, min: 2, max: 6 });
@@ -116,7 +117,7 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     const player = await joinOk(created.game.inviteCode, 'นก');
     expect(player.member.gameId).toBe(created.game.id);
     const view = await getGame(player.token);
-    expect(view.you).toEqual({ memberId: player.member.id, role: 'player', isOwner: false });
+    expect(view.you).toEqual({ memberId: player.member.id, role: 'player' });
     expect(view.players.count).toBe(1);
   });
 
@@ -150,12 +151,12 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     expect(body.code === 'invalid_input' && body.fields.pin).toContain('แป้นพิมพ์อาจเป็นภาษาไทย');
   });
 
-  it('C1: without a Human GM the creator is the owner and the first player', async () => {
+  it('C1: without a Human GM the creator is the first player', async () => {
     await start();
 
     const created = await createGame({ humanGm: false });
 
-    expect(created.game.you).toMatchObject({ role: 'player', isOwner: true });
+    expect(created.game.you).toMatchObject({ role: 'player' });
     expect(created.game.players.count).toBe(1);
   });
 
@@ -165,7 +166,7 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     const created = await createGame({ mode: 'single' });
 
     expect(created.game).toMatchObject({ mode: 'single', humanGm: false });
-    expect(created.game.you).toMatchObject({ role: 'player', isOwner: true });
+    expect(created.game.you).toMatchObject({ role: 'player' });
     expect(created.game.players).toEqual({ count: 1, min: 1, max: 1 });
 
     const other = await postJoin(created.game.inviteCode, 'เบล');
@@ -257,12 +258,10 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     const created = await createGame();
     seedCharacter(created.member.id);
 
-    const res = await call('POST', '/api/game/start', { token: created.token });
+    const res = await ready(created.token);
 
-    expect(res.status).toBe(409);
-    const body = error(res.body);
-    expect(body.code).toBe('cannot_start');
-    expect(body).toMatchObject({ reasons: ['ขาดผู้เล่นอีก 1 คน (Online ต้องมีผู้เล่นอย่างน้อย 2 คน)'] });
+    expect(res.status).toBe(200);
+    expect(GameView.parse(res.body)).toMatchObject({ status: 'lobby', startBlockers: ['ขาดผู้เล่นอีก 1 คน (Online ต้องมีผู้เล่นอย่างน้อย 2 คน)'] });
     expect((await getGame(created.token)).status).toBe('lobby');
   });
 
@@ -274,17 +273,16 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     const pla = await joinOk(created.game.inviteCode, 'ปลา');
     seedCharacter(bel.member.id);
 
-    const res = await call('POST', '/api/game/start', { token: created.token });
+    for (const p of [bel, ton, pla]) expect((await ready(p.token)).status).toBe(200);
 
-    expect(res.status).toBe(409);
-    expect(error(res.body)).toMatchObject({ code: 'cannot_start', reasons: ['ยังไม่สร้างตัวละคร: ต้น, ปลา'] });
     const view = await getGame(created.token);
+    expect(view.status).toBe('lobby');
     expect(view.startBlockers).toEqual(['ยังไม่สร้างตัวละคร: ต้น, ปลา']);
     expect(view.members.find((m) => m.id === bel.member.id)?.hasCharacter).toBe(true);
 
     seedCharacter(ton.member.id);
     seedCharacter(pla.member.id);
-    const started = await call('POST', '/api/game/start', { token: created.token });
+    const started = await ready(pla.token);
     expect(started.status).toBe(200);
     expect(GameView.parse(started.body)).toMatchObject({ status: 'started', startBlockers: [] });
   });
@@ -299,9 +297,7 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     seedChosenLoot(server!.db, bel.member.id);
     seedChosenLoot(server!.db, ton.member.id, { legacy: true });
 
-    const res = await call('POST', '/api/game/start', { token: created.token });
-    expect(res.status).toBe(409);
-    expect(error(res.body)).toMatchObject({ code: 'cannot_start', reasons: ['ยังไม่ได้เลือกของติดตัว: ต้น, ปลา'] });
+    for (const p of [bel, ton, pla]) expect((await ready(p.token)).status).toBe(200);
     expect((await getGame(created.token)).startBlockers).toEqual(['ยังไม่ได้เลือกของติดตัว: ต้น, ปลา']);
     expect((await getGame(created.token)).status).toBe('lobby');
 
@@ -311,7 +307,7 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     expect((await getGame(created.token)).startBlockers).toEqual(['ยังไม่ได้เลือกของติดตัว: ปลา']);
 
     seedChosenLoot(server!.db, pla.member.id);
-    const started = await call('POST', '/api/game/start', { token: created.token });
+    const started = await ready(pla.token);
     expect(started.status).toBe(200);
     expect(GameView.parse(started.body)).toMatchObject({ status: 'started', startBlockers: [] });
   });
@@ -327,107 +323,34 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
   it('C5: Single starts once its one player has a character', async () => {
     await start();
     const created = await createGame({ mode: 'single' });
-    expect(error((await call('POST', '/api/game/start', { token: created.token })).body)).toMatchObject({
-      reasons: ['ยังไม่สร้างตัวละคร: นก'],
-    });
+    expect(GameView.parse((await ready(created.token)).body)).toMatchObject({ status: 'lobby', startBlockers: ['ยังไม่สร้างตัวละคร: นก'] });
 
     seedCharacter(created.member.id);
 
-    expect((await call('POST', '/api/game/start', { token: created.token })).status).toBe(200);
+    expect(GameView.parse((await ready(created.token)).body).status).toBe('started');
   });
 
-  it('C6: a new invite code replaces the old one; members get back in with it and the same name + PIN', async () => {
+  // ISK-017: new invite code and kick moved to the server owner (ISK-018); renaming / mode / NPC level edits are gone
+  // (set once at creation). Their 404s are in lobby-ready.test.ts C7.
+
+  it('a ready without a session is 401', async () => {
     await start();
-    const created = await createGame();
-    const oldCode = created.game.inviteCode;
-    const bel = await joinOk(oldCode, 'เบล', '5555');
-
-    const res = await call('POST', '/api/game/invite-code', { token: created.token });
-
-    expect(res.status).toBe(200);
-    const newCode = GameView.parse(res.body).inviteCode;
-    expect(newCode).not.toBe(oldCode);
-    expect(newCode).toMatch(/^[A-Z0-9]{6}$/);
-    expect(error((await postJoin(oldCode, 'เบล', '5555')).body).code).toBe('game_not_found');
-    const back = await joinOk(newCode, 'เบล', '5555');
-    expect(back.created).toBe(false);
-    expect(back.member.id).toBe(bel.member.id);
-    // Sessions opened before the change stay valid.
-    expect((await call('GET', '/api/me', { token: bel.token })).status).toBe(200);
+    expect((await call('POST', '/api/game/ready', { body: { ready: true } })).status).toBe(401);
   });
 
-  it('C7: a kicked member loses every session and cannot join again with the same name + PIN', async () => {
-    await start();
-    const created = await createGame();
-    const bel = await joinOk(created.game.inviteCode, 'เบล', '5555');
-    const belPhone = await joinOk(created.game.inviteCode, 'เบล', '5555');
-
-    const res = await call('DELETE', `/api/game/members/${bel.member.id}`, { token: created.token });
-
-    expect(res.status).toBe(200);
-    expect(GameView.parse(res.body).members.map((m) => m.name)).toEqual(['นก']);
-    expect((await call('GET', '/api/me', { token: bel.token })).status).toBe(401);
-    expect((await call('GET', '/api/me', { token: belPhone.token })).status).toBe(401);
-    expect((await call('GET', '/api/game', { token: bel.token })).status).toBe(401);
-    const again = await postJoin(created.game.inviteCode, 'เบล', '5555');
-    expect(again.status).toBe(403);
-    expect(error(again.body).code).toBe('kicked');
-  });
-
-  it('C7: a member who is not the owner gets 403 for kick, edit, new invite code and start', async () => {
-    await start();
-    const created = await createGame();
-    const bel = await joinOk(created.game.inviteCode, 'เบล');
-
-    const attempts = [
-      await call('DELETE', `/api/game/members/${created.member.id}`, { token: bel.token }),
-      await call('DELETE', `/api/game/members/${bel.member.id}`, { token: bel.token }),
-      await call('PATCH', '/api/game', { token: bel.token, body: { mode: 'single' } }),
-      await call('PATCH', '/api/game', { token: bel.token, body: { gameName: 'ของฉัน' } }),
-      await call('POST', '/api/game/invite-code', { token: bel.token }),
-      await call('POST', '/api/game/start', { token: bel.token }),
-    ];
-
-    for (const res of attempts) {
-      expect(res.status).toBe(403);
-      expect(error(res.body).code).toBe('forbidden');
-    }
-    const view = await getGame(created.token);
-    expect(view).toMatchObject({ name: 'เมืองก่อนอุกกาบาต', mode: 'online', inviteCode: created.game.inviteCode, status: 'lobby' });
-    expect(view.members).toHaveLength(2);
-  });
-
-  it('C7: the owner cannot kick a member of another game, and requests without a session get 401', async () => {
-    await start();
-    const a = await createGame();
-    const b = await createGame({ gameName: 'อีกเกม' });
-
-    const res = await call('DELETE', `/api/game/members/${b.member.id}`, { token: a.token });
-
-    expect(res.status).toBe(404);
-    expect((await call('GET', '/api/me', { token: b.token })).status).toBe(200);
-    expect((await call('POST', '/api/game/start')).status).toBe(401);
-    expect((await call('PATCH', '/api/game', { body: { mode: 'single' } })).status).toBe(401);
-  });
-
-  it('C8: after the start, mode cannot change, nobody new can join, and nobody can be kicked', async () => {
+  it('C8: after the start nobody new can join and ready is refused; members still log back in', async () => {
     await start();
     const created = await createGame();
     const bel = await joinOk(created.game.inviteCode, 'เบล', '5555');
     seedCharacter(created.member.id);
     seedCharacter(bel.member.id);
-    expect((await call('POST', '/api/game/start', { token: created.token })).status).toBe(200);
+    expect((await ready(created.token)).status).toBe(200);
+    expect(GameView.parse((await ready(bel.token)).body).status).toBe('started');
 
-    const modeChange = await call('PATCH', '/api/game', { token: created.token, body: { mode: 'single' } });
     const newcomer = await postJoin(created.game.inviteCode, 'ปลา');
-    const kick = await call('DELETE', `/api/game/members/${bel.member.id}`, { token: created.token });
-    const startAgain = await call('POST', '/api/game/start', { token: created.token });
-
-    for (const res of [modeChange, newcomer, kick, startAgain]) {
-      expect(res.status).toBe(409);
-      expect(error(res.body).code).toBe('game_started');
-    }
-    expect(error(newcomer.body).message).toBe('เกมนี้เริ่มไปแล้ว รับคนเพิ่มไม่ได้');
+    expect(newcomer.status).toBe(409);
+    expect(error(newcomer.body)).toMatchObject({ code: 'game_started', message: 'เกมนี้เริ่มไปแล้ว รับคนเพิ่มไม่ได้' });
+    expect(error((await ready(created.token)).body).code).toBe('not_in_lobby');
     const view = await getGame(created.token);
     expect(view.mode).toBe('online');
     expect(view.members.map((m) => m.name)).toEqual(['นก', 'เบล']);
@@ -435,51 +358,13 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     expect((await postJoin(created.game.inviteCode, 'เบล', '5555')).status).toBe(200);
   });
 
-  it('before the start the owner can rename the game and switch mode when the players fit', async () => {
-    await start();
-    const created = await createGame();
-
-    const renamed = await call('PATCH', '/api/game', { token: created.token, body: { gameName: 'ป่าหลังเมือง', mode: 'single' } });
-    expect(renamed.status).toBe(200);
-    expect(GameView.parse(renamed.body)).toMatchObject({ name: 'ป่าหลังเมือง', mode: 'single', players: { max: 1 } });
-
-    await call('PATCH', '/api/game', { token: created.token, body: { mode: 'online' } });
-    await joinOk(created.game.inviteCode, 'เบล');
-    const tooMany = await call('PATCH', '/api/game', { token: created.token, body: { mode: 'single' } });
-    expect(tooMany.status).toBe(409);
-    expect(error(tooMany.body).code).toBe('not_allowed');
-  });
-
-  it('GEN-116 C5/C6: the NPC dialogue level is normal by default, set at creation, edited by the owner in the lobby; a non-owner gets 403; a bad value 400', async () => {
+  it('GEN-116 C5/C6: the NPC dialogue level is normal by default and set at creation; a bad value 400', async () => {
     await start();
     const created = await createGame();
     expect(created.game.npcDialogue).toBe('normal');
     const low = await createGame({ gameName: 'เกมบทพูดน้อย', npcDialogue: 'low' });
     expect(low.game.npcDialogue).toBe('low');
-
-    const bel = await joinOk(created.game.inviteCode, 'เบล');
-    const denied = await call('PATCH', '/api/game', { token: bel.token, body: { npcDialogue: 'high' } });
-    expect(denied.status).toBe(403);
-    expect(error(denied.body).code).toBe('forbidden');
-    expect((await getGame(created.token)).npcDialogue).toBe('normal');
-
-    const set = await call('PATCH', '/api/game', { token: created.token, body: { npcDialogue: 'high' } });
-    expect(set.status).toBe(200);
-    expect(GameView.parse(set.body).npcDialogue).toBe('high');
-    expect((await getGame(bel.token)).npcDialogue).toBe('high');
-    expect((await call('PATCH', '/api/game', { token: created.token, body: { npcDialogue: 'loud' } })).status).toBe(400);
     expect((await call('POST', '/api/games', { body: { ...validCreate, npcDialogue: 'loud' } })).status).toBe(400);
-  });
-
-  it('the owner cannot kick themselves', async () => {
-    await start();
-    const created = await createGame();
-
-    const res = await call('DELETE', `/api/game/members/${created.member.id}`, { token: created.token });
-
-    expect(res.status).toBe(409);
-    expect(error(res.body).code).toBe('not_allowed');
-    expect(MeResponse.parse((await call('GET', '/api/me', { token: created.token })).body).member.id).toBe(created.member.id);
   });
 
   it('Q-070: creating a game copies the default scenario; each game gets its own copy', async () => {
@@ -504,14 +389,14 @@ describe('games: create, members, invite code, kick, start (GEN-025)', { timeout
     expect(server!.db.prepare('select count(*) as n from game').get()).toEqual({ n: 0 });
   });
 
-  it('Q-075: without a ready AI the owner cannot start a game that could otherwise start', async () => {
+  it('Q-075: without a ready AI a game that could otherwise start does not start', async () => {
     await start();
     const created = await createGame({ mode: 'single' });
     seedCharacter(created.member.id);
     await server!.close();
     await start(true, AI_WITHOUT_KEY);
 
-    const res = await call('POST', '/api/game/start', { token: created.token });
+    const res = await ready(created.token);
     expect(res.status).toBe(503);
     expect(error(res.body)).toMatchObject({ code: 'ai_not_ready', message: expect.stringMatching(/สร้างหรือเริ่มเกม/) });
     expect((await getGame(created.token)).status).toBe('lobby');

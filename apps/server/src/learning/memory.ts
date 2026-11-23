@@ -66,9 +66,6 @@ export function checkedMemory(db: DbOrTx, setting: GameMemorySetting | undefined
   return ids.every((id) => allowed.has(id)) ? ids : undefined;
 }
 
-/** The owner's player key (set when they created the game with a code); null = none. */
-export const ownerKeyOf = (db: DbOrTx, ownerMemberId: string) => db.select({ k: memberStyle.playerKey }).from(memberStyle).where(eq(memberStyle.memberId, ownerMemberId)).get()?.k ?? null;
-
 /** Q-365 A: the turn's tags = the verb / target tags the AI GM gave each acting member's latest action (gm_turn proposals). */
 export function turnTags(db: DbOrTx, gameId: string, memberIds: readonly string[]): string[] {
   const latest = new Map<string, string[]>();

@@ -3,11 +3,14 @@ import {
   characterFieldErrors,
   CreateGameRequest,
   createGameFieldErrors,
+  GameReadyRequest,
+  parseScenario,
+  sortTimeline,
   type CharacterResponse,
   LootChooseRequest,
   type LootResponse,
   type OriginResponse,
-  UpdateGameRequest,
+  type Scenario,
   type CreateGameResponse,
 } from '@isekai/protocol';
 import type { KarmaTier, Rng } from '@isekai/rules';
@@ -17,25 +20,16 @@ import { bearerToken, sendError } from '../auth/routes.ts';
 import type { AiService } from '../ai/core/service.ts';
 import type { GameAssets } from '../assets/load.ts';
 import type { Db } from '../db/client.ts';
-import { checkedMemory, ownerKeyOf } from '../learning/memory.ts';
+import { checkedMemory } from '../learning/memory.ts';
 import { playerKeyOf, saveJoinStyle } from '../learning/style.ts';
-import { readScenario, resetScenario, saveScenario, type ScenarioEditOutcome } from '../scenario/editor.ts';
+import type { Lobby } from '../room/lobby.ts';
+import { readScenario } from '../scenario/editor.ts';
 import { createCharacter, getCharacter, updateCharacter, type CharacterOutcome } from './character.ts';
 import { createCodeChecker } from './create-code.ts';
 import { chooseLoot, getLoot, LOOT_AI_FAILED, rollLoot, type LootOutcome } from './loot.ts';
 import { getOrigin, narrateOrigins } from './origin.ts';
 import { closureOf } from '../admin/games.ts';
-import {
-  createGame,
-  gameView,
-  kickMember,
-  deleteGame,
-  renewInviteCode,
-  startGame,
-  updateGame,
-  type MemberRow,
-  type OwnerActionOutcome,
-} from './service.ts';
+import { createGame, gameView, setReady, type MemberRow } from './service.ts';
 
 export interface GameRouteOptions {
   /** scrypt hash of the create code (CREATE_CODE_HASH); without it nobody can create a game. */
@@ -51,13 +45,15 @@ export interface GameRouteOptions {
   assets: GameAssets;
   /** Real rolls: each player's start scenario at game start (GEN-065); null = none (ServerOptions.rng). */
   rng: Rng | null;
+  /** ISK-017: the lobby sockets that hear `lobby_ready` / `lobby_start_blocked`. */
+  lobby: Lobby;
 }
 
 const minutesUntil = (at: number, t: number) => Math.max(1, Math.ceil((at - t) / 60_000));
 
 /**
- * POST /api/games creates a game (create code + the creator's name + PIN). The /api/game routes
- * act on the caller's own game, found from the bearer token; owner-only ones answer 403 to others.
+ * POST /api/games creates a game (create code + the creator's name + PIN + every setting, ISK-017). The /api/game
+ * routes act on the caller's own game, found from the bearer token; every player has the same rights (no owner).
  */
 export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, options: GameRouteOptions) {
   const checkCreateCode = createCodeChecker(options.createCodeHash, now);
@@ -104,14 +100,26 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
         break;
     }
 
-    // GEN-083: the memory's source games must be ended games of the creator's player code.
+    // ISK-017: the scenario is set here once, checked as the old scenario editor did (one message per field).
+    let scenario: Scenario | undefined;
+    if (parsed.data.scenario !== undefined) {
+      const checked = parseScenario(parsed.data.scenario);
+      if (!checked.ok) {
+        const fields: Record<string, string> = {};
+        for (const issue of checked.errors) fields[issue.path || 'scenario'] ??= issue.message;
+        return sendError(reply, 400, { code: 'invalid_input', message: 'scenario ไม่ถูกต้อง', fields });
+      }
+      scenario = sortTimeline(checked.scenario);
+    }
+
+    // GEN-083: the memory's source games must be ended games of the creator's player code (409 as the lobby edit was).
     const playerCode = parsed.data.playerCode ?? '';
     const sources = checkedMemory(db, parsed.data.memory, playerCode === '' ? null : playerKeyOf(db, playerCode));
     if (sources === undefined) {
-      return sendError(reply, 400, { code: 'invalid_input', message: 'ข้อมูลไม่ถูกต้อง', fields: { memory: 'เลือกได้เฉพาะเกมที่จบแล้วที่คุณเป็นสมาชิก (ตามรหัสผู้เล่น)' } });
+      return sendError(reply, 409, { code: 'not_allowed', message: 'ความทรงจำเลือกได้เฉพาะเกมที่จบแล้วที่คุณเป็นสมาชิก (ตามรหัสผู้เล่น)' });
     }
     // GEN-177: no tone picked = the server default (the Voice data set, set at /admin).
-    const created = await createGame(db, parsed.data, now, options.assets.voice.tone, sources);
+    const created = await createGame(db, parsed.data, now, options.assets.voice.tone, sources, scenario);
     // GEN-082 / GEN-201: the creator's code and opt-out tick link their style like a join does.
     saveJoinStyle(db, { id: created.member.id, gameId: created.member.gameId }, { playerCode, noStyle: parsed.data.noStyle ?? false }, now());
     const body: CreateGameResponse = {
@@ -131,64 +139,16 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
     return found;
   }
 
-  function sendOutcome(reply: FastifyReply, outcome: OwnerActionOutcome) {
-    switch (outcome.kind) {
-      case 'ok':
-        return reply.code(200).send(outcome.view);
-      case 'forbidden':
-        return sendError(reply, 403, { code: 'forbidden', message: 'เฉพาะเจ้าของเกมทำได้' });
-      case 'game_started':
-        return sendError(reply, 409, { code: 'game_started', message: 'เกมเริ่มแล้ว เปลี่ยนโหมดหรือสมาชิกไม่ได้' });
-      case 'member_not_found':
-        return sendError(reply, 404, { code: 'member_not_found', message: 'ไม่พบสมาชิกคนนี้ในเกม' });
-      case 'not_allowed':
-        return sendError(reply, 409, { code: 'not_allowed', message: outcome.message });
-      case 'cannot_start':
-        return sendError(reply, 409, {
-          code: 'cannot_start',
-          message: `ยังเริ่มเกมไม่ได้: ${outcome.reasons.join(' / ')}`,
-          reasons: outcome.reasons,
-        });
-    }
-  }
-
-  function sendScenario(reply: FastifyReply, outcome: ScenarioEditOutcome) {
-    switch (outcome.kind) {
-      case 'ok':
-        return reply.code(200).send({ scenario: outcome.scenario, locked: outcome.locked });
-      case 'forbidden':
-        return sendError(reply, 403, {
-          code: 'forbidden',
-          message: 'เฉพาะ GM คนของเกมนี้แก้หรือดู scenario ได้ (เกมที่ไม่มี GM คนใช้ scenario ตั้งต้น)',
-        });
-      case 'game_started':
-        return sendError(reply, 409, { code: 'game_started', message: 'เกมเริ่มแล้ว แก้ scenario ผ่านหน้านี้ไม่ได้' });
-      case 'invalid': {
-        // One message per field, keyed by its path (`timeline.3.day`; `timeline` for the whole list).
-        const fields: Record<string, string> = {};
-        for (const issue of outcome.errors) fields[issue.path || 'scenario'] ??= issue.message;
-        return sendError(reply, 400, { code: 'invalid_input', message: 'scenario ไม่ถูกต้อง', fields });
-      }
-    }
-  }
-
-  // Scenario editor (GEN-046): the Human GM only; players never get scenario content.
+  // Scenario (GEN-046): the Human GM reads it; ISK-017: it is set once at creation, nobody edits it afterwards.
   app.get('/api/game/scenario', async (request, reply) => {
     const me = caller(request, reply);
     if (!me) return reply;
-    return sendScenario(reply, readScenario(db, me));
-  });
-
-  app.put('/api/game/scenario', async (request, reply) => {
-    const me = caller(request, reply);
-    if (!me) return reply;
-    return sendScenario(reply, saveScenario(db, me, request.body, now()));
-  });
-
-  app.post('/api/game/scenario/reset', async (request, reply) => {
-    const me = caller(request, reply);
-    if (!me) return reply;
-    return sendScenario(reply, resetScenario(db, me, now()));
+    const outcome = readScenario(db, me);
+    if (outcome.kind === 'ok') return reply.code(200).send({ scenario: outcome.scenario, locked: outcome.locked });
+    return sendError(reply, 403, {
+      code: 'forbidden',
+      message: 'เฉพาะ GM คนของเกมนี้ดู scenario ได้ (เกมที่ไม่มี GM คนใช้ scenario ตั้งต้น)',
+    });
   });
 
   app.get('/api/game', async (request, reply) => {
@@ -198,52 +158,23 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
     return reply.send({ ...gameView(db, me.gameId, me), closed: closureOf(db, me.gameId) });
   });
 
-  app.patch('/api/game', async (request, reply) => {
+  // ISK-017: no host. Each player presses ready; the server starts the game itself once everyone is.
+  app.post('/api/game/ready', async (request, reply) => {
     const me = caller(request, reply);
     if (!me) return reply;
-    const parsed = UpdateGameRequest.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      const fields: Record<string, string> = {};
-      for (const issue of parsed.error.issues) {
-        const field = String(issue.path[0] ?? 'form');
-        fields[field] ??= issue.message;
-      }
-      return sendError(reply, 400, { code: 'invalid_input', message: 'ข้อมูลไม่ถูกต้อง', fields });
+    const parsed = GameReadyRequest.safeParse(request.body ?? {});
+    if (!parsed.success) return sendError(reply, 400, { code: 'invalid_input', message: 'ข้อมูลไม่ถูกต้อง', fields: { ready: 'ส่ง true หรือ false' } });
+    const outcome = setReady(db, me, parsed.data.ready, now, options.assets, options.rng, () => options.ai.ready());
+    if (outcome.kind === 'not_in_lobby') return sendError(reply, 409, { code: 'not_in_lobby', message: 'กดพร้อมได้เฉพาะผู้เล่นในห้องรอ ก่อนเกมเริ่ม' });
+    options.lobby.send(me.gameId, { type: 'lobby_ready', memberId: me.id, ready: parsed.data.ready });
+    if (outcome.kind === 'ai_not_ready') {
+      options.lobby.send(me.gameId, { type: 'lobby_start_blocked', reason: outcome.message });
+      return sendError(reply, 503, { code: 'ai_not_ready', message: outcome.message });
     }
-    const memory = parsed.data.memory;
-    return sendOutcome(reply, updateGame(db, me, parsed.data, (tx, row) => checkedMemory(tx, memory, ownerKeyOf(tx, row.ownerMemberId ?? ''))));
-  });
-
-  app.delete('/api/game', async (request, reply) => {
-    const me = caller(request, reply);
-    if (!me) return reply;
-    const outcome = deleteGame(db, me, (request.body as { confirmName?: unknown } | null | undefined)?.confirmName, now());
-    if (outcome === 'forbidden') return sendError(reply, 403, { code: 'forbidden', message: 'เฉพาะเจ้าของเกมทำได้' });
-    if (outcome === 'confirm_required') return sendError(reply, 400, { code: 'invalid_input', message: 'พิมพ์ชื่อเกมเพื่อยืนยันการลบ', fields: { confirmName: 'พิมพ์ชื่อเกมให้ตรง' } });
-    return reply.code(204).send();
-  });
-
-  app.post('/api/game/invite-code', async (request, reply) => {
-    const me = caller(request, reply);
-    if (!me) return reply;
-    return sendOutcome(reply, renewInviteCode(db, me));
-  });
-
-  app.delete<{ Params: { memberId: string } }>('/api/game/members/:memberId', async (request, reply) => {
-    const me = caller(request, reply);
-    if (!me) return reply;
-    return sendOutcome(reply, kickMember(db, me, request.params.memberId, now));
-  });
-
-  app.post('/api/game/start', async (request, reply) => {
-    const me = caller(request, reply);
-    if (!me) return reply;
-    if (refuseWithoutAi(reply)) return reply;
-    const outcome = startGame(db, me, now, options.assets, options.rng);
     // The start scenarios are already stored; the private narrations follow. A failed one stays null and
-    // is written on the player's next GET /api/game/origin (C8).
-    if (outcome.kind === 'ok') await narrateOrigins(db, options.ai, options.assets, me.gameId, now);
-    return sendOutcome(reply, outcome);
+    // is written on the player's next GET /api/game/origin (GEN-065 C8).
+    if (outcome.started) await narrateOrigins(db, options.ai, options.assets, me.gameId, now);
+    return reply.code(200).send(outcome.view);
   });
 
   // --- Start scenario (GEN-065): the caller's own origin; the Human GM sees every player's. ---

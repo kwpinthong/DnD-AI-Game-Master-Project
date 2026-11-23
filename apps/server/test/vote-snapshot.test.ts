@@ -2,6 +2,7 @@ import { AdminCorrectionsExportResponse } from '@isekai/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import { hashPin } from '../src/auth/pin.ts';
+import { deleteGame as removeGame } from '../src/game/service.ts';
 import { insertEntry } from '../src/room/store.ts';
 import { getGameScenario } from '../src/scenario/store.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
@@ -52,7 +53,9 @@ describe('GEN-189 vote snapshot on game delete', { timeout: 60_000 }, () => {
     return { t, gameId, npc, line, feed };
   }
 
-  const deleteGame = (t: Table) => t.call('DELETE', '/api/game', { token: t.a.token, body: { confirmName: 'เมืองก่อนอุกกาบาต' } });
+  // ISK-017: no player route deletes a game any more; the service the server owner's delete will use (ISK-018).
+  const deleteGame = (t: Table) =>
+    removeGame(server!.orm, (server!.db.prepare('select game_id as id from member where id = ?').get(t.a.memberId) as { id: string }).id, CLOCK);
   const snapshots = () =>
     server!.db.prepare('select game_id as gameId, entry_id as seq, scene, npc_name as npc, text, up, down, players, verdict from vote_snapshot order by id').all() as Record<string, unknown>[];
   async function adminToken(t: Table) {
@@ -62,7 +65,7 @@ describe('GEN-189 vote snapshot on game delete', { timeout: 60_000 }, () => {
   it('C1: deleting a game with votes keeps a snapshot of each voted message with its full counts and verdict', async () => {
     const { t, gameId, npc, line, feed } = await votedGame();
     expect(snapshots()).toEqual([]);
-    expect((await deleteGame(t)).status).toBe(204);
+    deleteGame(t);
     expect(server!.db.prepare('select count(*) as n from response_vote where game_id = ?').get(gameId)).toEqual({ n: 0 });
     expect(snapshots()).toEqual([
       { gameId, seq: line, scene: 'npc-dialogue', npc: npc.name, text: '{{PLAYER_1}}จ๋า {{PLAYER_1}}กับ{{PLAYER_2}}ขอเตือนนะ', up: 1, down: 2, players: 3, verdict: 'avoid' },
@@ -70,10 +73,9 @@ describe('GEN-189 vote snapshot on game delete', { timeout: 60_000 }, () => {
     ]);
   });
 
-  it('C1: a refused delete (wrong name, not the owner) keeps no snapshot', async () => {
+  it('C1: a refused delete (ISK-017: no player can delete, 404) keeps no snapshot', async () => {
     const { t } = await votedGame();
-    expect((await t.call('DELETE', '/api/game', { token: t.a.token, body: { confirmName: 'ผิด' } })).status).toBe(400);
-    expect((await t.call('DELETE', '/api/game', { token: t.b.token, body: { confirmName: 'เมืองก่อนอุกกาบาต' } })).status).toBe(403);
+    expect((await t.call('DELETE', '/api/game', { token: t.a.token, body: { confirmName: 'เมืองก่อนอุกกาบาต' } })).status).toBe(404);
     expect(snapshots()).toEqual([]);
   });
 

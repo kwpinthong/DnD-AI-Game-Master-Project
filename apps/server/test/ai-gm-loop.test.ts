@@ -574,13 +574,13 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       // Q-221: no one-off "ระบบ: ..." narration any more.
       expect(c.entries().filter((e) => e.text.startsWith('ระบบ:'))).toEqual([]);
     }
-    // The owner (A) sees why in the room's gmStatus while the game goes on; the other players do not.
+    // Every player (ISK-017: not only the creator A) sees why in the room's gmStatus while the game goes on.
     const ownerStatus = (c: RoomClient) => c.lastRoom()!.gmStatus;
     expect(ownerStatus(clients[0]!)).toMatchObject({ code: 'budget_reached', canRetry: false });
     expect(ownerStatus(clients[0]!)!.message).toContain('เพดาน');
     expect(clients[0]!.lastRoom()).toMatchObject({ status: 'collecting', turn: 2 });
-    expect(ownerStatus(clients[1]!)).toBeNull();
-    expect(ownerStatus(clients[2]!)).toBeNull();
+    expect(ownerStatus(clients[1]!)).toMatchObject({ code: 'budget_reached' });
+    expect(ownerStatus(clients[2]!)).toMatchObject({ code: 'budget_reached' });
     const lines = logs.filter((l) => l.startsWith('[gm]') && l.includes('fallback'));
     expect(lines.length).toBeGreaterThan(0);
     for (const line of lines) expect(line).toContain('cause=budget');
@@ -590,13 +590,13 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     await send(clients[1]!, 'ขายผัก');
     await clients[0]!.waitFor((m) => m.type === 'room' && m.submittedCount === 1, from);
     expect(ownerStatus(clients[0]!)).toMatchObject({ code: 'budget_reached' });
-    expect(ownerStatus(clients[1]!)).toBeNull();
+    expect(ownerStatus(clients[1]!)).toMatchObject({ code: 'budget_reached' });
     await Promise.all(sockets.splice(0).map((s) => s.close()));
     await server!.close();
     await boot(env, handler);
     clients = [await enter(t.a), await enter(t.b)];
     expect(ownerStatus(clients[0]!)).toMatchObject({ code: 'budget_reached', canRetry: false });
-    expect(ownerStatus(clients[1]!)).toBeNull();
+    expect(ownerStatus(clients[1]!)).toMatchObject({ code: 'budget_reached', canRetry: false });
 
     // The budget changes (raised ceiling): the status is gone.
     await Promise.all(sockets.splice(0).map((s) => s.close()));
@@ -606,14 +606,14 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(ownerStatus(clients[0]!)).toBeNull();
   });
 
-  it('Q-221: with a Human GM the GM sees the budget gmStatus, players do not; it ends with the game', async () => {
+  it('Q-221 + ISK-017: with a Human GM the GM and every player see the budget gmStatus; it ends with the game', async () => {
     await boot({ AI_GAME_MONTHLY_USD: '0' });
     const t = await startedTable(server!, true);
     const gm = await enter(t.gm!);
     const players = [await enter(t.a), await enter(t.b)];
     expect(gm.lastRoom()!.gmStatus).toMatchObject({ code: 'budget_reached', canRetry: false });
     expect(gm.lastRoom()!.gmStatus!.message).toContain('เพดาน');
-    for (const p of players) expect(p.lastRoom()!.gmStatus).toBeNull();
+    for (const p of players) expect(p.lastRoom()!.gmStatus).toMatchObject({ code: 'budget_reached', canRetry: false });
 
     // The game ends: no budget notice on an ended game.
     await Promise.all(sockets.splice(0).map((s) => s.close()));
@@ -828,17 +828,18 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(new Set(audiences).size).toBe(audiences.length);
   });
 
-  it('C7: at the token ceiling the AI is not called, the owner sees why, and the turn waits with nothing lost', async () => {
+  it('C7: at the token ceiling the AI is not called, every player sees why (ISK-017: no owner), and the turn waits with nothing lost', async () => {
     await boot({ AI_GAME_MONTHLY_USD: '0' });
     const t = await startedTable(server!, false);
     const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
     for (const [i, c] of clients.entries()) await send(c, ['ซื้อดาบ', 'ขายผ้า', 'ซ่อมรองเท้า'][i]!);
 
-    const owner = await clients[0]!.waitFor(gmStuck);
-    expect(owner.gmStatus).toMatchObject({ code: 'budget_reached' });
-    expect(owner.gmStatus!.message).toContain('เพดาน');
-    const player = await clients[1]!.waitFor(gmStuck);
-    expect(player.gmStatus!.message).toContain('AI GM ติดขัด');
+    const creator = await clients[0]!.waitFor(gmStuck);
+    expect(creator.gmStatus).toMatchObject({ code: 'budget_reached' });
+    expect(creator.gmStatus!.message).toContain('เพดาน');
+    // ISK-017: players get the lasting budget notice too, so wait for the stuck turn itself.
+    const player = await clients[1]!.waitFor((m): m is RoomState => gmStuck(m) && m.status === 'resolving');
+    expect(player.gmStatus!.message).toContain('เพดาน');
     expect(provider.requests).toEqual([]);
     expect(player).toMatchObject({ status: 'resolving', day: 1, phase: 'EOSORIA', turn: 1 });
 

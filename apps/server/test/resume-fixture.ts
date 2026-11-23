@@ -4,7 +4,7 @@ import { expect } from 'vitest';
 import type { RunningServer } from '../src/server.ts';
 import { seedChosenLoot } from './helpers.ts';
 import { isReady, openRoom, type RoomClient } from './room-client.ts';
-import { caller, CREATE_CODE, DARIN, LIN, MEKHA, type Call, type Seat } from './visibility-fixture.ts';
+import { caller, CREATE_CODE, DARIN, LIN, MEKHA, readyAll, type Call, type Seat } from './visibility-fixture.ts';
 
 /** GEN-037: a started online game with four players, the size of the C1 table. */
 
@@ -46,8 +46,7 @@ export async function fourPlayerTable(server: RunningServer, gameName = 'เม�
     await withCharacter(await postJoin('ซี'), MEKHA),
     await withCharacter(await postJoin('ดี'), NARA),
   ];
-  const start = await call('POST', '/api/game/start', { token: game.token });
-  expect(start.status, JSON.stringify(start.body)).toBe(200);
+  await readyAll(call, seats);
   return { call, gameId: game.game.id, inviteCode: game.game.inviteCode, seats };
 }
 

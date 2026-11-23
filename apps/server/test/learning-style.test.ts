@@ -5,7 +5,7 @@ import { buildStyles, styleContextFor } from '../src/learning/style.ts';
 import { ensurePhaseState, recordAction, savePhaseState } from '../src/room/store.ts';
 import type { RunningServer } from '../src/server.ts';
 import { makeTempDir, seedChosenLoot } from './helpers.ts';
-import { caller, CLOCK, CREATE_CODE, DARIN, LIN, MEKHA, startTestServer, type Call } from './visibility-fixture.ts';
+import { caller, CLOCK, CREATE_CODE, DARIN, LIN, MEKHA, readyAll, startTestServer, type Call } from './visibility-fixture.ts';
 
 /**
  * GEN-082: a player's style profile across games, linked by the player code they set when joining (Q-167), kept only
@@ -65,7 +65,7 @@ describe('GEN-082 player style across games', { timeout: 120_000 }, () => {
       CharacterResponse.parse(res.body);
       seedChosenLoot(server!.db, s.memberId);
     }
-    expect((await call('POST', '/api/game/start', { token: a.token })).status).toBe(200);
+    await readyAll(call, [a, b, c]);
     return { call, gameId: game.game.id, a, b, c };
   }
 

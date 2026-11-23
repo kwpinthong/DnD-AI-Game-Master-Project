@@ -1,0 +1,1 @@
+ALTER TABLE `member` ADD `ready_at` integer;

@@ -284,7 +284,7 @@ describe('character: name, appearance, personality + starting values (GEN-047)',
     expect(CharacterResponse.parse(before.body).character).toMatchObject({ name: 'ลินดา', personality: 'กล้าหาญ', editable: true });
 
     seedChosenLoot(server!.db, created.member.id);
-    expect((await call('POST', '/api/game/start', { token: created.token })).status).toBe(200);
+    expect((await call('POST', '/api/game/ready', { token: created.token, body: { ready: true } })).status).toBe(200);
 
     for (const patch of [{ name: 'ชื่อใหม่' }, { personality: 'บุคลิกใหม่' }, { appearance: 'หน้าตาใหม่' }]) {
       const res = await putCharacter(created.token, { ...lin, name: 'ลินดา', personality: 'กล้าหาญ', ...patch });

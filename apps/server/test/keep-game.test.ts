@@ -102,23 +102,17 @@ describe('GEN-112 the game is kept', { timeout: 120_000 }, () => {
     const back = await call()('POST', '/api/join', { body: { inviteCode: t.inviteCode, name: 'นก', pin: '1234' } });
     expect(back.status, JSON.stringify(back.body)).toBe(200);
 
-    // C3: same game, same member, owner rights.
+    // C3: same game, same member (ISK-017: no owner rights any more).
     const token = (back.body as { token: string }).token;
-    const view = (await call()('GET', '/api/game', { token })).body as { status: string; you: { memberId: string; isOwner: boolean } };
-    expect(view).toMatchObject({ status: 'started', you: { memberId: owner.memberId, isOwner: true } });
+    const view = (await call()('GET', '/api/game', { token })).body as { status: string; you: { memberId: string } };
+    expect(view).toMatchObject({ status: 'started', you: { memberId: owner.memberId } });
   });
 
-  it('C6: deleting a game is owner-only (403) and needs the game name as confirmation (400); then it is gone', async () => {
+  it('C6 (ISK-017): a player cannot delete a game, not even its creator (404); it stays', async () => {
     const t = await fourPlayerTable(server!, 'เกมที่จะลบ');
-    const [owner, b] = t.seats;
-    expect((await call()('DELETE', '/api/game', { token: b.token, body: { confirmName: 'เกมที่จะลบ' } })).status).toBe(403);
-    expect((await call()('DELETE', '/api/game', { token: owner.token })).status).toBe(400);
-    expect((await call()('DELETE', '/api/game', { token: owner.token, body: { confirmName: 'ผิด' } })).status).toBe(400);
+    const [creator, b] = t.seats;
+    expect((await call()('DELETE', '/api/game', { token: creator.token, body: { confirmName: 'เกมที่จะลบ' } })).status).toBe(404);
     expect((await call()('GET', '/api/game', { token: b.token })).status).toBe(200);
-
-    expect((await call()('DELETE', '/api/game', { token: owner.token, body: { confirmName: 'เกมที่จะลบ' } })).status).toBe(204);
-    expect((await call()('GET', '/api/game', { token: b.token })).status).toBe(401);
-    expect(server!.db.prepare('select count(*) as n from game').get()).toEqual({ n: 0 });
-    expect(server!.db.prepare('select count(*) as n from phase_action').get()).toEqual({ n: 0 });
+    expect(server!.db.prepare('select count(*) as n from game').get()).toEqual({ n: 1 });
   });
 });

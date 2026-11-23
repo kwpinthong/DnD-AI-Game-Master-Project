@@ -37,14 +37,8 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     // GEN-056: the play room's WebSocket (a plain GET is 404, no body). Its events are scanned in room.test.ts.
     'GET /api/game/room': { method: 'GET', path: '/api/game/room' },
     'GET /api/game/scenario': { method: 'GET', path: '/api/game/scenario' },
-    'PUT /api/game/scenario': { method: 'PUT', path: '/api/game/scenario', body: defaultScenario() },
-    'POST /api/game/scenario/reset': { method: 'POST', path: '/api/game/scenario/reset' },
-    'PATCH /api/game': { method: 'PATCH', path: '/api/game', body: { gameName: 'ชื่อใหม่' } },
-    'POST /api/game/invite-code': { method: 'POST', path: '/api/game/invite-code' },
-    // No confirmName: the owner gets 400 and nobody's game is deleted by the scan.
-    'DELETE /api/game': { method: 'DELETE', path: '/api/game' },
-    'DELETE /api/game/members/:memberId': { method: 'DELETE', path: `/api/game/members/${t.c.memberId}` },
-    'POST /api/game/start': { method: 'POST', path: '/api/game/start' },
+    // ISK-017: the lobby's ready (the game here has started: the 409 is scanned).
+    'POST /api/game/ready': { method: 'POST', path: '/api/game/ready', body: { ready: true } },
     'POST /api/game/character': { method: 'POST', path: '/api/game/character', body: LIN },
     'PUT /api/game/character': { method: 'PUT', path: '/api/game/character', body: LIN },
     // GEN-048 loot step (after the character exists). The ids are not in the offer: the 400 is scanned too.

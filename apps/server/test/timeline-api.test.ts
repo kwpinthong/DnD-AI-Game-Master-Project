@@ -88,8 +88,10 @@ describe('timeline over the API: start = day 1 Morning, players see no future ev
     }
     seedPresence(players[0]!.member.id, gameId, 'fountain');
     beforeStart(gameId);
-    const started = await call('POST', '/api/game/start', { token: created.token });
-    expect(started.status, started.text).toBe(200);
+    for (const p of players) {
+      const res = await call('POST', '/api/game/ready', { token: p.token, body: { ready: true } });
+      expect(res.status, res.text).toBe(200);
+    }
     return {
       gameId,
       gm: created.token,

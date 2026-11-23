@@ -53,11 +53,12 @@ describe('migration feedback (ISK-010)', () => {
     };
 
     migrate(drizzle(sqlite), { migrationsFolder });
+    // toMatchObject: a later migration may add a column (ISK-017 member.ready_at); every value kept is what counts.
     expect({
       games: sqlite.prepare('select * from game').all(),
       members: sqlite.prepare('select * from member').all(),
       phases: sqlite.prepare('select * from game_phase').all(),
-    }).toEqual(before);
+    }).toMatchObject(before);
     expect(sqlite.prepare('select count(*) as n from feedback').get()).toEqual({ n: 0 });
     expect(sqlite.prepare('select count(*) as n from feedback_audit').get()).toEqual({ n: 0 });
     // Kept for good: deleting a game never takes its reports with it.

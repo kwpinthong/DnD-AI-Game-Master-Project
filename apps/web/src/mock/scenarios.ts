@@ -93,8 +93,8 @@ const gmRoom: RoomState = {
 const gmGame: GameView = {
   ...STARTED_GAME,
   humanGm: true,
-  you: { memberId: GM_ID, role: 'gm', isOwner: false },
-  members: [...STARTED_GAME.members, { id: GM_ID, name: 'จีเอ็ม', role: 'gm', isOwner: false, hasCharacter: false }],
+  you: { memberId: GM_ID, role: 'gm' },
+  members: [...STARTED_GAME.members, { id: GM_ID, name: 'จีเอ็ม', role: 'gm', ready: false, hasCharacter: false }],
 };
 const noCharacterGame: GameView = {
   ...LOBBY_GAME,
@@ -104,7 +104,7 @@ const noCharacterGame: GameView = {
 
 // --- GEN-090: the pages before the game starts ---
 /** A newcomer for the lobby's member list (`lobby-join`). */
-const NEWCOMER = { id: 'm-pla', name: 'ปลา', role: 'player', isOwner: false, hasCharacter: false } as const;
+const NEWCOMER = { id: 'm-pla', name: 'ปลา', role: 'player', ready: false, hasCharacter: false } as const;
 const joinedGame: GameView = {
   ...LOBBY_GAME,
   members: [...LOBBY_GAME.members, NEWCOMER],

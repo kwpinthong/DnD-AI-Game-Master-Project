@@ -255,17 +255,21 @@ describe('GEN-071 scenario editor and old games over HTTP', { timeout: 60_000 },
     cleanup();
   });
 
-  async function gmGame() {
-    const call = caller(server!);
-    const res = await call('POST', '/api/games', {
-      body: { createCode: CREATE_CODE, gameName: 'ห้องทดสอบ', mode: 'online', humanGm: true, name: 'จีเอ็ม', pin: '1234' },
+  // ISK-017: the scenario is given in the create form; the GM only reads it afterwards.
+  const postGame = (scenario?: unknown) =>
+    caller(server!)('POST', '/api/games', {
+      body: { createCode: CREATE_CODE, gameName: 'ห้องทดสอบ', mode: 'online', humanGm: true, name: 'จีเอ็ม', pin: '1234', ...(scenario === undefined ? {} : { scenario }) },
     });
-    expect(res.status).toBe(200);
+
+  async function gmGame(scenario?: unknown) {
+    const call = caller(server!);
+    const res = await postGame(scenario);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
     const created = CreateGameResponse.parse(res.body);
     return { call, token: created.token, gameId: created.game.id };
   }
 
-  it('C1 / C5: a new game\'s GM sees the 5 sheet events by period range and can change the range', async () => {
+  it('C1 / C5: a new game\'s GM sees the 5 sheet events by period range; a game created with another range keeps it', async () => {
     const { call, token } = await gmGame();
     const got = GameScenarioResponse.parse((await call('GET', '/api/game/scenario', { token })).body).scenario;
     expect(got.timeline.map((e) => [e.day, e.phase, e.endPhase])).toEqual([
@@ -276,9 +280,9 @@ describe('GEN-071 scenario editor and old games over HTTP', { timeout: 60_000 },
       [12, 'HESPERION', 'NOCTHERION'],
     ]);
     const edited = { ...got, timeline: got.timeline.map((e) => (e.day === 7 ? { ...e, endPhase: 'NOCTHERION' as const } : e)) };
-    const put = await call('PUT', '/api/game/scenario', { token, body: edited });
-    expect(put.status).toBe(200);
-    expect(GameScenarioResponse.parse(put.body).scenario.timeline.find((e) => e.day === 7)!.endPhase).toBe('NOCTHERION');
+    const other = await gmGame(edited);
+    const read = GameScenarioResponse.parse((await call('GET', '/api/game/scenario', { token: other.token })).body).scenario;
+    expect(read.timeline.find((e) => e.day === 7)!.endPhase).toBe('NOCTHERION');
   });
 
   it('C5: a period that does not exist, or a range that ends before it starts, is refused naming the field', async () => {
@@ -287,15 +291,15 @@ describe('GEN-071 scenario editor and old games over HTTP', { timeout: 60_000 },
     const at = got.timeline.findIndex((e) => e.day === 7);
     const withAt = (patch: Record<string, unknown>) => ({ ...got, timeline: got.timeline.map((e, i) => (i === at ? { ...e, ...patch } : e)) });
 
-    const unknown = await call('PUT', '/api/game/scenario', { token, body: withAt({ endPhase: 'EVENING' }) });
+    const unknown = await postGame(withAt({ endPhase: 'EVENING' }));
     expect(unknown.status).toBe(400);
     expect((unknown.body as { fields: Record<string, string> }).fields).toEqual({ [`timeline.${at}.endPhase`]: expect.stringMatching(/เช้า.*บ่าย.*ค่ำ/) });
 
-    const backwards = await call('PUT', '/api/game/scenario', { token, body: withAt({ endPhase: 'SOLARION' }) });
+    const backwards = await postGame(withAt({ endPhase: 'SOLARION' }));
     expect(backwards.status).toBe(400);
     expect((backwards.body as { fields: Record<string, string> }).fields).toEqual({ [`timeline.${at}.endPhase`]: expect.stringMatching(/ก่อนช่วงเริ่ม/) });
 
-    const lateHint = await call('PUT', '/api/game/scenario', { token, body: withAt({ foreshadowAt: { day: 8, phase: 'EOSORIA' } }) });
+    const lateHint = await postGame(withAt({ foreshadowAt: { day: 8, phase: 'EOSORIA' } }));
     expect(lateHint.status).toBe(400);
     expect((lateHint.body as { fields: Record<string, string> }).fields).toEqual({ [`timeline.${at}.foreshadowAt`]: expect.stringMatching(/ก่อนเหตุการณ์/) });
   });

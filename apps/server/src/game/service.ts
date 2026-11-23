@@ -7,7 +7,7 @@ import {
   type GameTone,
   type GameView,
   type Member,
-  type UpdateGameRequest,
+  type Scenario,
 } from '@isekai/protocol';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { randomInt, randomUUID } from 'node:crypto';
@@ -15,7 +15,7 @@ import { isUniqueViolation, openSession, type Clock } from '../auth/join.ts';
 import { hashPin } from '../auth/pin.ts';
 import { snapshotVotes } from '../admin/vote-review.ts';
 import type { Db } from '../db/client.ts';
-import { character, game, learningEntry, member, session } from '../db/schema.ts';
+import { character, game, learningEntry, member } from '../db/schema.ts';
 import { canEditScenario } from '../scenario/editor.ts';
 import { membersWithLootChoice } from './loot.ts';
 import { copyTemplateForGame, getGameScenario } from '../scenario/store.ts';
@@ -113,12 +113,12 @@ export function gameView(db: Db | Tx, gameId: string, viewer: MemberRow): GameVi
     inviteCode: row.inviteCode,
     status: row.startedAt === null ? 'lobby' : 'started',
     startedAt: row.startedAt === null ? null : new Date(row.startedAt).toISOString(),
-    you: { memberId: viewer.id, role: viewer.role, isOwner: row.ownerMemberId === viewer.id },
+    you: { memberId: viewer.id, role: viewer.role },
     members: members.map((m) => ({
       id: m.id,
       name: m.name,
       role: m.role,
-      isOwner: row.ownerMemberId === m.id,
+      ready: m.readyAt !== null,
       hasCharacter: withCharacter.has(m.id),
     })),
     players: { count: members.filter((m) => m.role === 'player').length, ...limits },
@@ -146,11 +146,11 @@ export interface CreatedGame {
 }
 
 /**
- * Creates the game, its owner and its own copy of the default scenario (Q-070) in one transaction.
- * The create code is checked by the caller.
- * Human GM on: the owner is the GM (no character, no player slot). Off: the owner is a player.
+ * Creates the game, its creator and its own copy of the scenario (`scenario`, already checked; none = the default,
+ * Q-070) in one transaction. The create code is checked by the caller. ISK-017: every setting is final here.
+ * Human GM on: the creator is the GM (no character, no player slot). Off: the creator is a player.
  */
-export async function createGame(db: Db, input: CreateGameRequest, now: Clock, defaultTone: GameTone = 'A', learningSources: string[] | null = null): Promise<CreatedGame> {
+export async function createGame(db: Db, input: CreateGameRequest, now: Clock, defaultTone: GameTone = 'A', learningSources: string[] | null = null, scenario?: Scenario): Promise<CreatedGame> {
   const pinHash = await hashPin(input.pin);
   return db.transaction((tx) => {
     const t = now();
@@ -164,6 +164,7 @@ export async function createGame(db: Db, input: CreateGameRequest, now: Clock, d
       lockedUntil: null,
       role: input.humanGm ? 'gm' : 'player',
       kickedAt: null,
+      readyAt: null,
       createdAt: t,
     };
     withFreshInviteCode((inviteCode) =>
@@ -185,7 +186,7 @@ export async function createGame(db: Db, input: CreateGameRequest, now: Clock, d
         .run(),
     );
     tx.insert(member).values(owner).run();
-    copyTemplateForGame(tx, gameId, undefined, t);
+    copyTemplateForGame(tx, gameId, scenario, t);
     const opened = openSession(tx, owner.id, t);
     return {
       member: { id: owner.id, gameId, name: owner.name },
@@ -195,107 +196,64 @@ export async function createGame(db: Db, input: CreateGameRequest, now: Clock, d
   });
 }
 
-export type OwnerActionOutcome =
-  | { kind: 'ok'; view: GameView }
-  | { kind: 'forbidden' }
-  | { kind: 'game_started' }
-  | { kind: 'member_not_found' }
-  | { kind: 'not_allowed'; message: string }
-  | { kind: 'cannot_start'; reasons: string[] };
-
-/** Runs an owner-only change in one transaction, re-reading the game so checks see fresh state. */
-function asOwner(db: Db, actor: MemberRow, change: (tx: Tx, row: GameRow) => OwnerActionOutcome | undefined): OwnerActionOutcome {
-  return db.transaction((tx) => {
-    const row = tx.select().from(game).where(eq(game.id, actor.gameId)).get();
-    if (!row || row.ownerMemberId !== actor.id) return { kind: 'forbidden' };
-    return change(tx, row) ?? { kind: 'ok', view: gameView(tx, row.id, actor) };
+/**
+ * GEN-112: removes a game; every table cascades. GEN-189: its 👍/👎 are kept first as vote snapshots.
+ * ISK-017: no player route calls it any more (players cannot delete a game); kept for the server owner (ISK-018).
+ */
+export function deleteGame(db: Db, gameId: string, now: number): void {
+  db.transaction((tx) => {
+    snapshotVotes(tx, gameId, now);
+    tx.delete(game).where(eq(game.id, gameId)).run();
   });
 }
 
-export function renewInviteCode(db: Db, actor: MemberRow): OwnerActionOutcome {
-  return asOwner(db, actor, (tx, row) => {
-    withFreshInviteCode((inviteCode) => tx.update(game).set({ inviteCode }).where(eq(game.id, row.id)).run());
-    return undefined;
-  });
-}
+export type AiReadiness = { ok: true } | { ok: false; message: string };
 
-/** Kicked = blocked: sessions are deleted and the row stays so the name + PIN cannot rejoin. */
-export function kickMember(db: Db, actor: MemberRow, targetId: string, now: Clock): OwnerActionOutcome {
-  return asOwner(db, actor, (tx, row) => {
-    if (row.startedAt !== null) return { kind: 'game_started' };
-    if (targetId === actor.id) return { kind: 'not_allowed', message: 'เจ้าของเกมเตะตัวเองไม่ได้' };
-    const target = tx
-      .select({ id: member.id })
-      .from(member)
-      .where(and(eq(member.id, targetId), eq(member.gameId, row.id), isNull(member.kickedAt)))
-      .get();
-    if (!target) return { kind: 'member_not_found' };
-    tx.update(member).set({ kickedAt: now() }).where(eq(member.id, target.id)).run();
-    tx.delete(session).where(eq(session.memberId, target.id)).run();
-    return undefined;
+export type ReadyOutcome =
+  | { kind: 'ok'; view: GameView; started: boolean }
+  | { kind: 'not_in_lobby' }
+  | { kind: 'ai_not_ready'; message: string };
+
+/**
+ * ISK-017: a player's ready in the lobby, then the start check in the same transaction (so two last readies at
+ * once start the game once). An AI GM that is not ready keeps the ready and only refuses the start.
+ */
+export function setReady(db: Db, me: MemberRow, ready: boolean, now: Clock, assets: GameAssets, rng: Rng | null, aiReady: () => AiReadiness): ReadyOutcome {
+  return db.transaction((tx): ReadyOutcome => {
+    const row = tx.select().from(game).where(eq(game.id, me.gameId)).get();
+    if (!row || row.startedAt !== null || me.role !== 'player') return { kind: 'not_in_lobby' };
+    tx.update(member).set({ readyAt: ready ? now() : null }).where(eq(member.id, me.id)).run();
+    const start = tryStart(tx, row, now, assets, rng, aiReady);
+    if (start.kind === 'ai_not_ready') return start;
+    return { kind: 'ok', view: gameView(tx, row.id, me), started: start.kind === 'started' };
   });
 }
 
 /**
- * GEN-112: the only way a game is removed. Owner only, and the caller must type the game's name; every table
- * cascades. GEN-189: its 👍/👎 are kept first as vote snapshots.
+ * ISK-017: starts a lobby game whose players are all ready (Online ≥ 2 by the start blockers, Single its one).
+ * Call it inside the transaction of every change that can complete the ready set (ready today; ISK-018 kick).
  */
-export function deleteGame(db: Db, actor: MemberRow, confirmName: unknown, now: number): 'ok' | 'forbidden' | 'confirm_required' {
-  return db.transaction((tx) => {
-    const row = tx.select().from(game).where(eq(game.id, actor.gameId)).get();
-    if (!row || row.ownerMemberId !== actor.id) return 'forbidden';
-    if (confirmName !== row.name) return 'confirm_required';
-    snapshotVotes(tx, row.id, now);
-    tx.delete(game).where(eq(game.id, row.id)).run();
-    return 'ok';
-  });
+export function tryStart(tx: Tx, row: GameRow, now: Clock, assets: GameAssets, rng: Rng | null, aiReady: () => AiReadiness): { kind: 'waiting' | 'started' } | { kind: 'ai_not_ready'; message: string } {
+  if (row.startedAt !== null) return { kind: 'waiting' };
+  const members = activeMembers(tx, row.id);
+  if (members.some((m) => m.role === 'player' && m.readyAt === null)) return { kind: 'waiting' };
+  if (startBlockers(tx, row, members, characterOwners(tx, members)).length > 0) return { kind: 'waiting' };
+  const ai = aiReady();
+  if (!ai.ok) return { kind: 'ai_not_ready', message: ai.message };
+  startGame(tx, row, now, assets, rng);
+  return { kind: 'started' };
 }
 
-/** GEN-083: the checked source game ids of `change.memory` (null = off), or undefined when one is not allowed. */
-export type MemoryResolver = (db: Db | Tx, row: GameRow) => string[] | null | undefined;
-
-export function updateGame(db: Db, actor: MemberRow, change: UpdateGameRequest, resolveMemory?: MemoryResolver): OwnerActionOutcome {
-  return asOwner(db, actor, (tx, row) => {
-    if (row.startedAt !== null) return { kind: 'game_started' };
-    let learningSources: string[] | null | undefined;
-    if (change.memory !== undefined) {
-      learningSources = resolveMemory?.(tx, row);
-      if (learningSources === undefined) return { kind: 'not_allowed', message: 'เลือกได้เฉพาะเกมที่จบแล้วที่คุณเป็นสมาชิก (ตามรหัสผู้เล่นที่ใช้ตอนสร้างเกม)' };
-    }
-    if (change.mode === 'single' && row.mode !== 'single') {
-      if (row.humanGm) return { kind: 'not_allowed', message: 'เกมที่มี GM คนเปลี่ยนเป็นเล่นคนเดียวไม่ได้' };
-      if (playerCount(tx, row.id) > 1) {
-        return { kind: 'not_allowed', message: 'มีผู้เล่นมากกว่า 1 คน เปลี่ยนเป็นเล่นคนเดียวไม่ได้' };
-      }
-    }
-    const set: Partial<GameRow> = {};
-    if (change.gameName !== undefined) set.name = change.gameName;
-    if (change.mode !== undefined) set.mode = change.mode;
-    if (change.npcDialogue !== undefined) set.npcDialogue = change.npcDialogue;
-    if (change.tone !== undefined) set.tone = change.tone;
-    if (learningSources !== undefined) set.learningSources = learningSources;
-    if (Object.keys(set).length > 0) tx.update(game).set(set).where(eq(game.id, row.id)).run();
-    return undefined;
-  });
-}
-
-export function startGame(db: Db, actor: MemberRow, now: Clock, assets: GameAssets, rng: Rng | null): OwnerActionOutcome {
-  return asOwner(db, actor, (tx, row) => {
-    if (row.startedAt !== null) return { kind: 'game_started' };
-    const members = activeMembers(tx, row.id);
-    const reasons = startBlockers(tx, row, members, characterOwners(tx, members));
-    if (reasons.length > 0) return { kind: 'cannot_start', reasons };
-    const t = now();
-    tx.update(game).set({ startedAt: t }).where(eq(game.id, row.id)).run();
-    // Each player's start scenario is rolled once here and stored (a restart never rolls again): it sets the
-    // starting stats and places the character at its spawn place (GEN-065).
-    if (rng !== null) rollOrigins(tx, row.id, assets, rng, t);
-    // Anyone the roll did not place (no spawn table) starts at the scenario's first place (GEN-050).
-    const start = getGameScenario(tx, row.id)?.locations[0];
-    if (start) placeUnplacedCharacters(tx, row.id, start.id, t);
-    // The game starts at day 1 Morning: its events become active (GEN-053), after placing, so each
-    // event's witness snapshot sees where everyone starts (Q-104).
-    advanceTimeline(tx, row.id, { day: 1, phase: 'EOSORIA' }, t);
-    return undefined;
-  });
+function startGame(tx: Tx, row: GameRow, now: Clock, assets: GameAssets, rng: Rng | null): void {
+  const t = now();
+  tx.update(game).set({ startedAt: t }).where(eq(game.id, row.id)).run();
+  // Each player's start scenario is rolled once here and stored (a restart never rolls again): it sets the
+  // starting stats and places the character at its spawn place (GEN-065).
+  if (rng !== null) rollOrigins(tx, row.id, assets, rng, t);
+  // Anyone the roll did not place (no spawn table) starts at the scenario's first place (GEN-050).
+  const start = getGameScenario(tx, row.id)?.locations[0];
+  if (start) placeUnplacedCharacters(tx, row.id, start.id, t);
+  // The game starts at day 1 Morning: its events become active (GEN-053), after placing, so each
+  // event's witness snapshot sees where everyone starts (Q-104).
+  advanceTimeline(tx, row.id, { day: 1, phase: 'EOSORIA' }, t);
 }

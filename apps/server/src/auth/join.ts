@@ -58,6 +58,7 @@ export async function joinGame(db: Db, input: JoinRequest, now: Clock): Promise<
     lockedUntil: null,
     role: 'player',
     kickedAt: null,
+    readyAt: null,
     createdAt,
   };
   try {

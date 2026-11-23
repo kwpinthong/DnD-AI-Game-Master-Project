@@ -90,21 +90,21 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
 
     // --- Lobby of a game with a Human GM: every route before the start ---
     await hit(call, 'GET /health');
+    // ISK-017: every setting (the scenario too) is given here once; a broken scenario is a 400 naming its field.
+    await hit(call, 'POST /api/games', {
+      body: { createCode: CREATE_CODE, gameName: 'เกมเสีย', mode: 'online', humanGm: true, name: 'จีเอ็ม', pin: '1234', scenario: { hello: 1 } },
+    });
     const created = await hit(call, 'POST /api/games', {
-      body: { createCode: CREATE_CODE, gameName: 'เกมสัญญา', mode: 'online', humanGm: true, name: 'จีเอ็ม', pin: '1234' },
+      body: { createCode: CREATE_CODE, gameName: 'เกมสัญญา', mode: 'online', humanGm: true, name: 'จีเอ็ม', pin: '1234', tone: 'B', npcDialogue: 'high', scenario: defaultScenario() },
     });
     const lobby = CreateGameResponse.parse(created.body);
     const gm = lobby.token;
     const joinAs = async (name: string) => JoinResponse.parse((await hit(call, 'POST /api/join', { body: { inviteCode: lobby.game.inviteCode, name, pin: '1111' } })).body);
     const p1 = await joinAs('พี');
     const p2 = await joinAs('คิว');
-    const kicked = await joinAs('เตะ');
     await hit(call, 'GET /api/me', { token: p1.token });
     await hit(call, 'GET /api/game', { token: gm });
-    await hit(call, 'PATCH /api/game', { token: gm, body: { gameName: 'เกมสัญญา 2' } });
     await hit(call, 'GET /api/game/scenario', { token: gm });
-    await hit(call, 'PUT /api/game/scenario', { token: gm, body: defaultScenario() });
-    await hit(call, 'POST /api/game/scenario/reset', { token: gm });
     await hit(call, 'GET /api/game/character', { token: p1.token });
     await hit(call, 'POST /api/game/character', { token: p1.token, body: LIN });
     await hit(call, 'PUT /api/game/character', { token: p1.token, body: LIN });
@@ -113,9 +113,16 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'POST /api/game/character/loot/choose', { token: p1.token, body: { skillIds: [offer.skills[0]!.id], itemIds: [offer.items[0]!.id] } });
     await hit(call, 'POST /api/game/character', { token: p2.token, body: DARIN });
     seedChosenLoot(server!.db, p2.member.id);
-    await hit(call, 'DELETE /api/game/members/:memberId', { token: gm, path: `/api/game/members/${kicked.member.id}` });
-    await hit(call, 'POST /api/game/invite-code', { token: gm });
-    await hit(call, 'POST /api/game/start', { token: gm });
+    // ISK-017: the lobby socket hears every ready; the GM is not a player (409); the last ready starts the game.
+    const watch = await openRoom(server!, { token: gm, lobby: true });
+    sockets.push(watch);
+    await hit(call, 'POST /api/game/ready', { token: gm, body: { ready: true } });
+    for (let i = 0; i < 20 && !watch.messages.some((m) => m.type === 'lobby_ready'); i++) {
+      await hit(call, 'POST /api/game/ready', { token: p1.token, body: { ready: true } });
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    await watch.waitFor((m) => m.type === 'lobby_ready');
+    await hit(call, 'POST /api/game/ready', { token: p2.token, body: { ready: true } });
     await hit(call, 'GET /api/game/origin', { token: p1.token });
     await hit(call, 'GET /api/game/origin', { token: gm });
 
@@ -341,13 +348,33 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'PATCH /api/admin/feedback/:id', { token: adminToken, path: '/api/admin/feedback/99999', body: { status: 'done' } });
     await hit(call, 'POST /api/admin/logout', { token: adminToken });
     await hit(call, 'POST /api/logout', { token: p1.token });
-    await hit(call, 'DELETE /api/game', { token: gm, body: { confirmName: 'เกมสัญญา 2' } });
+
+    // --- ISK-017: everyone ready while the AI GM is not: 503 + lobby_start_blocked to the lobby (same database) ---
+    const solo = CreateGameResponse.parse(
+      (await call('POST', '/api/games', { body: { createCode: CREATE_CODE, gameName: 'รอ AI', mode: 'single', humanGm: false, name: 'โซโล่', pin: '1234' } })).body,
+    );
+    server!.db.prepare('insert into character (member_id, created_at) values (?, ?)').run(solo.member.id, CLOCK);
+    seedChosenLoot(server!.db, solo.member.id);
+    await Promise.all(sockets.splice(0).map((s) => s.close()));
+    await server!.close();
+    server = await startServer(
+      { host: '127.0.0.1', port: 0, dbPath: `${dataDir}/isekai.sqlite`, createCodeHash: await hashPin(CREATE_CODE), adminCodeHash: await hashPin(ADMIN_CODE) },
+      { now: () => CLOCK, ai: loadAiConfig({ AI_PROVIDER: 'anthropic' }), aiLog: () => {}, rng: new SeededRng(99) },
+    );
+    const noAi = caller(server);
+    const waiting = await openRoom(server, { token: solo.token, lobby: true });
+    sockets.push(waiting);
+    for (let i = 0; i < 20 && !waiting.messages.some((m) => m.type === 'lobby_start_blocked'); i++) {
+      await hit(noAi, 'POST /api/game/ready', { token: solo.token, body: { ready: true } });
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    await waiting.waitFor((m) => m.type === 'lobby_start_blocked');
 
     // --- Socket frames: each passes the schema the contract names for its `type` ---
     const schemaOf = new Map(READY_SERVER_EVENTS.map((i) => [i.type, i.schema]));
     const seenTypes = new Set<string>();
     const seenEntryKinds = new Set<string>();
-    for (const client of [a, b, c, bad]) {
+    for (const client of [a, b, c, bad, watch, waiting]) {
       for (const raw of client.raw) {
         const frame = JSON.parse(raw) as RoomServerMessage;
         seenTypes.add(frame.type);

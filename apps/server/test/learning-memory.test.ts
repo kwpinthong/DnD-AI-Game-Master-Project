@@ -160,10 +160,11 @@ describe('GEN-083 memory from earlier games', { timeout: 120_000 }, () => {
 
     const create = (extra: Record<string, unknown>) =>
       g1.t.call('POST', '/api/games', { body: { createCode: 'ลับเฉพาะ-2026', gameName: 'ใหม่', mode: 'single', humanGm: false, name: 'นก', pin: '1234', ...extra } });
+    // ISK-017 C8: a source not of the creator's code is 409 (as the lobby edit was); too many ids is still a 400.
     const refused = await create({ playerCode: CODE, memory: { enabled: true, sourceGameIds: [other.gameId] } });
-    expect(refused.status).toBe(400);
-    expect((refused.body as { fields: Record<string, string> }).fields.memory).toBeDefined();
-    expect((await create({ memory: { enabled: true, sourceGameIds: [g1.gameId] } })).status).toBe(400);
+    expect(refused.status).toBe(409);
+    expect((refused.body as { code: string }).code).toBe('not_allowed');
+    expect((await create({ memory: { enabled: true, sourceGameIds: [g1.gameId] } })).status).toBe(409);
     expect((await create({ playerCode: CODE, memory: { enabled: true, sourceGameIds: [g1.gameId, g2.gameId, other.gameId, 'x'] } })).status).toBe(400);
     const ok = await create({ playerCode: CODE, memory: { enabled: true, sourceGameIds: [g1.gameId] } });
     expect(ok.status, JSON.stringify(ok.body)).toBe(200);
@@ -263,20 +264,11 @@ describe('GEN-083 memory from earlier games', { timeout: 120_000 }, () => {
     expect(learningContext(server!.orm, gameId, { tags: ['steal'], room: 20_000 })).toEqual({ blocks: [], trimmed: 0 });
   });
 
-  it('C7: once the game started, changing the setting → 409; before the start the owner may change it', async () => {
+  it('C7 (ISK-017): the setting is set at creation and locked: no edit route (404), the sources stay', async () => {
     const old = await endedGame(CODE, 'เกมเก่า');
-    const call = old.t.call;
-    const created = await call('POST', '/api/games', { body: { createCode: 'ลับเฉพาะ-2026', gameName: 'ใหม่', mode: 'online', humanGm: false, name: 'นก', pin: '1234', playerCode: CODE } });
-    const owner = (created.body as { token: string }).token;
-    const on = await call('PATCH', '/api/game', { token: owner, body: { memory: { enabled: true, sourceGameIds: [old.gameId] } } });
-    expect(on.status, JSON.stringify(on.body)).toBe(200);
-    expect(GameView.parse(on.body).memory).toEqual({ enabled: true, sources: [{ id: old.gameId, name: 'เกมเก่า' }] });
-    expect((await call('PATCH', '/api/game', { token: owner, body: { memory: { enabled: true, sourceGameIds: ['not-mine'] } } })).status).toBe(409);
-
     const t = await startedTable(server!, false, { playerCode: CODE, memory: { enabled: true, sourceGameIds: [old.gameId] } });
     const res = await t.call('PATCH', '/api/game', { token: t.a.token, body: { memory: { enabled: false } } });
-    expect(res.status).toBe(409);
-    expect((res.body as { code: string }).code).toBe('game_started');
+    expect(res.status).toBe(404);
     expect((server!.db.prepare('select learning_sources as s from game where id = ?').get(gameIdOf(t.a)) as { s: string }).s).toBe(JSON.stringify([old.gameId]));
   });
 

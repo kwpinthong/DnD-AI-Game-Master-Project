@@ -307,9 +307,8 @@ describe('ISK-001 admin game list + close', { timeout: 120_000 }, () => {
       ['POST', '/api/game/npc-chat', t.a, { npc: 'n-1', text: 'สวัสดี' }],
       ['POST', '/api/game/companions', t.a, { ref: 'n-1' }],
       ['PUT', '/api/game/character', t.a, { name: 'ลิน', appearance: 'ใหม่', personality: 'ใหม่' }],
-      ['PATCH', '/api/game', t.a, { npcDialogue: 'high' }],
-      ['POST', '/api/game/start', lobby.owner, undefined],
-      ['PATCH', '/api/game', lobby.owner, { gameName: 'ชื่อใหม่' }],
+      ['POST', '/api/game/ready', t.a, { ready: true }],
+      ['POST', '/api/game/ready', lobby.owner, { ready: true }],
       ['POST', '/api/game/character', lobby.b, { name: 'บี', appearance: 'สูง', personality: 'เงียบ' }],
     ];
     for (const [method, path, seat, body] of http) {

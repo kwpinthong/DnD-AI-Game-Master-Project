@@ -52,10 +52,10 @@ describe('CORS for the web origin', () => {
     expect(res.headers.get('access-control-allow-headers')?.toLowerCase()).toContain('authorization');
   });
 
-  // GEN-025: the lobby edits the game with PATCH and kicks with DELETE.
+  // The lobby's ready (ISK-017) and a DELETE route (companions) with the bearer token.
   it.each([
-    ['PATCH', '/api/game'],
-    ['DELETE', '/api/game/members/m-1'],
+    ['POST', '/api/game/ready'],
+    ['DELETE', '/api/game/companions/n-1'],
   ])('lets the web origin send %s %s with the bearer token (preflight)', async (method, path) => {
     const { url } = await start();
 

@@ -64,7 +64,7 @@ describe('GEN-127 C2 / C3 lobby', () => {
   });
 
   it('another member sees the level but cannot change it', async () => {
-    const other = { ...LOBBY, npcDialogue: 'high' as const, you: { ...LOBBY.you, isOwner: false } };
+    const other = { ...LOBBY, npcDialogue: 'high' as const, you: { ...LOBBY.you, memberId: 'm-not-the-creator' } };
     render(<Lobby apiBaseUrl={base('lobby')} token={MOCK_TOKEN} onSessionLost={noop} initial={other} pollMs={60_000} />);
     expect(radio(/เยอะ/).checked).toBe(true);
     for (const r of within(group()).getAllByRole('radio')) expect((r as HTMLInputElement).disabled).toBe(true);
