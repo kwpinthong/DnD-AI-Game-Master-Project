@@ -5,6 +5,7 @@ import { gmMemory, roomEntry } from '../db/schema.ts';
 import { activeMembers } from '../game/service.ts';
 import { insertEntry, type RoomEntryRow } from '../room/store.ts';
 import { getGameScenario } from '../scenario/store.ts';
+import { maskNames } from './check.ts';
 import { loadWorld, npcToken } from './context.ts';
 import { renderTokens } from './loop.ts';
 
@@ -54,9 +55,13 @@ export function clipNews(text: string): string {
 /** C12: a text as everyone reads it: player / NPC tokens and real names (other names too) → the alias. */
 function forEveryone(db: DbOrTx, assets: GameAssets, gameId: string): (text: string) => string {
   const world = loadWorld(db, gameId, assets);
-  const npcs = tokeniseNpcs(db, gameId);
+  // Whole words only (GEN-117 C6), so "คลินิก" stays whole for a player called "ลิน".
+  const aliases = new Map([
+    ...[...world.players.values()].map((p) => [p.name, p.socialTitle] as const),
+    ...world.npcs.flatMap((n) => n.names.filter((name) => name !== n.alias).map((name) => [name, n.alias] as const)),
+  ]);
   // One line per item: the entry's text joins the items with "\n".
-  return (text) => renderTokens(db, world, npcs(world.tokenise(text)), null, true).replace(/\s*\n\s*/g, ' ').trim();
+  return (text) => maskNames(renderTokens(db, world, text, null, true), aliases).replace(/\s*\n\s*/g, ' ').trim();
 }
 
 /** The summary's `news` (any shape) as the items to publish; null when there is nothing usable (C9: the template then). */

@@ -312,13 +312,15 @@ describe('ISK-014 morning news', { timeout: 60_000 }, () => {
   });
 
   it('C12: no real name of a player or an NPC (other names too): the alias everyone reads', async () => {
-    await boot((req) => ({ ...(cannedSummary(req) as object), news: ['ลินถูกเห็นคุยกับซิสเตอร์เอเลน่าที่โบสถ์', 'การ์เร็ตสั่งปิดประตูเมือง', 'คนเห็น {{n:merchant}} ขนของออกจากตลาด'] }));
+    await boot((req) => ({ ...(cannedSummary(req) as object), news: ['ลินถูกเห็นคุยกับซิสเตอร์เอเลน่าที่โบสถ์', 'การ์เร็ตสั่งปิดประตูเมือง', 'คนเห็น {{n:merchant}} ขนของออกจากคลินิก'] }));
     const t = await startedTable(server!, false);
     const { clients } = await endDay(3, { t });
     const n = await waitNews(clients[1]!, 4);
-    for (const real of ['ลิน', 'ซิสเตอร์เอเลน่า', 'การ์เร็ต', 'มาร์คัส', '{{']) expect(n.text).not.toContain(real);
+    for (const real of ['ลิน', 'ซิสเตอร์เอเลน่า', 'การ์เร็ต', 'มาร์คัส', '{{']) expect(n.text.replace('คลินิก', '')).not.toContain(real);
     expect(n.text).toContain('แม่ชีผู้เหนื่อยล้าแห่งโบสถ์เก่า');
     expect(n.text).toContain('พ่อค้าเร่ผู้สวมแว่นหนา');
+    // A word that only contains a player's name ("ลิน" in "คลินิก") stays whole.
+    expect(n.text).toContain('คลินิก');
     // The sources are events only (name + public description), never a player's or a place's private thing.
     const ctx = contextOf<DayContext & { news: { starting: object[]; yesterday: object[] } }>(summaryRequests().at(-1)!);
     for (const e of [...ctx.news.starting, ...ctx.news.yesterday]) expect(Object.keys(e).sort()).toEqual(['description', 'title']);
