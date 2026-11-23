@@ -1639,5 +1639,63 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
         for (const c of clients) expect(scenesOf(c, 1, 'HESPERION')).toEqual([]);
       });
     });
+
+    describe('GEN-186 in a Human GM game the scene waits in the GM console', () => {
+      const gmView = async (t: Table) => GmConsoleResponse.parse((await t.call('GET', '/api/game/gm/console', { token: t.gm!.token })).body);
+      /** A Human GM game: A and B at the fountain, C at the inn, the GM approves the last turn of SOLARION. */
+      async function periodOpened(): Promise<{ t: Table; clients: RoomClient[] }> {
+        await boot({}, noRoll);
+        const t = await startedTable(server!, true);
+        move(t.a, 'fountain');
+        move(t.b, 'fountain');
+        jumpTo(t, { day: 1, phase: 'SOLARION', turn: 2 });
+        const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+        for (const [i, c] of clients.entries()) await send(c, ['ยืนมองน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างแก้ว'][i]!);
+        await approveHeldTurn(t.call, t.gm!.token);
+        for (const c of clients) await c.waitFor(at(1, 'HESPERION', 1));
+        await expect.poll(async () => (await gmView(t)).pending?.entries.length ?? 0, { timeout: 5_000 }).toBe(2);
+        return { t, clients };
+      }
+
+      it('C1 + C3: the period changes: the announcement goes out at once, the scene sits in the console and players do not have it', async () => {
+        const { t, clients } = await periodOpened();
+        const pending = (await gmView(t)).pending!;
+        expect(pending).toMatchObject({ scene: true, at: { day: 1, phase: 'HESPERION', turn: 1 }, results: [] });
+        expect(pending.entries.map((e) => [e.kind, e.locationId]).sort()).toEqual([
+          ['feed', 'fountain'],
+          ['feed', 'inn'],
+        ]);
+        await pause(50);
+        for (const c of clients) {
+          expect(timeEntries(c)).toHaveLength(1);
+          expect(timeEntries(c)[0]).toMatchObject({ day: 1, phase: 'HESPERION', turn: 1 });
+          expect(scenesOf(c, 1, 'HESPERION')).toEqual([]);
+        }
+      });
+
+      it('C2: the GM edits then approves: players read the edited scene, and the edit does not touch the turn that follows', async () => {
+        const { t, clients } = await periodOpened();
+        const pending = (await gmView(t)).pending!;
+        const fountain = pending.entries.find((e) => e.locationId === 'fountain')!;
+        const edited = 'แสงตะวันสุดท้ายลับหลังหอระฆัง น้ำพุเงียบลง';
+        const res = await t.call('POST', '/api/game/gm/turn/edit', { token: t.gm!.token, body: { reason: 'ให้เข้ากับเรื่อง', narrations: [{ index: fountain.index, text: edited }] } });
+        expect(res.status, JSON.stringify(res.body)).toBe(200);
+        // A scene has no HP / Stamina / Karma to change.
+        const stats = await t.call('POST', '/api/game/gm/turn/edit', { token: t.gm!.token, body: { reason: 'ลอง', results: [{ memberId: t.a.memberId, hp: 1 }] } });
+        expect(stats.status).toBe(400);
+        expect((await t.call('POST', '/api/game/gm/turn/approve', { token: t.gm!.token })).status).toBe(200);
+        await until(() => clients.every((c) => scenesOf(c, 1, 'HESPERION').length > 0));
+        expect(scenesOf(clients[0]!, 1, 'HESPERION').map((e) => e.text)).toEqual([edited]);
+        expect(scenesOf(clients[1]!, 1, 'HESPERION').map((e) => e.text)).toEqual([edited]);
+        expect(scenesOf(clients[2]!, 1, 'HESPERION').map((e) => [e.place?.id, e.text === edited])).toEqual([['inn', false]]);
+
+        // Turn 1 of HESPERION is held as a turn of its own, without the scene's edit.
+        for (const [i, c] of clients.entries()) await send(c, ['ยืนมองน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างแก้ว'][i]!);
+        const turn = await approveHeldTurn(t.call, t.gm!.token);
+        expect(turn.scene).toBeUndefined();
+        expect(turn.entries.every((e) => !e.edited && e.text !== edited)).toBe(true);
+        for (const c of clients) await c.waitFor(at(1, 'HESPERION', 2));
+      });
+    });
   });
 });
