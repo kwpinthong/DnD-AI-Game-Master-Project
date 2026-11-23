@@ -5,10 +5,10 @@
  * (buildGameAssets), backed up to a file first, logged in game_data_audit and can be undone.
  *
  * `assets` is one object for the whole server: its fields read the latest saved data, so new games and the next
- * turn of a running game use an edit at once.
- * shortcut: a turn already running while an edit is saved may read old and new data mixed; upgrade to a per-turn
- * snapshot if that ever matters.
+ * turn of a running game use an edit at once. GEN-174: the AI GM resolver pins it per turn (`pinAssets`), so a turn
+ * already running while an edit is saved reads only the old data to its end.
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -45,7 +45,7 @@ export type ImportPreviewOutcome =
   | Exclude<SaveOutcome, { ok: true }>;
 
 export interface GameDataStore {
-  /** Always the latest saved data (see the file comment). */
+  /** The latest saved data, or the snapshot of a `pinAssets` run (see the file comment). */
   readonly assets: GameAssets;
   list(): DataSetSummary[];
   get(name: DataSetName): { summary: DataSetSummary; value: unknown } | undefined;
@@ -61,9 +61,15 @@ export interface GameDataStore {
   exportFiles(): Record<string, unknown>;
 }
 
-/** Reads every property of the current data on each access, so holders of this object see edits. */
-function liveView(current: () => GameAssets): GameAssets {
-  return new Proxy({} as GameAssets, {
+/** GEN-174: live view → the data it reads inside a `pinAssets` run. */
+const pinned = new AsyncLocalStorage<ReadonlyMap<GameAssets, GameAssets>>();
+/** Live view → its latest data (so `pinAssets` can take a snapshot of it). */
+const latestOf = new WeakMap<GameAssets, () => GameAssets>();
+
+/** Reads every property of the current data on each access, so holders of this object see edits (unless pinned). */
+function liveView(latest: () => GameAssets): GameAssets {
+  const current = () => pinned.getStore()?.get(view) ?? latest();
+  const view: GameAssets = new Proxy({} as GameAssets, {
     get: (_t, key) => Reflect.get(current(), key),
     has: (_t, key) => Reflect.has(current(), key),
     ownKeys: () => Reflect.ownKeys(current()),
@@ -72,6 +78,23 @@ function liveView(current: () => GameAssets): GameAssets {
       return d && { ...d, configurable: true };
     },
   });
+  latestOf.set(view, latest);
+  return view;
+}
+
+/**
+ * GEN-174: takes a snapshot of `assets` now. Whatever runs through the returned function, including the async work
+ * it starts (a turn's background dialogue and summaries), reads that snapshot through the same `assets` object; an
+ * admin edit saved meanwhile shows only outside it. A pin inside a pin keeps the outer snapshot. A plain GameAssets
+ * (not the live view) is already fixed and passes through.
+ */
+export function pinAssets(assets: GameAssets): <R>(fn: () => R) => R {
+  const latest = latestOf.get(assets);
+  const outer = pinned.getStore();
+  if (!latest || outer?.has(assets)) return (fn) => fn();
+  const map = new Map(outer);
+  map.set(assets, latest());
+  return (fn) => pinned.run(map, fn);
 }
 
 function changesOf(oldJson: string, newJson: string): AuditEntry['changes'] {
