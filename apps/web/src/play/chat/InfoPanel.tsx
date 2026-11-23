@@ -64,7 +64,23 @@ export function SelfPanel({ data, entries, secret, room, onUse }: Pick<InfoData,
           <>
             <SelfStatus character={character} secret={secret} drowsy={room.you.drowsy} />
             <Fold title={t.traits} open>
-              <p>{character.personality || playText.loadFailed}</p>
+              {character.strength || character.weakness ? (
+                <dl className="info-traits">
+                  {([[t.strength, character.strength], [t.weakness, character.weakness]] as const).map(([label, trait]) =>
+                    trait && (
+                      <div key={label}>
+                        <dt>{label}</dt>
+                        <dd>
+                          <strong>{trait.label}</strong>
+                          <p>{trait.description}</p>
+                        </dd>
+                      </div>
+                    ),
+                  )}
+                </dl>
+              ) : (
+                <p>{character.personality || playText.loadFailed}</p>
+              )}
             </Fold>
           </>
         )}

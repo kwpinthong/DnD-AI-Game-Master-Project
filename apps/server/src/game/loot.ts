@@ -259,6 +259,13 @@ function toView(row: LootRow | undefined, started: boolean, memberId: string, na
   };
 }
 
+/** GEN-130: the kept strength / weakness for the owner's own CharacterView (tokens resolved; null until chosen). */
+export function keptTraits(db: DbOrTx, memberId: string, name: string): { strength: TraitView | null; weakness: TraitView | null } {
+  const json = db.select({ chosenJson: characterLoot.chosenJson }).from(characterLoot).where(eq(characterLoot.memberId, memberId)).get()?.chosenJson;
+  const chosen = json ? (JSON.parse(json) as StoredChosen) : null;
+  return { strength: chosen && publicTrait(chosen.strength, memberId, name), weakness: chosen && publicTrait(chosen.weakness, memberId, name) };
+}
+
 const lootRow = (db: DbOrTx, memberId: string) =>
   db.select().from(characterLoot).where(eq(characterLoot.memberId, memberId)).get();
 

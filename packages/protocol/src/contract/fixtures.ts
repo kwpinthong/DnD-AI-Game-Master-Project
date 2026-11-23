@@ -51,6 +51,8 @@ const characterView = {
   socialTitle: 'คนคุ้นหน้า',
   conduct: 'เป็นกลาง',
   statuses: [] as string[],
+  strength: { label: 'ช่างสังเกต', description: 'มองเห็นรายละเอียดที่คนอื่นพลาด' },
+  weakness: { label: 'กลัวความมืด', description: 'ในที่มืดใจสั่น' },
   editable: false,
 } as const;
 

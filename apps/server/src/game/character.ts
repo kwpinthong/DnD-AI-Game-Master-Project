@@ -5,7 +5,7 @@ import type { Clock } from '../auth/join.ts';
 import type { Db } from '../db/client.ts';
 import { character, game } from '../db/schema.ts';
 import { curseLabelsOf } from '../statuses/curses.ts';
-import { clearLoot } from './loot.ts';
+import { clearLoot, keptTraits } from './loot.ts';
 import type { MemberRow } from './service.ts';
 
 type CharacterRow = typeof character.$inferSelect;
@@ -21,8 +21,9 @@ export function titleOf(row: Pick<CharacterRow, 'reputation' | 'initialTitle'>):
 }
 
 /** What the player sees of their own character: no Karma or Reputation number; their own Karma word (GEN-067). */
-function toView(row: CharacterRow, gameStarted: boolean, karmaTiers: readonly KarmaTier[], statuses: string[] = []): CharacterView {
+function toView(row: CharacterRow, gameStarted: boolean, karmaTiers: readonly KarmaTier[], statuses: string[] = [], traits: Pick<CharacterView, 'strength' | 'weakness'> = { strength: null, weakness: null }): CharacterView {
   return {
+    ...traits,
     name: row.name,
     appearance: row.appearance,
     personality: row.personality,
@@ -51,7 +52,7 @@ function gameStarted(db: Db | Tx, gameId: string): boolean {
 export function getCharacter(db: Db, me: MemberRow, karmaTiers: readonly KarmaTier[]): CharacterView | null {
   const row = db.select().from(character).where(eq(character.memberId, me.id)).get();
   // GEN-095: timed statuses as words only.
-  return row ? toView(row, gameStarted(db, me.gameId), karmaTiers, curseLabelsOf(db, me.gameId, me.id)) : null;
+  return row ? toView(row, gameStarted(db, me.gameId), karmaTiers, curseLabelsOf(db, me.gameId, me.id), keptTraits(db, me.id, row.name)) : null;
 }
 
 /**
@@ -95,6 +96,6 @@ export function updateCharacter(db: Db, me: MemberRow, input: CharacterRequest, 
     const identity = { name: input.name, appearance: input.appearance, personality: input.personality, updatedAt: now() };
     tx.update(character).set(identity).where(eq(character.memberId, me.id)).run();
     if (input.personality !== existing.personality) clearLoot(tx, me.id, identity.updatedAt);
-    return { kind: 'ok', character: toView({ ...existing, ...identity }, false, karmaTiers) };
+    return { kind: 'ok', character: toView({ ...existing, ...identity }, false, karmaTiers, [], keptTraits(tx, me.id, input.name)) };
   });
 }

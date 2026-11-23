@@ -60,6 +60,8 @@ const saved: CharacterView = {
   socialTitle: 'คนแปลกหน้า',
   conduct: 'เป็นกลางสุดๆ',
   statuses: [],
+  strength: null,
+  weakness: null,
   editable: true,
 };
 

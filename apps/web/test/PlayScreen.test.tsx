@@ -445,6 +445,8 @@ describe('C3 words, never the hidden numbers', () => {
       socialTitle: 'คนแปลกหน้า',
       conduct: 'วายร้ายฝึกหัด',
       statuses: ['หวาดกลัว'],
+      strength: null,
+      weakness: null,
       editable: false,
     };
     const { rerender } = render(<SelfStatus character={character} secret="วันนี้เหลือ 1" drowsy />);
