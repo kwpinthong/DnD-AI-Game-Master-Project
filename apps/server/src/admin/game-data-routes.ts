@@ -2,6 +2,7 @@ import {
   GameDataSaveRequest,
   type GameDataAuditResponse,
   type GameDataExportResponse,
+  type GameDataImportPreviewResponse,
   type GameDataListResponse,
   type GameDataSetResponse,
   type GameDataSetSummary,
@@ -71,6 +72,17 @@ export function registerGameDataRoutes(
     const { name } = request.params;
     if (!isDataSetName(name)) return sendError(reply, 404, NOT_FOUND);
     return sendSet(reply, name, store.undo(name));
+  });
+
+  // GEN-173: the asset file (after `pnpm assets:import`) and its diff; the admin confirms it with the PUT above.
+  app.get<{ Params: { name: string } }>('/api/admin/game-data/:name/asset-file', async (request, reply) => {
+    if (refuse(request, reply)) return reply;
+    const { name } = request.params;
+    if (!isDataSetName(name)) return sendError(reply, 404, NOT_FOUND);
+    const outcome = store.importPreview(name);
+    if (!outcome.ok) return sendSet(reply, name, outcome);
+    const body: GameDataImportPreviewResponse = { set: summaryView(outcome.summary), value: outcome.value, changes: outcome.changes };
+    return noStore(reply).send(body);
   });
 
   app.get('/api/admin/game-data-audit', async (request, reply) => {

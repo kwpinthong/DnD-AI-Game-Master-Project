@@ -531,6 +531,10 @@ export const CONTRACT_FIXTURES: Fixtures = {
     },
     { entries: [] },
   ],
+  GameDataImportPreviewResponse: [
+    { set: gameDataSummary, value: [scheduleRow], changes: [{ index: 0, old: { ...scheduleRow, periods: ['EOSORIA'] }, new: scheduleRow }] },
+    { set: gameDataSummary, value: [scheduleRow], changes: [] },
+  ],
   GameDataExportResponse: [{ exportedAt: '2026-11-22T12:00:00.000Z', files: { 'npc-schedule.json': [scheduleRow] } }],
   LearningLibraryResponse: [
     {
