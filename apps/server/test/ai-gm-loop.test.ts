@@ -1043,6 +1043,44 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       expect(asked.length).toBeGreaterThan(0);
     });
 
+    it('GEN-151 C1 + C2 + C3 + C5: the dialogue call carries Lucia\'s library after the rules, the same bytes every turn; none without one, none once deleted', async () => {
+      // Every action asking "หญิงสาว" is aimed at Lucia, so she lingers past SOLARION (GEN-144).
+      await boot({}, (req) => {
+        if (!isTurn(req)) return undefined;
+        const ctx = contextOf<TurnContext>(req);
+        const proposal = mockTurnProposal(ctx);
+        for (const a of proposal.actions) {
+          a.check = { type: 'none' };
+          if (ctx.actions.find((x) => x.actionId === a.actionId)?.text.includes('หญิงสาว')) a.targetNpc = 'amnesiac';
+        }
+        return mockReply.ok(proposal);
+      });
+      const { clients } = await atFountain();
+      const fountainDialogue = () => provider.requests.filter(isDialogue).filter((r) => { const a = contextOf<DialogueContext>(r).audience; return 'place' in a && a.place === 'fountain'; });
+      // C2: no library yet: the rules only, as before.
+      await playTurn(clients, ['ยืนมองน้ำพุ', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
+      expect(fountainDialogue().at(-1)!.system.map((b) => b.id)).toEqual(['dialogue-rules']);
+
+      const add = server!.db.prepare("insert into npc_example (npc_id, npc_name, scene, text, source, game_id, entry_id, created_at) values ('amnesiac', 'x', 'npc-dialogue', ?, 'vote', 'g', ?, 0)");
+      for (const i of [1, 2, 3, 4]) add.run(`นาฬิกาเรือนนี้หยุดเดินมานาน ${i}`, i);
+      await playTurn(clients, ['ถามหญิงสาวเรื่องนาฬิกา', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 1 });
+      await playTurn(clients, ['ถามหญิงสาวต่อ', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 2 });
+      const [one, two] = fountainDialogue().slice(-2);
+      // C1: the rules first, then the library block (≤ 3 examples); C3: both turns start with the same bytes.
+      expect(one!.system[0]!.id).toBe('dialogue-rules');
+      expect(one!.system.at(-1)!.text.match(/หยุดเดินมานาน \d/g)).toHaveLength(3);
+      expect(JSON.stringify(two!.system)).toBe(JSON.stringify(one!.system));
+      expect(lastUserText(one!)).not.toContain('หยุดเดินมานาน');
+
+      // C5: deleted, gone from the next call.
+      server!.db.prepare("delete from npc_example where npc_id = 'amnesiac'").run();
+      const before = fountainDialogue().length;
+      await playTurn(clients, ['ถามหญิงสาวอีก', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'NOCTHERION', turn: 1 });
+      expect(fountainDialogue().length).toBeGreaterThan(before);
+      expect(JSON.stringify(fountainDialogue().at(-1)!.system)).not.toContain('หยุดเดินมานาน');
+      expectNoNamesInPrompts();
+    });
+
     it('GEN-144 C1 + C2 + C4 + C7: Noah talked to at the fountain stays past his schedule (across a restart), anyone there may talk to him, then he says goodbye', async () => {
       // Every action that asks "เด็กขอทาน" something is aimed at Noah (the beggar).
       const aimed: Handler = (req) => {
