@@ -92,6 +92,35 @@ const dialogue = (n: Omit<DialogueContext, 'kind' | 'answers' | 'privateLines' |
   ...n,
 });
 
+/** ISK-025: one NPC chat message as `sendNpcChat` sends it (day 2 unless said; nobody else here unless said). */
+function chatScene(
+  id: string,
+  title: string,
+  npcId: string,
+  persona: string,
+  message: string,
+  scene: Pick<NpcChatContext['scene'], 'place' | 'period' | 'weather'> & Partial<NpcChatContext['scene']>,
+  opt: { affinity?: number; met?: boolean; recent?: NpcChatContext['recent']; whisper?: boolean } = {},
+): StyleScene {
+  return {
+    id,
+    title,
+    purpose: 'npc_chat',
+    npcs: [npcId],
+    context: {
+      kind: 'npc_chat',
+      chat: {
+        npc: { token: `{{n:${npcId}}}`, ...npc(npcId, persona, opt.affinity ?? 0, opt.met ?? false) },
+        player: { token: '{{p:p_a}}', look: 'ผมเปียยาว สะพายกระเป๋าหนังเก่า', socialTitle: A.title },
+        scene: { day: 2, playersHere: [], npcsHere: [], ...scene },
+        recent: opt.recent ?? [],
+        message,
+        whisper: opt.whisper ?? false,
+      },
+    },
+  };
+}
+
 export const STYLE_SCENES: StyleScene[] = [
   {
     id: 'greeting',
@@ -232,19 +261,51 @@ export const STYLE_SCENES: StyleScene[] = [
     }),
   },
   {
-    id: 'fail-sneak',
-    title: 'ลอบผ่านทหารยามแต่พลาด',
-    purpose: 'narrate_place',
+    // ISK-025: was the narration "fail-sneak"; now the guard's lines when he catches the player (the set stays at 20).
+    id: 'caught-sneak',
+    title: 'ทหารยามจับได้ว่าลอบเข้าคลังอาวุธ',
+    purpose: 'npc_dialogue',
     npcs: ['guard'],
-    context: narration({
+    context: dialogue({
       audience: { place: 'barracks' },
       turn: { day: 7, phase: 'NOCTHERION', turn: 2 },
       place: PLACE.barracks,
       cast: [{ ...A, self: false }],
       npcs: [npc('guard', 'ทหารผ่านศึก พูดห้วน ไม่ชอบคนต่างถิ่น', -5, true)],
-      beats: [beat('a1', '{{p:p_a}} พยายามย่องผ่านหลัง {{n:guard}} เข้าไปในคลังอาวุธ', 'fumble', { kind: 'public_action' })],
+      answers: [{ npcId: 'guard', actionIds: ['a1'], via: 'target' }],
+      beats: [beat('a1', '{{p:p_a}} พยายามย่องผ่านหลัง {{n:guard}} เข้าไปในคลังอาวุธ', 'fumble', { targetNpc: 'guard', kind: 'public_action' })],
+      narration: ['เท้าของ {{p:p_a}} เตะถังน้ำล้มดังโครม {{n:guard}} หันขวับมาพร้อมคบเพลิงในมือ'],
     }),
   },
+  {
+    id: 'nun-thanks',
+    title: 'แม่ชีขอบคุณที่ช่วยเด็กกำพร้า',
+    purpose: 'npc_dialogue',
+    npcs: ['nun'],
+    context: dialogue({
+      audience: { place: 'temple' },
+      turn: { day: 3, phase: 'EOSORIA', turn: 1 },
+      place: PLACE.temple,
+      cast: [A],
+      npcs: [npc('nun', 'แม่ชีที่ดูแลเด็กกำพร้ามานาน เหนื่อยแต่ไม่เคยบ่น พูดนุ่มและช้า', 10, true)],
+      answers: [{ npcId: 'nun', actionIds: ['a1'], via: 'target' }],
+      beats: [beat('a1', '{{p:p_a}} อุ้มเด็กที่หลงทางมาส่งคืนให้ {{n:nun}} ที่หน้าโบสถ์', 'success', { targetNpc: 'nun', kind: 'public_action' })],
+      narration: ['แสงเช้าลอดหน้าต่างสีของโบสถ์ {{p:p_a}} ส่งเด็กน้อยที่ยังสะอื้นคืนให้ {{n:nun}}'],
+    }),
+  },
+  chatScene('chat-beggar-morning', 'คุยกับเด็กขอทานตอนเช้า', 'beggar', 'เด็กกำพร้าช่างสังเกต พูดสุภาพแบบเด็ก ระแวงคนแปลกหน้าแต่ใจดี', 'หิวไหม เดี๋ยวพี่ซื้อขนมให้', { place: 'น้ำพุกลางเมือง', period: 'EOSORIA', weather: 'Clear' }),
+  chatScene('chat-nun-rain', 'ขอหลบฝนในโบสถ์', 'nun', 'แม่ชีที่ดูแลเด็กกำพร้ามานาน เหนื่อยแต่ไม่เคยบ่น พูดนุ่มและช้า', 'ฝนตกแบบนี้ ขอหลบในโบสถ์สักพักได้ไหมครับ', { place: 'โบสถ์', period: 'HESPERION', weather: 'Rain' }, { affinity: 20, met: true }),
+  chatScene('chat-guard-night', 'ขอเข้าค่ายทหารตอนกลางคืน', 'guard', 'ทหารผ่านศึก พูดห้วน ไม่ชอบคนต่างถิ่น แต่ซื่อตรงต่อหน้าที่', 'ขอเข้าไปดูในค่ายหน่อยได้ไหม', { place: 'ค่ายทหารป้องกันเมือง', period: 'NOCTHERION', weather: 'Dark Night' }, { affinity: -5 }),
+  chatScene('chat-merchant-haggle', 'ต่อราคาผ้าไหมในแชต', 'merchant', 'พ่อค้าช่างเจรจา สุภาพแบบคนขายของ นับเหรียญตลอดเวลา', 'ผ้าไหมผืนนี้ลดให้อีกหน่อยได้ไหม', { place: 'ย่านการค้า-ตลาดมืด', period: 'SOLARION', weather: 'Clear', playersHere: ['{{p:p_b}}'] }, {
+    affinity: 5,
+    met: true,
+    recent: [
+      { from: 'player', text: 'ผ้าไหมผืนนี้ราคาเท่าไร' },
+      { from: 'npc', text: 'สิบสองเหรียญ ผ้าดีขนาดนี้หาไม่ได้อีกแล้ว' },
+    ],
+  }),
+  chatScene('chat-cloaked-whisper', 'กระซิบถามชายชุดคลุมในหมอก', 'cloaked-man', 'นักต้มตุ๋นปากจัด พูดภาษาตลาด หัวเราะเยาะแม้ตอนถูกขู่', 'รู้ไหมว่าใครขโมยหีบไปเมื่อคืน', { place: 'ย่านการค้า-ตลาดมืด', period: 'NOCTHERION', weather: 'Fog' }, { whisper: true, met: true }),
+  chatScene('chat-amnesiac-storm', 'ถามถึงนาฬิกาพกกลางพายุ', 'amnesiac', 'หญิงสาวที่ความจำหาย พูดน้อย ประโยคสั้น มักหยุดกลางประโยค', 'นาฬิกาเรือนนั้นยังเดินอยู่ไหม', { place: 'น้ำพุกลางเมือง', period: 'NOCTHERION', weather: 'Storm', npcsHere: ['{{n:beggar}} (เด็กขอทานตาบอดข้างหนึ่ง)'] }, { affinity: 15, met: true }),
   {
     id: 'comfort',
     title: 'ปลอบหญิงสาวที่จำอะไรไม่ได้',

@@ -1,4 +1,4 @@
-import type { NpcDialogueLevel } from '@isekai/protocol';
+import { clampReply, type NpcDialogueLevel } from '@isekai/protocol';
 import { restorePhaseState, type Period, type Weather } from '@isekai/rules';
 import type { GameAssets } from '../assets/load.ts';
 import { voiceFormOf, voiceProfile } from '../assets/voice.ts';
@@ -285,6 +285,9 @@ export function cutLine(text: string, max: number = NPC_LINE_LIMITS.chars): stri
   return body.length === 0 ? '' : `${body}…`;
 }
 
+/** ISK-025: an NPC line / chat reply as players get it: whitespace tidied, then `clampReply` (120 code points, at a sentence end). */
+export const clampLine = (text: string): string => clampReply(text.normalize('NFC').replace(/\s+/g, ' ').trim());
+
 export interface CleanOptions {
   /** NPC ids at the place (what the AI was given). */
   present: ReadonlySet<string>;
@@ -305,7 +308,7 @@ export function cleanNpcLines(raw: readonly RawLine[], opt: CleanOptions): Clean
   const limits = npcLineLimits(opt.level);
   const ok = raw.flatMap((l): CleanLine[] => {
     if (!opt.present.has(l.npcId)) return [];
-    const text = cutLine(l.text);
+    const text = clampLine(l.text);
     if (text.length === 0) return [];
     for (const [, kind, id] of text.matchAll(TOKEN_PATTERN)) {
       if (kind === 'p' ? !opt.cast.has(id!) : !opt.present.has(id!)) return [];

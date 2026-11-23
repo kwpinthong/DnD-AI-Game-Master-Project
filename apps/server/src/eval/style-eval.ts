@@ -1,6 +1,7 @@
-import { defaultScenario, type StyleEvalMark, type StyleEvalResponse, type StyleEvalRun, type StyleEvalSceneResult } from '@isekai/protocol';
+import { defaultScenario, NPC_REPLY_MAX_LENGTH, type StyleEvalMark, type StyleEvalResponse, type StyleEvalRun, type StyleEvalSceneResult } from '@isekai/protocol';
 import { desc, eq, lt } from 'drizzle-orm';
-import type { z } from 'zod';
+import type { Weather } from '@isekai/rules';
+import { z } from 'zod';
 import type { AiConfig } from '../ai/config.ts';
 import { createAiService } from '../ai/core/service.ts';
 import { createUsageStore } from '../ai/core/usage.ts';
@@ -13,6 +14,7 @@ import { SCENE_BLOCK } from '../gm/scene.ts';
 import { GM_OUTPUT, GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmScene } from '../gm/schema.ts';
 import { styleIssues } from '../gm/style-check.ts';
 import { toneBlock } from '../gm/tone.ts';
+import { NPC_CHAT_BLOCK, NpcChatAnswer } from '../npc-chat/prompt.ts';
 import { STYLE_SCENES, type StyleScene, type StyleSceneContext } from './style-scenes.ts';
 
 /**
@@ -68,15 +70,51 @@ function callFor(context: StyleSceneContext, assets: GameAssets): Call<unknown> 
         texts: (v) => [{ text: v.overall, npcId: null }, ...v.players.map((p) => ({ text: p.text, npcId: null }))],
       });
     case 'npc_chat':
-      throw new Error('not yet');
+      // As gm_dialogue: no example library block. 400 = the cap of npc-chat/service.ts.
+      return call({
+        system: [NPC_CHAT_BLOCK, tone],
+        output: { name: 'npc_chat', schema: NpcChatAnswer },
+        maxOutputTokens: 400,
+        scope: 'dialogue',
+        texts: (v) => [{ text: v.reply, npcId: context.chat.npc.id }],
+      });
   }
 }
+
+/** ISK-025: one judge call per NPC scene (chat or turn lines): the 4 parts of each reply, as booleans. Eval only, never in a game. */
+const JUDGE_BLOCK: PromptBlock = {
+  id: 'npc-reply-judge',
+  cache: true,
+  text: [
+    'You judge NPC replies of a Thai fantasy game. The message JSON gives scene (everything the NPC was given: persona, voice, what the player said or did, the place, period, weather, who is around) and replies.',
+    'For each reply, in order, answer 4 booleans:',
+    '- persona: it sounds like this NPC (its persona and voice)',
+    '- feeling: it shows how the NPC feels now through tone or a gesture (stating the feeling outright is false)',
+    '- reaction: it reacts to what the player just said or did',
+    '- place: it uses one real detail of here and now that the scene gives (place, period, weather, people around); a detail the scene does not give (rain when the weather is not rain) is false',
+  ].join('\n'),
+};
+const JudgeAnswer = z.object({ verdicts: z.array(z.object({ persona: z.boolean(), feeling: z.boolean(), reaction: z.boolean(), place: z.boolean() })) });
+const PARTS = ['persona', 'feeling', 'reaction', 'place'] as const;
+
+/** C4: weather words a reply may use only when the scene has that weather (a turn line's scene has none). */
+const WEATHER_WORDS: [string, readonly Weather[]][] = [
+  ['ฝน', ['Rain', 'Storm']],
+  ['พายุ', ['Storm']],
+  ['หมอก', ['Fog']],
+];
+const inventsWeather = (text: string, context: StyleSceneContext) => {
+  const weather = context.kind === 'npc_chat' ? context.chat.scene.weather : null;
+  return WEATHER_WORDS.some(([word, allowed]) => text.includes(word) && (weather === null || !allowed.includes(weather)));
+};
 
 /** Real NPC names of the scenario: the eval's readers know every NPC only by alias. */
 const realNpcNames = () => defaultScenario().npcs.flatMap((n) => [n.name, ...(n.otherNames ?? [])]).filter((n) => n.trim().length > 1);
 
 interface StoredScene extends StyleEvalSceneResult {
   prompt: { system: PromptBlock[]; user: string };
+  /** ISK-025: each NPC reply of an NPC scene with its length and the judge's verdict (server only, like the prompt). */
+  replies?: { text: string; chars: number; verdict: NpcReplyVerdict | null }[];
 }
 
 export interface StyleEvalDeps {
@@ -116,7 +154,7 @@ export async function runStyleEval(deps: StyleEvalDeps, scenes: readonly StyleSc
   const results: StoredScene[] = [];
   for (const scene of scenes) {
     const c = callFor(scene.context, assets);
-    const user = JSON.stringify(scene.context);
+    const user = JSON.stringify(scene.context.kind === 'npc_chat' ? scene.context.chat : scene.context);
     const base = { sceneId: scene.id, title: scene.title, purpose: scene.purpose, prompt: { system: c.system, user } };
     if (spent >= limit) {
       results.push({ ...base, ok: false, text: null, failure: 'budget', flags: [], costUsdMicros: 0 });
@@ -125,16 +163,36 @@ export async function runStyleEval(deps: StyleEvalDeps, scenes: readonly StyleSc
     sceneCost = 0;
     // C4: one failed scene is reported and the set goes on.
     const result = await ai.call({ gameId: STYLE_EVAL_GAME_ID, purpose: scene.purpose, system: c.system, messages: [{ role: 'user', text: user }], output: c.output, maxOutputTokens: c.maxOutputTokens });
-    spent += sceneCost;
     if (!result.ok) {
+      spent += sceneCost;
       results.push({ ...base, ok: false, text: null, failure: result.error.detail ?? result.error.code, flags: [], costUsdMicros: sceneCost });
       continue;
     }
     const parts = c.texts(result.value);
     const text = parts.map((p) => (p.npcId ? `{{n:${p.npcId}}}: ${p.text}` : p.text)).join('\n');
     // C5: a real name the reader should not know, then the Voice rules the game's checker flags (GEN-169).
-    const flags = [...new Set([...(names.some((n) => text.includes(n)) ? ['real_name'] : []), ...parts.flatMap((p) => styleIssues(assets.voice, p.text, c.scope, p.npcId).map((i) => i.reason))])];
-    results.push({ ...base, ok: true, text, failure: null, flags, costUsdMicros: sceneCost });
+    const flags = [...(names.some((n) => text.includes(n)) ? ['real_name'] : []), ...parts.flatMap((p) => styleIssues(assets.voice, p.text, c.scope, p.npcId).map((i) => i.reason))];
+    // ISK-025: the NPC replies (scope dialogue = turn lines and chat): length, invented weather (C4), the judge's 4 parts.
+    let replies: StoredScene['replies'];
+    if (c.scope === 'dialogue' && parts.length > 0) {
+      // shortcut: the judge runs as purpose npc_chat (the summary model) so the eval needs no AiPurpose of its own; add one if its usage must show apart.
+      const judged = await ai.call({
+        gameId: STYLE_EVAL_GAME_ID,
+        purpose: 'npc_chat',
+        system: [JUDGE_BLOCK],
+        messages: [{ role: 'user', text: JSON.stringify({ scene: JSON.parse(user) as unknown, replies: parts.map((p) => p.text) }) }],
+        output: { name: 'npc_reply_judge', schema: JudgeAnswer },
+        maxOutputTokens: 300,
+      });
+      const verdicts = judged.ok && judged.value.verdicts.length === parts.length ? judged.value.verdicts : null;
+      replies = parts.map((p, i) => ({ text: p.text, chars: [...p.text].length, verdict: verdicts?.[i] ?? null }));
+      if (replies.some((r) => r.chars > NPC_REPLY_MAX_LENGTH)) flags.push('too_long');
+      if (parts.some((p) => inventsWeather(p.text, scene.context))) flags.push('not_in_scene');
+      if (!verdicts) flags.push('judge_failed');
+      for (const part of PARTS) if (verdicts?.some((v) => !v[part])) flags.push(`missing_${part}`);
+    }
+    spent += sceneCost;
+    results.push({ ...base, ok: true, text, failure: null, flags: [...new Set(flags)], costUsdMicros: sceneCost, ...(replies ? { replies } : {}) });
   }
   const row = db
     .insert(styleEvalRun)
@@ -165,16 +223,27 @@ export interface NpcReplyReport {
 }
 
 export function npcReplyReport(db: DbOrTx, runId: number): NpcReplyReport {
-  void db;
-  void runId;
-  return { replies: 0, withinLength: 0, complete: 0, completeRate: 0, pass: false, samples: [] };
+  const row = db.select({ scenes: styleEvalRun.scenes }).from(styleEvalRun).where(eq(styleEvalRun.id, runId)).get();
+  const scenes = row ? (JSON.parse(row.scenes) as StoredScene[]) : [];
+  const replies = scenes.flatMap((s) => s.replies ?? []);
+  const withinLength = replies.filter((r) => r.chars <= NPC_REPLY_MAX_LENGTH).length;
+  const complete = replies.filter((r) => r.verdict !== null && PARTS.every((p) => r.verdict![p])).length;
+  const completeRate = replies.length === 0 ? 0 : complete / replies.length;
+  return {
+    replies: replies.length,
+    withinLength,
+    complete,
+    completeRate,
+    pass: replies.length > 0 && withinLength === replies.length && completeRate >= 0.8,
+    samples: scenes.flatMap((s) => s.replies?.slice(0, 1).map((r) => r.text) ?? []).slice(0, 5),
+  };
 }
 
 type RunRow = typeof styleEvalRun.$inferSelect;
 
 /** The round as the admin page reads it: no prompts. */
 function runOf(row: RunRow): StyleEvalRun {
-  const scenes = (JSON.parse(row.scenes) as StoredScene[]).map(({ prompt: _prompt, ...s }) => s);
+  const scenes = (JSON.parse(row.scenes) as StoredScene[]).map(({ prompt: _prompt, replies: _replies, ...s }) => s);
   return { id: row.id, createdAt: row.createdAt, provider: row.provider, models: JSON.parse(row.models) as string[], voiceVersion: row.voiceVersion, costUsdMicros: row.costUsdMicros, scenes };
 }
 

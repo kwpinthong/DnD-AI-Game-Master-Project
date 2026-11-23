@@ -10,7 +10,7 @@ import { activeMembers, type MemberRow } from '../game/service.ts';
 import { loadWorld, npcToken, playerToken } from '../gm/context.ts';
 import { renderTokens } from '../gm/loop.ts';
 import { dialoguePrompt } from '../gm/npc-examples.ts';
-import { cutLine, npcPrompt, npcRealNames, npcsHereNow, withVoice } from '../gm/npc-lines.ts';
+import { clampLine, cutLine, npcPrompt, npcRealNames, npcsHereNow, withVoice } from '../gm/npc-lines.ts';
 import { MEMORY_LIMITS } from '../gm/npc-memory.ts';
 import { gateStyle, styleIssues } from '../gm/style-check.ts';
 import { gameTone, toneBlock } from '../gm/tone.ts';
@@ -26,8 +26,8 @@ import { closureOf } from '../admin/games.ts';
  * other players at the place get the talk as `player` + `npc` entries (a whisper only the speaker, and the Human GM).
  */
 
-/** Characters of a reply / suggestion that go out. */
-const REPLY_CHARS = 300;
+/** Characters of a suggestion that go out (the reply: `clampLine`, ISK-025). */
+const SUGGESTION_CHARS = 300;
 /** Lines of the earlier talk of the pair in the prompt. */
 const RECENT = 6;
 
@@ -149,7 +149,7 @@ export async function sendNpcChat(deps: NpcChatDeps, me: MemberRow, input: { npc
     deps.log(`[npc-chat] game=${me.gameId} npc=${npcId} failed: ${result.error.code}`);
     return unavailable;
   }
-  const clean = (a: NpcChatAnswer) => ({ ...a, reply: cutLine(tokenise(a.reply), REPLY_CHARS), suggestion: a.suggestion ? cutLine(tokenise(a.suggestion), REPLY_CHARS) || null : null });
+  const clean = (a: NpcChatAnswer) => ({ ...a, reply: clampLine(tokenise(a.reply)), suggestion: a.suggestion ? cutLine(tokenise(a.suggestion), SUGGESTION_CHARS) || null : null });
   // GEN-169: the reply against the NPC's speech profile before any player reads it.
   const { value: answer } = await gateStyle({
     db,

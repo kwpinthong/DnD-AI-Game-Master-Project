@@ -5,7 +5,7 @@ import { openGameData } from '../assets/game-data.ts';
 import { assetFileLabel, buildGameAssets, DEFAULT_ASSETS_DIR, readRawDataSets } from '../assets/load.ts';
 import { loadConfig } from '../config.ts';
 import { openDatabase } from '../db/client.ts';
-import { runStyleEval } from './style-eval.ts';
+import { npcReplyReport, runStyleEval } from './style-eval.ts';
 
 // `pnpm eval:style` (GEN-167): one round of the Thai style eval set against the AI of AI_PROVIDER, saved in the DB of
 // DB_PATH for the /admin compare page. Never creates or reads a game. STYLE_EVAL_MAX_USD (default 1) stops the round.
@@ -31,6 +31,10 @@ try {
     const failed = run.scenes.filter((s) => !s.ok).length;
     const leaked = run.scenes.filter((s) => s.flags.includes('real_name')).length;
     console.log(`[eval:style] ${run.scenes.length - failed}/${run.scenes.length} scenes ok, ${failed} failed, ${leaked} with a real name`);
+    // ISK-025 C8: the bar for NPC replies (every one ≤ 120, all 4 parts in ≥ 80%).
+    const npc = npcReplyReport(db, run.id);
+    console.log(`[eval:style] NPC replies: ${npc.withinLength}/${npc.replies} within 120, ${npc.complete}/${npc.replies} with all 4 parts (${Math.round(npc.completeRate * 100)}%): ${npc.pass ? 'PASS' : 'BELOW THE BAR'}`);
+    for (const s of npc.samples) console.log(`[eval:style]   ${s}`);
   } finally {
     sqlite.close();
   }

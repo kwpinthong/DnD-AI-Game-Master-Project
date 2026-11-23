@@ -1,0 +1,7 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ISK-025 C1 the prompts > C1: NPC chat and the turn NPC lines both carry the 1-2 sentence / 120 rule, the 4 parts and 2 good examples 1`] = `
+"NPC reply / line: 1-2 sentences, at most 120 characters, with all 4: persona + voice; feeling now by tone or gesture (never "รู้สึก"); reaction to what the player just said / did; one real detail of here and now from the scene (place, period, weather, people; never invent one)
+Good (bread, morning fountain): รับขนมปังอย่างลังเล "น้ำพุเช้านี้เย็นจัด ของอุ่นๆ ไม่ได้กินนานแล้ว"
+Good (threat, night alley): หัวเราะแห้งๆ หลังชิดกำแพงชื้น "ตรอกมืดขนาดนี้ ขู่ไปก็ไม่มีพยานหรอก""
+`;
