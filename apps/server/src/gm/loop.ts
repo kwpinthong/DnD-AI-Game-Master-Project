@@ -69,6 +69,7 @@ import {
   type TurnAction,
 } from './context.ts';
 import { createStageTimer, type StageTimer } from './timing.ts';
+import { learningContext, turnTags } from '../learning/memory.ts';
 import { introduceNpcs } from './npc-intro.ts';
 import { dialoguePrompt } from './npc-examples.ts';
 import { recordNpcMemories } from './npc-memory.ts';
@@ -404,6 +405,10 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         weather: input.weather ?? null,
         assets,
       });
+      // GEN-083: the learning blocks fit what the 20k cap leaves (2 = the joins of the two blocks).
+      const room = CONTEXT_BUDGET.gm_adjudicate - requestTokens([RULES_BLOCK], [{ text: JSON.stringify(context) }]) - 2;
+      const learning = learningContext(db, gameId, { tags: turnTags(db, gameId, order.map((a) => a.memberId)), room });
+      if (learning.trimmed > 0) log(`[gm] game=${gameId} learning_trimmed step=${learning.trimmed}`);
       timer.add('build', performance.now() - buildStart);
       let checked: PhaseAction[] = [];
       const { value: proposal } = await ask({
@@ -411,7 +416,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         at,
         purpose: 'gm_adjudicate',
         repairPurpose: 'gm_repair',
-        system: [RULES_BLOCK],
+        system: [RULES_BLOCK, ...learning.blocks],
         context,
         output: { name: GM_OUTPUT.turn, schema: GmTurnProposal },
         maxOutputTokens: 8_000,

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { JoinRequest, Member } from './join.ts';
-import { GameMemoryView } from './view-models.ts';
+import { GameMemorySetting, GameMemoryView } from './view-models.ts';
 
 /** Online: 2-6 players. Single: exactly 1. A Human GM is not a player and has no character. */
 export const ONLINE_MIN_PLAYERS = 2;
@@ -54,6 +54,10 @@ export const CreateGameRequest = z
     tone: GameTone.optional(),
     name: JoinRequest.shape.name,
     pin: JoinRequest.shape.pin,
+    /** GEN-082 / GEN-083: the creator's player code (kept only as its HMAC); finds the memory's source games. */
+    playerCode: z.string().trim().max(64, 'รหัสผู้เล่นยาวได้ไม่เกิน 64 ตัวอักษร').optional(),
+    /** GEN-083: absent = off. */
+    memory: GameMemorySetting.optional(),
   })
   .refine((v) => !(v.mode === 'single' && v.humanGm), {
     path: ['humanGm'],
@@ -80,6 +84,8 @@ export const UpdateGameRequest = z.object({
   mode: GameMode.optional(),
   npcDialogue: NpcDialogueLevel.optional(),
   tone: GameTone.optional(),
+  /** GEN-083: the source games are checked against the owner's player code (409 after the start). */
+  memory: GameMemorySetting.optional(),
 });
 export type UpdateGameRequest = z.infer<typeof UpdateGameRequest>;
 
@@ -117,7 +123,7 @@ export const GameView = z.object({
   canEditScenario: z.boolean(),
   /** Why the owner cannot start yet (Thai, one line each); empty when the game can start. */
   startBlockers: z.array(z.string()),
-  /** GEN-083: the "ความทรงจำจากเกมก่อน" setting the lobby shows (pending, see docs/contract.md). */
+  /** GEN-083: the "ความทรงจำจากเกมก่อน" setting the lobby shows. The server always sends it; optional for older web fixtures. */
   memory: GameMemoryView.optional(),
 });
 export type GameView = z.infer<typeof GameView>;

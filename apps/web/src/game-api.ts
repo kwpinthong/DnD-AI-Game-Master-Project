@@ -37,7 +37,7 @@ export interface CreateGameInput {
   tone?: GameTone;
   name: string;
   pin: string;
-  /** Pending GEN-082 / GEN-083 (sent only when the form shows them, GEN-090): the creator's player code and the memory toggle. */
+  /** GEN-082 / GEN-083: the creator's player code and the memory toggle (absent = off). */
   playerCode?: string;
   memory?: GameMemorySetting;
 }
@@ -195,8 +195,7 @@ export async function originCall(baseUrl: string, token: string): Promise<Origin
 }
 
 /**
- * POST /api/memory/sources (pending GEN-083): the ended games that passed the learning gate and the creator
- * was in, found by the creator's player code (Q-225). The code goes in the POST body only, never in a URL
+ * POST /api/memory/sources (GEN-083): the ended games the creator was in, found by the creator's player code (Q-225). The code goes in the POST body only, never in a URL
  * or a header (Q-276).
  */
 export type MemorySourcesResult = { kind: 'ok'; games: MemorySourceGame[] } | { kind: 'error'; message: string };

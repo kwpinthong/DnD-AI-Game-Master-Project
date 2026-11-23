@@ -301,6 +301,9 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'POST /api/style', { body: { playerCode: 'pc-unknown' } });
     await hit(call, 'PUT /api/style/opt-out', { body: { playerCode: 'pc-contract', optOut: true } });
     await hit(call, 'POST /api/style/delete', { body: { playerCode: 'pc-contract' } });
+    // GEN-083: the ended games of that code (none ended here: an empty list); unknown = 403.
+    await hit(call, 'POST /api/memory/sources', { body: { playerCode: 'pc-contract' } });
+    await hit(call, 'POST /api/memory/sources', { body: { playerCode: 'pc-unknown' } });
     await hit(call, 'POST /api/admin/logout', { token: adminToken });
     await hit(call, 'POST /api/logout', { token: p1.token });
     await hit(call, 'DELETE /api/game', { token: gm, body: { confirmName: 'เกมสัญญา 2' } });

@@ -203,26 +203,30 @@ export const RoomOmenRejected = z.strictObject({ type: z.literal('omen_rejected'
 
 // --- GEN-083: memory from earlier games ---
 
-/** An ended game that passed the learning gate (> 8, GEN-079) and the caller was a member of. Its score is public. */
-export const MemorySourceGame = z.strictObject({ id: z.string(), name: z.string(), score: z.number().min(1).max(10), endedAt: z.string() });
+/** An ended game the caller (by player code) was a member of (no score gate, GEN-108). `score`: the average rating, null = nobody rated. */
+export const MemorySourceGame = z.strictObject({ id: z.string(), name: z.string(), score: z.number().min(1).max(10).nullable(), endedAt: z.string() });
 export type MemorySourceGame = z.infer<typeof MemorySourceGame>;
 
-/** Body of POST /api/memory/sources (pending GEN-083): the player code is in the body, never in a URL or header (Q-276). */
+/** Body of POST /api/memory/sources (GEN-083): the player code is in the body, never in a URL or header (Q-276). */
 export const MemorySourcesRequest = z.object({ playerCode: z.string().trim().min(1, 'ใส่รหัสผู้เล่น') });
 export type MemorySourcesRequest = z.input<typeof MemorySourcesRequest>;
 
-/** 200 from POST /api/memory/sources (pending GEN-083). */
+/** 200 from POST /api/memory/sources (GEN-083), newest ended first. */
 export const MemorySourcesResponse = z.strictObject({ games: z.array(MemorySourceGame) });
 export type MemorySourcesResponse = z.infer<typeof MemorySourcesResponse>;
 
-/** The create-game memory toggle (pending: GEN-083 adds it as `CreateGameRequest.memory`). Default off. */
-export const GameMemorySetting = z.object({
-  enabled: z.boolean().default(false),
-  sourceGameIds: z.array(z.string()).max(10).default([]),
-});
+export const MEMORY_MAX_SOURCES = 3;
+
+/** GEN-083: `CreateGameRequest.memory` / `UpdateGameRequest.memory`. Default off; on = 1-3 source games. */
+export const GameMemorySetting = z
+  .object({
+    enabled: z.boolean().default(false),
+    sourceGameIds: z.array(z.string()).max(MEMORY_MAX_SOURCES, `เลือกได้ไม่เกิน ${MEMORY_MAX_SOURCES} เกม`).default([]),
+  })
+  .refine((m) => !m.enabled || m.sourceGameIds.length > 0, { message: 'เลือกอย่างน้อย 1 เกม หรือปิดความทรงจำ' });
 export type GameMemorySetting = z.infer<typeof GameMemorySetting>;
 
-/** What the lobby shows of the setting (pending: `GameView.memory`). */
+/** What the lobby shows of the setting (`GameView.memory`). */
 export const GameMemoryView = z.strictObject({ enabled: z.boolean(), sources: z.array(z.strictObject({ id: z.string(), name: z.string() })) });
 export type GameMemoryView = z.infer<typeof GameMemoryView>;
 

@@ -100,6 +100,8 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'POST /api/style': { method: 'POST', path: '/api/style', body: { playerCode: 'pc-scan' } },
     'PUT /api/style/opt-out': { method: 'PUT', path: '/api/style/opt-out', body: { playerCode: 'pc-scan', optOut: true } },
     'POST /api/style/delete': { method: 'POST', path: '/api/style/delete', body: { playerCode: 'pc-scan' } },
+    // GEN-083: the create form's source games by player code (unknown here: 403).
+    'POST /api/memory/sources': { method: 'POST', path: '/api/memory/sources', body: { playerCode: 'pc-scan' } },
     // GEN-080: the lore + feedback extract; a player's session is 403.
     'POST /api/admin/learning/games/:gameId/extract': { method: 'POST', path: '/api/admin/learning/games/any-game/extract' },
     // GEN-055: the player's own skills, held items and library discoveries (no condition or progress).
