@@ -16,6 +16,7 @@ import {
   THAI_OUTPUT,
 } from '../src/gm/context.ts';
 import { mockNarration } from '../src/gm/mock-gm.ts';
+import { AVOID_LEAD, LEARNING_HEADS, LEARNING_LEAD } from '../src/learning/memory.ts';
 import { EXAMPLES_HEAD } from '../src/gm/npc-examples.ts';
 import { SCENE_BLOCK } from '../src/gm/scene.ts';
 import { GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmScene, GmTurnProposal } from '../src/gm/schema.ts';
@@ -28,7 +29,8 @@ import { WEATHER_RULES } from '../src/weather/service.ts';
  * GEN-164: the AI reads its instructions in English and writes for the players in Thai. The only Thai a
  * system block may keep is this allowlist: words the AI must write as they are (the reader's "คุณ").
  */
-const ALLOWED_THAI = ['คุณ'];
+// GEN-083: the avoid lead-in of the learning block is Thai by the requirement (GEN-108 R5).
+const ALLOWED_THAI = ['คุณ', AVOID_LEAD];
 const THAI = /[฀-๿]/;
 const thaiLeft = (text: string) => ALLOWED_THAI.reduce((t, word) => t.split(word).join(''), text).match(/[฀-๿]+/g) ?? [];
 
@@ -55,6 +57,7 @@ const BLOCKS: Record<string, string> = {
   npc_examples: EXAMPLES_HEAD,
   tone: toneBlock(englishVoice, 'A').text,
   timeline: eventContextBlock({ day: 1, phase: 'EOSORIA', active: [], past: [], foreshadowing: [] }).text,
+  learning: [LEARNING_LEAD, ...Object.values(LEARNING_HEADS), AVOID_LEAD].join('\n'),
   repair: REPAIR_INSTRUCTION,
   style_rewrite: STYLE_REWRITE_INSTRUCTION,
 };

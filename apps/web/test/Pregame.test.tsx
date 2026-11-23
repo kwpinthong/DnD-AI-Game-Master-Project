@@ -336,10 +336,10 @@ describe('the parts that wait for the backend (GEN-082 / GEN-083) follow the con
     expect(body).toEqual({ inviteCode: 'K7Q-2MX', name: 'นก', pin: '1234', playerCode: 'PC-7H2K', noStyle: true });
   });
 
-  it('Create game: the memory toggle is off by default; on, it lists the games found by the player code', async () => {
+  it('Create game (GEN-083): the memory toggle is off by default; it opens once the player code finds ended games and lists them', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const onCreated = vi.fn();
-    render(<CreateGameForm apiBaseUrl={base('guest')} onCreated={onCreated} onBack={noop} pendingFields />);
+    render(<CreateGameForm apiBaseUrl={base('guest')} onCreated={onCreated} onBack={noop} />);
     type('Create code', 'ลับเฉพาะ');
     type('ชื่อเกม', 'เมืองก่อนอุกกาบาต');
     type('ชื่อผู้เล่นของคุณ', 'นก');
@@ -347,18 +347,19 @@ describe('the parts that wait for the backend (GEN-082 / GEN-083) follow the con
 
     const toggle = screen.getByRole('switch', { name: 'ความทรงจำจากเกมก่อน' }) as HTMLInputElement;
     expect(toggle.checked).toBe(false);
+    expect(toggle.disabled).toBe(true);
     expect(screen.getByText('ปิดอยู่')).toBeTruthy();
-    expect(screen.queryByLabelText(/รหัสผู้เล่นของคุณ/)).toBeNull();
-    fireEvent.click(toggle);
-    expect(screen.getByText('เปิดอยู่')).toBeTruthy();
-
-    // on with no game picked: the form says so and cannot be sent
-    expect(button('สร้างเกมและรับโค้ด').disabled).toBe(true);
     expect(button('ดูเกมที่ใช้ได้').disabled).toBe(true);
     type(/รหัสผู้เล่นของคุณ/, 'PC-7H2K');
     fireEvent.click(button('ดูเกมที่ใช้ได้'));
+    await waitFor(() => expect(toggle.disabled).toBe(false));
+    fireEvent.click(toggle);
+    expect(screen.getByText('เปิดอยู่')).toBeTruthy();
+    // on with no game picked: the form says so and cannot be sent
+    expect(button('สร้างเกมและรับโค้ด').disabled).toBe(true);
     const source = (await screen.findByLabelText(/คืนจันทราโลหิต/)) as HTMLInputElement;
     expect(source.closest('label')!.textContent).toContain('คะแนน 8.6');
+    expect((screen.getByLabelText(/เมืองไร้คะแนน/) as HTMLInputElement).closest('label')!.textContent).toContain('ยังไม่มีคะแนน');
     // Q-276: the player code travels in a POST body, never in the URL or a header
     const lookup = fetchSpy.mock.calls.find(([input]) => String(input).endsWith('/api/memory/sources'))!;
     const init = lookup[1] as RequestInit;
@@ -373,6 +374,31 @@ describe('the parts that wait for the backend (GEN-082 / GEN-083) follow the con
     await waitFor(() => expect(onCreated).toHaveBeenCalled());
     const post = fetchSpy.mock.calls.find(([input]) => String(input).endsWith('/api/games'))!;
     expect(JSON.parse(String((post[1] as RequestInit).body))).toMatchObject({ playerCode: 'PC-7H2K', memory: { enabled: true, sourceGameIds: ['g-old'] } });
+  });
+
+  it('GEN-083 C3: the player code finds no ended game → the toggle stays disabled and says why; the game is created with the memory off', async () => {
+    const real = globalThis.fetch;
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) =>
+      String(input).endsWith('/api/memory/sources') ? Promise.resolve(new Response(JSON.stringify({ games: [] }), { status: 200, headers: { 'content-type': 'application/json' } })) : real(input, init),
+    );
+    const onCreated = vi.fn();
+    render(<CreateGameForm apiBaseUrl={base('guest')} onCreated={onCreated} onBack={noop} />);
+    type('Create code', 'ลับเฉพาะ');
+    type('ชื่อเกม', 'เมืองก่อนอุกกาบาต');
+    type('ชื่อผู้เล่นของคุณ', 'นก');
+    type('PIN ของคุณ', '1234');
+    type(/รหัสผู้เล่นของคุณ/, 'PC-NEW');
+    fireEvent.click(button('ดูเกมที่ใช้ได้'));
+    expect(await screen.findByText('ยังไม่มีเกมที่จบแล้วที่คุณเป็นสมาชิก จึงเปิดความทรงจำไม่ได้')).toBeTruthy();
+    const toggle = screen.getByRole('switch', { name: 'ความทรงจำจากเกมก่อน' }) as HTMLInputElement;
+    expect(toggle.disabled).toBe(true);
+    expect(toggle.getAttribute('aria-describedby')).toBe('memory-why');
+    fireEvent.click(button('สร้างเกมและรับโค้ด'));
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    const post = fetchSpy.mock.calls.find(([input]) => String(input).endsWith('/api/games'))!;
+    const sent = JSON.parse(String((post[1] as RequestInit).body)) as Record<string, unknown>;
+    expect(sent.playerCode).toBe('PC-NEW');
+    expect(sent.memory).toBeUndefined();
   });
 
   it('Lobby: says whether the memory is on, and from which game', async () => {
