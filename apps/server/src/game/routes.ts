@@ -17,6 +17,8 @@ import { bearerToken, sendError } from '../auth/routes.ts';
 import type { AiService } from '../ai/core/service.ts';
 import type { GameAssets } from '../assets/load.ts';
 import type { Db } from '../db/client.ts';
+import { checkedMemory, ownerKeyOf } from '../learning/memory.ts';
+import { playerKeyOf, saveJoinStyle } from '../learning/style.ts';
 import { readScenario, resetScenario, saveScenario, type ScenarioEditOutcome } from '../scenario/editor.ts';
 import { createCharacter, getCharacter, updateCharacter, type CharacterOutcome } from './character.ts';
 import { createCodeChecker } from './create-code.ts';
@@ -101,8 +103,16 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
         break;
     }
 
+    // GEN-083: the memory's source games must be ended games of the creator's player code.
+    const playerCode = parsed.data.playerCode ?? '';
+    const sources = checkedMemory(db, parsed.data.memory, playerCode === '' ? null : playerKeyOf(db, playerCode));
+    if (sources === undefined) {
+      return sendError(reply, 400, { code: 'invalid_input', message: 'ข้อมูลไม่ถูกต้อง', fields: { memory: 'เลือกได้เฉพาะเกมที่จบแล้วที่คุณเป็นสมาชิก (ตามรหัสผู้เล่น)' } });
+    }
     // GEN-177: no tone picked = the server default (the Voice data set, set at /admin).
-    const created = await createGame(db, parsed.data, now, options.assets.voice.tone);
+    const created = await createGame(db, parsed.data, now, options.assets.voice.tone, sources);
+    // GEN-082: the creator's code links their style like a join does.
+    if (playerCode !== '') saveJoinStyle(db, { id: created.member.id, gameId: created.member.gameId }, { playerCode, noStyle: false }, now());
     const body: CreateGameResponse = {
       token: created.token,
       expiresAt: new Date(created.expiresAt).toISOString(),
@@ -198,7 +208,8 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
       }
       return sendError(reply, 400, { code: 'invalid_input', message: 'ข้อมูลไม่ถูกต้อง', fields });
     }
-    return sendOutcome(reply, updateGame(db, me, parsed.data));
+    const memory = parsed.data.memory;
+    return sendOutcome(reply, updateGame(db, me, parsed.data, (tx, row) => checkedMemory(tx, memory, ownerKeyOf(tx, row.ownerMemberId ?? ''))));
   });
 
   app.delete('/api/game', async (request, reply) => {

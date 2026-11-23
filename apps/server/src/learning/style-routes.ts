@@ -1,4 +1,4 @@
-import { PlayerStyleRequest, type PlayerStyleResponse } from '@isekai/protocol';
+import { PlayerStyleRequest, type MemorySourcesResponse, type PlayerStyleResponse } from '@isekai/protocol';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { clientIp } from '../auth/client-ip.ts';
 import { memberRowForToken, type Clock } from '../auth/join.ts';
@@ -6,6 +6,7 @@ import { bearerToken, sendError } from '../auth/routes.ts';
 import type { Db } from '../db/client.ts';
 import { memberStyle } from '../db/schema.ts';
 import { eq } from 'drizzle-orm';
+import { memorySources } from './memory.ts';
 import { deleteStyle, knownKey, optedOut, playerKeyOf, profileOf, setOptOut } from './style.ts';
 
 /** Unknown player codes per client IP: 5 in 10 minutes lock it out for 10 minutes (ADR §4, like the PIN). */
@@ -66,6 +67,14 @@ export function registerPlayerStyleRoutes(app: FastifyInstance, db: Db, now: Clo
     if (found.optOut === undefined) return sendError(reply, 400, { code: 'invalid_input', message: 'เลือกเปิดหรือปิด', fields: { optOut: 'เลือกเปิดหรือปิด' } });
     setOptOut(db, found.key, found.optOut, now());
     return send(reply, found.key);
+  });
+
+  // GEN-083: the create form's source games of "ความทรงจำจากเกมก่อน" (same code check and lock as the style page).
+  app.post('/api/memory/sources', async (request, reply) => {
+    const found = keyFor(request, reply);
+    if (!found) return reply;
+    const body: MemorySourcesResponse = { games: memorySources(db, found.key) };
+    return reply.header('cache-control', 'no-store').send(body);
   });
 
   app.post('/api/style/delete', async (request, reply) => {

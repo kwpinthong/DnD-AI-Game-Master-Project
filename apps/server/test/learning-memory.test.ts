@@ -201,7 +201,8 @@ describe('GEN-083 memory from earlier games', { timeout: 120_000 }, () => {
     expect(turn).toContain(AVOID_LEAD);
     expect(turn.indexOf(AVOID_LEAD)).toBeLessThan(turn.indexOf('ขโมยแย่ที่'));
     expect(turn).not.toContain('รักษาดี');
-    expect(learningContext(server!.orm, gameId, { tags: [], room: 20_000 }).blocks.map((b) => b.id)).toEqual(['learning']);
+    // No tag this turn and nothing else stored → no block at all.
+    expect(learningContext(server!.orm, gameId, { tags: [], room: 20_000 }).blocks).toEqual([]);
   });
 
   it('C5: over the budget → cut avoid → good (keep 1) → style → feedback → lore (keep 1) → the whole block; never over the room or 1,500', async () => {

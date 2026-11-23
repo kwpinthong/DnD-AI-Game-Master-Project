@@ -24,6 +24,8 @@ export const game = sqliteTable('game', {
   npcDialogue: text('npc_dialogue', { enum: ['low', 'normal', 'high'] }).notNull().default('normal'),
   /** GEN-177: the language tone, set at creation and locked at the start (an old game has A). */
   tone: text('tone', { enum: ['A', 'B', 'C'] }).notNull().default('A'),
+  /** GEN-083: the source game ids of "ความทรงจำจากเกมก่อน" (JSON string[], 1-3); null = off (an old game is off). Locked at the start. */
+  learningSources: text('learning_sources', { mode: 'json' }).$type<string[]>(),
   /** The member who created the game; only they may kick, edit, renew the code or start. */
   ownerMemberId: text('owner_member_id'),
   /** Set once by the start; mode and members are locked from then on. */

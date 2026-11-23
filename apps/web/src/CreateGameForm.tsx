@@ -1,13 +1,12 @@
-import { createGameFieldErrors, type CreateGameField, type GameView, type Member, type MemorySourceGame } from '@isekai/protocol';
+import { createGameFieldErrors, MEMORY_MAX_SOURCES, type CreateGameField, type GameView, type Member, type MemorySourceGame } from '@isekai/protocol';
 import { useState, type FormEvent } from 'react';
 import { useFieldErrors } from './form-state.ts';
 import { memorySourcesCall, postCreateGame, type CreateGameInput } from './game-api.ts';
 import { NpcDialoguePicker } from './NpcDialoguePicker.tsx';
 import { TonePicker } from './TonePicker.tsx';
 import { toneText } from './ui/strings.ts';
-import { PENDING_BACKEND_UI } from './pending.ts';
 import { PinInput } from './PinInput.tsx';
-import { Button, EmptyState, Field, Panel } from './ui/index.ts';
+import { Button, Field, Panel } from './ui/index.ts';
 import './pregame.css';
 
 type TextField = 'createCode' | 'gameName' | 'name' | 'pin';
@@ -18,20 +17,17 @@ const endedOn = (iso: string) => new Date(iso).toLocaleDateString('th-TH', { day
 /**
  * Create game v2 (GEN-090, Screens and Flows v2 §2): create code, game name, mode, Human GM and the
  * creator's own login. A field says what is wrong once the creator leaves it; the create button stays off
- * until everything passes (C2). `pendingFields` adds "ความทรงจำจากเกมก่อน" (GEN-083, `GameMemorySetting`,
- * off by default) with the source games found by the creator's player code (Q-225); the server does not
- * read it yet, so it is on only in mock mode until GEN-102.
+ * until everything passes (C2). "ความทรงจำจากเกมก่อน" (GEN-083, off by default) lists the ended games found by
+ * the creator's player code (Q-225); with none the toggle stays off and says why.
  */
 export function CreateGameForm({
   apiBaseUrl,
   onCreated,
   onBack,
-  pendingFields = PENDING_BACKEND_UI,
 }: {
   apiBaseUrl: string;
   onCreated: (member: Member, token: string, game: GameView) => void;
   onBack: () => void;
-  pendingFields?: boolean;
 }) {
   const [values, setValues] = useState<Base>({ createCode: '', gameName: '', mode: 'online', humanGm: false, npcDialogue: 'normal', name: '', pin: '' });
   const [formError, setFormError] = useState<string>();
@@ -48,7 +44,8 @@ export function CreateGameForm({
   // Single is AI GM only, so the Human GM choice is dropped with it.
   const base: Base = { ...values, humanGm: values.mode === 'online' && values.humanGm };
   const errors = useFieldErrors<CreateGameField>(createGameFieldErrors(base));
-  const memoryMissing = pendingFields && memoryOn && picked.length === 0;
+  const noSources = !sources || sources.length === 0;
+  const memoryMissing = memoryOn && picked.length === 0;
   const blocked = errors.invalid || memoryMissing;
 
   async function submit(event: FormEvent) {
@@ -57,9 +54,8 @@ export function CreateGameForm({
     if (blocked) return errors.touchAll();
     if (busy) return;
 
-    const body: CreateGameInput = pendingFields
-      ? { ...base, playerCode: playerCode.trim(), memory: { enabled: memoryOn, sourceGameIds: memoryOn ? picked : [] } }
-      : base;
+    const code = playerCode.trim();
+    const body: CreateGameInput = { ...base, ...(code === '' ? {} : { playerCode: code }), ...(memoryOn ? { memory: { enabled: true, sourceGameIds: picked } } : {}) };
     setBusy(true);
     const result = await postCreateGame(apiBaseUrl, body);
     setBusy(false);
@@ -76,6 +72,7 @@ export function CreateGameForm({
     if (result.kind === 'error') return setSourcesError(result.message);
     setSources(result.games);
     setPicked((ids) => ids.filter((id) => result.games.some((g) => g.id === id)));
+    if (result.games.length === 0) setMemoryOn(false);
   }
 
   const bind = (field: TextField) => ({
@@ -143,58 +140,63 @@ export function CreateGameForm({
             {(control) => <PinInput {...control} {...bind('pin')} autoComplete="new-password" />}
           </Field>
 
-          {pendingFields && (
-            <section className="memory" aria-label="ความทรงจำจากเกมก่อน">
-              <div className="memory__head">
-                <label className="switch">
-                  <input type="checkbox" role="switch" aria-label="ความทรงจำจากเกมก่อน" checked={memoryOn} onChange={(e) => setMemoryOn(e.target.checked)} />
-                  <span className="switch__track" aria-hidden="true" />
-                  <span className="switch__title">ความทรงจำจากเกมก่อน</span>
-                </label>
-                <span className="memory__state">{memoryOn ? 'เปิดอยู่' : 'ปิดอยู่'}</span>
-              </div>
-              <p className="pregame__note">
-                เมื่อเปิด AI GM จะรู้ตำนานโลก ข้อเสนอจากผู้เล่น การตัดสินที่ดี และสไตล์ของผู้เล่นในเกมนี้ จากเกมที่เลือก
-              </p>
-              {memoryOn && (
-                <>
-                  <Field id="create-playerCode" label="รหัสผู้เล่นของคุณ" hint="ใช้หาเกมที่จบแล้วซึ่งคุณเคยเล่นและผ่านเกณฑ์คะแนน">
-                    {(control) => (
-                      <input {...control} name="playerCode" value={playerCode} onChange={(e) => setPlayerCode(e.target.value)} className="code-input" autoComplete="off" spellCheck={false} />
-                    )}
-                  </Field>
-                  <Button onClick={() => void lookUpSources()} disabled={playerCode.trim() === ''} loading={looking} loadingText="กำลังหาเกม…" disabledReason="ใส่รหัสผู้เล่นก่อน">
-                    ดูเกมที่ใช้ได้
-                  </Button>
-                  {sourcesError && (
-                    <p className="field-error" role="alert">
-                      {sourcesError}
-                    </p>
-                  )}
-                  {sources && sources.length === 0 && <EmptyState title="ยังไม่มีเกมที่ผ่านเกณฑ์">ต้องเป็นเกมที่จบแล้ว คะแนนเฉลี่ยมากกว่า 8 และคุณเป็นสมาชิก</EmptyState>}
-                  {sources && sources.length > 0 && (
-                    <fieldset className="pregame__group">
-                      <legend>เลือกเกมที่จะให้ AI GM จำ</legend>
-                      {sources.map((g) => (
-                        <label className="check" key={g.id}>
-                          <input
-                            type="checkbox"
-                            checked={picked.includes(g.id)}
-                            onChange={(e) => setPicked((ids) => (e.target.checked ? [...ids, g.id] : ids.filter((id) => id !== g.id)))}
-                          />
-                          <span>
-                            {g.name} <span className="memory__meta">คะแนน {g.score} จบ {endedOn(g.endedAt)}</span>
-                          </span>
-                        </label>
-                      ))}
-                    </fieldset>
-                  )}
-                  {memoryMissing && <p className="pregame__note">เลือกอย่างน้อย 1 เกม หรือปิดความทรงจำ จึงจะสร้างเกมได้</p>}
-                  <p className="pregame__note">ตั้งแล้วแก้ไม่ได้หลังเริ่มเกม</p>
-                </>
+          <section className="memory" aria-label="ความทรงจำจากเกมก่อน">
+            <Field id="create-playerCode" label="รหัสผู้เล่นของคุณ (ไม่บังคับ)" hint="ผูกสไตล์การเล่นของคุณข้ามเกม และใช้หาเกมที่จบแล้วซึ่งคุณเคยเล่น">
+              {(control) => (
+                <input {...control} name="playerCode" value={playerCode} onChange={(e) => {
+                    // Another code = another list: look it up again before the memory can be on.
+                    setPlayerCode(e.target.value);
+                    setSources(undefined);
+                    setMemoryOn(false);
+                  }} className="code-input" autoComplete="off" spellCheck={false} />
               )}
-            </section>
-          )}
+            </Field>
+            <Button onClick={() => void lookUpSources()} disabled={playerCode.trim() === ''} loading={looking} loadingText="กำลังหาเกม…" disabledReason="ใส่รหัสผู้เล่นก่อน">
+              ดูเกมที่ใช้ได้
+            </Button>
+            {sourcesError && (
+              <p className="field-error" role="alert">
+                {sourcesError}
+              </p>
+            )}
+            <div className="memory__head">
+              <label className="switch">
+                <input type="checkbox" role="switch" aria-label="ความทรงจำจากเกมก่อน" aria-describedby="memory-why" checked={memoryOn} disabled={noSources} onChange={(e) => setMemoryOn(e.target.checked)} />
+                <span className="switch__track" aria-hidden="true" />
+                <span className="switch__title">ความทรงจำจากเกมก่อน</span>
+              </label>
+              <span className="memory__state">{memoryOn ? 'เปิดอยู่' : 'ปิดอยู่'}</span>
+            </div>
+            <p className="pregame__note" id="memory-why">
+              {sources === undefined
+                ? 'ใส่รหัสผู้เล่นแล้วกด "ดูเกมที่ใช้ได้" ก่อน จึงจะเปิดได้'
+                : sources.length === 0
+                  ? 'ยังไม่มีเกมที่จบแล้วที่คุณเป็นสมาชิก จึงเปิดความทรงจำไม่ได้'
+                  : `เมื่อเปิด AI GM จะรู้ตำนานโลก ข้อเสนอจากผู้เล่น การตัดสินที่ดี และสไตล์ของผู้เล่นในเกมนี้ จากเกมที่เลือก (ไม่เกิน ${MEMORY_MAX_SOURCES} เกม)`}
+            </p>
+            {memoryOn && sources && sources.length > 0 && (
+              <>
+                <fieldset className="pregame__group">
+                  <legend>เลือกเกมที่จะให้ AI GM จำ</legend>
+                  {sources.map((g) => (
+                    <label className="check" key={g.id}>
+                      <input
+                        type="checkbox"
+                        checked={picked.includes(g.id)}
+                        disabled={!picked.includes(g.id) && picked.length >= MEMORY_MAX_SOURCES}
+                        onChange={(e) => setPicked((ids) => (e.target.checked ? [...ids, g.id] : ids.filter((id) => id !== g.id)))}
+                      />
+                      <span>
+                        {g.name} <span className="memory__meta">{g.score === null ? 'ยังไม่มีคะแนน' : `คะแนน ${g.score}`} จบ {endedOn(g.endedAt)}</span>
+                      </span>
+                    </label>
+                  ))}
+                </fieldset>
+                {memoryMissing && <p className="pregame__note">เลือกอย่างน้อย 1 เกม หรือปิดความทรงจำ จึงจะสร้างเกมได้</p>}
+                <p className="pregame__note">ตั้งแล้วแก้ไม่ได้หลังเริ่มเกม</p>
+              </>
+            )}
+          </section>
 
           {formError && (
             <p className="field-error pregame__form-error" role="alert">

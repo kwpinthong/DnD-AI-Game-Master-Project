@@ -14,7 +14,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { isUniqueViolation, openSession, type Clock } from '../auth/join.ts';
 import { hashPin } from '../auth/pin.ts';
 import type { Db } from '../db/client.ts';
-import { character, game, member, session } from '../db/schema.ts';
+import { character, game, learningEntry, member, session } from '../db/schema.ts';
 import { canEditScenario } from '../scenario/editor.ts';
 import { membersWithLootChoice } from './loot.ts';
 import { copyTemplateForGame, getGameScenario } from '../scenario/store.ts';
@@ -123,7 +123,18 @@ export function gameView(db: Db | Tx, gameId: string, viewer: MemberRow): GameVi
     players: { count: members.filter((m) => m.role === 'player').length, ...limits },
     canEditScenario: canEditScenario(row, viewer),
     startBlockers: row.startedAt === null ? startBlockers(db, row, members, withCharacter) : [],
+    memory: memoryView(db, row.learningSources),
   };
+}
+
+/** GEN-083: the lobby's "ความทรงจำจากเกมก่อน" (a source game deleted since keeps the name its learning kept). */
+function memoryView(db: Db | Tx, ids: string[] | null): NonNullable<GameView['memory']> {
+  if (!ids || ids.length === 0) return { enabled: false, sources: [] };
+  const names = new Map([
+    ...db.select({ id: learningEntry.sourceGameId, name: learningEntry.sourceGameName }).from(learningEntry).where(inArray(learningEntry.sourceGameId, ids)).all().map((r) => [r.id, r.name] as const),
+    ...db.select({ id: game.id, name: game.name }).from(game).where(inArray(game.id, ids)).all().map((r) => [r.id, r.name] as const),
+  ]);
+  return { enabled: true, sources: ids.map((id) => ({ id, name: names.get(id) ?? id })) };
 }
 
 export interface CreatedGame {
@@ -138,7 +149,7 @@ export interface CreatedGame {
  * The create code is checked by the caller.
  * Human GM on: the owner is the GM (no character, no player slot). Off: the owner is a player.
  */
-export async function createGame(db: Db, input: CreateGameRequest, now: Clock, defaultTone: GameTone = 'A'): Promise<CreatedGame> {
+export async function createGame(db: Db, input: CreateGameRequest, now: Clock, defaultTone: GameTone = 'A', learningSources: string[] | null = null): Promise<CreatedGame> {
   const pinHash = await hashPin(input.pin);
   return db.transaction((tx) => {
     const t = now();
@@ -165,6 +176,7 @@ export async function createGame(db: Db, input: CreateGameRequest, now: Clock, d
           humanGm: input.humanGm,
           npcDialogue: input.npcDialogue ?? 'normal',
           tone: input.tone ?? defaultTone,
+          learningSources,
           ownerMemberId: owner.id,
           startedAt: null,
           createdAt: t,
@@ -234,9 +246,17 @@ export function deleteGame(db: Db, actor: MemberRow, confirmName: unknown): 'ok'
   });
 }
 
-export function updateGame(db: Db, actor: MemberRow, change: UpdateGameRequest): OwnerActionOutcome {
+/** GEN-083: the checked source game ids of `change.memory` (null = off), or undefined when one is not allowed. */
+export type MemoryResolver = (db: Db | Tx, row: GameRow) => string[] | null | undefined;
+
+export function updateGame(db: Db, actor: MemberRow, change: UpdateGameRequest, resolveMemory?: MemoryResolver): OwnerActionOutcome {
   return asOwner(db, actor, (tx, row) => {
     if (row.startedAt !== null) return { kind: 'game_started' };
+    let learningSources: string[] | null | undefined;
+    if (change.memory !== undefined) {
+      learningSources = resolveMemory?.(tx, row);
+      if (learningSources === undefined) return { kind: 'not_allowed', message: 'เลือกได้เฉพาะเกมที่จบแล้วที่คุณเป็นสมาชิก (ตามรหัสผู้เล่นที่ใช้ตอนสร้างเกม)' };
+    }
     if (change.mode === 'single' && row.mode !== 'single') {
       if (row.humanGm) return { kind: 'not_allowed', message: 'เกมที่มี GM คนเปลี่ยนเป็นเล่นคนเดียวไม่ได้' };
       if (playerCount(tx, row.id) > 1) {
@@ -248,6 +268,7 @@ export function updateGame(db: Db, actor: MemberRow, change: UpdateGameRequest):
     if (change.mode !== undefined) set.mode = change.mode;
     if (change.npcDialogue !== undefined) set.npcDialogue = change.npcDialogue;
     if (change.tone !== undefined) set.tone = change.tone;
+    if (learningSources !== undefined) set.learningSources = learningSources;
     if (Object.keys(set).length > 0) tx.update(game).set(set).where(eq(game.id, row.id)).run();
     return undefined;
   });
