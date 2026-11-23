@@ -5,7 +5,6 @@ import {
   COMPANION_LIMIT,
   evolutionPath,
   GAME_DAYS,
-  npcNameShown,
   rankCompanions,
   type EvolutionCondition,
   type NpcAlignment,
@@ -109,7 +108,9 @@ function upsertBond(db: DbOrTx, memberId: string, npcId: string, set: Partial<Om
 /** The name `ctx`'s player sees, and whether it is the real one (Q-103 / Q-219: grades B and S hide it). */
 function displayName(ctx: NpcContext, bond: BondRow | undefined): { name: string; nameRevealed: boolean } {
   if (bond?.evolvedGrade) return { name: ctx.sheet ? ctx.sheet.evolvedName(bond.evolvedAlignment) : ctx.npc.name, nameRevealed: true };
-  const shown = npcNameShown(ctx.baseGrade, bond?.nameRevealed ?? false);
+  // GEN-121: every grade shows its alias until this player knows it (talked to it, B +9, S met / awakened); a companion
+  // saved before this rule counts as known.
+  const shown = (bond?.nameRevealed ?? false) || bond?.companionSeq != null;
   if (!ctx.sheet) return { name: shown ? ctx.npc.name : ctx.npc.alias, nameRevealed: shown };
   return { name: shown ? ctx.sheet.realName : ctx.sheet.hiddenName, nameRevealed: shown };
 }
@@ -214,8 +215,7 @@ function tryEvolve(db: DbOrTx, ctx: NpcContext, at: GameTime): Evolution | null 
   const path = evolutionPath(rule, progressOf(db, ctx.memberId, ctx.npc.id, at.day));
   if (!path) return null;
   // Q-219: awakening a grade S NPC reveals its real name to this player (narration tokens read `nameRevealed`).
-  const reveals = !npcNameShown(ctx.baseGrade, false) ? { nameRevealed: true } : {};
-  upsertBond(db, ctx.memberId, ctx.npc.id, { evolvedGrade: rule.to, evolvedAlignment: path.alignment, ...reveals }, at.now);
+  upsertBond(db, ctx.memberId, ctx.npc.id, { evolvedGrade: rule.to, evolvedAlignment: path.alignment, nameRevealed: true }, at.now);
   give(db, ctx.memberId, ctx.npc.id, segmentsAt(ctx, 'evolved', path.alignment).flatMap((s) => s.rewards), at.now);
   return { npcId: ctx.npc.id, grade: rule.to, alignment: path.alignment };
 }
@@ -255,7 +255,8 @@ export function changeNpcAffinity(db: DbOrTx, assets: GameAssets, memberId: stri
   return db.transaction((tx) => {
     observeKarma(tx, memberId, at.day);
     const threshold = revealAt(ctx);
-    const revealsNow = !(before?.nameRevealed ?? false) && threshold !== null && change.after >= threshold;
+    // GEN-121: grade B learns the name at its affinity; grade S only when met / awakened (not by affinity); F / A at the first dealing.
+    const revealsNow = !(before?.nameRevealed ?? false) && (threshold === null ? ctx.baseGrade !== 'S' : change.after >= threshold);
     upsertBond(tx, memberId, npcId, { affinity: change.after, ...(revealsNow ? { nameRevealed: true } : {}) }, at.now);
     const granted = revealsNow ? give(tx, memberId, npcId, segmentsAt(ctx, 'reveal').flatMap((s) => s.rewards), at.now) : [];
     const evolved = tryEvolve(tx, ctx, at);
@@ -446,6 +447,7 @@ export type CompanionOutcome =
   | { kind: 'not_placed' }
   | { kind: 'npc_not_found'; message: string }
   | { kind: 'already_companion' }
+  | { kind: 'not_acquainted' }
   | { kind: 'companion_limit' };
 
 function savedBonds(db: DbOrTx, memberId: string) {
@@ -484,6 +486,8 @@ export function saveCompanion(db: DbOrTx, assets: GameAssets, me: MemberRow, ref
   if (!npcId || !npc || npc.locationId !== here.locationId) return { kind: 'npc_not_found', message: 'ไม่พบ NPC คนนี้ในที่ที่คุณอยู่' };
   const saved = savedBonds(db, me.id);
   if (saved.some((b) => b.npcId === npcId)) return { kind: 'already_companion' };
+  const ctx = contextFor(db, assets, me.id, npcId)!;
+  if (!displayName(ctx, bondOf(db, me.id, npcId)).nameRevealed) return { kind: 'not_acquainted' };
   if (saved.length >= COMPANION_LIMIT) return { kind: 'companion_limit' };
   const seq = Math.max(0, ...saved.map((b) => b.companionSeq!)) + 1;
   upsertBond(db, me.id, npcId, { companionSeq: seq }, now);

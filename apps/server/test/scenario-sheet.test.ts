@@ -128,17 +128,17 @@ describe('GEN-071 default scenario from the sheet', () => {
       const npc = npcs.find((n) => assets.npc(n.name) === record)!;
       if (record.publicAlias !== '') expect(npc.alias, record.name).toBe(record.publicAlias);
     }
-    expect(npcs.find((n) => n.id === 'noble')!.alias).toBe('ลอร์ดจูเลียน แวนเดอร์บิลต์ (ขุนนางผู้มาเยือน)');
+    expect(npcs.find((n) => n.id === 'noble')!.alias).toBe('ขุนนางผู้มาเยือน');
   });
 
   it('Q-220: grade F / A aliases are the sheet Public_Alias word for word; grade S goes by its Public_Alias too (Q-219)', () => {
     const aliases = Object.fromEntries(defaultScenario().npcs.filter((n) => n.rank !== 'B').map((n) => [n.id, n.alias]));
     expect(aliases).toEqual({
-      beggar: 'โนอา — เด็กขอทานตาบอดข้างหนึ่ง',
-      amnesiac: 'ลูเซีย — หญิงสาวผู้พกนาฬิกาพกตาย',
-      noble: 'ลอร์ดจูเลียน แวนเดอร์บิลต์ (ขุนนางผู้มาเยือน)',
-      archbishop: 'อาร์คบิชอป มัลคอล์ม (นักบวชผู้ใจบุญประจำเมือง)',
-      archivist: 'เลดี้เซเรน่า แห่งหอจดหมายเหตุ',
+      beggar: 'เด็กขอทานตาบอดข้างหนึ่ง',
+      amnesiac: 'หญิงสาวผู้พกนาฬิกาพกตาย',
+      noble: 'ขุนนางผู้มาเยือน',
+      archbishop: 'นักบวชผู้ใจบุญประจำเมือง',
+      archivist: 'สตรีผู้ดูแลหอจดหมายเหตุ',
       'light-spirit': 'ภูตแห่งแสงในแท่นบูชา',
       'dark-spirit': 'เงาในรอยแยกใต้แท่นพิธี',
       'horizon-watcher': 'ผู้เฝ้ามองเส้นขอบฟ้า',

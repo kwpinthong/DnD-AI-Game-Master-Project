@@ -220,6 +220,7 @@ describe('GEN-059 finale', { timeout: 60_000 }, () => {
     move(t.a, 'market');
     const seen = await t.call('GET', '/api/game/surroundings', { token: t.a.token });
     const merchantRef = (seen.body as { npcs: { ref: string; name: string }[] }).npcs.find((n) => n.name === 'พ่อค้าเร่ผู้สวมแว่นหนา')!.ref;
+    server!.db.prepare('insert into npc_bond (member_id, npc_id, name_revealed, updated_at) values (?, ?, 1, ?)').run(t.a.memberId, 'merchant', CLOCK);
     const saved = await t.call('POST', '/api/game/companions', { token: t.a.token, body: { ref: merchantRef } });
     expect(saved.status, JSON.stringify(saved.body)).toBeLessThan(300);
     server!.db.prepare('update character set karma = -45 where member_id = ?').run(t.a.memberId);

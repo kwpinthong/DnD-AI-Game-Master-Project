@@ -645,7 +645,10 @@ describe('GEN-101 history, companions, arrival line (Q-268)', () => {
     const calls: string[] = [];
     let saved = false;
     loggedIn(gameView(), {
-      'GET /api/game/surroundings': around([{ ref: 'n-9', name: 'หมอยาจร', nameRevealed: false }]),
+      'GET /api/game/surroundings': around([
+        { ref: 'n-9', name: 'หมอยาจร', nameRevealed: true },
+        { ref: 'n-8', name: 'หญิงสาวผู้พกนาฬิกา', nameRevealed: false },
+      ]),
       'GET /api/game/companions': () => Response.json({ companions: saved ? [...mine, doc] : mine }),
       'POST /api/game/companions': (init) => {
         calls.push(String(init?.body));
@@ -656,7 +659,10 @@ describe('GEN-101 history, companions, arrival line (Q-268)', () => {
     render(<App apiBaseUrl="" />);
     await openRoom();
     tab('คนรอบตัว');
-    fireEvent.click(await screen.findByRole('button', { name: 'บันทึกหมอยาจรเป็นคู่หู' }));
+    const saveButton = await screen.findByRole('button', { name: 'บันทึกหมอยาจรเป็นคู่หู' });
+    // GEN-121: an NPC the player does not know yet has no [บันทึก].
+    expect(screen.queryByRole('button', { name: 'บันทึกหญิงสาวผู้พกนาฬิกาเป็นคู่หู' })).toBeNull();
+    fireEvent.click(saveButton);
     await waitFor(() => expect(calls).toEqual([JSON.stringify({ ref: 'n-9' })]));
     expect(await screen.findByRole('button', { name: 'ปล่อยหมอยาจร' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'บันทึกหมอยาจรเป็นคู่หู' })).toBeNull();

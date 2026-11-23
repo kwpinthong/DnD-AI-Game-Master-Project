@@ -25,7 +25,7 @@ function hereChips(data: PlayData, allies: RoomState['you']['allies']): HereChip
       .filter((s): s is string => Boolean(s))
       .join(' · '),
   }));
-  return [...people, ...data.npcs.map((n) => ({ text: n.name, npc: n.ref }))];
+  return [...people, ...data.npcs.map((n) => ({ text: n.name, npc: n.nameRevealed ? n.ref : undefined }))];
 }
 
 /** The place's name, zone, who sees it and [เดินทาง] (the "สถานที่" tab). */

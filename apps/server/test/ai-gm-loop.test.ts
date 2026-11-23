@@ -941,8 +941,8 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       await playTurn(clients, ['ทักทาย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'SOLARION', turn: 2 });
       const names = (c: RoomClient) => npcEntries(c).map((e) => e.npc!.name);
       expect(names(clients[0]!).length).toBeGreaterThan(0);
-      // Grade F shows its name from the start (npcNameShown); grades B and S keep it hidden.
-      for (const name of names(clients[0]!)) expect(['ลูเซีย', 'โนอา']).toContain(name);
+      // GEN-121: no grade shows its real name until the player knows it.
+      for (const name of names(clients[0]!)) expect(['หญิงสาวผู้พกนาฬิกาพกตาย', 'เด็กขอทานตาบอดข้างหนึ่ง']).toContain(name);
 
       // A grade S NPC: alias until revealed (Q-219), never the real name in the entry the viewer gets.
       const row = server!.db.prepare("select id from room_entry where kind = 'npc' and location_id = 'fountain' order by id limit 1").get() as { id: number };
