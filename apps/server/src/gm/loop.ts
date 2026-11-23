@@ -464,7 +464,12 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     // runs next to the narrations instead of after the publish, and the next day's adjudicate hardly waits for it.
     // shortcut: a game that ends (game_over) on a day's last turn gets that day's summary too (one unused call); upgrade if that costs.
     const summaryStarted = at.phase === 'NOCTHERION' && at.turn === 2 && at.day < SCENARIO_DAYS && !hasDaySummary(db, gameId, at.day);
-    if (summaryStarted) void summarizeFinishedDays(gameId, signal, { day: at.day, journals: false });
+    // GEN-190b (Q-384 = B): what turn 1's narrations cost stays under the ceiling for this turn's (GEN-128 sizing).
+    // shortcut: a turn 1 with no AI narration reserves nothing; upgrade if the summary still eats a narration's money.
+    if (summaryStarted) {
+      const reserveUsdMicros = spentOnTurn(db, gameId, { ...at, turn: 1 }, ['narrate_place', 'narrate_player']);
+      void summarizeFinishedDays(gameId, signal, { day: at.day, journals: false, reserveUsdMicros });
+    }
 
     // 5: narration per place and per player.
     const proposal = stored.proposal;
@@ -836,7 +841,11 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
    * follows it, so a summary is never asked for twice. GEN-190: `parts.day` = a number: the days through that one (its
    * last turn is adjudicated), null: no day summaries this run (already started during the turn).
    */
-  function summarizeFinishedDays(gameId: string, signal?: AbortSignal, parts: { day: number | 'finished' | null; journals: boolean } = { day: 'finished', journals: true }): Promise<void> {
+  function summarizeFinishedDays(
+    gameId: string,
+    signal?: AbortSignal,
+    parts: { day: number | 'finished' | null; journals: boolean; reserveUsdMicros?: number } = { day: 'finished', journals: true },
+  ): Promise<void> {
     const before = writing.get(gameId);
     const endingDay = typeof parts.day === 'number' ? parts.day : undefined;
     // `one` → null: nothing was missing for that day; false: a call failed (later days wait for the next run).
@@ -855,7 +864,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         if (asked) log(`[gm] game=${gameId} ${stage} timing total_ms=${Math.round(performance.now() - start)}`);
       })().catch((error) => log(`[gm] game=${gameId} ${stage} failed: ${error instanceof Error ? error.name : 'unknown error'}`));
     const entry = {
-      day: parts.day === null ? (before?.day ?? Promise.resolve()) : chain(before?.day, 'summarize_day', (d) => summarizeDay(gameId, d, signal)),
+      day: parts.day === null ? (before?.day ?? Promise.resolve()) : chain(before?.day, 'summarize_day', (d) => summarizeDay(gameId, d, signal, parts.reserveUsdMicros)),
       // A journal reads the published texts, so never during the turn.
       journals: parts.journals ? chain(before?.journals, 'summarize_journal', (d) => summarizeJournals(gameId, d, signal)) : (before?.journals ?? Promise.resolve()),
     };
@@ -913,7 +922,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
   }
 
   /** The GM's summary of day `d` when it has none (null: nothing was missing); false when the call failed. */
-  async function summarizeDay(gameId: string, d: number, signal?: AbortSignal): Promise<boolean | null> {
+  async function summarizeDay(gameId: string, d: number, signal?: AbortSignal, reserveUsdMicros?: number): Promise<boolean | null> {
     if (hasDaySummary(db, gameId, d)) return null;
     const context: DayContext = { kind: 'gm_day', day: d, saga: latestSaga(db, gameId, d), log: dayLog(db, gameId, d) };
     const system = [SUMMARY_BLOCK];
@@ -930,6 +939,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       messages,
       output: { name: GM_OUTPUT.daySummary, schema: GmDaySummary },
       maxOutputTokens: 1_500,
+      ...(reserveUsdMicros !== undefined ? { reserveUsdMicros } : {}),
       ...(signal ? { signal } : {}),
     });
     if (!result.ok) {
