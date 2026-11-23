@@ -9,6 +9,7 @@ import type { MemberRow } from '../game/service.ts';
 import type { GameAssets } from '../assets/load.ts';
 import type { WeatherService } from '../weather/service.ts';
 import type { PhaseResolver } from './resolver.ts';
+import type { Lobby } from './lobby.ts';
 import { createRoomService, type RoomService } from './service.ts';
 import { closureOf } from '../admin/games.ts';
 
@@ -25,6 +26,8 @@ export interface RoomOptions {
   onGameEnded?: (gameId: string, status: 'finale' | 'game_over') => void;
   /** Q-221: the game's AI budget notice for its owner / Human GM, shown as a lasting gmStatus. */
   budgetNotice?: (gameId: string) => string | null;
+  /** ISK-017: the lobby sockets (`hello` with `lobby: true` before the start). */
+  lobby: Lobby;
 }
 
 /** Close codes (4000-4999 are the application's own). */
@@ -34,7 +37,7 @@ const ERROR_MESSAGE: Record<RoomErrorCode, string> = {
   bad_message: 'ข้อความไม่ถูกต้อง เชื่อมต่อใหม่อีกครั้ง',
   unauthorized: 'ยังไม่ได้เข้าเกม หรือ session หมดอายุ',
   no_character: 'ต้องสร้างตัวละครก่อนเข้าห้องเล่น',
-  game_not_started: 'เกมยังไม่เริ่ม รอเจ้าของเกมกดเริ่มในห้องรอ',
+  game_not_started: 'เกมยังไม่เริ่ม รอทุกคนกดพร้อมในห้องรอ',
   game_closed: 'เกมนี้ถูกผู้ดูแลปิดแล้ว ส่งคำสั่งไม่ได้',
 };
 
@@ -70,6 +73,7 @@ export function registerRoomRoutes(app: FastifyInstance, db: Db, now: Clock, opt
     },
     (socket) => {
       let me: MemberRow | undefined;
+      let inLobby = false;
       const reply = (message: RoomServerMessage) => socket.send(JSON.stringify(message));
       const refuse = (code: RoomErrorCode) => {
         reply({ type: 'error', code, message: ERROR_MESSAGE[code] });
@@ -88,7 +92,7 @@ export function registerRoomRoutes(app: FastifyInstance, db: Db, now: Clock, opt
         const message = parsed.data;
 
         if (message.type === 'hello') {
-          if (me) return refuse('bad_message');
+          if (me || inLobby) return refuse('bad_message');
           clearTimeout(helloTimer);
           const found = memberRowForToken(db, message.token, now);
           if (!found) return refuse('unauthorized');
@@ -99,12 +103,18 @@ export function registerRoomRoutes(app: FastifyInstance, db: Db, now: Clock, opt
             return socket.close(CLOSE.game_closed);
           }
           const refusal = entryRefusal(db, found);
+          // ISK-017: the lobby's socket stays open before the start, for its ready events only.
+          if (refusal === 'game_not_started' && message.lobby) {
+            inLobby = true;
+            return options.lobby.join(found.gameId, socket);
+          }
           if (refusal) return refuse(refusal);
           me = found;
           room.join(socket, me, message.afterSeq);
           return;
         }
 
+        if (inLobby) return refuse('bad_message');
         if (!me) return refuse('unauthorized');
         // ISK-001: every command of a closed game is refused and changes nothing; the socket stays to show the end.
         if (closureOf(db, me.gameId)) return reply({ type: 'error', code: 'game_closed', message: ERROR_MESSAGE.game_closed });
@@ -118,6 +128,7 @@ export function registerRoomRoutes(app: FastifyInstance, db: Db, now: Clock, opt
       socket.on('close', () => {
         clearTimeout(helloTimer);
         if (me) room.leave(socket);
+        if (inLobby) options.lobby.leave(socket);
       });
     },
   );

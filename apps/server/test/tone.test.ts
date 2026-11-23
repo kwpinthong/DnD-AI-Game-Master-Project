@@ -1,4 +1,4 @@
-import { AdminSessionResponse, ApiError, CreateGameResponse, GameView, StyleSettingsResponse, type RoomServerMessage } from '@isekai/protocol';
+import { AdminSessionResponse, CreateGameResponse, GameView, StyleSettingsResponse, type RoomServerMessage } from '@isekai/protocol';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
@@ -118,19 +118,12 @@ describe('language tone (GEN-177)', { timeout: 90_000 }, () => {
     }
   });
 
-  it('C3: the tone can change in the lobby, not after the start (409)', async () => {
-    const created = await create();
-    const changed = await call('PATCH', '/api/game', { token: created.token, body: { tone: 'C' } });
-    expect(changed.status).toBe(200);
-    expect(GameView.parse(changed.body).tone).toBe('C');
-    expect((await call('PATCH', '/api/game', { token: created.token, body: { tone: 'D' } })).status).toBe(400);
-
-    const t = await startedTable(server, false);
-    const owner = t.a.token;
-    const late = await call('PATCH', '/api/game', { token: owner, body: { tone: 'B' } });
-    expect(late.status).toBe(409);
-    expect(ApiError.parse(late.body).code).toBe('game_started');
-    expect(GameView.parse((await call('GET', '/api/game', { token: owner })).body).tone).toBe('A');
+  it('C3 (ISK-017): the tone is set at creation and locked: no edit route (404), a bad tone 400', async () => {
+    const created = await create({ tone: 'C' });
+    expect(created.game.tone).toBe('C');
+    expect((await call('PATCH', '/api/game', { token: created.token, body: { tone: 'B' } })).status).toBe(404);
+    expect(GameView.parse((await call('GET', '/api/game', { token: created.token })).body).tone).toBe('C');
+    expect((await call('POST', '/api/games', { body: { createCode: CREATE_CODE, gameName: 'เกม', mode: 'single', humanGm: false, name: 'นก', pin: '1234', tone: 'D' } })).status).toBe(400);
   });
 
   it('C4: the admin sets the default to C: new games get C, games made before keep theirs', async () => {

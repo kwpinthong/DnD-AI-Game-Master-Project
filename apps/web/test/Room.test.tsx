@@ -55,10 +55,10 @@ function gameView(patch: Partial<GameView> = {}): GameView {
     inviteCode: 'K7Q2MX',
     status: 'started',
     startedAt: '2026-11-22T12:00:00.000Z',
-    you: { memberId: me.id, role: 'player', isOwner: true },
+    you: { memberId: me.id, role: 'player' },
     members: [
-      { id: me.id, name: 'นก', role: 'player', isOwner: true, hasCharacter: true },
-      { id: 'm-bee', name: 'บี', role: 'player', isOwner: false, hasCharacter: true },
+      { id: me.id, name: 'นก', role: 'player', ready: false, hasCharacter: true },
+      { id: 'm-bee', name: 'บี', role: 'player', ready: false, hasCharacter: true },
     ],
     players: { count: 2, min: 2, max: 6 },
     canEditScenario: false,
@@ -175,7 +175,7 @@ describe('GEN-056 play room (web)', () => {
   });
 
   it('C2: without a character the lobby button opens character creation, and so does the server saying no_character', async () => {
-    loggedIn(gameView({ members: [{ id: me.id, name: 'นก', role: 'player', isOwner: true, hasCharacter: false }] }), {
+    loggedIn(gameView({ members: [{ id: me.id, name: 'นก', role: 'player', ready: false, hasCharacter: false }] }), {
       'GET /api/game/character': () => Response.json({ character: null }),
     });
     render(<App apiBaseUrl="" />);
@@ -381,7 +381,7 @@ describe('GEN-056 play room (web)', () => {
 
   it('C7: a Single game uses the same room', async () => {
     const socket = await enterRoom(
-      gameView({ mode: 'single', members: [{ id: me.id, name: 'นก', role: 'player', isOwner: true, hasCharacter: true }], players: { count: 1, min: 1, max: 1 } }),
+      gameView({ mode: 'single', members: [{ id: me.id, name: 'นก', role: 'player', ready: false, hasCharacter: true }], players: { count: 1, min: 1, max: 1 } }),
     );
     socket.receive(roomState({ mode: 'single', members: [roomState().members[0]!] }));
     expect(screen.getByRole('heading', { name: /ห้องเล่น · วันที่ 1 · EOSORIA \(เช้า 06:00-11:59\) · เทิร์น 1\/2 · เล่นคนเดียว/ })).toBeTruthy();
@@ -504,10 +504,10 @@ describe('GEN-058 Human GM console in the play room (web)', () => {
   it('the GM gets the console, which reloads when the room says a turn waits for approval; players get none', async () => {
     const gmGame = gameView({
       humanGm: true,
-      you: { memberId: me.id, role: 'gm', isOwner: true },
+      you: { memberId: me.id, role: 'gm' },
       members: [
-        { id: me.id, name: 'นก', role: 'gm', isOwner: true, hasCharacter: false },
-        { id: 'm-bee', name: 'บี', role: 'player', isOwner: false, hasCharacter: true },
+        { id: me.id, name: 'นก', role: 'gm', ready: false, hasCharacter: false },
+        { id: 'm-bee', name: 'บี', role: 'player', ready: false, hasCharacter: true },
       ],
     });
     let consoleCalls = 0;

@@ -37,10 +37,10 @@ function view(patch: Partial<GameView> = {}): GameView {
     inviteCode: 'K7Q2MX',
     status: 'lobby',
     startedAt: null,
-    you: { memberId: owner.id, role: 'player', isOwner: true },
+    you: { memberId: owner.id, role: 'player' },
     members: [
-      { id: owner.id, name: 'นก', role: 'player', isOwner: true, hasCharacter: true },
-      { id: 'm-bel', name: 'เบล', role: 'player', isOwner: false, hasCharacter: false },
+      { id: owner.id, name: 'นก', role: 'player', ready: false, hasCharacter: true },
+      { id: 'm-bel', name: 'เบล', role: 'player', ready: false, hasCharacter: false },
     ],
     players: { count: 2, min: 2, max: 6 },
     canEditScenario: false,
@@ -90,8 +90,8 @@ describe('Create game + Lobby (GEN-025)', () => {
   it('C1: creates an Online game with a Human GM and opens the lobby with the invite code; the creator is GM', async () => {
     const game = view({
       humanGm: true,
-      you: { memberId: owner.id, role: 'gm', isOwner: true },
-      members: [{ id: owner.id, name: 'นก', role: 'gm', isOwner: true, hasCharacter: false }],
+      you: { memberId: owner.id, role: 'gm' },
+      members: [{ id: owner.id, name: 'นก', role: 'gm', ready: false, hasCharacter: false }],
       players: { count: 0, min: 2, max: 6 },
       startBlockers: ['ขาดผู้เล่นอีก 2 คน (Online ต้องมีผู้เล่นอย่างน้อย 2 คน)'],
     });
@@ -291,14 +291,14 @@ describe('Create game + Lobby (GEN-025)', () => {
   });
 
   it('GEN-112 C6: a member who is not the owner has no delete button', async () => {
-    loggedIn(view({ you: { memberId: 'm-bel', role: 'player', isOwner: false } }));
+    loggedIn(view({ you: { memberId: 'm-bel', role: 'player' } }));
     render(<App apiBaseUrl="" />);
     expect(await screen.findByText('K7Q-2MX')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'ลบเกม' })).toBeNull();
   });
 
   it('C7: a member who is not the owner sees no kick, new code or start controls', async () => {
-    loggedIn(view({ you: { memberId: 'm-bel', role: 'player', isOwner: false } }));
+    loggedIn(view({ you: { memberId: 'm-bel', role: 'player' } }));
 
     render(<App apiBaseUrl="" />);
 

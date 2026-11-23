@@ -294,7 +294,7 @@ describe('GEN-080 learning extract (lore + feedback_note)', { timeout: 120_000 }
     expect(extractCalls()).toHaveLength(1);
   });
 
-  it('Q-363: a failed extract shows "failed" to the game owner on the end page, who retries it there; others get 403', async () => {
+  it('Q-363 + ISK-017: a failed extract shows "failed" to every member on the end page, who can retry it there; no session gets 403', async () => {
     await boot(true);
     answer = () => GOOD;
     const { t, gameId } = await seeded();
@@ -303,13 +303,13 @@ describe('GEN-080 learning extract (lore + feedback_note)', { timeout: 120_000 }
     expect(await status(t.a.token)).toMatchObject({ status: 200, body: { status: 'pending' } });
     fail = true;
     expect((await extract(t, gameId)).status).toBe(200);
-    expect(await status(t.a.token)).toMatchObject({ status: 200, body: { status: 'failed' } });
-    // Not the owner (B is a player of the game): 403, nothing runs.
-    expect((await status(t.b.token)).status).toBe(403);
-    expect((await retry(t.b.token)).status).toBe(403);
+    // ISK-017: no owner: B (not the creator) sees it too; without a session 403 and nothing runs.
+    expect(await status(t.b.token)).toMatchObject({ status: 200, body: { status: 'failed' } });
+    expect((await status('not-a-token')).status).toBe(403);
+    expect((await retry('not-a-token')).status).toBe(403);
     expect(extractCalls()).toHaveLength(1);
     fail = false;
-    expect(await retry(t.a.token)).toMatchObject({ status: 200, body: { status: 'done' } });
+    expect(await retry(t.b.token)).toMatchObject({ status: 200, body: { status: 'done' } });
     expect(entries(gameId).filter((r) => r.type === 'lore')).toHaveLength(2);
     expect(await status(t.a.token)).toMatchObject({ status: 200, body: { status: 'done' } });
   });

@@ -7,7 +7,7 @@ import { createMockProvider, mockReply } from '../src/ai/providers/mock.ts';
 import type { ClosedPhase, PhaseResolution, PhaseResolver } from '../src/room/resolver.ts';
 import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
 import type { RunningServer, ServerOptions } from '../src/server.ts';
-import { makeTempDir, seedChosenLoot } from './helpers.ts';
+import { makeTempDir, seedChosenLoot, withLooks } from './helpers.ts';
 import { isReady, openRoom, type RoomClient } from './room-client.ts';
 import { caller, CLOCK, CREATE_CODE, startedTable, startTestServer, type Table } from './visibility-fixture.ts';
 
@@ -115,7 +115,7 @@ describe('ISK-015 join a started game', { timeout: 90_000 }, () => {
   /** Joins, makes the character, keeps a loot choice and spawns. */
   async function spawned(t: Table, name = 'ดี', identity = NEWCOMER) {
     const n = await lateJoin(t, name);
-    const made = await t.call('POST', '/api/game/character', { token: n.token, body: identity });
+    const made = await t.call('POST', '/api/game/character', { token: n.token, body: withLooks(identity) });
     expect(made.status, JSON.stringify(made.body)).toBe(201);
     seedChosenLoot(server!.db, n.memberId);
     const spawn = await t.call('POST', '/api/game/spawn', { token: n.token });
@@ -153,7 +153,7 @@ describe('ISK-015 join a started game', { timeout: 90_000 }, () => {
     const n = await lateJoin(t, 'ดี');
     expect(n.created).toBe(true);
     expect(CharacterResponse.parse((await t.call('GET', '/api/game/character', { token: n.token })).body).character).toBeNull();
-    const made = await t.call('POST', '/api/game/character', { token: n.token, body: NEWCOMER });
+    const made = await t.call('POST', '/api/game/character', { token: n.token, body: withLooks(NEWCOMER) });
     expect(made.status, JSON.stringify(made.body)).toBe(201);
     expect(CharacterResponse.parse(made.body).character).toMatchObject({ name: NEWCOMER.name, editable: true });
     // Not spawned yet: no start scenario, and the room is not open to them yet.
@@ -191,9 +191,9 @@ describe('ISK-015 join a started game', { timeout: 90_000 }, () => {
     const single = CreateGameResponse.parse(
       (await call('POST', '/api/games', { body: { createCode: CREATE_CODE, gameName: 'คนเดียว', mode: 'single', humanGm: false, name: 'นก', pin: '1234' } })).body,
     );
-    expect((await call('POST', '/api/game/character', { token: single.token, body: NEWCOMER })).status).toBe(201);
+    expect((await call('POST', '/api/game/character', { token: single.token, body: withLooks(NEWCOMER) })).status).toBe(201);
     seedChosenLoot(server!.db, single.member.id);
-    expect((await call('POST', '/api/game/start', { token: single.token })).status).toBe(200);
+    expect((await call('POST', '/api/game/ready', { token: single.token, body: { ready: true } })).status).toBe(200);
     const solo = await postJoin({ call, inviteCode: single.game.inviteCode }, 'ดี');
     expect(solo.status).toBe(409);
     expect(errorOf(solo.body).code).toBe('single_mode');
@@ -214,7 +214,7 @@ describe('ISK-015 join a started game', { timeout: 90_000 }, () => {
     await boot();
     const t = await startedTable(server!, false);
     const n = await lateJoin(t, 'ดี');
-    expect((await t.call('POST', '/api/game/character', { token: n.token, body: NEWCOMER })).status).toBe(201);
+    expect((await t.call('POST', '/api/game/character', { token: n.token, body: withLooks(NEWCOMER) })).status).toBe(201);
 
     const [a, b, c] = [await enter(t.a), await enter(t.b), await enter(t.c)];
     await playTurn([a, b, c], { day: 1, phase: 'EOSORIA', turn: 2 });
@@ -349,7 +349,7 @@ describe('ISK-015 join a started game', { timeout: 90_000 }, () => {
     const n = await lateJoin(t, 'ดี');
     await playTurn([a, b, c], { day: 10, phase: 'EOSORIA', turn: 1 });
 
-    expect((await t.call('POST', '/api/game/character', { token: n.token, body: NEWCOMER })).status).toBe(201);
+    expect((await t.call('POST', '/api/game/character', { token: n.token, body: withLooks(NEWCOMER) })).status).toBe(201);
     seedChosenLoot(server!.db, n.memberId);
     expect((await t.call('POST', '/api/game/spawn', { token: n.token })).status).toBe(200);
     await playTurn([a, b, c], { day: 10, phase: 'EOSORIA', turn: 2 });
@@ -414,7 +414,7 @@ describe('ISK-015 join a started game', { timeout: 90_000 }, () => {
     await boot();
     const t = await startedTable(server!, false);
     const n = await lateJoin(t, 'ดี');
-    expect((await t.call('POST', '/api/game/character', { token: n.token, body: NEWCOMER })).status).toBe(201);
+    expect((await t.call('POST', '/api/game/character', { token: n.token, body: withLooks(NEWCOMER) })).status).toBe(201);
     const rolled = await t.call('POST', '/api/game/character/loot', { token: n.token });
     expect(rolled.status, JSON.stringify(rolled.body)).toBe(200);
     const offer = LootResponse.parse(rolled.body).loot.offer!;
@@ -428,7 +428,7 @@ describe('ISK-015 join a started game', { timeout: 90_000 }, () => {
     expect(OriginResponse.parse((await t.call('GET', '/api/game/origin', { token: n.token })).body)).toEqual({ view: 'player', origin: null });
     // Spawning needs the choice; without one it is refused.
     const m = await lateJoin(t, 'อี');
-    expect((await t.call('POST', '/api/game/character', { token: m.token, body: { ...NEWCOMER, name: 'อรุณ' } })).status).toBe(201);
+    expect((await t.call('POST', '/api/game/character', { token: m.token, body: withLooks({ ...NEWCOMER, name: 'อรุณ' }) })).status).toBe(201);
     const early = await t.call('POST', '/api/game/spawn', { token: m.token });
     expect(early.status).toBe(409);
     expect(errorOf(early.body).code).toBe('not_allowed');

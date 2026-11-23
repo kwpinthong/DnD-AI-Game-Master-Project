@@ -28,7 +28,7 @@ export const game = sqliteTable('game', {
   tone: text('tone', { enum: ['A', 'B', 'C'] }).notNull().default('A'),
   /** GEN-083: the source game ids of "ความทรงจำจากเกมก่อน" (JSON string[], 1-3); null = off (an old game is off). Locked at the start. */
   learningSources: text('learning_sources', { mode: 'json' }).$type<string[]>(),
-  /** The member who created the game; only they may kick, edit, renew the code or start. */
+  /** The member who created the game. ISK-017: no rights any more; only finds the creator's player key for the memory (GEN-083) at creation. */
   ownerMemberId: text('owner_member_id'),
   /** Set once by the start; mode and members are locked from then on. */
   startedAt: integer('started_at'),
@@ -56,6 +56,8 @@ export const member = sqliteTable(
     role: text('role', { enum: ['player', 'gm'] }).notNull().default('player'),
     /** Set when the owner kicks the member: sessions are gone and the name cannot join again. */
     kickedAt: integer('kicked_at'),
+    /** ISK-017: when the player pressed ready in the lobby; null = not ready (a newcomer, and everyone of an old game). */
+    readyAt: integer('ready_at'),
     createdAt: integer('created_at').notNull(),
   },
   (t) => [uniqueIndex('member_game_name_key').on(t.gameId, t.nameKey)],

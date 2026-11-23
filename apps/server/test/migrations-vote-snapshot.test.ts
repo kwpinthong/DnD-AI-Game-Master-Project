@@ -53,11 +53,12 @@ describe('migration vote_snapshot (GEN-189)', () => {
     };
 
     migrate(drizzle(sqlite), { migrationsFolder });
+    // toMatchObject: a later migration may add a column (ISK-017 member.ready_at); every value kept is what counts.
     expect({
       votes: sqlite.prepare('select * from response_vote').all(),
       pairs: sqlite.prepare('select * from response_correction').all(),
       members: sqlite.prepare('select * from member').all(),
-    }).toEqual(before);
+    }).toMatchObject(before);
     expect(sqlite.prepare('select count(*) as n from vote_snapshot').get()).toEqual({ n: 0 });
     // No foreign key: a snapshot outlives its game.
     expect(sqlite.prepare("select * from pragma_foreign_key_list('vote_snapshot')").all()).toEqual([]);

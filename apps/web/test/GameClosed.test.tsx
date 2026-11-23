@@ -56,10 +56,10 @@ function gameView(patch: Partial<GameView> = {}): GameView {
     inviteCode: 'K7Q2MX',
     status: 'started',
     startedAt: '2026-11-22T12:00:00.000Z',
-    you: { memberId: me.id, role: 'player', isOwner: true },
+    you: { memberId: me.id, role: 'player' },
     members: [
-      { id: me.id, name: 'นก', role: 'player', isOwner: true, hasCharacter: true },
-      { id: 'm-bee', name: 'บี', role: 'player', isOwner: false, hasCharacter: true },
+      { id: me.id, name: 'นก', role: 'player', ready: true, hasCharacter: true },
+      { id: 'm-bee', name: 'บี', role: 'player', ready: true, hasCharacter: true },
     ],
     players: { count: 2, min: 2, max: 6 },
     canEditScenario: false,
@@ -146,7 +146,7 @@ describe('C4 game_closed while playing', () => {
 });
 
 describe('C5 closed in the lobby or on the character page (no summary)', () => {
-  const lobbyGame = gameView({ status: 'lobby', startedAt: null, members: [{ id: me.id, name: 'นก', role: 'player', isOwner: false, hasCharacter: false }] });
+  const lobbyGame = gameView({ status: 'lobby', startedAt: null, members: [{ id: me.id, name: 'นก', role: 'player', ready: false, hasCharacter: false }] });
   const closedLobby = { ...lobbyGame, closed: { reason: null, hasSummary: false } };
 
   it('lobby: the poll brings the close; no reason line, [กลับหน้าแรก] goes to our game list', { timeout: 10_000 }, async () => {

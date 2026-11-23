@@ -23,8 +23,10 @@ import {
   type Member,
   type NpcDialogueLevel,
   type GameTone,
-  type UpdateGameRequest,
 } from '@isekai/protocol';
+
+/** The old PATCH /api/game body: the server removed the route in ISK-017 (404); ISK-019 removes the lobby edits. */
+type UpdateGameRequest = { gameName?: string; mode?: 'online' | 'single'; npcDialogue?: NpcDialogueLevel; tone?: GameTone; memory?: GameMemorySetting };
 import { apiUrl, fetchWithTimeout } from './session.ts';
 
 const UNREACHABLE = 'ติดต่อ server ไม่ได้ ลองใหม่อีกครั้ง';

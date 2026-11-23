@@ -18,6 +18,7 @@ import { registerVisibilityRoutes } from './visibility/routes.ts';
 import websocket from '@fastify/websocket';
 import { createAiGmResolver } from './gm/loop.ts';
 import type { PhaseResolver } from './room/resolver.ts';
+import { createLobby } from './room/lobby.ts';
 import { registerRoomRoutes } from './room/routes.ts';
 import { createWeatherService, type WeatherService } from './weather/service.ts';
 import { assetFileLabel, buildGameAssets, DEFAULT_ASSETS_DIR, readRawDataSets, type GameAssets } from './assets/load.ts';
@@ -148,7 +149,9 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   const now = options.now ?? Date.now;
   registerClosedGameGuard(app, db, now);
   registerAuthRoutes(app, db, now);
+  const lobby = createLobby();
   registerGameRoutes(app, db, now, {
+    lobby,
     ai,
     // A getter: an admin edit of the Karma Tiers rows reaches the next request (GEN-147).
     get karmaTiers() {
@@ -167,6 +170,7 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   const styleReview = createStyleReview({ db, ai, gameData, now, log: options.aiLog ?? ((line) => console.log(line)) });
   const learning = createLearningExtractor({ db, ai, assets, now, log: options.aiLog ?? ((line) => console.log(line)) });
   const room = registerRoomRoutes(app, db, now, {
+    lobby,
     resolver,
     assets,
     webOrigins: config.webOrigins ?? [],

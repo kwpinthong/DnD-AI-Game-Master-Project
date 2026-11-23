@@ -255,7 +255,9 @@ export function Lobby({
     return error ? <p role="alert">โหลดห้องรอไม่ได้: {error.message}</p> : <Skeleton lines={4} label="กำลังโหลดห้องรอ…" />;
   }
 
-  const owner = game.you.isOwner;
+  // shortcut: GameView has no owner since ISK-017 (the server answers these owner calls 404); the creator (first
+  // member) keeps the old controls only until ISK-019 replaces them with the ready button.
+  const owner = game.members[0]?.id === game.you.memberId;
   const lobby = game.status === 'lobby';
   // The Human GM edits before the start (canEditScenario) and can still read it after; nobody else (Q-028).
   const gmOfGame = game.humanGm && game.you.role === 'gm';
@@ -348,7 +350,7 @@ export function Lobby({
                   </span>
                   <span className="members__name">{m.name}</span>
                   <span className="members__status">{memberStatus(m)}</span>
-                  {m.isOwner && <span className="members__tag">(เจ้าของเกม)</span>}
+                  {m.id === game.members[0]?.id && <span className="members__tag">(เจ้าของเกม)</span>}
                   {m.id === game.you.memberId && <span className="members__tag">(คุณ)</span>}
                   {owner && lobby && m.id !== game.you.memberId && (
                     <Button

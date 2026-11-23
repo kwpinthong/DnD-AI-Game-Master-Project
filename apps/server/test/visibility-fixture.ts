@@ -93,7 +93,14 @@ export async function startedTable(server: RunningServer, humanGm: boolean, extr
   const a = await withCharacter(humanGm ? await join('นก') : owner, LIN);
   const b = await withCharacter(await join('บี'), DARIN);
   const c = await withCharacter(await join('ซี'), MEKHA);
-  const start = await call('POST', '/api/game/start', { token: owner.token });
-  expect(start.status, JSON.stringify(start.body)).toBe(200);
+  await readyAll(call, [a, b, c]);
   return { call, inviteCode: game.game.inviteCode, ...(humanGm ? { gm: owner } : {}), a, b, c };
+}
+
+/** ISK-017: every player presses ready; the last one starts the game (no host). */
+export async function readyAll(call: Call, players: readonly { token: string }[]): Promise<void> {
+  let last: { status: number; body: unknown } | undefined;
+  for (const p of players) last = await call('POST', '/api/game/ready', { token: p.token, body: { ready: true } });
+  expect(last?.status, JSON.stringify(last?.body)).toBe(200);
+  expect((last?.body as { status?: string }).status, JSON.stringify(last?.body)).toBe('started');
 }

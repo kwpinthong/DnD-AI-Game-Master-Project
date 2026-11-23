@@ -378,7 +378,7 @@ describe('GEN-056 play room', { timeout: 60_000 }, () => {
     );
     expect((await call('POST', '/api/game/character', { token: created.token, body: LIN })).status).toBe(201);
     seedChosenLoot(server!.db, created.member.id);
-    expect((await call('POST', '/api/game/start', { token: created.token })).status).toBe(200);
+    expect((await call('POST', '/api/game/ready', { token: created.token, body: { ready: true } })).status).toBe(200);
 
     const solo = await enter({ token: created.token });
     expect(solo.lastRoom()!.mode).toBe('single');

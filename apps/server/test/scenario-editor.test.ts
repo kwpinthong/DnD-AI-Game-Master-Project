@@ -23,7 +23,11 @@ const CANARY_CONDITION = 'CANARY-เงื่อนไขลับ-ห้าม�
 const CANARY_EVENT = 'CANARY-event-ล่วงหน้า-วัน-4';
 const CANARY_NPC = 'CANARY-โน้ตลับ-NPC';
 
-describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () => {
+/**
+ * GEN-046 scenario of a game, ISK-017: the Human GM gives it once in the create form (POST /api/games `scenario`,
+ * checked as the old editor did) and only reads it afterwards; PUT /api/game/scenario and the reset are gone (404).
+ */
+describe('scenario set at creation, read by the GM (GEN-046, ISK-017)', { timeout: 60_000 }, () => {
   let createCodeHash = '';
   let dataDir = '';
   let cleanup = () => {};
@@ -61,10 +65,13 @@ describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () =
     return { status: res.status, text, body: (text ? JSON.parse(text) : undefined) as unknown };
   }
 
-  async function createGame(humanGm: boolean, name = 'ต้น') {
-    const res = await call('POST', '/api/games', {
-      body: { createCode: CREATE_CODE, gameName: 'ห้องทดสอบ', mode: 'online', humanGm, name, pin: '1234' },
+  const postGame = (humanGm: boolean, name: string, scenario?: unknown) =>
+    call('POST', '/api/games', {
+      body: { createCode: CREATE_CODE, gameName: 'ห้องทดสอบ', mode: 'online', humanGm, name, pin: '1234', ...(scenario === undefined ? {} : { scenario }) },
     });
+
+  async function createGame(humanGm: boolean, name = 'ต้น', scenario?: unknown) {
+    const res = await postGame(humanGm, name, scenario);
     expect(res.status, res.text).toBe(200);
     return { ...CreateGameResponse.parse(res.body), raw: res.text };
   }
@@ -75,9 +82,9 @@ describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () =
     return { ...JoinResponse.parse(res.body), raw: res.text };
   }
 
-  /** A Human GM game with two players who joined. */
-  async function gmGame() {
-    const gm = await createGame(true);
+  /** A Human GM game (with `scenario`, or the default) and two players who joined. */
+  async function gmGame(scenario?: unknown) {
+    const gm = await createGame(true, 'ต้น', scenario);
     const nok = await join(gm.game.inviteCode, 'นก');
     const bel = await join(gm.game.inviteCode, 'เบล');
     return { gm, nok, bel };
@@ -92,11 +99,16 @@ describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () =
   const putScenario = (token: string, scenario: unknown) => call('PUT', '/api/game/scenario', { token, body: scenario });
   const resetScenario = (token: string) => call('POST', '/api/game/scenario/reset', { token });
   const error = (body: unknown) => ApiError.parse(body);
+  const gameCount = () => (server!.db.prepare('select count(*) as n from game').get() as { n: number }).n;
 
   /** Characters are created by GEN-047; here a character row is seeded straight into the table. */
   function seedCharacter(memberId: string) {
     server!.db.prepare('insert into character (member_id, created_at) values (?, ?)').run(memberId, clock);
     seedChosenLoot(server!.db, memberId);
+  }
+
+  async function startBy(...players: { token: string }[]) {
+    for (const p of players) expect((await call('POST', '/api/game/ready', { token: p.token, body: { ready: true } })).status).toBe(200);
   }
 
   const newEvent = (patch: Record<string, unknown> = {}) => ({
@@ -115,20 +127,17 @@ describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () =
       return !prev || prev.day < e.day || (prev.day === e.day && PHASE_ORDER[prev.phase] <= PHASE_ORDER[e.phase]);
     });
 
-  it('C1: the GM adds an event on day 4 afternoon; it is saved and the timeline is sorted by day + phase', async () => {
-    const { gm } = await gmGame();
-    const before = await getScenario(gm.token);
-    expect(before).toMatchObject({ locked: false });
-    expect(before.scenario).toEqual(defaultScenario());
-
+  it('C1: the GM adds an event on day 4 afternoon at creation; it is stored and the timeline is sorted by day + phase', async () => {
+    const base = defaultScenario();
     // Added at the end on purpose (after the day 12 finale), plus a morning event of the same day after it.
     const edited = {
-      ...before.scenario,
-      timeline: [...before.scenario.timeline, newEvent(), newEvent({ id: 'gm-day4-morning', phase: 'EOSORIA', title: 'เช้าวันที่ 4' })],
+      ...base,
+      timeline: [...base.timeline, newEvent(), newEvent({ id: 'gm-day4-morning', phase: 'EOSORIA', title: 'เช้าวันที่ 4' })],
     };
-    const res = await putScenario(gm.token, edited);
-    expect(res.status, res.text).toBe(200);
-    const saved = GameScenarioResponse.parse(res.body).scenario;
+    const { gm } = await gmGame(edited);
+    const read = await getScenario(gm.token);
+    expect(read.locked).toBe(false);
+    const saved = read.scenario;
 
     expect(isSorted(saved)).toBe(true);
     const ids = saved.timeline.map((e) => e.id);
@@ -138,43 +147,38 @@ describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () =
     // The day 1 event comes right before day 4 (GEN-071 has nothing on days 2-3), day 5 right after.
     expect(saved.timeline[ids.indexOf('gm-day4-morning') - 1]!.day).toBe(1);
     expect(saved.timeline[ids.indexOf('gm-day4-afternoon') + 1]!.day).toBe(5);
-
-    // Stored, not only echoed.
-    expect((await getScenario(gm.token)).scenario).toEqual(saved);
     expect(getGameScenario(server!.orm, gm.game.id)).toEqual(saved);
   });
 
-  it('C1: the GM edits an event, a Legendary and an NPC', async () => {
-    const { gm } = await gmGame();
-    const { scenario } = await getScenario(gm.token);
+  it('C1: the GM sets an event, a Legendary and an NPC at creation', async () => {
+    const scenario = defaultScenario();
     const edited: Scenario = {
       ...scenario,
       timeline: scenario.timeline.map((e) => (e.day === 7 ? { ...e, title: 'เบาะแสใหม่ของ GM', outcome: 'ลัทธิย้ายฐาน' } : e)),
       legendaries: [{ ...scenario.legendaries[0]!, condition: 'ช่วยเด็กกำพร้าครบ 3 วันติด', target: 3 }],
       npcs: scenario.npcs.map((n) => (n.id === 'merchant' ? { ...n, alias: 'พ่อค้าเครายาว', gmNote: 'เป็นสายลับ' } : n)),
     };
-    const res = await putScenario(gm.token, edited);
-    expect(res.status, res.text).toBe(200);
+    const { gm } = await gmGame(edited);
     const saved = (await getScenario(gm.token)).scenario;
     expect(saved.timeline.find((e) => e.day === 7)).toMatchObject({ title: 'เบาะแสใหม่ของ GM', outcome: 'ลัทธิย้ายฐาน' });
     expect(saved.legendaries).toEqual([expect.objectContaining({ condition: 'ช่วยเด็กกำพร้าครบ 3 วันติด', target: 3 })]);
     expect(saved.npcs.find((n) => n.id === 'merchant')).toMatchObject({ alias: 'พ่อค้าเครายาว', gmNote: 'เป็นสายลับ' });
   });
 
-  it('C2: after the GM edits the Legendary condition, no player-facing response has scenario content', async () => {
-    const gm = await createGame(true);
-    const { scenario } = await getScenario(gm.token);
+  it('C2: with a secret Legendary condition set at creation, no player-facing response has scenario content', async () => {
+    const scenario = defaultScenario();
     const edited: Scenario = {
       ...scenario,
       legendaries: [{ ...scenario.legendaries[0]!, condition: CANARY_CONDITION }],
       timeline: [...scenario.timeline, { ...newEvent(), title: CANARY_EVENT } as Scenario['timeline'][number]],
       npcs: scenario.npcs.map((n, i) => (i === 0 ? { ...n, gmNote: CANARY_NPC } : n)),
     };
-    const put = await putScenario(gm.token, edited);
-    expect(put.status).toBe(200);
+    const gm = await createGame(true, 'ต้น', edited);
     // The parsed copy (defaults filled in) is what the secrets come from.
-    const saved = GameScenarioResponse.parse(put.body).scenario;
+    const saved = (await getScenario(gm.token)).scenario;
     expect(JSON.stringify(saved)).toContain(CANARY_EVENT);
+    // The GM's own create answer does not echo it either.
+    expect(gm.raw).not.toContain(CANARY_EVENT);
 
     // Everything a player can receive: join, me, the game view, a refused scenario read.
     const nok = await join(gm.game.inviteCode, 'นก');
@@ -190,21 +194,20 @@ describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () =
     // After the start too.
     seedCharacter(nok.member.id);
     seedCharacter(bel.member.id);
-    expect((await call('POST', '/api/game/start', { token: gm.token })).status).toBe(200);
+    await startBy(nok, bel);
     responses.push((await call('GET', '/api/game', { token: nok.token })).text);
 
     expectNoScenarioContent(responses, saved);
   });
 
-  it('C2 / Q-028: a game without a Human GM never shows its owner-player the scenario', async () => {
-    const owner = await createGame(false, 'นก');
-    const bel = await join(owner.game.inviteCode, 'เบล');
-    const responses = [owner.raw, bel.raw];
-    for (const token of [owner.token, bel.token]) {
+  it('C2 / Q-028: a game without a Human GM never shows its creator-player the scenario', async () => {
+    const creator = await createGame(false, 'นก');
+    const bel = await join(creator.game.inviteCode, 'เบล');
+    const responses = [creator.raw, bel.raw];
+    for (const token of [creator.token, bel.token]) {
       responses.push((await call('GET', '/api/me', { token })).text);
       responses.push((await call('GET', '/api/game', { token })).text);
     }
-    responses.push((await call('POST', '/api/game/invite-code', { token: owner.token })).text);
     expectNoScenarioContent(responses, defaultScenario());
   });
 
@@ -224,7 +227,7 @@ describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () =
     }
   }
 
-  it('C2: the game view tells the client who may edit: the GM before the start, nobody else', async () => {
+  it('C2: the game view tells the client who may open the scenario: the GM before the start, nobody else', async () => {
     const { gm, nok } = await gmGame();
     expect(GameView.parse((await call('GET', '/api/game', { token: gm.token })).body).canEditScenario).toBe(true);
     expect(GameView.parse((await call('GET', '/api/game', { token: nok.token })).body).canEditScenario).toBe(false);
@@ -233,55 +236,48 @@ describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () =
     expect(solo.game.canEditScenario).toBe(false);
   });
 
-  it('C3: a player who edits the scenario gets 403, and the scenario stays as it was', async () => {
+  it('C3 (ISK-017): nobody edits the scenario after creation: PUT and reset are 404 for the GM and players; it stays as it was', async () => {
     const { gm, nok } = await gmGame();
-    const edited = { ...defaultScenario(), name: 'ผู้เล่นแอบแก้' };
-
-    const res = await putScenario(nok.token, edited);
-    expect(res.status).toBe(403);
-    expect(error(res.body)).toMatchObject({ code: 'forbidden' });
-    expect((await resetScenario(nok.token)).status).toBe(403);
+    const edited = { ...defaultScenario(), name: 'แอบแก้' };
+    for (const token of [gm.token, nok.token]) {
+      expect((await putScenario(token, edited)).status).toBe(404);
+      expect((await resetScenario(token)).status).toBe(404);
+    }
     expect((await call('GET', '/api/game/scenario', { token: nok.token })).status).toBe(403);
     expect((await getScenario(gm.token)).scenario).toEqual(defaultScenario());
   });
 
-  it('Q-028: without a Human GM every scenario endpoint refuses, even the owner', async () => {
-    const owner = await createGame(false, 'นก');
-    expect((await call('GET', '/api/game/scenario', { token: owner.token })).status).toBe(403);
-    const put = await putScenario(owner.token, { ...defaultScenario(), name: 'เจ้าของแอบแก้' });
-    expect(put.status).toBe(403);
-    expect(error(put.body).message).toMatch(/GM/);
-    expect((await resetScenario(owner.token)).status).toBe(403);
-    expect(getGameScenario(server!.orm, owner.game.id)).toEqual(defaultScenario());
+  it('Q-028: without a Human GM the scenario read refuses, even the creator', async () => {
+    const creator = await createGame(false, 'นก');
+    const read = await call('GET', '/api/game/scenario', { token: creator.token });
+    expect(read.status).toBe(403);
+    expect(error(read.body).message).toMatch(/GM/);
+    expect(getGameScenario(server!.orm, creator.game.id)).toEqual(defaultScenario());
   });
 
   it('requests without a session get 401', async () => {
     expect((await call('GET', '/api/game/scenario')).status).toBe(401);
-    expect((await putScenario('nope', defaultScenario())).status).toBe(401);
-    expect((await resetScenario('nope')).status).toBe(401);
   });
 
-  it('C4: the GM cannot delete the day 12 finale', async () => {
-    const { gm } = await gmGame();
-    const { scenario } = await getScenario(gm.token);
+  it('C4: a scenario without the day 12 finale is refused at creation; no game is made', async () => {
+    const scenario = defaultScenario();
     const withoutFinale = { ...scenario, timeline: scenario.timeline.filter((e) => e.kind !== 'finale') };
 
-    const res = await putScenario(gm.token, withoutFinale);
+    const res = await postGame(true, 'ต้น', withoutFinale);
     expect(res.status).toBe(400);
     const body = error(res.body);
     expect(body.code).toBe('invalid_input');
     if (body.code !== 'invalid_input') return;
     expect(body.fields).toEqual({ timeline: expect.stringMatching(/ฉากจบ.*12/) });
-    expect((await getScenario(gm.token)).scenario).toEqual(defaultScenario());
+    expect(gameCount()).toBe(0);
   });
 
-  it('C5: day 13, an empty title or a wrong phase is refused and names the field', async () => {
-    const { gm } = await gmGame();
-    const { scenario } = await getScenario(gm.token);
+  it('C5: day 13, an empty title or a wrong phase is refused at creation and names the field', async () => {
+    const scenario = defaultScenario();
     const at = scenario.timeline.length;
     const bad = { ...scenario, timeline: [...scenario.timeline, newEvent({ day: 13, title: '   ', phase: 'EVENING' })] };
 
-    const res = await putScenario(gm.token, bad);
+    const res = await postGame(true, 'ต้น', bad);
     expect(res.status).toBe(400);
     const body = error(res.body);
     if (body.code !== 'invalid_input') throw new Error(JSON.stringify(body));
@@ -289,41 +285,30 @@ describe('scenario editor before the start (GEN-046)', { timeout: 60_000 }, () =
     expect(body.fields[`timeline.${at}.day`]).toMatch(/1 ถึง 12/);
     expect(body.fields[`timeline.${at}.title`]).toMatch(/ห้ามว่าง/);
     expect(body.fields[`timeline.${at}.phase`]).toMatch(/เช้า.*บ่าย.*ค่ำ/);
-    expect((await getScenario(gm.token)).scenario).toEqual(defaultScenario());
 
     // Not a scenario at all.
-    const garbage = await putScenario(gm.token, { hello: 1 });
-    expect(garbage.status).toBe(400);
+    expect((await postGame(true, 'ต้น', { hello: 1 })).status).toBe(400);
+    expect(gameCount()).toBe(0);
   });
 
-  it('C6: after the start the editor cannot save or reset; the GM can still read it (locked)', async () => {
+  it('C6: after the start the GM can still read the scenario (locked)', async () => {
     const { gm, nok, bel } = await gmGame();
     seedCharacter(nok.member.id);
     seedCharacter(bel.member.id);
-    expect((await call('POST', '/api/game/start', { token: gm.token })).status).toBe(200);
+    await startBy(nok, bel);
 
     const read = await getScenario(gm.token);
     expect(read.locked).toBe(true);
-    const res = await putScenario(gm.token, { ...read.scenario, name: 'แก้หลังเริ่ม' });
-    expect(res.status).toBe(409);
-    expect(error(res.body)).toMatchObject({ code: 'game_started' });
-    expect((await resetScenario(gm.token)).status).toBe(409);
-    expect((await getScenario(gm.token)).scenario).toEqual(defaultScenario());
+    expect(read.scenario).toEqual(defaultScenario());
     expect(GameView.parse((await call('GET', '/api/game', { token: gm.token })).body).canEditScenario).toBe(false);
   });
 
-  it('C7: "คืนค่า default" puts the copy back to the default template; other games are untouched', async () => {
-    const { gm } = await gmGame();
-    const other = await createGame(true, 'ปลา');
-    const { scenario } = await getScenario(gm.token);
-    const edited = { ...scenario, name: 'ของ GM', timeline: [...scenario.timeline, newEvent()] };
-    expect((await putScenario(gm.token, edited)).status).toBe(200);
-    expect((await putScenario(other.token, { ...scenario, name: 'เกมอื่น' })).status).toBe(200);
-
-    const res = await resetScenario(gm.token);
-    expect(res.status, res.text).toBe(200);
-    expect(GameScenarioResponse.parse(res.body).scenario).toEqual(defaultScenario());
-    expect((await getScenario(gm.token)).scenario).toEqual(defaultScenario());
+  it('C7: each game keeps the scenario it was created with; no scenario = the default template', async () => {
+    const { gm } = await gmGame({ ...defaultScenario(), name: 'ของ GM', timeline: [...defaultScenario().timeline, newEvent()] });
+    const other = await createGame(true, 'ปลา', { ...defaultScenario(), name: 'เกมอื่น' });
+    const plain = await createGame(true, 'ฟ้า');
+    expect((await getScenario(gm.token)).scenario.name).toBe('ของ GM');
     expect((await getScenario(other.token)).scenario.name).toBe('เกมอื่น');
+    expect((await getScenario(plain.token)).scenario).toEqual(defaultScenario());
   });
 });

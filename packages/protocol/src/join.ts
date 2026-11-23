@@ -139,7 +139,9 @@ export const ApiError = z.discriminatedUnion('code', [
   z.object({ code: z.literal('not_allowed'), message: z.string() }),
   /** 409 from POST /api/game/start; `reasons` lists what is missing (Thai, one line each). */
   z.object({ code: z.literal('cannot_start'), message: z.string(), reasons: z.array(z.string()) }),
-  /** 503 from POST /api/games and POST /api/game/start: the AI GM provider is not ready (e.g. no API key). */
+  /** 409 from POST /api/game/ready (ISK-017): only a player of a game still in the lobby can be ready. */
+  z.object({ code: z.literal('not_in_lobby'), message: z.string() }),
+  /** 503 from POST /api/games and POST /api/game/ready: the AI GM provider is not ready (e.g. no API key). */
   z.object({ code: z.literal('ai_not_ready'), message: z.string() }),
   /** 409: this member already has a character in this game (one per member per game). */
   z.object({ code: z.literal('character_exists'), message: z.string() }),

@@ -38,8 +38,8 @@ function view(patch: Partial<GameView> = {}): GameView {
     inviteCode: 'K7Q2MX',
     status: 'lobby',
     startedAt: null,
-    you: { memberId: gm.id, role: 'gm', isOwner: true },
-    members: [{ id: gm.id, name: gm.name, role: 'gm', isOwner: true, hasCharacter: false }],
+    you: { memberId: gm.id, role: 'gm' },
+    members: [{ id: gm.id, name: gm.name, role: 'gm', ready: false, hasCharacter: false }],
     players: { count: 0, min: 2, max: 6 },
     canEditScenario: true,
     startBlockers: [],
@@ -131,8 +131,8 @@ describe('Scenario editor (GEN-046)', () => {
       view({
         humanGm: false,
         canEditScenario: false,
-        you: { memberId: 'm-nok', role: 'player', isOwner: true },
-        members: [{ id: 'm-nok', name: 'นก', role: 'player', isOwner: true, hasCharacter: false }],
+        you: { memberId: 'm-nok', role: 'player' },
+        members: [{ id: 'm-nok', name: 'นก', role: 'player', ready: false, hasCharacter: false }],
       }),
     );
     render(<App apiBaseUrl="" />);

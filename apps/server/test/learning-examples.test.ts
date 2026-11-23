@@ -4,7 +4,7 @@ import { deleteLearningEntry, examplesFor, npcCandidates, syncExamples } from '.
 import { ensurePhaseState, insertEntry, recordAction, savePhaseState, type EntryMeta } from '../src/room/store.ts';
 import type { RunningServer } from '../src/server.ts';
 import { makeTempDir, seedChosenLoot, withLooks } from './helpers.ts';
-import { caller, CLOCK, CREATE_CODE, DARIN, LIN, MEKHA, startTestServer, type Call } from './visibility-fixture.ts';
+import { caller, CLOCK, CREATE_CODE, DARIN, LIN, MEKHA, readyAll, startTestServer, type Call } from './visibility-fixture.ts';
 
 /**
  * GEN-081: good_example / avoid entries from the per-message votes of ended games (voteVerdict, Q-286 / Q-287), stored
@@ -54,7 +54,7 @@ describe('GEN-081 good examples + avoid from per-message votes', { timeout: 120_
       CharacterResponse.parse(res.body);
       seedChosenLoot(server!.db, s.memberId);
     }
-    expect((await call('POST', '/api/game/start', { token: owner.token })).status).toBe(200);
+    await readyAll(call, seats);
     return { call, gameId: game.game.id, seats };
   }
 

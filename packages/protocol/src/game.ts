@@ -39,7 +39,8 @@ const gameName = z
 
 /**
  * Body of POST /api/games. The creator joins the new game in the same call with `name` + `pin`
- * (like POST /api/join) and becomes its owner: the GM when `humanGm`, otherwise its first player.
+ * (like POST /api/join): the GM when `humanGm`, otherwise its first player. ISK-017: every setting is given here
+ * once and locked; nobody edits the game afterwards (no owner).
  * `createCode` is the server-level secret (Q-021), not the game's invite code.
  */
 export const CreateGameRequest = z
@@ -60,6 +61,12 @@ export const CreateGameRequest = z
     noStyle: z.boolean().optional(),
     /** GEN-083: absent = off. */
     memory: GameMemorySetting.optional(),
+    /**
+     * ISK-017: the game's `Scenario`, set once here (as the old PUT /api/game/scenario took it); absent = the default.
+     * Typed unknown: the server checks it with parseScenario (one message per field), and the contract's number scan
+     * would read the Scenario's own reputation rule as a leak.
+     */
+    scenario: z.unknown().optional(),
   })
   .refine((v) => !(v.mode === 'single' && v.humanGm), {
     path: ['humanGm'],
@@ -80,28 +87,22 @@ export function createGameFieldErrors(input: unknown): Partial<Record<CreateGame
   return errors;
 }
 
-/** Body of PATCH /api/game (owner only, before the game starts). */
-export const UpdateGameRequest = z.object({
-  gameName: gameName.optional(),
-  mode: GameMode.optional(),
-  npcDialogue: NpcDialogueLevel.optional(),
-  tone: GameTone.optional(),
-  /** GEN-083: the source games are checked against the owner's player code (409 after the start). */
-  memory: GameMemorySetting.optional(),
-});
-export type UpdateGameRequest = z.infer<typeof UpdateGameRequest>;
+/** ISK-017: body of POST /api/game/ready (players only, in the lobby). The game starts by itself once everyone is ready. */
+export const GameReadyRequest = z.object({ ready: z.boolean() });
+export type GameReadyRequest = z.infer<typeof GameReadyRequest>;
 
 export const GameMember = z.object({
   id: z.string(),
   name: z.string(),
   role: MemberRole,
-  isOwner: z.boolean(),
+  /** ISK-017: the player pressed ready in the lobby (the Human GM is always false). */
+  ready: z.boolean(),
   /** Players only: whether their character is created (GEN-047 creates characters). */
   hasCharacter: z.boolean(),
 });
 export type GameMember = z.infer<typeof GameMember>;
 
-/** 200 from GET /api/game and the owner actions: the caller's game as the lobby shows it. */
+/** 200 from GET /api/game and POST /api/game/ready: the caller's game as the lobby shows it. */
 export const GameView = z.object({
   id: z.string(),
   name: z.string(),
@@ -115,7 +116,7 @@ export const GameView = z.object({
   inviteCode: z.string(),
   status: z.enum(['lobby', 'started']),
   startedAt: z.string().nullable(),
-  you: z.object({ memberId: z.string(), role: MemberRole, isOwner: z.boolean() }),
+  you: z.object({ memberId: z.string(), role: MemberRole }),
   members: z.array(GameMember),
   players: z.object({ count: z.number().int(), min: z.number().int(), max: z.number().int() }),
   /**

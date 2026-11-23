@@ -52,6 +52,11 @@ export const RoomHello = z.object({
   type: z.literal('hello'),
   token: z.string().min(1),
   afterSeq: z.number().int().min(0).default(0),
+  /**
+   * ISK-017: the lobby's socket. Before the start it stays open for `lobby_ready` / `lobby_start_blocked` (no room,
+   * no `ready`); without it a game that has not started is refused as before (`game_not_started`).
+   */
+  lobby: z.boolean().optional(),
 });
 export type RoomHello = z.infer<typeof RoomHello>;
 
@@ -397,6 +402,14 @@ export const RoomError = z.strictObject({ type: z.literal('error'), code: RoomEr
 export const GameClosedEvent = z.strictObject({ type: z.literal('game_closed'), reason: z.string().nullable(), hasSummary: z.boolean() });
 export type GameClosedEvent = z.infer<typeof GameClosedEvent>;
 
+/** ISK-017: a player in the lobby pressed ready (or took it back); sent to every lobby socket of the game. */
+export const LobbyReadyEvent = z.strictObject({ type: z.literal('lobby_ready'), memberId: z.string(), ready: z.boolean() });
+export type LobbyReadyEvent = z.infer<typeof LobbyReadyEvent>;
+
+/** ISK-017: everyone is ready but the AI GM is not, so the game did not start (`reason` = the GEN-038 Thai reason). */
+export const LobbyStartBlockedEvent = z.strictObject({ type: z.literal('lobby_start_blocked'), reason: z.string() });
+export type LobbyStartBlockedEvent = z.infer<typeof LobbyStartBlockedEvent>;
+
 export const RoomServerMessage = z.discriminatedUnion('type', [
   RoomState,
   RoomEntryMessage,
@@ -412,5 +425,7 @@ export const RoomServerMessage = z.discriminatedUnion('type', [
   RoomOmenAccepted,
   RoomOmenRejected,
   GameClosedEvent,
+  LobbyReadyEvent,
+  LobbyStartBlockedEvent,
 ]);
 export type RoomServerMessage = z.infer<typeof RoomServerMessage>;
