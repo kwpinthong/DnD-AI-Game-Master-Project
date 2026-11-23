@@ -647,6 +647,8 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(new Set(journals().map((j) => j.day))).toEqual(new Set([1]));
     const journalReqs = provider.requests.filter((r) => r.purpose === 'summarize_journal');
     expect(journalReqs).toHaveLength(3);
+    // GEN-161 (Q-327): room for a real journal like summarize_day (800 hit max_tokens on every real call).
+    for (const r of journalReqs) expect(r.maxOutputTokens).toBe(1_500);
     const reqFor = (ref: string) => journalReqs.find((r) => contextOf<JournalContext>(r).player === ref)!;
     // Only what each player saw that day: A saw its own action (and nothing of B's Secret or C in the forest).
     const seenA = reqFor(refA).messages[0]!.text;
