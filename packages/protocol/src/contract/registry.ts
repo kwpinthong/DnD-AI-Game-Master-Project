@@ -272,7 +272,7 @@ export const CONTRACT: readonly ContractItem[] = [
   http('PUT', '/api/game/entries/:seq/vote', 'ResponseVoteRequest', 'ResponseVoteResponse', ready('GEN-107', 'player', ['play-action'], '👍/👎 ข้อความของ AI GM (`RoomEntry.myVote` ≠ undefined = มีปุ่ม); `vote: null` = ยกเลิก; ไม่ใช่ผู้เล่น / ไม่ใช่ผู้รับ entry 403; id ไม่มี/ไม่ใช่ข้อความ AI = 404 `response_not_found`; ใช้ได้หลังเกมจบ')),
 
   // --- after the end ---
-  http('GET', '/api/game/rating', null, 'GameRatingResponse', ready('GEN-078', 'player', ['ending-rating'], 'หลังเกมจบเท่านั้น (ก่อนจบ 409); ไม่ใช่สมาชิก 403; `eligible` / `blocker` เป็นของ GEN-079')),
+  http('GET', '/api/game/rating', null, 'GameRatingResponse', ready('GEN-078', 'player', ['ending-rating'], 'หลังเกมจบเท่านั้น (ก่อนจบ 409); ไม่ใช่สมาชิก 403; `average` แสดงเฉยๆ ไม่เป็นเกณฑ์ (GEN-079)')),
   http('PUT', '/api/game/rating', 'GameRatingRequest', 'GameRatingResponse', ready('GEN-078', 'player', ['ending-rating'], 'คนละ 1 คะแนน ส่งใหม่ = แทนค่าเดิม')),
   http('PUT', '/api/game/rating/votes/:sourceRef', 'ResponseVoteRequest', 'GameRatingResponse', ready('GEN-171', 'player', ['ending-rating'], '👍/👎 action → ผล ด้วย `sourceRef` (ADR GEN-077) แบบ GEN-107, `vote: null` = ยกเลิก; เก็บใน response_vote เป็น `ruling-${sourceRef}` (Q-325); เห็นแค่ `myVotes` ของตัวเอง ไม่มียอดรวม; GM คน / ไม่ใช่สมาชิก 403; ก่อนจบ 409; ref ที่หน้าสรุปไม่เปิด = 404 `ruling_not_found`')),
 

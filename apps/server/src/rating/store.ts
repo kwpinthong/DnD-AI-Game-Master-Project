@@ -4,7 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
 import { gamePhase, gameRating, phaseAction, responseVote } from '../db/schema.ts';
 import { activeMembers, type MemberRow } from '../game/service.ts';
-import { voteVerdict } from '../room/vote.ts';
+import { voteFlags } from '../room/vote.ts';
 
 const PERIOD_ORDER = ['EOSORIA', 'SOLARION', 'HESPERION', 'NOCTHERION'] as const;
 
@@ -79,13 +79,12 @@ export function rulingVotes(db: DbOrTx, gameId: string): Map<string, { up: numbe
     c[v.vote] += 1;
     counts.set(ref, c);
   }
-  return new Map([...counts].map(([ref, c]) => [ref, { ...c, ...voteVerdict(c, players.size) }]));
+  return new Map([...counts].map(([ref, c]) => [ref, { ...c, ...voteFlags(c, players.size) }]));
 }
 
 /**
- * The rating part of the end page for one member. Members = players + the Human GM, not removed (Q-164 /
- * Q-222); the score is the average of who rated (Q-163). `eligible` / `blocker` only report the two
- * numbers here; the learning gate itself is GEN-079.
+ * The rating part of the end page for one member. Members = players + the Human GM, not removed (Q-222);
+ * the score is the average of who rated (Q-163), shown only: GEN-079 dropped the > 8 gate (Q-286 / Q-287).
  */
 export function ratingViewFor(db: DbOrTx, me: MemberRow): GameRatingView {
   const members = new Set(activeMembers(db, me.gameId).map((m) => m.id));
@@ -97,8 +96,6 @@ export function ratingViewFor(db: DbOrTx, me: MemberRow): GameRatingView {
     .filter((r) => members.has(r.memberId));
   const mine = ratings.find((r) => r.memberId === me.id);
   const average = ratings.length === 0 ? null : ratings.reduce((sum, r) => sum + r.score, 0) / ratings.length;
-  const enoughRaters = ratings.length > 0 && ratings.length * 2 >= members.size;
-  const highEnough = average !== null && average > 8;
   return {
     mine: mine ? { score: mine.score, comment: mine.comment } : null,
     myVotes: myRulingVotes(db, me),
@@ -106,8 +103,6 @@ export function ratingViewFor(db: DbOrTx, me: MemberRow): GameRatingView {
     average,
     raters: ratings.length,
     members: members.size,
-    eligible: enoughRaters && highEnough,
-    blocker: !enoughRaters ? 'too_few_raters' : !highEnough ? 'score_too_low' : null,
   };
 }
 

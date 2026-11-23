@@ -82,7 +82,7 @@ const playingLog: GameLogResponse = {
 function stubServer() {
   const calls: string[] = [];
   const ratingCalls: { method: string; path: string; body: unknown }[] = [];
-  const rating: GameRatingView = { mine: null, myVotes: {}, canVote: true, average: null, raters: 0, members: 2, eligible: false, blocker: 'too_few_raters' };
+  const rating: GameRatingView = { mine: null, myVotes: {}, canVote: true, average: null, raters: 0, members: 2 };
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

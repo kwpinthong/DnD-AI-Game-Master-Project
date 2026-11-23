@@ -240,8 +240,8 @@ export const GameRatingRequest = z.object({
 export type GameRatingRequest = z.input<typeof GameRatingRequest>;
 
 /**
- * The rating part of the end page. `average` is the game score (public, not a secret value). Eligible for
- * learning when average > 8 and raters ≥ half the members (Q-163, Q-164); `blocker` says which is missing.
+ * The rating part of the end page. `average` is the game score (public, not a secret value), shown with how
+ * many rated as supporting info only (GEN-079: no gate; learning comes from `voteVerdict` of the votes).
  * `myVotes` (GEN-171): `sourceRef` (`${day}-${phase}-${turn}-${actionSeq}`, GEN-077 ADR) → this viewer's own
  * 👍/👎 on that action → result row (GEN-081 rulings); rows without a vote are left out. Never anyone
  * else's vote or a total.
@@ -254,8 +254,6 @@ export const GameRatingView = z.strictObject({
   average: z.number().nullable(),
   raters: z.number().int().min(0),
   members: z.number().int().min(0),
-  eligible: z.boolean(),
-  blocker: z.enum(['too_few_raters', 'score_too_low']).nullable(),
 });
 export type GameRatingView = z.infer<typeof GameRatingView>;
 

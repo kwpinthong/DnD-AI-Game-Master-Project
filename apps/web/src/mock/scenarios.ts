@@ -135,9 +135,9 @@ function surroundingsWith(you: Partial<CharacterView>): Readonly<Record<string, 
 const SPENT = surroundingsWith({ stamina: { current: 0, max: 30 } });
 const DOWN = surroundingsWith({ hp: { current: 0, max: 30 } });
 
-/** GEN-091: the held finale (Q-215) and a rated game whose average is 8 or lower (Q-223), both from the fixtures. */
+/** GEN-091: the held finale (Q-215) and a rated game with a low average (shown only, GEN-079), both from the fixtures. */
 const FINALE_TURN = F.GmPendingTurn.find((t) => t.finale)!;
-const LOW_RATING = { rating: { ...F.GameRatingResponse[0]!.rating, mine: { score: 6, comment: 'ช่วงกลางเกมช้าไปหน่อย' }, average: 7.4, eligible: false, blocker: 'score_too_low' } };
+const LOW_RATING = { rating: { ...F.GameRatingResponse[0]!.rating, mine: { score: 6, comment: 'ช่วงกลางเกมช้าไปหน่อย' }, average: 7.4 } };
 
 /** An ended game whose secrets span days 1, 2, 3 and 4 and two players, so the end page's day filter shows (Q-270). */
 const ENDED_LOG = F.GameLogResponse[1]!;
