@@ -737,6 +737,11 @@
   padding-bottom: var(--space-2);
 }
 
+/* GEN-136: no resize-handle corner marks inside the folds (phone sheet). */
+.info-fold__body {
+  resize: none;
+}
+
 .info-panel .play-panel,
 .v3m-sheet .play-panel {
   padding: 0;

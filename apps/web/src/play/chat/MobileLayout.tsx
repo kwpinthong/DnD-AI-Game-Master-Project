@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { playText } from '../../ui/index.ts';
-import { INFO_TABS, InfoTabs, type InfoTab } from './InfoPanel.tsx';
+import { INFO_TABS, InfoTabs, PHONE_TAB_DEFS, type InfoTab } from './InfoPanel.tsx';
 import { useInfoSheet } from './useInfoSheet.ts';
 
 const t = playText.chat.panel;
@@ -65,7 +65,7 @@ export function MobileLayout({ hud, notices, feed, actions, panel }: { hud: Reac
               {playText.chat.bar.close}
             </button>
           </div>
-          <InfoTabs tab={sheet.tab} onPick={sheet.show}>
+          <InfoTabs tab={sheet.tab} onPick={sheet.show} tabs={PHONE_TAB_DEFS}>
             {panel(sheet.tab)}
           </InfoTabs>
         </div>
