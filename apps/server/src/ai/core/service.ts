@@ -145,7 +145,8 @@ export function createAiService(deps: AiServiceDeps): AiService {
         model,
         system: trigger.system,
         messages: trigger.messages,
-        output: { name: trigger.output.name, jsonSchema: z.toJSONSchema(trigger.output.schema) as Record<string, unknown> },
+        // GEN-158: the input side, so a field with a zod default is optional for the AI; parsing fills it in.
+        output: { name: trigger.output.name, jsonSchema: z.toJSONSchema(trigger.output.schema, { io: 'input' }) as Record<string, unknown> },
         maxOutputTokens: trigger.maxOutputTokens,
         effort: trigger.effort ?? (trigger.purpose === 'gm_adjudicate' || trigger.purpose === 'gm_repair' ? 'medium' : 'low'),
         timeoutMs: config.timeoutMs,

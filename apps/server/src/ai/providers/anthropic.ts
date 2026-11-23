@@ -84,6 +84,7 @@ function answerFormat(output: AiCallRequest['output']): string {
   return [
     `Answer with one JSON object only (${output.name}): no text before or after it, no code fence.`,
     'It must follow this JSON Schema exactly: every required property, no property the schema does not name, null where the schema allows null.',
+    'Leave out every property whose value would be its "default" (the server fills it in); write it only when the value differs.',
     JSON.stringify(schema),
   ].join('\n');
 }
