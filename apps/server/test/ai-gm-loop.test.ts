@@ -157,6 +157,7 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(turnRequests.map((r) => r.purpose)).toEqual(['gm_adjudicate']);
     const ctx = contextOf<TurnContext>(turnRequests[0]!);
     expect(ctx.order).toHaveLength(3);
+    expect(ctx.mustAnswer).toContain('3 รายการ'); // GEN-118
     expect(ctx.tagVocabulary.length).toBeGreaterThan(0);
     const stored = JSON.parse((server!.db.prepare('select proposal from gm_turn').get() as { proposal: string }).proposal) as GmTurnProposal;
     expect(stored.actions.map((a) => a.tagging.verbTags.length)).toEqual([1, 1, 1]);

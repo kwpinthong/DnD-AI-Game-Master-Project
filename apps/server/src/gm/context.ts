@@ -168,6 +168,8 @@ export interface TurnContext {
   tagVocabulary: string[];
   events: { active: Omit<EventContext['active'][number], 'defaultOutcome'>[]; past: EventContext['past'] };
   memory: { saga: string | null; yesterday: string | null; today: string[] };
+  /** GEN-118: last in the JSON, where the AI stops reading: the real AI stopped after an action with no effect and left the others out. */
+  mustAnswer: string;
 }
 
 export interface TurnContextInput {
@@ -250,6 +252,7 @@ export function buildTurnContext(db: DbOrTx, input: TurnContextInput): TurnConte
     // happens now, so the narration cannot run ahead of the day.
     events: { active: events.active.map(({ defaultOutcome: _ahead, ...now }) => now), past: events.past },
     memory: memoryContext(db, world.gameId, at),
+    mustAnswer: `actions ต้องมี ${input.actions.length} รายการ ตามลำดับ ${input.actions.map((a) => a.actionId).join(', ')} ทุกรายการแม้ไม่มีผลเชิงกลไก`,
   };
 }
 
@@ -370,9 +373,9 @@ export interface DayContext {
 const RULES_TEXT = [
   'คุณคือ Game Master ผู้ตัดสินอย่างเคร่งครัด (Strict Referee) ของเกม Isekai Chronicles ไม่ใช่ผู้ช่วยของผู้เล่น',
   '1. ห้ามเกราะตัวเอก: ห้ามลด DC หรือเพิ่ม modifier เพื่อช่วยผู้เล่น ความยากมาจากสถานการณ์จริงใน state เท่านั้น',
-  '2. ตอบ action ครบทุกตัวตาม `order` ที่ให้มา ห้ามข้าม ห้ามสลับลำดับ ห้ามแต่ง actionId ใหม่ `actor` คือ ref ของผู้ทำ',
+  '2. ตอบ action ครบทุกตัวตาม `order` ที่ให้มา ห้ามข้าม ห้ามสลับลำดับ ห้ามแต่ง actionId ใหม่ `actor` คือ ref ของผู้ทำ ทุก id ใน order ต้องมี 1 รายการใน actions เสมอ แม้ไม่มีผลเชิงกลไก / คลุมเครือ / ระบุเป้าไม่ได้ / ทำไม่ได้ (ตอบ kind general, check none, effects เป็น 0 / null แล้วอธิบายใน reason) จำนวน actions ต้องเท่ากับจำนวน order',
   '3. DC อยู่บนบันได 5, 8, 11, 14, 17, 20, 23 / staminaCost: general 3, complex 5 (opposed 6), exertion 7-10',
-  '4. verbTags / targetTags ใช้ได้เฉพาะคำใน tagVocabulary / activate ได้เฉพาะ tagSources ของผู้ทำที่ยังไม่ครบ dailyLimit',
+  '4. verbTags / targetTags ใช้ได้เฉพาะคำใน tagVocabulary ตรงตัวอักษร ห้ามคิดคำใหม่ ถ้าไม่มีคำที่เหมาะตอบ [] / activate ได้เฉพาะ tagSources ของผู้ทำที่ trigger เป็น active หรือ both และยังไม่ครบ dailyLimit (source ที่ trigger = passive ทำงานเอง ห้ามใส่ใน activate เด็ดขาด)',
   '5. ผู้เล่นที่ติด constraints (Constraint Lock) ยังติดอยู่จนกว่าคุณจะปลดใน constraints.release พร้อม reason ที่อธิบายว่าทำไมหลุด',
   '6. คุณไม่รู้ผลเต๋า เสนอ onSuccess และ onFail ให้สมเหตุสมผลทั้งคู่ ห้ามใส่ค่า HP / Stamina ใหม่เอง',
   '7. ห้ามเขียนชื่อจริงของตัวละคร ใช้ {{p:ref}} / {{n:id}} ที่ให้มาเท่านั้น',
@@ -387,6 +390,8 @@ const RULES_TEXT = [
   '9. endingPath: เฉพาะตอนที่เหตุการณ์ kind finale (วันพิพากษา วันที่ 12) active เท่านั้น ถ้าผู้เล่นทำเส้นทางสำเร็จในเทิร์นนี้ ให้ตอบ good (ม่านปาฏิหาริย์เบี่ยงอุกกาบาต) / evil (ดูดซับพลังอุกกาบาต) / neutral (ร่วมกับ NPC ของเหตุการณ์ลบล้างผลเป็นศูนย์) ตาม interventionEffects ของเหตุการณ์นั้น โดยดูจากผลของวันที่ 1, 5, 7, 10 ใน past ด้วย นอกนั้นตอบ null',
   // GEN-093 (Q-203)
   '10. strategy ของ action: เฉพาะตอนที่เหตุการณ์ที่มี strategies (คืนวันที่ 10) active เท่านั้น ถ้า action เป็นส่วนหนึ่งของแผน ให้ตอบ id ของแผนจาก strategies ของเหตุการณ์ (ห้ามใช้ D10-DRIFT) และ role = leader (ผู้นำที่ทอยตัดสินแผน) หรือ support (ผู้ร่วมสนับสนุน) ผลสำเร็จมาจากเต๋าของ action นั้น นอกนั้นตอบ null',
+  // GEN-118: the answer is mostly the time of the turn (about 175 tokens / s), so the free texts are short.
+  '13. ตอบให้สั้น: intentSummary ไม่เกิน 40 ตัวอักษร / reason ไม่เกิน 80 ตัวอักษร (หนึ่งประโยค) / remember ตอบ [] เว้นแต่มีเรื่องสำคัญจริง ๆ / ห้ามมีข้อความนอก JSON',
   '11. eventOutcomes.side: ฝ่ายตาม interventionEffects ของเหตุการณ์ที่ผู้เล่นทำ ตอบ good / evil / neutral (interventionEffects ที่เขียนรวม เช่น Good/Neutral ให้เลือกฝ่ายเดียวที่ตรงกับสิ่งที่ผู้เล่นทำ) ถ้าไม่เข้าฝ่ายใดตอบ null / eventOutcomes.outcome เขียนเฉพาะสิ่งที่เกิดขึ้น ห้ามขึ้นต้น outcome ด้วยชื่อฝ่าย',
 ].join('\n');
 
