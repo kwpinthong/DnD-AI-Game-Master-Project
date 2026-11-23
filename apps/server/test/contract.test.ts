@@ -175,6 +175,10 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'POST /api/game/gm/turn/approve', { token: tgm });
     for (const x of [a, b, c]) await x.waitFor((m) => m.type === 'room' && m.turn === 2 && m.status === 'collecting');
     await a.waitFor((m) => m.type === 'entry' && m.entry.kind === 'narration');
+    // GEN-128: the turn's NPC lines wait in the console too; the GM approves them as they are.
+    expect((await heldTurn(call, tgm)).dialogue).toBe(true);
+    await hit(call, 'POST /api/game/gm/turn/approve', { token: tgm });
+    await Promise.race([a, b, c].map((x) => x.waitFor((m) => m.type === 'entry' && m.entry.kind === 'npc')));
     await hit(call, 'GET /api/game/gm/log', { token: tgm });
     await hit(call, 'GET /api/game/gm/votes', { token: tgm });
     await hit(call, 'GET /api/game/gm/votes', { token: t.a.token });

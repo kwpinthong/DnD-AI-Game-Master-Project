@@ -27,6 +27,8 @@ export const gmTurn = sqliteTable(
     rolls: text('rolls').notNull(),
     /** Narrations that passed their checks, JSON `{ [audienceKey]: NarrationOut }`. */
     narrations: text('narrations').notNull().default('{}'),
+    /** GEN-128: the dialogue calls of the turn not done yet, JSON `DialogueJob[]`; null = none left (a restart redoes the rest). */
+    dialogue: text('dialogue'),
     updatedAt: integer('updated_at').notNull(),
   },
   (t) => [primaryKey({ columns: [t.gameId, t.day, t.phase, t.turn] })],

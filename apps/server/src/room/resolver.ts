@@ -30,7 +30,11 @@ export interface PhaseResolver {
    * could not write is simply missing.
    */
   scene?(input: { readonly gameId: string; readonly at: TurnPoint; readonly weather: PeriodWeather | null; readonly signal?: AbortSignal }): Promise<readonly ResolutionEntry[]>;
+  /** GEN-128: the dialogue stages a restart cut short, each to run like `PhaseResolution.dialogue`; the room asks once per game, on the first join. */
+  dialogueLeft?(input: { readonly gameId: string; readonly signal?: AbortSignal }): { readonly at: TurnPoint; readonly dialogue: DialogueStage }[];
 }
+
+export type DialogueStage = (publish: (entries: readonly ResolutionEntry[], stored?: () => void) => void, published?: readonly ResolutionEntry[]) => Promise<void>;
 
 /** The ending as entries (whole-town feed + one narration per player), or why it could not be told (retry). */
 export type FinaleResolution = { readonly entries: readonly ResolutionEntry[]; readonly stuck?: undefined } | { readonly stuck: ResolverStuck };
@@ -144,8 +148,10 @@ export interface PhaseResolution {
    * is open meanwhile. It calls `publish` with the NPC line entries of one audience whenever they are ready (each call
    * stores and sends them, to the same recipients as the narration they follow, under this turn's day / phase / turn).
    * A failure inside is the resolver's to swallow (the turn stays complete); if it throws, the room logs it and goes on.
+   * GEN-128: `published` = the entries as the room published them (a Human GM's edits), which the lines follow; the room
+   * calls `stored` once the lines are kept for good (with a Human GM: when the GM approves them).
    */
-  readonly dialogue?: (publish: (entries: readonly ResolutionEntry[]) => void) => Promise<void>;
+  readonly dialogue?: DialogueStage;
   /**
    * Runs after the turn is published (e.g. the day summary). GEN-157: in the background, like `dialogue`: the next turn
    * does not wait for it in the room (the resolver waits for what a prompt needs); a failure is logged and never blocks the game.

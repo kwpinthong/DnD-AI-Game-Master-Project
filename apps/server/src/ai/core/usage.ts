@@ -1,5 +1,5 @@
-import { and, eq, gte, sql } from 'drizzle-orm';
-import type { Db } from '../../db/client.ts';
+import { and, eq, gte, inArray, sql } from 'drizzle-orm';
+import type { Db, DbOrTx } from '../../db/client.ts';
 import { aiUsage } from '../../db/schema-ai.ts';
 import type { ModelPrice } from '../config.ts';
 import type { AiPhase, AiPurpose, AiTokenUsage } from '../provider.ts';
@@ -61,6 +61,17 @@ export function createUsageStore(db: Db): UsageStore {
       return result?.total ?? 0;
     },
   };
+}
+
+/** GEN-128: micro-USD the game spent on `purposes` in one turn (e.g. its result stage). */
+export function spentOnTurn(db: DbOrTx, gameId: string, at: { day: number; phase: AiPhase; turn: number }, purposes: readonly AiPurpose[]): number {
+  return (
+    db
+      .select({ total: sql<number>`coalesce(sum(${aiUsage.costUsdMicros}), 0)` })
+      .from(aiUsage)
+      .where(and(eq(aiUsage.gameId, gameId), eq(aiUsage.day, at.day), eq(aiUsage.phase, at.phase), eq(aiUsage.turn, at.turn), inArray(aiUsage.purpose, [...purposes])))
+      .get()?.total ?? 0
+  );
 }
 
 export function monthStartUtc(now: number): number {

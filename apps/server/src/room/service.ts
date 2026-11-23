@@ -61,7 +61,7 @@ import { isOwnRestText } from '../game/rest-text.ts';
 import { weatherAt, type WeatherService } from '../weather/service.ts';
 import { applyCrisisLog, astralMembers, astralViewOf, omenCheck } from '../game/crisis.ts';
 import { settleTurnProgress, withPeriodEndEffects } from '../skills/progress.ts';
-import type { ClosedAction, FinaleResolution, PhaseResolution, PhaseResolver, ResolverStuck } from './resolver.ts';
+import type { ClosedAction, DialogueStage, FinaleResolution, PhaseResolution, PhaseResolver, ResolutionEntry, ResolverStuck } from './resolver.ts';
 import { getEnding, markNarrated, settleEnding } from '../finale/store.ts';
 import { templateFinaleEntries } from '../gm/finale.ts';
 import { periodAnnouncement } from '../gm/scene.ts';
@@ -163,6 +163,8 @@ export interface HeldTurn {
   readonly finale?: boolean;
   /** GEN-186: the scene of a period that just opened (`at` = its turn 1, entries only); approving publishes it, then the turn goes on. */
   readonly scene?: boolean;
+  /** GEN-128: the NPC lines of a published turn (`at` = that turn, entries only); approving stores and sends them. */
+  readonly dialogue?: boolean;
 }
 
 const AWAITING_GM_PLAYER_MESSAGE = 'ผลของเทิร์นนี้รอ GM ตรวจและอนุมัติก่อน แล้วจะส่งให้ทุกคน';
@@ -193,6 +195,8 @@ export function createRoomService(
   const stuck = new Map<string, ResolverStuck>();
   /** Games with a Human GM whose resolved turn waits for approval (GEN-058); lost on restart, resolved again then. */
   const held = new Map<string, HeldTurn>();
+  /** GEN-128: what waits behind the held one (NPC lines, a scene, an ending), shown in this order as each is approved. */
+  const queued = new Map<string, HeldTurn[]>();
   /** Endings being told (GEN-059), awaited on shutdown. */
   const finaling = new Map<string, Promise<void>>();
   const shutdown = new AbortController();
@@ -201,6 +205,8 @@ export function createRoomService(
   const rng = new CryptoRng();
   /** GEN-116: dialogue stages still running (the next turn does not wait for them), awaited on shutdown. */
   const dialogues = new Set<Promise<void>>();
+  /** GEN-128: per game, the dialogue stages running; with a Human GM the next turn waits for them (their lines go to the console first). */
+  const dialogueOf = new Map<string, Promise<void>>();
   /** GEN-157: after-turn work (the day summary) still running, awaited on shutdown; the games whose catch-up ran. */
   const afters = new Set<Promise<void>>();
   const caughtUp = new Set<string>();
@@ -547,7 +553,8 @@ export function createRoomService(
     broadcastRoom(gameId);
     // GEN-115: counts only, never text.
     log(`[room] game=${gameId} publish db_ms=${Math.round(socketStart - dbStart)} socket_ms=${Math.round(performance.now() - socketStart)}`);
-    if (resolution.dialogue) startDialogue(gameId, turn.at, resolution.dialogue, placeAudience);
+    const { dialogue, entries } = resolution;
+    if (dialogue) startDialogue(gameId, turn.at, (publish) => dialogue(publish, entries), placeAudience);
     if (published.opened) startScene(gameId, published.opened);
     if (published.ended) startFinale(gameId);
     if (outcome.ended !== null) {
@@ -568,28 +575,72 @@ export function createRoomService(
   function startDialogue(
     gameId: string,
     at: HeldTurn['at'],
-    run: NonNullable<PhaseResolution['dialogue']>,
+    run: (publish: Parameters<DialogueStage>[0]) => Promise<void>,
     places: ReadonlyMap<string, ReadonlySet<string>>,
   ): void {
     if (stopped) return;
-    const publishLate = (entries: readonly NonNullable<PhaseResolution['entries']>[number][]) => {
+    // GEN-128 C3: with a Human GM the lines wait in the console like a turn; they count as stored once the GM approves them.
+    const humanGm = hasHumanGm(gameId);
+    const kept: { entries: ResolutionEntry[]; stored: (() => void)[] } = { entries: [], stored: [] };
+    const publishLate: Parameters<DialogueStage>[0] = (entries, stored) => {
       if (stopped || entries.length === 0) return;
-      const rows = db.transaction((tx) => {
-        const t = now();
-        const state = ensurePhaseState(tx, gameId, t);
-        return entries.map((entry) => {
-          const recipients = (entry.kind === 'npc' && entry.locationId !== null ? places.get(entry.locationId) : undefined) ?? recipientsOf(tx, gameId, state, entry);
-          const meta = entry.kind === 'npc' ? { meta: { npc: { id: entry.npcId, kind: entry.npcKind, ...(entry.memberId !== null ? { private: true as const } : {}) } } } : {};
-          const locationId = entry.kind === 'narration' ? null : entry.locationId;
-          return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text, ...meta }, [...recipients], t), recipients };
-        });
-      });
-      deliver(gameId, rows);
+      if (humanGm) {
+        kept.entries.push(...entries);
+        if (stored) kept.stored.push(stored);
+        return;
+      }
+      // `stored` runs inside the same transaction (one connection), so a restart never sees lines stored but still to do.
+      deliver(gameId, storeLines(gameId, at, entries, places, stored));
     };
     const task: Promise<void> = run(publishLate)
+      .then(() => {
+        if (stopped || kept.entries.length === 0) return;
+        const resolution: PhaseResolution = { entries: kept.entries, apply: () => kept.stored.forEach((done) => done()) };
+        hold(gameId, { at, state: ensurePhaseState(db, gameId, now()), actions: [], resolution, dialogue: true });
+      })
       .catch((error) => log(`[room] game=${gameId} dialogue stage failed: ${error instanceof Error ? error.name : 'unknown error'}`))
-      .finally(() => dialogues.delete(task));
+      .finally(() => {
+        dialogues.delete(task);
+        if (dialogueOf.get(gameId) === running) dialogueOf.delete(gameId);
+      });
     dialogues.add(task);
+    const running = Promise.all([dialogueOf.get(gameId), task]).then(() => {});
+    dialogueOf.set(gameId, running);
+  }
+
+  /**
+   * Stores NPC lines under their own turn (a late line still belongs to it) and returns the rows to send. A place's lines go
+   * to who read that place's feed (`places`), else to who is there now. `apply` runs in the same transaction.
+   */
+  function storeLines(gameId: string, at: TurnPoint, entries: readonly ResolutionEntry[], places: ReadonlyMap<string, ReadonlySet<string>>, apply?: (tx: DbOrTx) => void) {
+    return db.transaction((tx) => {
+      const t = now();
+      const state = ensurePhaseState(tx, gameId, t);
+      const rows = entries.map((entry) => {
+        const recipients = (entry.kind === 'npc' && entry.locationId !== null ? places.get(entry.locationId) : undefined) ?? recipientsOf(tx, gameId, state, entry);
+        const meta = entry.kind === 'npc' ? { meta: { npc: { id: entry.npcId, kind: entry.npcKind, ...(entry.memberId !== null ? { private: true as const } : {}) } } } : {};
+        const locationId = entry.kind === 'narration' ? null : entry.locationId;
+        return { row: insertEntry(tx, gameId, { kind: entry.kind, at, locationId, text: entry.text, ...meta }, [...recipients], t), recipients };
+      });
+      apply?.(tx);
+      return rows;
+    });
+  }
+
+  /** GEN-128: holds `turn` for the Human GM, or queues it behind what is held already. */
+  function hold(gameId: string, turn: HeldTurn): void {
+    if (held.has(gameId)) queued.set(gameId, [...(queued.get(gameId) ?? []), turn]);
+    else held.set(gameId, turn);
+    broadcastRoom(gameId);
+  }
+
+  /** After an approval: the next queued hold, if any; true when there was one. */
+  function release(gameId: string): boolean {
+    const next = queued.get(gameId)?.shift();
+    if (!next) return false;
+    held.set(gameId, next);
+    broadcastRoom(gameId);
+    return true;
   }
 
   /**
@@ -602,10 +653,11 @@ export function createRoomService(
       const weatherNow = await weatherFor(gameId, ensurePhaseState(db, gameId, now()));
       const entries = await resolver.scene!({ gameId, at, weather: weatherNow, signal: shutdown.signal });
       if (stopped || entries.length === 0) return;
-      // GEN-186: with a Human GM the scene waits in the console like a turn (the announcement is already out).
+      // GEN-186: with a Human GM the scene waits in the console like a turn (the announcement is already out),
+      // GEN-128: after the NPC lines of the turn before.
       if (hasHumanGm(gameId)) {
-        held.set(gameId, { at, state: ensurePhaseState(db, gameId, now()), actions: [], resolution: { entries }, scene: true });
-        broadcastRoom(gameId);
+        await dialogueOf.get(gameId);
+        hold(gameId, { at, state: ensurePhaseState(db, gameId, now()), actions: [], resolution: { entries }, scene: true });
         return;
       }
       publishScene(gameId, at, { entries });
@@ -681,8 +733,7 @@ export function createRoomService(
       // Q-205 (Q-030): with a Human GM the ending waits for approval like a turn; without one it goes out at once.
       if (hasHumanGm(gameId)) {
         const state = ensurePhaseState(db, gameId, now());
-        held.set(gameId, { at: { day: state.day, phase: state.phase, turn: state.turn }, state, actions: [], resolution: { entries: told.entries }, finale: true });
-        broadcastRoom(gameId);
+        hold(gameId, { at: { day: state.day, phase: state.phase, turn: state.turn }, state, actions: [], resolution: { entries: told.entries }, finale: true });
         return;
       }
       publishFinale(gameId, told.entries);
@@ -752,7 +803,9 @@ export function createRoomService(
         const periodWeather = await weatherFor(gameId, state);
         // GEN-145: the period's scene goes out before the results of its first turn.
         await scenes.get(gameId);
-        // GEN-186: a scene held for the Human GM goes first; approving it starts this turn again.
+        // GEN-128: with a Human GM the NPC lines of the turn before reach the console first.
+        if (hasHumanGm(gameId)) await dialogueOf.get(gameId);
+        // GEN-186: a scene (or NPC lines) held for the Human GM goes first; approving it starts this turn again.
         if (held.has(gameId)) {
           broadcastRoom(gameId);
           return;
@@ -781,8 +834,7 @@ export function createRoomService(
         const turn: HeldTurn = { at, state, actions, resolution };
         // Q-030: with a Human GM the turn waits for approval (`approve`); without one it is published at once (C6).
         if (hasHumanGm(gameId)) {
-          held.set(gameId, turn);
-          broadcastRoom(gameId);
+          hold(gameId, turn);
           return;
         }
         if (!publishTurn(gameId, turn)) return;
@@ -838,9 +890,12 @@ export function createRoomService(
       const lastSeq = entriesFor(db, me.gameId, me.id, 0).at(-1)?.id ?? 0;
       send(socket, { type: 'ready', lastSeq: Math.max(lastSeq, afterSeq) });
       // GEN-157: a summary a restart cut short is redone (before the turn below, so its prompt waits for it).
-      if (resolver.catchUp && !caughtUp.has(me.gameId)) {
+      if (!caughtUp.has(me.gameId)) {
         caughtUp.add(me.gameId);
-        startAfter(me.gameId, (signal) => resolver.catchUp!({ gameId: me.gameId, signal }));
+        if (resolver.catchUp) startAfter(me.gameId, (signal) => resolver.catchUp!({ gameId: me.gameId, signal }));
+        // GEN-128 C2: NPC lines a restart cut short are asked again, under their own turn.
+        // shortcut: a place's lines go to who is there now, not who read that turn's feed; upgrade if players notice.
+        for (const left of resolver.dialogueLeft?.({ gameId: me.gameId, signal: shutdown.signal }) ?? []) startDialogue(me.gameId, left.at, left.dialogue, new Map());
       }
       // GEN-185: a scene a restart cut short is written (before the turn below, so its resolve waits for it).
       if (resolver.scene && !sceneChecked.has(me.gameId)) {
@@ -863,18 +918,32 @@ export function createRoomService(
       if (!turn || stopped) return false;
       held.delete(gameId);
       const resolution = edit(turn);
-      if (turn.finale) return publishFinale(gameId, resolution.entries ?? []);
-      if (turn.scene) {
-        // A failed publish puts the scene back in the console for another approve.
-        if (!publishScene(gameId, turn.at, resolution)) {
+      if (turn.finale) {
+        if (!publishFinale(gameId, resolution.entries ?? [])) return false;
+        release(gameId);
+        return true;
+      }
+      if (turn.dialogue) {
+        try {
+          deliver(gameId, storeLines(gameId, turn.at, resolution.entries ?? [], new Map(), resolution.apply));
+        } catch (error) {
+          log(`[room] dialogue publish failed (game ${gameId}): ${error instanceof Error ? error.name : 'unknown error'}`);
           held.set(gameId, turn);
           return false;
         }
+      }
+      if (turn.scene && !publishScene(gameId, turn.at, resolution)) {
+        // A failed publish puts the scene back in the console for another approve.
+        held.set(gameId, turn);
+        return false;
+      }
+      if (turn.scene || turn.dialogue) {
         broadcastRoom(gameId);
-        startResolving(gameId);
+        if (!release(gameId)) startResolving(gameId);
         return true;
       }
       if (!publishTurn(gameId, { ...turn, resolution })) return false;
+      release(gameId);
       // The after-turn work and the new period's weather (GEN-068), then the next turn if it closes at once.
       startAfter(gameId, resolution.after);
       startResolving(gameId, async () => openPeriodWeather(gameId));

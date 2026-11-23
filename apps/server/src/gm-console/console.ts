@@ -123,8 +123,10 @@ interface TurnEdits {
   results: Map<string, Partial<GmStats>>;
 }
 
-/** GEN-186: a held scene shares its turn point with that turn's own result, so its text edits are logged under another target. */
-const entryTarget = (turn: HeldTurn) => (turn.scene ? 'scene:' : 'entry:');
+/** GEN-186 / GEN-128: a held scene or NPC lines share their turn point with that turn's own result, so their text edits are logged under another target. */
+const entryTarget = (turn: HeldTurn) => (turn.scene ? 'scene:' : turn.dialogue ? 'dialogue:' : 'entry:');
+/** A held scene / NPC lines are text only: no HP / Stamina / Karma. */
+const textOnly = (turn: HeldTurn) => turn.scene === true || turn.dialogue === true;
 
 function turnEdits(db: DbOrTx, gameId: string, turn: HeldTurn): TurnEdits {
   const { at } = turn;
@@ -139,7 +141,7 @@ function turnEdits(db: DbOrTx, gameId: string, turn: HeldTurn): TurnEdits {
   for (const row of rows) {
     const after = JSON.parse(row.after) as unknown;
     if (row.kind === 'narration' && typeof after === 'string' && row.target.startsWith(prefix)) edits.narrations.set(Number(row.target.slice(prefix.length)), after);
-    if (row.kind === 'result' && typeof after === 'number' && !turn.scene) {
+    if (row.kind === 'result' && typeof after === 'number' && !textOnly(turn)) {
       const dot = row.target.lastIndexOf('.');
       const memberId = row.target.slice(0, dot);
       const field = row.target.slice(dot + 1) as StatField;
@@ -173,6 +175,7 @@ function pendingView(db: DbOrTx, gameId: string, turn: HeldTurn): GmPendingTurn 
   return {
     ...(turn.finale ? { finale: true } : {}),
     ...(turn.scene ? { scene: true } : {}),
+    ...(turn.dialogue ? { dialogue: true } : {}),
     at: turn.at,
     // Q-269: a turn with no roll (REST only, a resolver that sends none) is an empty list, never a missing field.
     checks: [...(edited.checks ?? [])],
@@ -185,7 +188,7 @@ function pendingView(db: DbOrTx, gameId: string, turn: HeldTurn): GmPendingTurn 
       text: e.text,
       edited: edits.narrations.has(index),
     })),
-    results: (turn.scene ? [] : turn.state.order).map((memberId) => {
+    results: (textOnly(turn) ? [] : turn.state.order).map((memberId) => {
       const p = turn.state.players[memberId]!;
       const before = { hp: p.hp, stamina: p.stamina, karma: karma.get(memberId) ?? p.karma };
       const r = edited.results?.[memberId] ?? {};
@@ -294,6 +297,7 @@ export function editTurn(db: Db, room: RoomService, gm: MemberRow, input: unknow
   // GEN-059 (Q-205): the ending is text only; the game is over, so no HP / Stamina / Karma changes.
   if (turn.finale && results.length > 0) problems.results = 'ตอนจบแก้ได้เฉพาะข้อความ เกมจบแล้วจึงแก้ HP / Stamina / Karma ไม่ได้';
   if (turn.scene && results.length > 0) problems.results = 'ฉากเปลี่ยนช่วงแก้ได้เฉพาะข้อความ ไม่มี HP / Stamina / Karma ให้แก้';
+  if (turn.dialogue && results.length > 0) problems.results = 'บทพูด NPC แก้ได้เฉพาะข้อความ ไม่มี HP / Stamina / Karma ให้แก้';
   narrations.forEach((n, i) => {
     if (n.index < 0 || n.index >= entries.length) problems[`narrations.${i}.index`] = 'ไม่มีข้อความลำดับนี้ในผลของเทิร์น';
   });
@@ -315,7 +319,7 @@ export function editTurn(db: Db, room: RoomService, gm: MemberRow, input: unknow
   const current = editedResolution(turn, turnEdits(db, gm.gameId, turn));
   const merged: Record<string, PlayerResult> = { ...current.results };
   for (const r of results) merged[r.memberId] = { ...merged[r.memberId], ...withoutUndefined(r) };
-  const step = turn.finale || turn.scene ? { ok: true } : phaseStep(turn.state, { type: 'resolved', results: merged }, new CryptoRng());
+  const step = turn.finale || textOnly(turn) ? { ok: true } : phaseStep(turn.state, { type: 'resolved', results: merged }, new CryptoRng());
   if (!step.ok) return invalid({ results: 'ผลนี้ผิดกฎของเกม ตรวจ HP / Stamina / Karma อีกครั้ง' });
 
   const before = pendingView(db, gm.gameId, turn);
@@ -353,7 +357,7 @@ export function approveTurn(db: Db, room: RoomService, gm: MemberRow, now: numbe
       ...resolution,
       apply: (tx) => {
         resolution.apply?.(tx);
-        logOverride(tx, gm, { kind: 'approve', at: t.at, target: t.scene ? 'scene' : 'turn', before: null, after: { edits: count }, reason: '' }, now);
+        logOverride(tx, gm, { kind: 'approve', at: t.at, target: t.scene ? 'scene' : t.dialogue ? 'dialogue' : 'turn', before: null, after: { edits: count }, reason: '' }, now);
       },
     };
   });

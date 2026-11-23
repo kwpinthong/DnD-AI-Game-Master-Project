@@ -24,7 +24,8 @@ import { eq } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { game, gamePhase } from '../db/schema.ts';
 import type { GmFallbackCause } from '@isekai/protocol';
-import type { ClosedPhase, PhaseResolution, PhaseResolver, ResolutionEntry, ResolutionHit, ResolverStuck } from '../room/resolver.ts';
+import type { ClosedPhase, DialogueStage, PhaseResolution, PhaseResolver, ResolutionEntry, ResolutionHit, ResolverStuck } from '../room/resolver.ts';
+import { spentOnTurn } from '../ai/core/usage.ts';
 import { actionCausesOf } from '../room/turn-changes.ts';
 import { itemsInGame, skillsInGame } from '../crossplayer/items.ts';
 import { castCurseLabels } from '../statuses/curses.ts';
@@ -79,7 +80,11 @@ import {
   activeConstraints,
   addConstraint,
   dayLog,
+  dialogueJobDone,
+  dialogueJobsLeft,
   getStoredTurn,
+  saveDialogueJobs,
+  type DialogueJob,
   hasDaySummary,
   hasJournal,
   latestJournalSaga,
@@ -123,6 +128,9 @@ export interface AiGmDeps {
 const STUCK_MESSAGE = 'AI GM ติดขัด สรุปผลเทิร์นนี้ไม่ได้ action ทุกอันยังอยู่ กด "ลองใหม่" ได้';
 const BUDGET_PLAYER_MESSAGE = 'AI GM ติดขัด: AI ของเกมนี้ใช้ครบงบของเดือนแล้ว รอเจ้าของเกมจัดการ action ทุกอันยังอยู่';
 const NOT_READY_PLAYER_MESSAGE = 'AI GM ติดขัด: ยังเรียก AI ไม่ได้ รอเจ้าของเกมจัดการ action ทุกอันยังอยู่';
+
+/** GEN-128: the calls of a turn's result stage; what they cost is kept in reserve for the next one while the dialogue runs. */
+const RESULT_STAGE: readonly AiPurpose[] = ['gm_adjudicate', 'gm_repair', 'narrate_place', 'narrate_player'];
 
 /** Q-177: a narration call that fails is tried once more, then the template goes out. */
 const NARRATION_RETRIES = 1;
@@ -174,6 +182,9 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
    * neither promise rejects. A failed summary is simply missing and retried after the next turn (as before).
    */
   const writing = new Map<string, { day: Promise<void>; journals: Promise<void> }>();
+  /** GEN-128: the turns whose dialogue stage runs in this process (`dialogueLeft` never starts them twice). */
+  const running = new Set<string>();
+  const runningKey = (gameId: string, at: TurnAt) => `${gameId}:${at.day}:${at.phase}:${at.turn}`;
 
   function stuckFrom(error: AiServiceError): ResolverStuck {
     if (error.code === 'budget_reached') return { code: 'budget_reached', message: BUDGET_PLAYER_MESSAGE, ownerMessage: error.message };
@@ -279,6 +290,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     accept: (answer: R) => T | undefined;
     label: string;
     signal?: AbortSignal;
+    reserveUsdMicros?: number;
   }): Promise<T> {
     return gateStyle({
       db,
@@ -305,6 +317,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
           maxOutputTokens: opts.maxOutputTokens,
           maxRetries: 0,
           signal,
+          ...(opts.reserveUsdMicros !== undefined ? { reserveUsdMicros: opts.reserveUsdMicros } : {}),
         });
         return result.ok ? opts.accept(result.value) : undefined;
       },
@@ -589,7 +602,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     });
 
     // 6: what the room publishes and applies. GEN-116: the result and narration only; the NPC lines are the second stage below.
-    const entries: ResolutionEntry[] = [...farewellEntries, ...narrations.flatMap(({ ctx, out, readers }): ResolutionEntry[] => {
+    const perAudience = narrations.map(({ ctx, out, readers }): ResolutionEntry[] => {
       const reader = 'player' in ctx.audience ? world.byRef.get(ctx.audience.player)!.memberId : null;
       const render = (who: string | null, shared: boolean) => out.segments.map((s) => renderTokens(db, world, s.text, who, shared)).join('\n');
       const fallback = out.fallback ? { fallback: out.fallback } : {};
@@ -609,105 +622,37 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         { ...feed, text, except: [...own.values()].flat() },
         ...[...own].map(([t, only]): ResolutionEntry => ({ ...feed, text: t, only })),
       ];
-    })];
+    });
+    const entries: ResolutionEntry[] = [...farewellEntries, ...perAudience.flat()];
+    // GEN-128: where each audience's own text (its narration, or its place feed as most read it) sits in `entries`.
+    const firstEntry = (i: number) => farewellEntries.length + perAudience.slice(0, i).reduce((n, e) => n + e.length, 0);
 
     // GEN-116: the second stage, run by the room after the entries above are out and not waited for. One call per
-    // audience that has someone to speak; each audience's lines are published as soon as its call is done.
-    const realNpcNames = world.npcs.flatMap((n) => n.names.filter((name) => name !== n.alias));
+    // audience that has someone to speak. GEN-128: the calls are stored first, so a restart asks again what is not done.
     const level = db.select({ level: game.npcDialogue }).from(game).where(eq(game.id, gameId)).get()?.level ?? 'normal';
     const limits = npcLineLimits(level);
-    const dialogue = async (publish: (e: readonly ResolutionEntry[]) => void): Promise<void> => {
-      const dialogueTimer = createStageTimer();
-      let lineBudget = limits.total;
-      await Promise.all(
-        narrations.map(async ({ key, ctx, out, forbidden }) => {
-          const reader = 'player' in ctx.audience ? world.byRef.get(ctx.audience.player)!.memberId : null;
-          // Nobody here may speak, or a private narration of a public action (what is said in front of everyone is in the place feed once).
-          if (!ctx.npcs.some((n) => n.here) || (reader !== null && !ctx.privateLines)) return;
-          try {
-            const { journal: _journal, kind: _kind, ...rest } = ctx;
-            // GEN-151: the rules + each NPC's persona and library first (cached), the turn after.
-            const { system: libSystem, npcs } = dialoguePrompt(db, assets, world, rest.npcs);
-            // GEN-177 + GEN-151: rules, then the game's tone, then the NPC library — all stable, so all cacheable.
-            const system = [...dialogueSystem, ...libSystem.slice(1)];
-            const context: DialogueContext = { ...rest, npcs, kind: 'gm_dialogue', narration: out.segments.map((s) => s.text), limits };
-            const messages = [{ role: 'user' as const, text: JSON.stringify(context) }];
-            if (requestTokens(system, messages) > CONTEXT_BUDGET.npc_dialogue) {
-              log(`[gm] game=${gameId} purpose=npc_dialogue audience=${key} skipped: limit_exceeded`);
-              return;
-            }
-            const callStart = performance.now();
-            const result = await ai.call({
-              gameId,
-              purpose: 'npc_dialogue',
-              day: at.day,
-              phase: at.phase,
-              turn: at.turn,
-              system,
-              messages,
-              output: { name: GM_OUTPUT.dialogue, schema: GmDialogue },
-              maxOutputTokens: 1_000,
-              maxRetries: NARRATION_RETRIES,
-              ...(signal ? { signal } : {}),
-            });
-            dialogueTimer.add('dialogue_calls', performance.now() - callStart);
-            if (!result.ok) {
-              // C3: no lines, no repair, no more retries than the narration gets; the turn is complete without them.
-              log(`[gm] game=${gameId} purpose=npc_dialogue audience=${key} gave up: ${failureOf(result.error)}`);
-              return;
-            }
-            dialogueTimer.addTokens(result.usage);
-            const clean = (npcLines: GmDialogue['npcLines']) =>
-              capTotal(
-                cleanNpcLines(npcLines, {
-                  present: new Set(ctx.npcs.filter((n) => n.here).map((n) => n.id)),
-                  audience: reader === null ? 'public' : 'private',
-                  forbidden: [...forbidden, ...realNpcNames],
-                  cast: new Set(ctx.cast.map((c) => c.ref)),
-                  level,
-                  askers: new Map(ctx.answers.map((a) => [a.npcId, a.actionIds.length])),
-                }),
-                level,
-              );
-            // GEN-169: each line against its NPC's speech profile; a rewrite that leaves nobody speaking is refused.
-            const lines = (
-              await styled({
-                gameId,
-                at,
-                purpose: 'npc_dialogue',
-                system: dialogueSystem,
-                context,
-                output: { name: GM_OUTPUT.dialogue, schema: GmDialogue },
-                maxOutputTokens: 1_000,
-                answer: result.value,
-                value: clean(result.value.npcLines),
-                scope: 'dialogue',
-                texts: (ls) => ls.map((l) => ({ text: l.text, npcId: l.npcId })),
-                accept: (d) => {
-                  const again = clean(d.npcLines);
-                  return again.length > 0 ? again : undefined;
-                },
-                label: key,
-                ...(signal ? { signal } : {}),
-              })
-            ).slice(0, lineBudget);
-            lineBudget -= lines.length;
-            publish(
-              lines.map((l): ResolutionEntry => ({
-                kind: 'npc',
-                npcId: l.npcId,
-                npcKind: l.kind,
-                locationId: reader === null ? ctx.place.id : null,
-                memberId: reader,
-                text: renderTokens(db, world, l.text, reader),
-              })),
-            );
-          } catch (error) {
-            log(`[gm] game=${gameId} purpose=npc_dialogue audience=${key} failed: ${error instanceof Error ? error.name : 'unknown error'}`);
-          }
-        }),
-      );
-      log(`[gm] game=${gameId} day=${at.day} phase=${at.phase} turn=${at.turn} dialogue timing ${dialogueTimer.line()}`);
+    const dialogue: DialogueStage = async (publish, published = entries) => {
+      const jobs = narrations.flatMap(({ key, ctx, out, forbidden }, i): DialogueJob[] => {
+        const reader = 'player' in ctx.audience ? world.byRef.get(ctx.audience.player)!.memberId : null;
+        // Nobody here may speak, or a private narration of a public action (what is said in front of everyone is in the place feed once).
+        if (!ctx.npcs.some((n) => n.here) || (reader !== null && !ctx.privateLines)) return [];
+        const { journal: _journal, kind: _kind, ...rest } = ctx;
+        // GEN-151: the rules + each NPC's persona and library first (cached), the turn after.
+        const { system: libSystem, npcs } = dialoguePrompt(db, assets, world, rest.npcs);
+        // GEN-177 + GEN-151: rules, then the game's tone, then the NPC library — all stable, so all cacheable.
+        const system = [...dialogueSystem, ...libSystem.slice(1)];
+        // GEN-128 C3: the lines follow the narration the players read, a Human GM's edit included (names back to tokens).
+        const edited = published[firstEntry(i)]?.text;
+        const narration = edited !== undefined && edited !== entries[firstEntry(i)]!.text ? [world.tokenise(edited)] : out.segments.map((s) => s.text);
+        const context: DialogueContext = { ...rest, npcs, kind: 'gm_dialogue', narration, limits };
+        if (requestTokens(system, [{ text: JSON.stringify(context) }]) > CONTEXT_BUDGET.npc_dialogue) {
+          log(`[gm] game=${gameId} purpose=npc_dialogue audience=${key} skipped: limit_exceeded`);
+          return [];
+        }
+        return [{ key, system, context, forbidden }];
+      });
+      saveDialogueJobs(db, gameId, at, jobs, now());
+      await runDialogue(gameId, at, jobs, publish, signal);
     };
     const rolls = stored.rolls;
     log(`[gm] game=${gameId} day=${at.day} phase=${at.phase} turn=${at.turn} timing ${timer.line()}`);
@@ -750,6 +695,111 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       },
       after: (afterSignal) => summarizeFinishedDays(gameId, afterSignal),
     };
+  }
+
+  /**
+   * GEN-116 / GEN-128: the dialogue calls of one published turn, all at once; each audience's lines go to `publish` as soon as
+   * its call is done. A call is done (removed from the stored jobs) once its lines are stored, or when it gave up; never
+   * when the server shuts down, so the first join after the restart asks again (`dialogueLeft`).
+   */
+  async function runDialogue(gameId: string, at: TurnAt, jobs: readonly DialogueJob[], publish: Parameters<DialogueStage>[0], signal?: AbortSignal): Promise<void> {
+    const id = runningKey(gameId, at);
+    running.add(id);
+    try {
+      const world = loadWorld(db, gameId, assets);
+      const realNpcNames = world.npcs.flatMap((n) => n.names.filter((name) => name !== n.alias));
+      const level = db.select({ level: game.npcDialogue }).from(game).where(eq(game.id, gameId)).get()?.level ?? 'normal';
+      // GEN-128 C1: what this turn's result stage cost stays under the ceiling, for the next turn's result stage.
+      const reserveUsdMicros = spentOnTurn(db, gameId, at, RESULT_STAGE);
+      const dialogueTimer = createStageTimer();
+      let lineBudget = npcLineLimits(level).total;
+      const done = (key: string) => () => dialogueJobDone(db, gameId, at, key, now());
+      await Promise.all(
+        jobs.map(async ({ key, system, context, forbidden }) => {
+          const reader = 'player' in context.audience ? (world.byRef.get(context.audience.player)?.memberId ?? null) : null;
+          try {
+            if ('player' in context.audience && reader === null) return done(key)();
+            const callStart = performance.now();
+            const result = await ai.call({
+              gameId,
+              purpose: 'npc_dialogue',
+              day: at.day,
+              phase: at.phase,
+              turn: at.turn,
+              system,
+              messages: [{ role: 'user', text: JSON.stringify(context) }],
+              output: { name: GM_OUTPUT.dialogue, schema: GmDialogue },
+              maxOutputTokens: 1_000,
+              maxRetries: NARRATION_RETRIES,
+              reserveUsdMicros,
+              ...(signal ? { signal } : {}),
+            });
+            dialogueTimer.add('dialogue_calls', performance.now() - callStart);
+            if (!result.ok) {
+              // C3: no lines, no repair, no more retries than the narration gets; the turn is complete without them.
+              log(`[gm] game=${gameId} purpose=npc_dialogue audience=${key} gave up: ${failureOf(result.error)}`);
+              if (!signal?.aborted) done(key)();
+              return;
+            }
+            dialogueTimer.addTokens(result.usage);
+            const clean = (npcLines: GmDialogue['npcLines']) =>
+              capTotal(
+                cleanNpcLines(npcLines, {
+                  present: new Set(context.npcs.filter((n) => n.here).map((n) => n.id)),
+                  audience: reader === null ? 'public' : 'private',
+                  forbidden: [...forbidden, ...realNpcNames],
+                  cast: new Set(context.cast.map((c) => c.ref)),
+                  level,
+                  askers: new Map(context.answers.map((a) => [a.npcId, a.actionIds.length])),
+                }),
+                level,
+              );
+            // GEN-169: each line against its NPC's speech profile; a rewrite that leaves nobody speaking is refused.
+            const lines = (
+              await styled({
+                gameId,
+                at,
+                purpose: 'npc_dialogue',
+                system,
+                context,
+                output: { name: GM_OUTPUT.dialogue, schema: GmDialogue },
+                maxOutputTokens: 1_000,
+                answer: result.value,
+                value: clean(result.value.npcLines),
+                scope: 'dialogue',
+                texts: (ls) => ls.map((l) => ({ text: l.text, npcId: l.npcId })),
+                accept: (d) => {
+                  const again = clean(d.npcLines);
+                  return again.length > 0 ? again : undefined;
+                },
+                label: key,
+                reserveUsdMicros,
+                ...(signal ? { signal } : {}),
+              })
+            ).slice(0, lineBudget);
+            lineBudget -= lines.length;
+            if (lines.length === 0) return done(key)();
+            publish(
+              lines.map((l): ResolutionEntry => ({
+                kind: 'npc',
+                npcId: l.npcId,
+                npcKind: l.kind,
+                locationId: reader === null ? context.place.id : null,
+                memberId: reader,
+                text: renderTokens(db, world, l.text, reader),
+              })),
+              done(key),
+            );
+          } catch (error) {
+            log(`[gm] game=${gameId} purpose=npc_dialogue audience=${key} failed: ${error instanceof Error ? error.name : 'unknown error'}`);
+            if (!signal?.aborted) done(key)();
+          }
+        }),
+      );
+      log(`[gm] game=${gameId} day=${at.day} phase=${at.phase} turn=${at.turn} dialogue timing ${dialogueTimer.line()}`);
+    } finally {
+      running.delete(id);
+    }
   }
 
   /**
@@ -893,7 +943,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         return {
           ...r,
           ...(r.apply ? { apply: (tx: Parameters<typeof r.apply>[0]) => pin(() => r.apply!(tx)) } : {}),
-          ...(r.dialogue ? { dialogue: (publish: Parameters<typeof r.dialogue>[0]) => pin(() => r.dialogue!(publish)) } : {}),
+          ...(r.dialogue ? { dialogue: ((publish, published) => pin(() => r.dialogue!(publish, published))) satisfies DialogueStage } : {}),
           ...(r.after ? { after: (signal?: AbortSignal) => pin(() => r.after!(signal)) } : {}),
         };
       } catch (error) {
@@ -910,6 +960,10 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       }
     },
     catchUp: ({ gameId, signal }) => pinAssets(assets)(() => summarizeFinishedDays(gameId, signal)),
+    dialogueLeft: ({ gameId, signal }) =>
+      dialogueJobsLeft(db, gameId)
+        .filter(({ at }) => !running.has(runningKey(gameId, at)))
+        .map(({ at, jobs }) => ({ at, dialogue: (publish) => pinAssets(assets)(() => runDialogue(gameId, at, jobs, publish, signal)) })),
     scene: (input) => pinAssets(assets)(() => periodScenes({ db, ai, assets, log }, input)),
   };
 }
