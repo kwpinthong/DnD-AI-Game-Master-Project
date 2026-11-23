@@ -4,7 +4,7 @@ import type { Clock } from '../auth/join.ts';
 import { sendError } from '../auth/routes.ts';
 import type { Db } from '../db/client.ts';
 import { addNpcExample } from './npc-library.ts';
-import { correctionsJsonl, downvotedEntries, saveCorrection } from './vote-review.ts';
+import { correctionsJsonl, downvotedEntries, saveCorrection, voteSnapshotsJsonl } from './vote-review.ts';
 
 /** GEN-168: the 👎 review of the server owner; every route needs the admin token (`refuse` answers 403). */
 export function registerVoteReviewRoutes(app: FastifyInstance, db: Db, refuse: (request: FastifyRequest, reply: FastifyReply) => boolean, now: Clock, log: (line: string) => void) {
@@ -37,6 +37,13 @@ export function registerVoteReviewRoutes(app: FastifyInstance, db: Db, refuse: (
   app.get('/api/admin/corrections-export', async (request, reply) => {
     if (refuse(request, reply)) return reply;
     const body: AdminCorrectionsExportResponse = { exportedAt: new Date(now()).toISOString(), ...correctionsJsonl(db) };
+    return noStore(reply).send(body);
+  });
+
+  // GEN-189: the 👍/👎 kept from deleted games, the same envelope as the pairs' export.
+  app.get('/api/admin/vote-snapshots-export', async (request, reply) => {
+    if (refuse(request, reply)) return reply;
+    const body: AdminCorrectionsExportResponse = { exportedAt: new Date(now()).toISOString(), ...voteSnapshotsJsonl(db) };
     return noStore(reply).send(body);
   });
 }

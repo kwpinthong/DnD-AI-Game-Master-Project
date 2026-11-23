@@ -16,7 +16,7 @@ function stub() {
       calls.push({ method, path, body: init?.body ? JSON.parse(String(init.body)) : undefined });
       if (path === '/api/admin/downvotes') return Response.json(LIST);
       if (path === '/api/admin/corrections') return Response.json(CONTRACT_FIXTURES.AdminCorrectionResponse[0]);
-      if (path === '/api/admin/corrections-export') return Response.json(CONTRACT_FIXTURES.AdminCorrectionsExportResponse[0]);
+      if (path === '/api/admin/corrections-export' || path === '/api/admin/vote-snapshots-export') return Response.json(CONTRACT_FIXTURES.AdminCorrectionsExportResponse[0]);
       return Response.json({ code: 'not_found', message: 'ไม่พบ' }, { status: 404 });
     }),
   );
@@ -66,6 +66,16 @@ describe('GEN-168 vote review (admin)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'ส่งออก JSONL' }));
     const link = await screen.findByRole('link', { name: /ดาวน์โหลด/ });
     expect(link.getAttribute('download')).toMatch(/\.jsonl$/);
+    expect(decodeURIComponent(link.getAttribute('href')!)).toContain(CONTRACT_FIXTURES.AdminCorrectionsExportResponse[0]!.jsonl);
+  });
+
+  it('GEN-189 C3: export of the votes kept from deleted games gives its own .jsonl download', async () => {
+    const calls = stub();
+    open();
+    fireEvent.click(await screen.findByRole('button', { name: 'ส่งออกโหวตของเกมที่ลบแล้ว' }));
+    const link = await screen.findByRole('link', { name: /ดาวน์โหลด vote-snapshots/ });
+    expect(calls.some((c) => c.path === '/api/admin/vote-snapshots-export')).toBe(true);
+    expect(link.getAttribute('download')).toBe('vote-snapshots.jsonl');
     expect(decodeURIComponent(link.getAttribute('href')!)).toContain(CONTRACT_FIXTURES.AdminCorrectionsExportResponse[0]!.jsonl);
   });
 });

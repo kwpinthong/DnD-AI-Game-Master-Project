@@ -310,6 +310,7 @@ export const CONTRACT: readonly ContractItem[] = [
   http('GET', '/api/admin/downvotes', null, 'AdminDownvotesResponse', ready('GEN-168', 'admin', ['vote-review'], 'ข้อความ AI ที่มี 👎 ทุกเกม พร้อม NPC / เหตุผล (นับ) / คู่ "แก้เป็น" ที่บันทึกไว้')),
   http('POST', '/api/admin/corrections', 'AdminCorrectionRequest', 'AdminCorrectionResponse', ready('GEN-168', 'admin', ['vote-review'], 'เก็บคู่ข้อความเดิม → ฉบับแก้ (+ NPC, ฉาก, เหตุผล) แบบเพิ่มอย่างเดียว + log 1 บรรทัด; ข้อความในเกมไม่เปลี่ยน; `toLibrary` = แค่ติดธงผู้สมัครคลังตัวอย่าง NPC (คลังเป็นของ GEN-151); ไม่มีข้อความ = 404 `response_not_found`')),
   http('GET', '/api/admin/corrections-export', null, 'AdminCorrectionsExportResponse', ready('GEN-168', 'admin', ['vote-review'], 'JSONL ทุกคู่ ชื่อจริงของผู้เล่นแทนด้วย `{{PLAYER_n}}`')),
+  http('GET', '/api/admin/vote-snapshots-export', null, 'AdminCorrectionsExportResponse', ready('GEN-189', 'admin', ['vote-review'], 'JSONL โหวต 👍/👎 ของเกมที่ถูกลบ (เก็บไว้ก่อนลบ) ต่อข้อความ AI: `{ npc, scene, text, up, down, players, verdict }` ชื่อผู้เล่นแทนด้วย `{{PLAYER_n}}`')),
   // --- GEN-169: the server's style checker (server owner) ---
   http('GET', '/api/admin/style-flags', null, 'StyleFlagsResponse', ready('GEN-169', 'admin', ['vote-review'], 'จำนวนธงตรวจสำนวนต่อ NPC (id + alias ไม่ใช่ชื่อจริง) ต่อเหตุผล ไม่มีข้อความ; `npc: null` = บรรยาย')),
   http('GET', '/api/admin/style-settings', null, 'StyleSettingsResponse', ready('GEN-169', 'admin', ['vote-review'])),

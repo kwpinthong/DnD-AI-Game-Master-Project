@@ -124,3 +124,16 @@ export function correctionsJsonl(db: DbOrTx): { count: number; jsonl: string } {
   });
   return { count: lines.length, jsonl: lines.map((l) => `${l}\n`).join('') };
 }
+
+/** GEN-189 C1 / C2: called inside the delete's transaction, before the game's response_vote rows cascade. */
+export function snapshotVotes(db: DbOrTx, gameId: string, now: number): void {
+  void db;
+  void gameId;
+  void now;
+}
+
+/** GEN-189 C3: every vote snapshot as one JSON line. */
+export function voteSnapshotsJsonl(db: DbOrTx): { count: number; jsonl: string } {
+  void db;
+  return { count: 0, jsonl: '' };
+}

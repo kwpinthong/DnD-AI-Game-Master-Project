@@ -79,6 +79,8 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/admin/downvotes': { method: 'GET', path: '/api/admin/downvotes' },
     'POST /api/admin/corrections': { method: 'POST', path: '/api/admin/corrections', body: { gameId: 'g', seq: 1, edited: 'x' } },
     'GET /api/admin/corrections-export': { method: 'GET', path: '/api/admin/corrections-export' },
+    // GEN-189: the votes kept from deleted games (server owner).
+    'GET /api/admin/vote-snapshots-export': { method: 'GET', path: '/api/admin/vote-snapshots-export' },
     // GEN-169: the style checker (server owner); a player's session is 403.
     'GET /api/admin/style-flags': { method: 'GET', path: '/api/admin/style-flags' },
     'GET /api/admin/style-settings': { method: 'GET', path: '/api/admin/style-settings' },
@@ -152,6 +154,7 @@ const ADMIN_DATA_ROUTES = [
   'GET /api/admin/downvotes',
   'POST /api/admin/corrections',
   'GET /api/admin/corrections-export',
+  'GET /api/admin/vote-snapshots-export',
   'GET /api/admin/style-flags',
   'GET /api/admin/style-settings',
   'PUT /api/admin/style-settings',

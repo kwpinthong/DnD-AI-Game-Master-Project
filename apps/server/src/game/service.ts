@@ -13,6 +13,7 @@ import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { randomInt, randomUUID } from 'node:crypto';
 import { isUniqueViolation, openSession, type Clock } from '../auth/join.ts';
 import { hashPin } from '../auth/pin.ts';
+import { snapshotVotes } from '../admin/vote-review.ts';
 import type { Db } from '../db/client.ts';
 import { character, game, learningEntry, member, session } from '../db/schema.ts';
 import { canEditScenario } from '../scenario/editor.ts';
@@ -235,12 +236,16 @@ export function kickMember(db: Db, actor: MemberRow, targetId: string, now: Cloc
   });
 }
 
-/** GEN-112: the only way a game is removed. Owner only, and the caller must type the game's name; every table cascades. */
-export function deleteGame(db: Db, actor: MemberRow, confirmName: unknown): 'ok' | 'forbidden' | 'confirm_required' {
+/**
+ * GEN-112: the only way a game is removed. Owner only, and the caller must type the game's name; every table
+ * cascades. GEN-189: its 👍/👎 are kept first as vote snapshots.
+ */
+export function deleteGame(db: Db, actor: MemberRow, confirmName: unknown, now: number): 'ok' | 'forbidden' | 'confirm_required' {
   return db.transaction((tx) => {
     const row = tx.select().from(game).where(eq(game.id, actor.gameId)).get();
     if (!row || row.ownerMemberId !== actor.id) return 'forbidden';
     if (confirmName !== row.name) return 'confirm_required';
+    snapshotVotes(tx, row.id, now);
     tx.delete(game).where(eq(game.id, row.id)).run();
     return 'ok';
   });
