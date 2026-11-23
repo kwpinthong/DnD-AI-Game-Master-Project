@@ -16,6 +16,9 @@ export const INFO_TABS = ['place', 'self', 'bag', 'people'] as const;
 export type InfoTab = (typeof INFO_TABS)[number];
 export const TAB_DEFS:readonly TabDef<InfoTab>[] = INFO_TABS.map((id) => ({ id, label: t[id] }));
 
+/** The phone's names: the first tab is "ฉาก" like the bottom bar (GEN-136). */
+export const PHONE_TAB_DEFS: readonly TabDef<InfoTab>[] = INFO_TABS.map((id) => ({ id, label: id === 'place' ? t.scene : t[id] }));
+
 /** Everything the four panels read; the same object feeds the desktop side panel and the phone's tabs (GEN-123). */
 export interface InfoData {
   room: RoomState;
@@ -156,10 +159,10 @@ export function PeoplePanel({ room, data, entries, onSave, onRelease, companionP
 }
 
 /** The four tabs and the scrolling panel of the open one; the desktop side panel and the phone's sheet both use it. */
-export function InfoTabs({ tab, onPick, children }: { tab: InfoTab; onPick: (tab: InfoTab) => void; children: ReactNode }) {
+export function InfoTabs({ tab, onPick, children, tabs = TAB_DEFS }: { tab: InfoTab; onPick: (tab: InfoTab) => void; children: ReactNode; tabs?: readonly TabDef<InfoTab>[] }) {
   return (
     <>
-      <RovingTabs label={t.label} prefix={PREFIX} tabs={TAB_DEFS} active={tab} onPick={onPick} />
+      <RovingTabs label={t.label} prefix={PREFIX} tabs={tabs} active={tab} onPick={onPick} />
       <div role="tabpanel" id={panelId(PREFIX, tab)} aria-labelledby={tabId(PREFIX, tab)} className="info-scroll" tabIndex={0}>
         {children}
       </div>
