@@ -22,6 +22,8 @@ export interface PhaseResolver {
    * room uses the server's template ending.
    */
   finale?(input: { readonly gameId: string; readonly signal?: AbortSignal }): Promise<FinaleResolution>;
+  /** GEN-157: redoes the after-turn work a restart cut short (the summaries of finished days); the room runs it once per game in the background. */
+  catchUp?(input: { readonly gameId: string; readonly signal?: AbortSignal }): Promise<void>;
 }
 
 /** The ending as entries (whole-town feed + one narration per player), or why it could not be told (retry). */
@@ -138,8 +140,11 @@ export interface PhaseResolution {
    * A failure inside is the resolver's to swallow (the turn stays complete); if it throws, the room logs it and goes on.
    */
   readonly dialogue?: (publish: (entries: readonly ResolutionEntry[]) => void) => Promise<void>;
-  /** Runs after the turn is published (e.g. the day summary); a failure is logged and never blocks the game. */
-  readonly after?: () => Promise<void>;
+  /**
+   * Runs after the turn is published (e.g. the day summary). GEN-157: in the background, like `dialogue`: the next turn
+   * does not wait for it in the room (the resolver waits for what a prompt needs); a failure is logged and never blocks the game.
+   */
+  readonly after?: (signal?: AbortSignal) => Promise<void>;
   /** Set instead of everything else when the turn could not be resolved: nothing is published or applied. */
   readonly stuck?: ResolverStuck;
 }
