@@ -96,14 +96,17 @@ describe('C3 the info sheet and the device back button', () => {
 const room = RoomState.parse(CONTRACT_FIXTURES.RoomState[0]);
 const baseBar = { room, seenBy: 3, draft: EMPTY_DRAFT, setDraft: () => {}, problem: undefined, sending: false, onSend: () => {}, onRetry: () => {} };
 
-describe('C2 action bar on a phone', () => {
-  it('eight icon buttons with only an aria-label, and อื่นๆ that lists all eight with words', () => {
+describe('C2 action bar on a phone (GEN-134: four icons from the mockup + อื่นๆ)', () => {
+  const ROW = ['พูดคุย', 'สังเกต', 'ลอบเร้น', 'พัก'];
+  const REST = ['สืบค้น', 'โจมตี', 'ป้องกัน', 'สวด'];
+
+  it('GEN-134 C1/C2: four icon buttons with only an aria-label, and อื่นๆ that lists the other four with words', () => {
     render(<ActionBar {...baseBar} compact />);
     const row = screen.getByRole('group', { name: 'แถบ action' });
     const icons = within(row).getAllByRole('button');
-    // 8 words + the อื่นๆ button
-    expect(icons).toHaveLength(9);
-    for (const word of ['พูดคุย', 'สังเกต', 'สืบค้น', 'โจมตี', 'ป้องกัน', 'สวด', 'ลอบเร้น', 'พัก']) {
+    // 4 words + the อื่นๆ button: 4 x 44 + อื่นๆ fits 390 with no sideways scroll
+    expect(icons.map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([...ROW, 'อื่นๆ']);
+    for (const word of ROW) {
       const btn = within(row).getByRole('button', { name: word });
       expect(btn.getAttribute('aria-label')).toBe(word);
       expect(btn.textContent).toBe('');
@@ -114,7 +117,29 @@ describe('C2 action bar on a phone', () => {
 
     fireEvent.click(more);
     const list = screen.getByRole('group', { name: 'การกระทำทั้งหมด' });
-    for (const word of ['พูดคุย', 'สังเกต', 'สืบค้น', 'โจมตี', 'ป้องกัน', 'สวด', 'ลอบเร้น', 'พัก']) expect(within(list).getByRole('button', { name: word }).textContent).toContain(word);
+    for (const word of REST) expect(within(list).getByRole('button', { name: word }).textContent).toContain(word);
+    for (const word of ROW) expect(within(list).queryByRole('button', { name: word })).toBeNull();
+  });
+
+  it('GEN-134: the place chips are in the อื่นๆ list, not the icon row', () => {
+    const chip = { id: 'inn_rest', label: 'พัก (5 เหรียญ)', costCoins: 5, usesLeftToday: null, blocked: null } as const;
+    render(<ActionBar {...baseBar} room={{ ...room, you: { ...room.you, placeActions: [chip] } }} compact />);
+    expect(within(screen.getByRole('group', { name: 'แถบ action' })).queryByRole('button', { name: chip.label })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'อื่นๆ' }));
+    expect(within(screen.getByRole('group', { name: 'การกระทำทั้งหมด' })).getByRole('button', { name: chip.label })).toBeTruthy();
+  });
+
+  it('GEN-134: Escape closes the อื่นๆ list and focus goes back to อื่นๆ', () => {
+    render(<ActionBar {...baseBar} compact />);
+    const more = screen.getByRole('button', { name: 'อื่นๆ' });
+    fireEvent.click(more);
+    const list = screen.getByRole('group', { name: 'การกระทำทั้งหมด' });
+    const first = within(list).getByRole('button', { name: 'สืบค้น' });
+    first.focus();
+    fireEvent.keyDown(first, { key: 'Escape' });
+    expect(screen.queryByRole('group', { name: 'การกระทำทั้งหมด' })).toBeNull();
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(more);
   });
 
   it('a word in the list prefills the box and closes the list', () => {
@@ -186,6 +211,12 @@ describe('C1 / C4 / C5 the phone CSS (measured in Chrome too; jsdom has no layou
     expect(chat).toMatch(/env\(safe-area-inset-bottom/);
     expect(chat).not.toMatch(/position:\s*fixed/);
     expect(chat).toMatch(/overflow-x:\s*hidden/);
+  });
+
+  it('GEN-134 C1: the phone icon row does not scroll sideways (four icons + อื่นๆ fit 390)', () => {
+    expect(chat).not.toContain('.chat-quick__scroll');
+    expect(rule(chat, '.chat-quick--icons')).not.toMatch(/overflow-x:\s*(auto|scroll)/);
+    expect(rule(chat, '.play .chat-quick__more')).toMatch(/min-width:\s*44px/);
   });
 
   it('every phone button is at least 44 x 44; the icon buttons are exactly that', () => {
