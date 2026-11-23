@@ -1,8 +1,9 @@
 import { isVotableEntry, VoteReason, type AdminCorrection, type AdminDownvoteEntry, type ReviewScene } from '@isekai/protocol';
 import { and, asc, eq, inArray, like, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
-import { character, game, member, responseCorrection, responseVote, roomEntry } from '../db/schema.ts';
+import { character, game, member, responseCorrection, responseVote, roomEntry, voteSnapshot } from '../db/schema.ts';
 import type { EntryMeta, RoomEntryRow } from '../room/store.ts';
+import { gameVotes } from '../room/vote.ts';
 import { getGameScenario } from '../scenario/store.ts';
 
 /**
@@ -112,14 +113,17 @@ export function saveCorrection(db: DbOrTx, input: { gameId: string; seq: number;
   return correctionView(saved);
 }
 
+/** Swaps each player's real names (`memberNames`) for `{{PLAYER_n}}`, longest name first. */
+function playerMask(players: string[][]): (text: string) => string {
+  const swaps = players.flatMap((names, i) => names.map((name) => [name, `{{PLAYER_${i + 1}}}`] as const)).sort((a, b) => b[0].length - a[0].length);
+  return (text) => swaps.reduce((out, [name, token]) => out.replaceAll(name, token), text.normalize('NFC'));
+}
+
 /** C6: every pair as one JSON line, each player's real names swapped for `{{PLAYER_n}}` (longest name first). */
 export function correctionsJsonl(db: DbOrTx): { count: number; jsonl: string } {
   const rows = db.select().from(responseCorrection).orderBy(asc(responseCorrection.id)).all();
   const lines = rows.map((c) => {
-    const swaps = (JSON.parse(c.playerNames) as string[][])
-      .flatMap((names, i) => names.map((name) => [name, `{{PLAYER_${i + 1}}}`] as const))
-      .sort((a, b) => b[0].length - a[0].length);
-    const mask = (text: string) => swaps.reduce((out, [name, token]) => out.replaceAll(name, token), text.normalize('NFC'));
+    const mask = playerMask(JSON.parse(c.playerNames) as string[][]);
     return JSON.stringify({ npc: c.npcName, scene: c.scene, reasons: JSON.parse(c.reasons) as string[], original: mask(c.original), edited: mask(c.edited), libraryCandidate: c.libraryCandidate });
   });
   return { count: lines.length, jsonl: lines.map((l) => `${l}\n`).join('') };
@@ -127,13 +131,25 @@ export function correctionsJsonl(db: DbOrTx): { count: number; jsonl: string } {
 
 /** GEN-189 C1 / C2: called inside the delete's transaction, before the game's response_vote rows cascade. */
 export function snapshotVotes(db: DbOrTx, gameId: string, now: number): void {
-  void db;
-  void gameId;
-  void now;
+  const { players, entries } = gameVotes(db, gameId);
+  if (entries.length === 0) return;
+  const mask = playerMask(memberNames(db, gameId));
+  const rows = new Map(db.select().from(roomEntry).where(and(eq(roomEntry.gameId, gameId), inArray(roomEntry.id, entries.map((e) => e.seq)))).all().map((r) => [r.id, r]));
+  db.insert(voteSnapshot)
+    .values(
+      entries.map((e) => {
+        const row = rows.get(e.seq)!;
+        const meta = row.meta === null ? {} : (JSON.parse(row.meta) as EntryMeta);
+        const verdict = e.good ? 'good' : e.avoid ? 'avoid' : 'none';
+        return { gameId, entryId: e.seq, scene: sceneOf(row, meta), npcName: npcOf(db, row, meta)?.name ?? null, text: mask(e.text), up: e.up, down: e.down, players, verdict, createdAt: now } as const;
+      }),
+    )
+    .run();
 }
 
 /** GEN-189 C3: every vote snapshot as one JSON line. */
 export function voteSnapshotsJsonl(db: DbOrTx): { count: number; jsonl: string } {
-  void db;
-  return { count: 0, jsonl: '' };
+  const rows = db.select().from(voteSnapshot).orderBy(asc(voteSnapshot.id)).all();
+  const jsonl = rows.map((s) => `${JSON.stringify({ npc: s.npcName, scene: s.scene, text: s.text, up: s.up, down: s.down, players: s.players, verdict: s.verdict })}\n`).join('');
+  return { count: rows.length, jsonl };
 }

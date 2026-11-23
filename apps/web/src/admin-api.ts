@@ -130,6 +130,11 @@ export function fetchCorrectionsExport(baseUrl: string, token: string) {
   return call(baseUrl, '/api/admin/corrections-export', { headers: auth(token) }, AdminCorrectionsExportResponse);
 }
 
+/** GEN-189: the 👍/👎 kept from deleted games, the same envelope as the pairs. */
+export function fetchVoteSnapshotsExport(baseUrl: string, token: string) {
+  return call(baseUrl, '/api/admin/vote-snapshots-export', { headers: auth(token) }, AdminCorrectionsExportResponse);
+}
+
 /** GEN-169: the style checker's flag counts and settings (server owner only). */
 export function fetchStyleFlags(baseUrl: string, token: string) {
   return call(baseUrl, '/api/admin/style-flags', { headers: auth(token) }, StyleFlagsResponse);
