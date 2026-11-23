@@ -379,7 +379,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     const npcsFor = (placeId: string, members: string[]) => {
       const here = npcsPresentAt(world, assets, placeId, { phase: at.phase, weather: input.weather?.weather ?? null, karmas: members.map(karmaOf) });
       const hereIds = new Set(here.map((n) => n.id));
-      // Tokens may still name the NPCs of the scenario place (as before); only the scheduled ones speak.
+      // `here` (GEN-137): an NPC whose NPC_Schedule row matches this place now, else (no row anywhere now) at its scenario place;
+      // only these speak. Tokens may also name the other NPCs of the scenario place (scheduled elsewhere now).
       return npcPrompt(db, assets, world, world.npcs.filter((n) => hereIds.has(n.id) || n.locationId === placeId), hereIds, members);
     };
     const secretBy = new Set(order.filter((a) => a.visibility === 'secret').map((a) => a.memberId));
