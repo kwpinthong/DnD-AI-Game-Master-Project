@@ -1,4 +1,4 @@
-import type { AiUsageGameResponse, AiUsageOverviewResponse, UsageCeiling, UsageFailure, UsageTotals } from '@isekai/protocol';
+import type { AiUsageGameResponse, AiUsageOverviewResponse, GmRefusal, UsageCeiling, UsageFailure, UsageTotals } from '@isekai/protocol';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { fetchGameUsage, fetchUsageOverview, postAdminLogout, postAdminSession } from './admin-api.ts';
 import { GameDataEditor } from './GameDataEditor.tsx';
@@ -332,6 +332,7 @@ function GameUsage({ usage, onClose }: { usage: AiUsageGameResponse; onClose: ()
             rows={usage.byModel.map((m) => ({ key: m.model, name: m.model, totals: m.totals, unpriced: !m.priced }))}
           />
           {usage.failures.length > 0 && <Failures failures={usage.failures} />}
+          {usage.refusals.length > 0 && <Refusals refusals={usage.refusals} />}
         </>
       )}
     </section>
@@ -473,5 +474,47 @@ function Failures({ failures }: { failures: UsageFailure[] }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+/** GEN-199: answers the server refused before the repair (tokens only, text cut short by the server). */
+function Refusals({ refusals }: { refusals: GmRefusal[] }) {
+  return (
+    <>
+      <table aria-label="คำตอบ AI ที่ถูกตีกลับ">
+        <thead>
+          <tr>
+            <th>purpose</th>
+            <th>รอบ</th>
+            <th>code</th>
+            <th>path</th>
+            <th>AI ตอบ</th>
+            <th>ที่คาด (ข้อความ server)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {refusals.flatMap((r, i) =>
+            r.errors.map((e, j) => (
+              <tr key={`${i}-${j}`}>
+                <th scope="row">{PURPOSE_LABEL[r.purpose] ?? r.purpose}</th>
+                <td>{r.stage === 'first' ? 'ครั้งแรก' : 'หลัง repair'}</td>
+                <td>{e.code}</td>
+                <td>{e.path}</td>
+                <td>{e.got}</td>
+                <td>{e.message}</td>
+              </tr>
+            )),
+          )}
+        </tbody>
+      </table>
+      {refusals.map((r, i) => (
+        <details key={i}>
+          <summary>
+            คำตอบเต็ม {PURPOSE_LABEL[r.purpose] ?? r.purpose} {new Date(r.at).toLocaleString('th-TH', { hour12: false })}
+          </summary>
+          <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{r.proposal}</pre>
+        </details>
+      ))}
+    </>
   );
 }

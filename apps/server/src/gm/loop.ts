@@ -40,6 +40,7 @@ import { setEndingPath } from '../finale/store.ts';
 import { DRIFT_STRATEGY_ID, recordStrategyParticipation } from '../strategy/store.ts';
 import { SCENARIO_DAYS } from '@isekai/protocol';
 import { buildFinaleContext, checkFinale, finaleCheckInput, finaleEntries, templateFinale } from './finale.ts';
+import { recordRefusal } from './refusal-log.ts';
 import { checkNarration, checkTurnProposal, containsName, maskNames, type GmError } from './check.ts';
 import {
   CONTEXT_BUDGET,
@@ -257,6 +258,12 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       const value = opts.sanitize ? opts.sanitize(result.value) : result.value;
       const errors = opts.check(value);
       if (errors.length === 0) return { value, fallback: null };
+      try {
+        recordRefusal(db, { gameId: opts.gameId, purpose, stage: i === 0 ? 'first' : 'repair', value, errors, at: now() });
+      } catch (e) {
+        // GEN-199: the record is for the server owner only; a failure never stops the turn.
+        log(`[gm] game=${opts.gameId} refusal not recorded: ${(e as Error).message}`);
+      }
       // GEN-163: an unknown_ref message starts with the ref (an opaque id or token, never prompt text).
       const unknown = errors.filter((e) => e.code === 'unknown_ref').map((e) => `${e.message.split(' ')[0]} at ${e.path}`);
       log(

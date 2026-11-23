@@ -88,7 +88,7 @@ describe('GEN-199 refused AI answers kept for the server owner', { timeout: 60_0
     return AiUsageGameResponse.parse(res.body);
   }
 
-  /** The first adjudicate answer: action 0 costs 99 Stamina (and `edit` may add more); the repair gets the Mock's valid answer. */
+  /** The first adjudicate answer: action 0 costs 7 Stamina (in range, wrong for its kind) (and `edit` may add more); the repair gets the Mock's valid answer. */
   const wrongStamina =
     (edit: (proposal: ReturnType<typeof mockTurnProposal>, ctx: TurnContext) => void = () => {}): Handler =>
     (req) => {
@@ -96,7 +96,7 @@ describe('GEN-199 refused AI answers kept for the server owner', { timeout: 60_0
       const ctx = contextOf<TurnContext>(req);
       const proposal = mockTurnProposal(ctx);
       for (const a of proposal.actions) a.check = { type: 'none' };
-      proposal.actions[0]!.staminaCost = 99;
+      proposal.actions[0]!.staminaCost = 7;
       edit(proposal, ctx);
       return mockReply.ok(proposal);
     };
@@ -111,9 +111,9 @@ describe('GEN-199 refused AI answers kept for the server owner', { timeout: 60_0
     const r = refusals[0]!;
     expect(r).toMatchObject({ purpose: 'gm_adjudicate', stage: 'first' });
     const error = r.errors.find((e) => e.code === 'stamina_cost_mismatch');
-    expect(error).toMatchObject({ path: 'actions[0].staminaCost', got: '99' });
-    expect(error!.message).toMatch(/costs \d+(\.\.\d+)?, got 99/);
-    expect(JSON.parse(r.proposal).actions[0].staminaCost).toBe(99);
+    expect(error, JSON.stringify(r.errors)).toMatchObject({ path: 'actions[0].staminaCost', got: '7' });
+    expect(error!.message).toMatch(/costs \d+(\.\.\d+)?, got 7/);
+    expect(JSON.parse(r.proposal).actions[0].staminaCost).toBe(7);
   });
 
   it('C2: the kept answer has no real name, lobby name or player code, and player text is cut short', async () => {
