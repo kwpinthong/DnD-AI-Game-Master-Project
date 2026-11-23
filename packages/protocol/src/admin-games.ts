@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MemberRole } from './game.ts';
 import { GameEndReason } from './history.ts';
 import { Phase } from './scenario.ts';
 
@@ -40,3 +41,25 @@ export const CLOSE_REASON_MAX = 200;
  */
 export const AdminCloseGameRequest = z.object({ confirmName: z.string(), reason: z.string().optional() });
 export type AdminCloseGameRequest = z.infer<typeof AdminCloseGameRequest>;
+
+/**
+ * ISK-018: one member of a game for the server owner, kicked ones included (`kickedAt` ISO, null = in the game).
+ * `ready` is the lobby ready mark (always false until ISK-017). Never a PIN hash or a session token.
+ */
+export const AdminMemberRow = z.strictObject({
+  id: z.string(),
+  name: z.string(),
+  role: MemberRole,
+  hasCharacter: z.boolean(),
+  ready: z.boolean(),
+  kickedAt: z.string().nullable(),
+});
+export type AdminMemberRow = z.infer<typeof AdminMemberRow>;
+
+/** 200 from GET /api/admin/games/:id/members and POST .../members/:memberId/kick: every member, join order. */
+export const AdminMembersResponse = z.strictObject({ members: z.array(AdminMemberRow) });
+export type AdminMembersResponse = z.infer<typeof AdminMembersResponse>;
+
+/** 200 from POST /api/admin/games/:id/invite-code: the new code (the old one stops working at once). */
+export const AdminInviteCodeResponse = z.strictObject({ inviteCode: z.string() });
+export type AdminInviteCodeResponse = z.infer<typeof AdminInviteCodeResponse>;

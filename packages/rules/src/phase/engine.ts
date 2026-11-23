@@ -169,7 +169,19 @@ export function phaseStep(state: PhaseState, event: PhaseEvent, rng: Rng): Phase
       return submit(state, event.playerId, event.action);
     case 'resolved':
       return resolved(state, event.results, rng);
+    case 'leave':
+      return leave(state, event.playerId);
   }
+}
+
+function leave(state: PhaseState, playerId: string): PhaseStepResult {
+  if (!state.players[playerId]) return fail('unknown_player', `No player "${playerId}"`);
+  const { [playerId]: _seat, ...players } = state.players;
+  const { [playerId]: _draft, ...submissions } = state.submissions;
+  const next: PhaseState = { ...state, order: state.order.filter((id) => id !== playerId), players, submissions };
+  // An empty table never closes a turn (it would resolve turn after turn with nobody in it).
+  if (next.status !== 'collecting' || next.order.length === 0) return { ok: true, state: next, log: [] };
+  return { ok: true, ...closeIfComplete(next, []) };
 }
 
 function fail(code: PhaseErrorCode, message: string): { readonly ok: false; readonly error: PhaseError } {

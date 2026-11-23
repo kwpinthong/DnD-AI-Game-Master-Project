@@ -49,7 +49,8 @@ describe('migration late_join (ISK-015 C16)', () => {
     const before = { members: sqlite.prepare('select * from member').all(), phase: sqlite.prepare('select * from game_phase').all() };
 
     migrate(drizzle(sqlite), { migrationsFolder });
-    expect({ members: sqlite.prepare('select * from member').all(), phase: sqlite.prepare('select * from game_phase').all() }).toEqual(before);
+    // toMatchObject: later migrations may add columns (ISK-017 ready_at); every old value must stay.
+    expect({ members: sqlite.prepare('select * from member').all(), phase: sqlite.prepare('select * from game_phase').all() }).toMatchObject(before);
     expect(sqlite.prepare('select count(*) as n from late_join').get()).toEqual({ n: 0 });
     sqlite.close();
   });

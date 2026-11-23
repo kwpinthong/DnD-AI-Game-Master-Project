@@ -18,7 +18,7 @@ import { registerStyleReviewRoutes } from './style-review-routes.ts';
 import { registerStyleEvalRoutes } from './style-eval-routes.ts';
 import type { LearningExtractor } from '../learning/extract.ts';
 import { registerLearningRoutes } from './learning-routes.ts';
-import { registerAdminGameRoutes, type GameClosedHook } from './games-routes.ts';
+import { registerAdminGameRoutes, type GameClosedHook, type MemberKickedHook } from './games-routes.ts';
 import { registerFeedbackAdminRoutes } from '../feedback/routes.ts';
 
 export interface AdminRouteOptions {
@@ -36,6 +36,8 @@ export interface AdminRouteOptions {
   learning: LearningExtractor;
   /** ISK-001: after a game was closed (the room tells its sockets; a played game gets the end-of-game work). */
   onGameClosed?: GameClosedHook;
+  /** ISK-018: after a member was kicked by the server owner. */
+  onMemberKicked?: MemberKickedHook;
 }
 
 const FORBIDDEN = 'หน้านี้สำหรับเจ้าของ server เท่านั้น';
@@ -104,7 +106,7 @@ export function registerAdminRoutes(app: FastifyInstance, db: Db, now: Clock, op
   registerStyleReviewRoutes(app, options.styleReview, refuse);
   registerStyleEvalRoutes(app, db, refuse);
   registerLearningRoutes(app, db, options.learning, refuse);
-  registerAdminGameRoutes(app, db, now, sessions, options.onGameClosed ?? (() => {}));
+  registerAdminGameRoutes(app, db, now, sessions, options.onGameClosed ?? (() => {}), options.onMemberKicked ?? (() => {}));
   registerFeedbackAdminRoutes(app, db, refuse, now);
 
   app.get<{ Params: { gameId: string } }>('/api/admin/ai-usage/:gameId', async (request, reply) => {

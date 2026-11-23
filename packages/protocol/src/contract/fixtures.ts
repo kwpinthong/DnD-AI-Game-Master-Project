@@ -600,6 +600,17 @@ export const CONTRACT_FIXTURES: Fixtures = {
   AdminGamesResponse: [{ games: [adminGameRow, { ...adminGameRow, id: 'g-lobby', name: 'ห้องรอ', phase: 'lobby', day: null, period: null, playerCount: 2, lastActionAt: null, aiUsd: 0 }] }, { games: [] }],
   AdminGameRow: [adminGameRow, { ...adminGameRow, phase: 'ended', endedReason: 'closed' }],
   AdminCloseGameRequest: [{ confirmName: 'เมืองก่อนอุกกาบาต', reason: 'ทดสอบระบบ' }, { confirmName: 'เมืองก่อนอุกกาบาต' }],
+  AdminMembersResponse: [
+    {
+      members: [
+        { id: 'm-gm', name: 'จีเอ็ม', role: 'gm', hasCharacter: false, ready: false, kickedAt: null },
+        { id: 'm-1', name: 'นก', role: 'player', hasCharacter: true, ready: false, kickedAt: null },
+        { id: 'm-2', name: 'บี', role: 'player', hasCharacter: false, ready: false, kickedAt: '2026-11-24T10:00:00.000Z' },
+      ],
+    },
+    { members: [] },
+  ],
+  AdminInviteCodeResponse: [{ inviteCode: 'K7Q2MX' }],
   GmConsoleResponse: [
     {
       view: 'gm',

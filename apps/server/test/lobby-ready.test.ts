@@ -19,7 +19,7 @@ import { caller, CLOCK, CREATE_CODE, startedTable, startTestServer, type Call } 
  */
 
 const AI_WITHOUT_KEY = loadAiConfig({ AI_PROVIDER: 'anthropic' });
-const journal = JSON.parse(readFileSync(join(migrationsFolder, 'meta', '_journal.json'), 'utf8')) as { entries: { tag: string }[] };
+const journal = JSON.parse(readFileSync(join(migrationsFolder, 'meta', '_journal.json'), 'utf8')) as { entries: { tag: string; when: number }[] };
 
 interface Seat {
   token: string;
@@ -313,7 +313,10 @@ describe('ISK-017 ready + auto start, no owner', { timeout: 120_000 }, () => {
     const Database = (await import('better-sqlite3')).default;
     const sqlite = new Database(`${dir}/isekai.sqlite`);
     sqlite.prepare('alter table member drop column ready_at').run();
-    expect(sqlite.prepare('delete from __drizzle_migrations where created_at = (select max(created_at) from __drizzle_migrations)').run().changes).toBe(1);
+    // Drizzle only runs migrations newer than the last applied one, so the later ones (ISK-018's audit table) go too.
+    const readyWhen = journal.entries.find((e) => e.tag.endsWith('_member_ready'))!.when;
+    sqlite.prepare('drop table admin_game_audit').run();
+    expect(sqlite.prepare('delete from __drizzle_migrations where created_at >= ?').run(readyWhen).changes).toBeGreaterThanOrEqual(1);
     const owner = (sqlite.prepare('select owner_member_id as o from game where id = ?').get(t.gameId) as { o: string }).o;
     sqlite.close();
     expect(owner).toBe(a.memberId);

@@ -15,7 +15,7 @@ import { isUniqueViolation, openSession, type Clock } from '../auth/join.ts';
 import { hashPin } from '../auth/pin.ts';
 import { snapshotVotes } from '../admin/vote-review.ts';
 import type { Db } from '../db/client.ts';
-import { character, game, learningEntry, member } from '../db/schema.ts';
+import { character, game, learningEntry, member, session } from '../db/schema.ts';
 import { canEditScenario } from '../scenario/editor.ts';
 import { membersWithLootChoice } from './loot.ts';
 import { copyTemplateForGame, getGameScenario } from '../scenario/store.ts';
@@ -228,6 +228,20 @@ export function setReady(db: Db, me: MemberRow, ready: boolean, now: Clock, asse
     if (start.kind === 'ai_not_ready') return start;
     return { kind: 'ok', view: gameView(tx, row.id, me), started: start.kind === 'started' };
   });
+}
+
+/** ISK-018: a new invite code for the game (the old one stops working at once); returns it. */
+export function renewGameInviteCode(tx: Db | Tx, gameId: string): string {
+  return withFreshInviteCode((inviteCode) => {
+    tx.update(game).set({ inviteCode }).where(eq(game.id, gameId)).run();
+    return inviteCode;
+  });
+}
+
+/** ISK-018: kicked = blocked: sessions are deleted and the row stays so the name + PIN cannot rejoin. */
+export function blockMember(tx: Db | Tx, memberId: string, at: number): void {
+  tx.update(member).set({ kickedAt: at }).where(eq(member.id, memberId)).run();
+  tx.delete(session).where(eq(session.memberId, memberId)).run();
 }
 
 /**

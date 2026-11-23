@@ -1,8 +1,8 @@
 import type { ActionVisibility, GmFallbackCause, HitView, RollView, RoomEntryKind, TurnChange } from '@isekai/protocol';
-import { createPhaseState, restorePhaseState, type PhaseState, type TurnPoint } from '@isekai/rules';
-import { and, asc, eq, gt, inArray, max, sql } from 'drizzle-orm';
+import { createPhaseState, phaseStep, restorePhaseState, type PhaseState, type Rng, type TurnPoint } from '@isekai/rules';
+import { and, asc, eq, gt, inArray, isNotNull, max, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.ts';
-import { character, gamePhase, lateJoin, phaseAction, roomEntry, roomEntryRecipient } from '../db/schema.ts';
+import { character, gamePhase, lateJoin, member, phaseAction, roomEntry, roomEntryRecipient } from '../db/schema.ts';
 import { activeMembers } from '../game/service.ts';
 
 /** Current karma of each of `ids` from their character (the engine's copy only decides Drowsy, Q-087). */
@@ -63,6 +63,22 @@ function withCharacterHpMax(db: DbOrTx, state: PhaseState): PhaseState {
     if (hpMax !== undefined) players[id] = { ...players[id]!, hpMax };
   }
   return { ...state, players };
+}
+
+/** ISK-018: `state` without the seats of kicked members (a collecting turn may close by it); the same object when none. */
+export function withoutKicked(db: DbOrTx, gameId: string, state: PhaseState, rng: Rng): PhaseState {
+  if (state.order.length === 0) return state;
+  const kicked = db
+    .select({ id: member.id })
+    .from(member)
+    .where(and(eq(member.gameId, gameId), isNotNull(member.kickedAt), inArray(member.id, [...state.order])))
+    .all();
+  let next = state;
+  for (const { id } of kicked) {
+    const step = phaseStep(next, { type: 'leave', playerId: id }, rng);
+    if (step.ok) next = step.state;
+  }
+  return next;
 }
 
 export function savePhaseState(db: DbOrTx, gameId: string, state: PhaseState, now: number): void {

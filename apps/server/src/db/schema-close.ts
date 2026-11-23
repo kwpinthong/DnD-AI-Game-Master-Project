@@ -13,3 +13,15 @@ export const gameClose = sqliteTable('game_close', {
   hasSummary: integer('has_summary', { mode: 'boolean' }).notNull(),
   closedAt: integer('closed_at').notNull(),
 });
+
+/**
+ * ISK-018: the server owner's other changes to a game, one row each: `kick` (with the member) or `invite_code`
+ * (a new code; the code itself is never stored here). No foreign key, like `game_close`.
+ */
+export const adminGameAudit = sqliteTable('admin_game_audit', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  action: text('action', { enum: ['kick', 'invite_code'] }).notNull(),
+  gameId: text('game_id').notNull(),
+  memberId: text('member_id'),
+  at: integer('at').notNull(),
+});

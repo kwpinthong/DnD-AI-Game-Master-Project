@@ -305,3 +305,27 @@ describe('C7 resubmitting before the turn closes replaces the action; during res
     expect(s.submissions['pc-a']!.text).toBe('เดินดูตลาด');
   });
 });
+
+describe('ISK-018 leave (a kicked player)', () => {
+  it('drops the seat and the draft; the turn closes once nobody left is waited for', () => {
+    const s = submit(submit(start(), 'pc-a'), 'pc-b');
+    const left = step(s, { type: 'leave', playerId: 'pc-c' });
+    expect(left.status).toBe('resolving');
+    expect(left.order).toEqual(['pc-a', 'pc-b']);
+    expect(left.players['pc-c']).toBeUndefined();
+
+    const drafted = step(submit(start(), 'pc-a'), { type: 'leave', playerId: 'pc-a' });
+    expect(drafted.status).toBe('collecting');
+    expect(drafted.submissions).toEqual({});
+  });
+
+  it('while resolving only drops the seat; an unknown player is refused; the last one leaving does not close an empty turn', () => {
+    const resolving = step(submitAll(start()), { type: 'leave', playerId: 'pc-b' });
+    expect(resolving).toMatchObject({ status: 'resolving', order: ['pc-a', 'pc-c'] });
+    expect(rejected(phaseStep(start(), { type: 'leave', playerId: 'nobody' }, new SeededRng(1)))).toBe('unknown_player');
+
+    let alone = start();
+    for (const id of IDS) alone = step(alone, { type: 'leave', playerId: id });
+    expect(alone).toMatchObject({ status: 'collecting', order: [] });
+  });
+});
