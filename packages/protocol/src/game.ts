@@ -14,6 +14,10 @@ export type GameMode = z.infer<typeof GameMode>;
 export const NpcDialogueLevel = z.enum(['low', 'normal', 'high']);
 export type NpcDialogueLevel = z.infer<typeof NpcDialogueLevel>;
 
+/** GEN-177: the language tone of narration and NPC lines: A contemporary fantasy, B high old legend, C playful. */
+export const GameTone = z.enum(['A', 'B', 'C']);
+export type GameTone = z.infer<typeof GameTone>;
+
 /** `gm` = the Human GM (the creator when the game has one); everyone else is a `player`. */
 export const MemberRole = z.enum(['player', 'gm']);
 export type MemberRole = z.infer<typeof MemberRole>;
@@ -46,6 +50,8 @@ export const CreateGameRequest = z
     humanGm: z.boolean({ error: 'เลือกว่ามี GM คนหรือไม่' }),
     /** GEN-116: absent = normal. */
     npcDialogue: NpcDialogueLevel.optional(),
+    /** GEN-177: absent = the server default (set at /admin). */
+    tone: GameTone.optional(),
     name: JoinRequest.shape.name,
     pin: JoinRequest.shape.pin,
   })
@@ -73,6 +79,7 @@ export const UpdateGameRequest = z.object({
   gameName: gameName.optional(),
   mode: GameMode.optional(),
   npcDialogue: NpcDialogueLevel.optional(),
+  tone: GameTone.optional(),
 });
 export type UpdateGameRequest = z.infer<typeof UpdateGameRequest>;
 
@@ -94,6 +101,8 @@ export const GameView = z.object({
   humanGm: z.boolean(),
   /** GEN-116: the NPC dialogue level of the game (owner edits it in the lobby). The server always sends it; optional so older web fixtures still type. */
   npcDialogue: NpcDialogueLevel.optional(),
+  /** GEN-177: the game's tone (locked at the start). The server always sends it; optional for older web fixtures. */
+  tone: GameTone.optional(),
   /** Normalised (no dash); show it with formatInviteCode. */
   inviteCode: z.string(),
   status: z.enum(['lobby', 'started']),

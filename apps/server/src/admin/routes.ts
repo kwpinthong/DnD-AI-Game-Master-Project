@@ -85,7 +85,7 @@ export function registerAdminRoutes(app: FastifyInstance, db: Db, now: Clock, op
 
   registerGameDataRoutes(app, options.gameData, refuse, now);
   registerVoteReviewRoutes(app, db, refuse, now, options.log ?? (() => {}));
-  registerStyleRoutes(app, db, refuse);
+  registerStyleRoutes(app, db, refuse, options.gameData);
 
   app.get<{ Params: { gameId: string } }>('/api/admin/ai-usage/:gameId', async (request, reply) => {
     if (refuse(request, reply)) return reply;

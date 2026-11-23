@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import type { AiCallRequest, AiProvider } from '../src/ai/provider.ts';
 import { mockReply } from '../src/ai/providers/mock.ts';
+import { VoiceAsset } from '../src/assets/voice.ts';
 import { hashPin } from '../src/auth/pin.ts';
 import { cannedGmAnswer } from '../src/gm/mock-gm.ts';
 import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
@@ -78,12 +79,15 @@ describe('language tone (GEN-177)', { timeout: 90_000 }, () => {
       clients.push(c);
     }
     const dialogues = requests.filter(isDialogue).length;
+    const starts = clients.map((c) => c.messages.length);
     for (const [i, c] of clients.entries()) {
       const from = c.messages.length;
       c.action(['ทักทายเด็กขอทาน', 'มองน้ำพุ', 'ล้างแก้ว'][i]!, 'public');
       await c.waitFor((m) => m.type === 'action_accepted', from);
     }
-    for (const c of clients) await c.waitFor((m: RoomServerMessage) => m.type === 'room' && m.turn === turn + 1 && m.status === 'collecting');
+    // The next turn (turn 2), or after turn 2 the next period's turn 1.
+    const next = (m: RoomServerMessage) => m.type === 'room' && m.status === 'collecting' && (turn === 1 ? m.turn === 2 : m.turn === 1);
+    for (const [i, c] of clients.entries()) await c.waitFor(next, starts[i]);
     for (const end = Date.now() + 3_000; requests.filter(isDialogue).length === dialogues && Date.now() < end; ) await new Promise((r) => setTimeout(r, 10));
     await Promise.all(sockets.splice(0).map((s) => s.close()));
   }
@@ -163,5 +167,8 @@ describe('language tone (GEN-177)', { timeout: 90_000 }, () => {
       expect(tone.samples.length).toBeGreaterThan(0);
       expect(JSON.stringify(tone)).not.toContain('"npcs"');
     }
+    // A Voice row saved before GEN-177 (no `tones`) still loads, with the same tones as voice.json.
+    const { tones, ...older } = voice;
+    expect(VoiceAsset.parse(older).tones).toEqual(tones);
   });
 });

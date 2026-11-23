@@ -145,7 +145,7 @@ endpoint / socket event 82 รายการ: ready 75, pending 7 · field ท�
 | 11. ข้อความที่ถูก 👎 + แก้เป็น (ผู้ดูแล) | `GET /api/admin/corrections-export` | - → `AdminCorrectionsExportResponse` | ผู้ดูแล | ready | GEN-168 | JSONL ทุกคู่ ชื่อจริงของผู้เล่นแทนด้วย `{{PLAYER_n}}` |
 | 11. ข้อความที่ถูก 👎 + แก้เป็น (ผู้ดูแล) | `GET /api/admin/style-flags` | - → `StyleFlagsResponse` | ผู้ดูแล | ready | GEN-169 | จำนวนธงตรวจสำนวนต่อ NPC (id + alias ไม่ใช่ชื่อจริง) ต่อเหตุผล ไม่มีข้อความ; `npc: null` = บรรยาย |
 | 11. ข้อความที่ถูก 👎 + แก้เป็น (ผู้ดูแล) | `GET /api/admin/style-settings` | - → `StyleSettingsResponse` | ผู้ดูแล | ready | GEN-169 |  |
-| 11. ข้อความที่ถูก 👎 + แก้เป็น (ผู้ดูแล) | `PUT /api/admin/style-settings` | `StyleSettingsRequest` → `StyleSettingsResponse` | ผู้ดูแล | ready | GEN-169 | `rewrite` = กฎ block ให้ AI เขียนใหม่ 1 ครั้ง (ค่าเริ่ม false = แค่ติดธง) |
+| 11. ข้อความที่ถูก 👎 + แก้เป็น (ผู้ดูแล) | `PUT /api/admin/style-settings` | `StyleSettingsRequest` → `StyleSettingsResponse` | ผู้ดูแล | ready | GEN-169 | `rewrite` = กฎ block ให้ AI เขียนใหม่ 1 ครั้ง (ค่าเริ่ม false = แค่ติดธง); GEN-177 `defaultTone` = โทนของเกมใหม่ที่ไม่ได้เลือก (บันทึกลง `tone` ของชุดข้อมูล Voice มี backup / audit / undo) |
 
 ### field ที่ยัง pending (schema มีแล้ว server ยังไม่ส่ง / ยังไม่รับ)
 

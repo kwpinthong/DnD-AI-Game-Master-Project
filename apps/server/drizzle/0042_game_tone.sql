@@ -1,0 +1,1 @@
+ALTER TABLE `game` ADD `tone` text DEFAULT 'A' NOT NULL;

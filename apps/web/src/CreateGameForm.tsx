@@ -3,6 +3,8 @@ import { useState, type FormEvent } from 'react';
 import { useFieldErrors } from './form-state.ts';
 import { memorySourcesCall, postCreateGame, type CreateGameInput } from './game-api.ts';
 import { NpcDialoguePicker } from './NpcDialoguePicker.tsx';
+import { TonePicker } from './TonePicker.tsx';
+import { toneText } from './ui/strings.ts';
 import { PENDING_BACKEND_UI } from './pending.ts';
 import { PinInput } from './PinInput.tsx';
 import { Button, EmptyState, Field, Panel } from './ui/index.ts';
@@ -133,6 +135,7 @@ export function CreateGameForm({
             </fieldset>
           )}
           <NpcDialoguePicker value={values.npcDialogue ?? 'normal'} onChange={(npcDialogue) => setValues((v) => ({ ...v, npcDialogue }))} />
+          <TonePicker value={values.tone} onChange={(tone) => setValues((v) => ({ ...v, tone }))} note={values.tone ? undefined : toneText.unset} />
           <Field id="create-name"label="ชื่อผู้เล่นของคุณ" hint="ใช้เข้าเกมนี้ครั้งหน้า คู่กับ PIN" error={errors.errorOf('name')}>
             {(control) => <input {...control} {...bind('name')} autoComplete="username" />}
           </Field>

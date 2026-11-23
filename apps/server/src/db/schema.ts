@@ -22,6 +22,8 @@ export const game = sqliteTable('game', {
   humanGm: integer('human_gm', { mode: 'boolean' }).notNull().default(false),
   /** GEN-116: how many NPC lines a turn may carry (an old game has the default: normal). */
   npcDialogue: text('npc_dialogue', { enum: ['low', 'normal', 'high'] }).notNull().default('normal'),
+  /** GEN-177: the language tone, set at creation and locked at the start (an old game has A). */
+  tone: text('tone', { enum: ['A', 'B', 'C'] }).notNull().default('A'),
   /** The member who created the game; only they may kick, edit, renew the code or start. */
   ownerMemberId: text('owner_member_id'),
   /** Set once by the start; mode and members are locked from then on. */

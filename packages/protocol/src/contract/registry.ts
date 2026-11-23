@@ -297,7 +297,7 @@ export const CONTRACT: readonly ContractItem[] = [
   // --- GEN-169: the server's style checker (server owner) ---
   http('GET', '/api/admin/style-flags', null, 'StyleFlagsResponse', ready('GEN-169', 'admin', ['vote-review'], 'จำนวนธงตรวจสำนวนต่อ NPC (id + alias ไม่ใช่ชื่อจริง) ต่อเหตุผล ไม่มีข้อความ; `npc: null` = บรรยาย')),
   http('GET', '/api/admin/style-settings', null, 'StyleSettingsResponse', ready('GEN-169', 'admin', ['vote-review'])),
-  http('PUT', '/api/admin/style-settings', 'StyleSettingsRequest', 'StyleSettingsResponse', ready('GEN-169', 'admin', ['vote-review'], '`rewrite` = กฎ block ให้ AI เขียนใหม่ 1 ครั้ง (ค่าเริ่ม false = แค่ติดธง)')),
+  http('PUT', '/api/admin/style-settings', 'StyleSettingsRequest', 'StyleSettingsResponse', ready('GEN-169', 'admin', ['vote-review'], '`rewrite` = กฎ block ให้ AI เขียนใหม่ 1 ครั้ง (ค่าเริ่ม false = แค่ติดธง); GEN-177 `defaultTone` = โทนของเกมใหม่ที่ไม่ได้เลือก (บันทึกลง `tone` ของชุดข้อมูล Voice มี backup / audit / undo)')),
 
   // --- player style (player code, Q-167) ---
   http('POST', '/api/style', 'PlayerStyleRequest', 'PlayerStyleResponse', pending('GEN-082', 'any', ['my-style'])),

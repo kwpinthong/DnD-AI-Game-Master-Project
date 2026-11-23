@@ -20,6 +20,7 @@ import {
   type CreateGameField,
   type Member,
   type NpcDialogueLevel,
+  type GameTone,
   type UpdateGameRequest,
 } from '@isekai/protocol';
 import { apiUrl, fetchWithTimeout } from './session.ts';
@@ -32,6 +33,8 @@ export interface CreateGameInput {
   mode: 'online' | 'single';
   humanGm: boolean;
   npcDialogue?: NpcDialogueLevel;
+  /** GEN-177: absent = the server default tone. */
+  tone?: GameTone;
   name: string;
   pin: string;
   /** Pending GEN-082 / GEN-083 (sent only when the form shows them, GEN-090): the creator's player code and the memory toggle. */

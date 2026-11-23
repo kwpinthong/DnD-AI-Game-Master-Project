@@ -1,6 +1,7 @@
-import type { StyleFlagStat, StyleSettings, StyleSettingsRequest } from '@isekai/protocol';
+import type { GameTone, StyleFlagStat, StyleSettings, StyleSettingsRequest } from '@isekai/protocol';
 import { useEffect, useRef, useState } from 'react';
 import { fetchStyleFlags, fetchStyleSettings, saveStyleSettings, type AdminResult } from './admin-api.ts';
+import { toneText } from './ui/strings.ts';
 
 /**
  * GEN-169: what the server's style checker flagged, per NPC (its public alias) per reason, and its settings.
@@ -39,10 +40,23 @@ export function StylePanel({ apiBaseUrl, token, onForbidden }: { apiBaseUrl: str
       <h3>ตรวจสำนวน (คำต้องห้าม + สรรพนาม NPC)</h3>
       {error && <p role="alert">{error}</p>}
       {settings && (
-        <label className="gdata__check">
-          <input type="checkbox" checked={settings.rewrite} onChange={(e) => void change({ rewrite: e.target.checked })} />
-          ให้ AI เขียนใหม่ 1 ครั้งเมื่อเจอกฎ block (ทำการ, emoji / markdown)
-        </label>
+        <>
+          <label className="gdata__check">
+            <input type="checkbox" checked={settings.rewrite} onChange={(e) => void change({ rewrite: e.target.checked })} />
+            ให้ AI เขียนใหม่ 1 ครั้งเมื่อเจอกฎ block (ทำการ, emoji / markdown)
+          </label>
+          {/* GEN-177: a game created without a tone gets this one; games already made keep theirs. */}
+          <label className="gdata__field">
+            {toneText.adminDefault}
+            <select value={settings.defaultTone} onChange={(e) => void change({ defaultTone: e.target.value as GameTone })}>
+              {toneText.tones.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.value}: {t.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
       )}
       {stats === undefined ? (
         <p>กำลังโหลด…</p>
