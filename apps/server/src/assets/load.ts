@@ -25,7 +25,9 @@ import {
   type WorldEventRecord,
 } from './model.ts';
 import type { KarmaTier } from '@isekai/rules';
+import type { z } from 'zod';
 import { KARMA_TIERS_CATEGORY, karmaTiersFrom } from './karma.ts';
+import { SERVER_LINES_FILE, ServerLines, type ServerLineRecord } from './server-lines.ts';
 
 export const DEFAULT_ASSETS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets');
 
@@ -56,10 +58,27 @@ export interface GameAssets {
   location(name: string): LocationRecord | undefined;
   /** Karma bands from the System_Rules "Karma Tiers" rows (GEN-067), checked to cover -100..+100. */
   readonly karmaTiers: readonly KarmaTier[];
+  /** GEN-150: server message templates (server-lines.json), checked at load. */
+  readonly serverLines: readonly ServerLineRecord[];
 }
 
 function fieldPath(path: readonly PropertyKey[]): string {
   return path.map((p) => (typeof p === 'number' ? `[${p}]` : `.${String(p)}`)).join('').replace(/^\./, '');
+}
+
+function readJson<S extends z.ZodType>(file: string, schema: S, label: string): z.infer<S> {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(file, 'utf8'));
+  } catch (error) {
+    throw new AssetLoadError(`asset file ${file} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    const fields = parsed.error.issues.slice(0, 5).map((i) => `field ${fieldPath(i.path) || '(root)'}: ${i.message}`);
+    throw new AssetLoadError(`asset file ${file} does not match the ${label} schema: ${fields.join('; ')}`);
+  }
+  return parsed.data;
 }
 
 function readTab<T extends TabName>(dir: string, tab: T): TabRecords[T] | undefined {
@@ -70,18 +89,14 @@ function readTab<T extends TabName>(dir: string, tab: T): TabRecords[T] | undefi
     }
     return undefined;
   }
-  let raw: unknown;
-  try {
-    raw = JSON.parse(readFileSync(file, 'utf8'));
-  } catch (error) {
-    throw new AssetLoadError(`asset file ${file} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  const parsed = TAB_SCHEMAS[tab].safeParse(raw);
-  if (!parsed.success) {
-    const fields = parsed.error.issues.slice(0, 5).map((i) => `field ${fieldPath(i.path) || '(root)'}: ${i.message}`);
-    throw new AssetLoadError(`asset file ${file} does not match the ${tab} schema: ${fields.join('; ')}`);
-  }
-  return parsed.data as TabRecords[T];
+  return readJson(file, TAB_SCHEMAS[tab], tab) as TabRecords[T];
+}
+
+/** GEN-150: hand-written, not imported from the sheet, so a missing file is an error with no import hint. */
+function readServerLines(dir: string): ServerLineRecord[] {
+  const file = join(dir, SERVER_LINES_FILE);
+  if (!existsSync(file)) throw new AssetLoadError(`asset file ${file} is missing`);
+  return readJson(file, ServerLines, 'server lines');
 }
 
 export function loadGameAssets(dir: string = DEFAULT_ASSETS_DIR): GameAssets {
@@ -110,6 +125,7 @@ export function loadGameAssets(dir: string = DEFAULT_ASSETS_DIR): GameAssets {
     startScenarios: readTab(dir, 'Start_Scenarios')!,
     systemRules,
     karmaTiers: karma.tiers,
+    serverLines: readServerLines(dir),
     worldTimeline: readTab(dir, 'World_Timeline')!,
     ...(optional.NPC_Schedule ? { npcSchedule: optional.NPC_Schedule } : {}),
     ...(optional.Day10_Strategies ? { day10Strategies: optional.Day10_Strategies } : {}),

@@ -157,6 +157,8 @@ export const NpcRecord = z
     matchTargetTags: Tags,
     /** Q-161: what players see before they learn the truth (no spoilers); empty = the sheet gives none. */
     publicAlias: Text.default(''),
+    /** GEN-150: the NPC's own goodbye line for server-written farewells; empty = a generic one from server-lines.json. */
+    farewell: Text.default(''),
     note: Text.default(''),
     extra: Extra,
   })
