@@ -27,11 +27,13 @@ describe('GEN-082 player style across games', { timeout: 120_000 }, () => {
   let dbPath = '';
   let server: RunningServer | undefined;
   let logs: string[] = [];
+  let createBodies: string[] = [];
 
   beforeEach(async () => {
     const tmp = makeTempDir();
     cleanup = tmp.cleanup;
     logs = [];
+    createBodies = [];
     server = await startTestServer(tmp.dir, { aiLog: (line) => logs.push(line) });
     dbPath = server.dbPath;
   });
@@ -42,10 +44,12 @@ describe('GEN-082 player style across games', { timeout: 120_000 }, () => {
   });
 
   /** A started game: A owns it, B and C join with the given style fields. */
-  async function table(style: { b?: Record<string, unknown>; c?: Record<string, unknown> } = {}): Promise<{ call: Call; gameId: string; a: Seat; b: Seat; c: Seat }> {
+  async function table(style: { a?: Record<string, unknown>; b?: Record<string, unknown>; c?: Record<string, unknown> } = {}): Promise<{ call: Call; gameId: string; a: Seat; b: Seat; c: Seat }> {
     const call = caller(server!);
-    const created = await call('POST', '/api/games', { body: { createCode: CREATE_CODE, gameName: 'เมืองก่อนอุกกาบาต', mode: 'online', humanGm: false, name: 'นก', pin: '1234' } });
+    const created = await call('POST', '/api/games', { body: { createCode: CREATE_CODE, gameName: 'เมืองก่อนอุกกาบาต', mode: 'online', humanGm: false, name: 'นก', pin: '1234', ...style.a } });
+    expect(created.status, JSON.stringify(created.body)).toBe(200);
     const game = CreateGameResponse.parse(created.body);
+    createBodies.push(JSON.stringify(created.body));
     const join = async (name: string, extra: Record<string, unknown> = {}) => {
       const res = await call('POST', '/api/join', { body: { inviteCode: game.game.inviteCode, name, pin: '1111', ...extra } });
       expect(res.status, JSON.stringify(res.body)).toBe(200);
@@ -189,5 +193,46 @@ describe('GEN-082 player style across games', { timeout: 120_000 }, () => {
     act(g.gameId, g.b, 0, ['STEAL']);
     expect(await myStyle(g.call, CODE_B)).toEqual({ style: null, optOut: false });
     expect(styleContextFor(server!.orm, g.gameId)).toBeNull();
+  });
+
+  // GEN-201: the game owner sets the same fields on the create form.
+  it('GEN-201 C1: the owner\'s code at create links their style across games (same profile as a join with that code)', async () => {
+    const g1 = await table({ a: { playerCode: CODE_A } });
+    act(g1.gameId, g1.a, 0, ['STEAL']);
+    act(g1.gameId, g1.a, 1, ['STEAL']);
+    end(g1.gameId);
+    const g2 = await table({ b: { playerCode: 'NOK2026' } });
+    act(g2.gameId, g2.b, 0, ['OBSERVE']);
+    end(g2.gameId);
+    expect((await myStyle(g1.call, CODE_A)).style?.verbs).toEqual([
+      { verb: 'steal', count: 2 },
+      { verb: 'observe', count: 1 },
+    ]);
+  });
+
+  it('GEN-201 C2: the owner ticks "ไม่ต้องเก็บสไตล์ของฉัน" at create → no profile is built from that game', async () => {
+    const g = await table({ a: { playerCode: CODE_A, noStyle: true } });
+    act(g.gameId, g.a, 0, ['STEAL']);
+    end(g.gameId);
+    expect(server!.db.prepare("select count(*) as n from learning_entry where type = 'style'").get()).toEqual({ n: 0 });
+    expect((await myStyle(g.call, CODE_A)).style).toBeNull();
+    expect(styleContextFor(server!.orm, g.gameId)).toBeNull();
+
+    // Ticked without a code: still no profile.
+    const g2 = await table({ a: { noStyle: true } });
+    act(g2.gameId, g2.a, 0, ['TALK']);
+    end(g2.gameId);
+    expect(server!.db.prepare("select count(*) as n from learning_entry where type = 'style'").get()).toEqual({ n: 0 });
+  });
+
+  it('GEN-201 C3: the owner\'s code is not stored, logged or sent back by the create call', async () => {
+    const g = await table({ a: { playerCode: CODE_A } });
+    act(g.gameId, g.a, 0, ['STEAL']);
+    end(g.gameId);
+    expect(createBodies.join('\n')).not.toMatch(/nok-?2026/i);
+    const files = [dbPath, `${dbPath}-wal`].filter((p) => existsSync(p)).map((p) => readFileSync(p));
+    const file = files.map((f) => f.toString('latin1') + f.toString('utf8')).join('');
+    expect(file).not.toMatch(/nok-?2026/i);
+    expect(logs.join('\n')).not.toMatch(/nok-?2026/i);
   });
 });
