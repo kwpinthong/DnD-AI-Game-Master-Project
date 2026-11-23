@@ -22,7 +22,8 @@ function hereChips(data: PlayData, allies: RoomState['you']['allies']): HereChip
   const allyRefs = new Set(allies.map((a) => a.ref));
   const people = data.people.map((p) => ({
     text: [p.name ?? p.appearance, p.injury === 'ปกติ' ? null : p.injury === 'หมดสติ' ? t.self.injury.down : p.injury, p.socialTitle, allyRefs.has(p.ref) ? t.place.ally : null]
-      .filter((s): s is string => Boolean(s))
+      // GEN-143: a title the same as the look shows once.
+      .filter((s, i, all): s is string => Boolean(s) && all.indexOf(s) === i)
       .join(' · '),
   }));
   return [...people, ...data.npcs.map((n) => ({ text: n.name, npc: n.nameRevealed ? n.ref : undefined }))];

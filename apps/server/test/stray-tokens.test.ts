@@ -24,3 +24,31 @@ describe('GEN-152 stray tokens', () => {
     expect(render('ข้าอยู่ที่ {{town}} นี่แหละ')).toBe('ข้าอยู่ที่ นี่แหละ');
   });
 });
+
+describe('GEN-143 rendered names: "คุณ" without spaces, a title the text repeats shown once', () => {
+  const people = {
+    npcs: [],
+    byRef: new Map([
+      ['me', { memberId: 'm-me', name: 'นก', socialTitle: 'คนแปลกหน้า' }],
+      ['twin', { memberId: 'm-twin', name: 'บี', socialTitle: 'ผมดำยาว' }],
+      ['other', { memberId: 'm-other', name: 'ซี', socialTitle: 'นักเดินทาง' }],
+    ]),
+    knownNames: () => new Set<string>(),
+  } as unknown as GmWorld;
+  const readBy = (t: string, reader: string | null = 'm-me') => renderTokens(null as never, people, t, reader);
+
+  it('C6: {{p:me}} read by me is "คุณ" with no space around it, at the start and in the middle of a sentence', () => {
+    expect(readBy('เสียงของ {{p:me}} ถูกรับฟัง')).toBe('เสียงของคุณถูกรับฟัง');
+    expect(readBy('{{p:me}} ถูกรับฟัง')).toBe('คุณถูกรับฟัง');
+    expect(readBy('ทุกคนหันมามอง {{p:me}}')).toBe('ทุกคนหันมามองคุณ');
+    // A line break stays; another person's name keeps its spaces.
+    expect(readBy('บรรทัดแรก\n{{p:me}} เดินต่อ')).toBe('บรรทัดแรก\nคุณเดินต่อ');
+    expect(readBy('{{p:other}} คุยกับ {{p:me}} อยู่')).toBe('นักเดินทาง คุยกับคุณอยู่');
+  });
+
+  it('C5: a title the text also writes as the look right next to it shows once; a different look stays', () => {
+    expect(readBy('{{p:twin}} ผมดำยาว ยืนอยู่ข้างน้ำพุ')).toBe('ผมดำยาว ยืนอยู่ข้างน้ำพุ');
+    expect(readBy('ผมดำยาว {{p:twin}} ยืนอยู่')).toBe('ผมดำยาว ยืนอยู่');
+    expect(readBy('{{p:other}} ผมดำยาว ยืนอยู่')).toBe('นักเดินทาง ผมดำยาว ยืนอยู่');
+  });
+});

@@ -65,7 +65,7 @@ import {
   type TurnAction,
 } from './context.ts';
 import { createStageTimer, type StageTimer } from './timing.ts';
-import { capTotal, cleanNpcLines, lingerAfter, lingerNow, lingersOf, npcLineLimits, npcPrompt, npcsPresentAt, saveLingers } from './npc-lines.ts';
+import { capTotal, cleanNpcLines, lingerAfter, lingerNow, lingersOf, npcAnswers, npcLineLimits, npcPrompt, npcsPresentAt, saveLingers } from './npc-lines.ts';
 import { npcFarewellFor } from './server-lines.ts';
 import { GM_OUTPUT, GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
 import {
@@ -379,7 +379,10 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     const karmaOf = (memberId: string) => state.players[memberId]?.karma ?? 0;
     const presence = (karmas: number[]) => ({ phase: at.phase, weather: input.weather?.weather ?? null, karmas });
     // GEN-144: who the last turn left talking stays at that place a little longer; who has to go says goodbye.
-    const { lingering, farewells } = lingerNow(lingersOf(db, gameId), (npcId, placeId) =>
+    const lastTurn = lingersOf(db, gameId);
+    // GEN-143: who a place was talking to last turn answers an action there that names nobody.
+    const partnerAt = (placeId: string) => lastTurn.find((l) => l.talked && l.placeId === placeId)?.npcId ?? null;
+    const { lingering, farewells } = lingerNow(lastTurn, (npcId, placeId) =>
       npcsPresentAt(world, assets, placeId, presence(Object.keys(state.players).map(karmaOf))).some((n) => n.id === npcId),
     );
     const lingeringIds = new Set(lingering.map((l) => l.npcId));
@@ -429,6 +432,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         ...audience.ctx,
         turn: at,
         place: { id: audience.placeId, name: placeName.get(audience.placeId) ?? audience.placeId },
+        answers: npcAnswers(audience.ctx.beats, new Set(audience.ctx.npcs.filter((n) => n.here).map((n) => n.id)), partnerAt(audience.placeId)),
         privateLines: 'player' in audience.ctx.audience && secretBy.has(audience.readers[0]!),
         journal: 'player' in audience.ctx.audience ? narrationJournal(db, audience.readers[0]!, at.day) : null,
       };
@@ -552,6 +556,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
                 forbidden: [...forbidden, ...realNpcNames],
                 cast: new Set(ctx.cast.map((c) => c.ref)),
                 level,
+                askers: new Map(ctx.answers.map((a) => [a.npcId, a.actionIds.length])),
               }),
               level,
             ).slice(0, lineBudget);
@@ -931,18 +936,35 @@ function introduce(db: DbOrTx, world: GmWorld, order: readonly TurnAction[], sta
  * where the reader's own token is a person like any other.
  */
 export function renderTokens(db: DbOrTx, world: GmWorld, text: string, reader: string | null, shared = false): string {
-  const revealed = reader === null ? new Set<string>() : new Set(npcBondsOf(db, reader).filter((b) => b.nameRevealed).map((b) => b.npcId));
-  const known = text.replace(TOKEN_PATTERN, (_all, kind: string, id: string) => {
+  let revealed: Set<string> | undefined;
+  const isRevealed = (id: string) => (revealed ??= reader === null ? new Set() : new Set(npcBondsOf(db, reader).filter((b) => b.nameRevealed).map((b) => b.npcId))).has(id);
+  const nameOf = (kind: string, id: string) => {
     if (kind === 'n') {
       const npc = world.npcs.find((n) => n.id === id);
-      return npc ? (revealed.has(id) ? npc.name : npc.alias) : '';
+      return npc ? (isRevealed(id) ? npc.name : npc.alias) : '';
     }
     const p = world.byRef.get(id);
     if (!p) return '';
     if (p.memberId === reader && !shared) return 'คุณ';
     return reader !== null && world.knownNames(reader).has(p.memberId) ? p.name : p.socialTitle;
+  };
+  // GEN-143: the spaces the AI puts around a token; "คุณ" takes none (Thai writes no space around it).
+  const known = text.replace(new RegExp(`([ \\t]*)${TOKEN_PATTERN.source}([ \\t]*)`, 'g'), (_all, before: string, kind: string, id: string, after: string) => {
+    const name = nameOf(kind, id);
+    return name === 'คุณ' ? name : `${before}${name}${after}`;
   });
-  return stripStrayTokens(known);
+  return stripStrayTokens(dedupeNames(known, world));
+}
+
+/** GEN-143: a player title written twice in a row (the title, then the same words as the look) shows once. */
+function dedupeNames(text: string, world: GmWorld): string {
+  const titles = new Set([...world.byRef.values()].map((p) => p.socialTitle.trim()).filter((t) => t.length > 0));
+  let out = text;
+  for (const t of titles) {
+    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(`${escaped}([ \\t]+${escaped})+`, 'g'), t);
+  }
+  return out;
 }
 
 /** HP / Stamina / Karma per player after the turn, for the day / period engine (`PlayerResult`). */

@@ -8,7 +8,7 @@ import { npcLinger } from '../db/schema.ts';
 import { npcsAt } from '../travel/rules.ts';
 import { npcBondsOf } from '../visibility/store.ts';
 import { containsName } from './check.ts';
-import { npcToken, TOKEN_PATTERN, withinTokens, type GmWorld, type NarrationContext } from './context.ts';
+import { npcToken, TOKEN_PATTERN, withinTokens, type Beat, type GmWorld, type NarrationContext } from './context.ts';
 import type { GmNpcLine } from './schema.ts';
 
 /**
@@ -130,6 +130,29 @@ export function saveLingers(db: DbOrTx, gameId: string, lingers: readonly Linger
   if (lingers.length > 0) db.insert(npcLinger).values(lingers.map((l) => ({ gameId, npcId: l.npcId, locationId: l.placeId, used: l.used, talked: l.talked }))).run();
 }
 
+// --- GEN-143: who answers ---
+
+/** Beats someone does (not events, evidence or what was done to the reader). */
+const ASKING = new Set<Beat['kind']>(['own_action', 'public_action']);
+
+/**
+ * The NPCs here who answer the beats: the one a beat aims at (targetNpc), else the place's conversation partner
+ * (`partner`, GEN-144). An NPC that is not here answers nothing. Several beats to one NPC = one group answer.
+ */
+export function npcAnswers(beats: readonly Beat[], here: ReadonlySet<string>, partner: string | null): NarrationContext['answers'] {
+  const out: NarrationContext['answers'] = [];
+  for (const b of beats) {
+    if (!ASKING.has(b.kind)) continue;
+    const npcId = b.targetNpc ?? partner;
+    if (npcId === null || !here.has(npcId)) continue;
+    const via = b.targetNpc === null ? 'partner' : 'target';
+    const known = out.find((a) => a.npcId === npcId);
+    if (known) known.actionIds.push(b.actionId);
+    else out.push({ npcId, actionIds: [b.actionId], via });
+  }
+  return out;
+}
+
 // --- What the AI is given ---
 
 /** The persona text of one NPC in the prompt: at most this many tokens of the sheet's Lore. */
@@ -204,6 +227,8 @@ export interface CleanOptions {
   cast: ReadonlySet<string>;
   /** GEN-116: the game's level; default normal. */
   level?: NpcDialogueLevel;
+  /** GEN-143: how many actions each answering NPC answers at once (a group talk): its dialogue cap times that. */
+  askers?: ReadonlyMap<string, number>;
 }
 
 /** The lines of one narration the server keeps: ids, names and tokens checked, text cut, limits applied (C3, C5, C7). */
@@ -228,7 +253,7 @@ export function cleanNpcLines(raw: readonly RawLine[], opt: CleanOptions): Clean
     if (l.kind === 'dialogue') {
       const n = said.get(l.npcId) ?? 0;
       said.set(l.npcId, n + 1);
-      return n < limits.dialoguePerNpc;
+      return n < limits.dialoguePerNpc * Math.max(1, opt.askers?.get(l.npcId) ?? 1);
     }
     if (spoke.has(l.npcId) || reacted.has(l.npcId) || reacted.size >= limits.reactionNpcs) return false;
     reacted.add(l.npcId);

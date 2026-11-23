@@ -152,13 +152,15 @@ const RESULT_WORD: Record<string, string> = {
  * GEN-110: the Mock GM's NPC lines. A place narration: 2 dialogue lines of the NPC a beat aims at (else the first NPC),
  * then a reaction of each other NPC (up to 3, in order). A player narration: one private line when the reader's action is Secret.
  */
-export function mockNpcLines(all: Pick<NarrationContext, 'audience' | 'npcs' | 'beats' | 'privateLines'>): GmNpcLine[] {
+export function mockNpcLines(all: Pick<NarrationContext, 'audience' | 'npcs' | 'beats' | 'privateLines'> & Partial<Pick<NarrationContext, 'answers'>>): GmNpcLine[] {
   const ctx = { ...all, npcs: all.npcs.filter((n) => n.here) };
+  // GEN-143: the NPC asked answers first.
+  const answering = ctx.npcs.find((n) => n.id === all.answers?.[0]?.npcId);
   if ('player' in ctx.audience) {
-    const first = ctx.npcs[0];
+    const first = answering ?? ctx.npcs[0];
     return first && ctx.privateLines ? [{ npcId: first.id, kind: 'dialogue', text: 'ข้าเห็นนะว่าเจ้าทำอะไรอยู่ ไว้คุยกันทีหลัง' }] : [];
   }
-  const aimed = ctx.beats.find((b) => b.targetNpc !== null && ctx.npcs.some((n) => n.id === b.targetNpc))?.targetNpc;
+  const aimed = answering?.id ?? ctx.beats.find((b) => b.targetNpc !== null && ctx.npcs.some((n) => n.id === b.targetNpc))?.targetNpc;
   const main = ctx.npcs.find((n) => n.id === aimed) ?? ctx.npcs[0];
   if (!main || ctx.beats.every((b) => b.kind !== 'public_action')) return [];
   return [

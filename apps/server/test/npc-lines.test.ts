@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { GmDialogue, GmNarration } from '../src/gm/schema.ts';
-import { NPC_LINE_LIMITS, capTotal, cleanNpcLines, cutLine, lingerAfter, lingerNow, npcsPresentAt, type CleanLine, type Linger, type RawLine } from '../src/gm/npc-lines.ts';
+import { NPC_LINE_LIMITS, capTotal, cleanNpcLines, cutLine, lingerAfter, lingerNow, npcAnswers, npcsPresentAt, type CleanLine, type Linger, type RawLine } from '../src/gm/npc-lines.ts';
 import type { GameAssets } from '../src/assets/load.ts';
-import type { GmWorld } from '../src/gm/context.ts';
+import type { Beat, GmWorld } from '../src/gm/context.ts';
 
 /** GEN-110: what the server keeps of the NPC lines the AI GM wrote with a narration (limits, ids, names, Thai-safe cut). */
 
@@ -122,6 +122,41 @@ describe('GEN-144 the conversation partner stays past its schedule (at most 2 tu
     expect(lingerNow([], scheduledAt)).toEqual({ lingering: [], farewells: [] });
     expect(here('fountain', [])).toEqual(['noah']);
     expect(npcsPresentAt(world, assets, 'fountain', solarion).map((n) => n.id)).toEqual(['noah']);
+  });
+});
+
+describe('GEN-143 the NPC asked answers', () => {
+  const beat = (actionId: string, targetNpc: string | null, kind: Beat['kind'] = 'public_action'): Beat => ({ actionId, kind, actor: 'r1', text: 'ถาม', result: 'success', target: null, targetNpc, moved: null, items: [] });
+  const here = new Set(['lucia', 'noah']);
+
+  it('C1: an action aimed at an NPC here: that NPC answers it', () => {
+    expect(npcAnswers([beat('act-1', 'lucia')], here, null)).toEqual([{ npcId: 'lucia', actionIds: ['act-1'], via: 'target' }]);
+  });
+
+  it('C2: two players asking the same NPC: one answer for both', () => {
+    expect(npcAnswers([beat('act-1', 'lucia'), beat('act-2', 'lucia')], here, null)).toEqual([{ npcId: 'lucia', actionIds: ['act-1', 'act-2'], via: 'target' }]);
+  });
+
+  it('C4: no target but a conversation partner here: the partner answers', () => {
+    expect(npcAnswers([beat('act-1', null)], here, 'noah')).toEqual([{ npcId: 'noah', actionIds: ['act-1'], via: 'partner' }]);
+    // A partner who is not here (anymore) answers nothing.
+    expect(npcAnswers([beat('act-1', null)], here, 'guard')).toEqual([]);
+  });
+
+  it('C7: the NPC aimed at is not here: nobody answers it', () => {
+    expect(npcAnswers([beat('act-1', 'guard')], here, 'noah')).toEqual([]);
+  });
+
+  it('events and what was done to someone are not questions', () => {
+    expect(npcAnswers([beat('event:e1', null, 'event'), beat('act-1', 'lucia', 'affected')], here, 'noah')).toEqual([]);
+  });
+
+  it('C2: the dialogue cap of an NPC grows with the number of players it answers', () => {
+    const raw = Array.from({ length: 8 }, (_, i) => line('lucia', 'dialogue', `ตอบ ${i + 1}`));
+    const kept = (askers?: Map<string, number>) => cleanNpcLines(raw, { present: present('lucia'), audience: 'public', ...NONE, ...(askers ? { askers } : {}) }).length;
+    expect(kept()).toBe(NPC_LINE_LIMITS.dialoguePerNpc);
+    expect(kept(new Map([['lucia', 1]]))).toBe(NPC_LINE_LIMITS.dialoguePerNpc);
+    expect(kept(new Map([['lucia', 2]]))).toBe(NPC_LINE_LIMITS.dialoguePerNpc * 2);
   });
 });
 
