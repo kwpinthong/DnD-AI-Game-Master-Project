@@ -71,6 +71,7 @@ export function entryLook(entry: Pick<RoomEntry, 'kind' | 'npc' | 'actor'>, hitA
     case 'hit':
       return hitAcknowledged ? 'hit-line' : 'skip';
     case 'whisper':
+    case 'news':
       return 'skip';
     case 'time':
       return 'time';
