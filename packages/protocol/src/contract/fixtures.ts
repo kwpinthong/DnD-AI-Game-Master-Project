@@ -57,6 +57,9 @@ const characterView = {
   name: 'ลิน',
   appearance: 'หญิงผ้าคลุมเทา แผลเป็นที่คาง',
   personality: 'ช่างสังเกต พูดน้อย ขี้ระแวง',
+  // ISK-006: made before the chips (CharacterResponse has one made with them).
+  avatarId: null,
+  appearanceTraits: null,
   hp: { current: 22, max: 30 },
   stamina: { current: 18, max: 30 },
   coins: 18,
@@ -425,8 +428,38 @@ export const CONTRACT_FIXTURES: Fixtures = {
   GameMemoryView: [{ enabled: false, sources: [] }],
   Scenario: [defaultScenario()],
   GameScenarioResponse: [{ scenario: defaultScenario(), locked: false }],
-  CharacterRequest: [{ name: 'ลิน', appearance: 'หญิงผ้าคลุมเทา', personality: 'ช่างสังเกต พูดน้อย' }],
-  CharacterResponse: [{ character: characterView }, { character: null }],
+  CharacterRequest: [
+    {
+      name: 'ลิน',
+      personality: 'ช่างสังเกต พูดน้อย',
+      avatarId: 'avatar-03',
+      appearanceTraits: { hairColor: 'black', hairStyle: 'long', eyes: 'blue', build: 'tall', outfit: 'traveler', feature: 'scar', extra: 'ถือย่ามผ้า' },
+    },
+  ],
+  CharacterResponse: [
+    { character: characterView },
+    { character: null },
+    {
+      character: {
+        ...characterView,
+        appearance: 'ผมยาวสีดำ ดวงตาสีฟ้า รูปร่างผอมสูง สวมชุดเดินทาง มีแผลเป็นที่แก้ม ถือย่ามผ้า',
+        avatarId: 'avatar-03',
+        appearanceTraits: { hairColor: 'black', hairStyle: 'long', eyes: 'blue', build: 'tall', outfit: 'traveler', feature: 'scar', extra: 'ถือย่ามผ้า' },
+      },
+    },
+  ],
+  AppearanceOptionsResponse: [
+    {
+      categories: {
+        hairColor: [{ id: 'black', label: 'ดำ' }, { id: 'red', label: 'แดง' }],
+        hairStyle: [{ id: 'long', label: 'ยาว' }, { id: 'shaved', label: 'โกน' }],
+        eyes: [{ id: 'blue', label: 'ฟ้า' }, { id: 'heterochromia', label: 'สองสี' }],
+        build: [{ id: 'tall', label: 'ผอมสูง' }],
+        outfit: [{ id: 'traveler', label: 'ชุดเดินทาง' }],
+        feature: [{ id: 'none', label: 'ไม่มี' }, { id: 'scar', label: 'แผลเป็นที่แก้ม' }],
+      },
+    },
+  ],
   LootResponse: [
     {
       loot: {
@@ -457,7 +490,7 @@ export const CONTRACT_FIXTURES: Fixtures = {
       view: 'player',
       you: characterView,
       place: FOUNTAIN_ZONED,
-      people: [{ ref: 'p-red', appearance: 'ชายผมแดง ผ้าพันแผล', injury: 'บาดเจ็บ', socialTitle: 'คนคุ้นหน้า', name: null }],
+      people: [{ ref: 'p-red', avatarId: 'avatar-05', appearance: 'ชายผมแดง ผ้าพันแผล', injury: 'บาดเจ็บ', socialTitle: 'คนคุ้นหน้า', name: null }],
       npcs: [{ ref: 'n-1', name: 'เด็กชายตัวผอม', nameRevealed: false }],
     },
     { view: 'gm', characters: [gmCharacter], evidence: [{ id: 1, locationId: 'church', day: 2, actorMemberId: ME }] },

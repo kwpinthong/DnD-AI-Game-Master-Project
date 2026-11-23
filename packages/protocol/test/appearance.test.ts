@@ -45,7 +45,9 @@ describe('composeAppearance (ISK-006)', () => {
   it('extra: trimmed, NFC, each line break (and run of spaces) one space, tags kept as text', () => {
     expect(normalizeAppearanceExtra('  ถือ\nไม้เท้า \r\n  เก่า  ')).toBe('ถือ ไม้เท้า เก่า');
     expect(normalizeAppearanceExtra('<b>คำ</b>')).toBe('<b>คำ</b>');
-    expect(normalizeAppearanceExtra('กํา')).toBe('กำ'.normalize('NFC'));
+    // NFC, not NFKC: sara am (U+0E33) stays one character (GEN-094).
+    expect(normalizeAppearanceExtra('ถือคำสาป')).toBe('ถือคำสาป');
+    expect(normalizeAppearanceExtra('é')).toBe('é');
   });
 });
 

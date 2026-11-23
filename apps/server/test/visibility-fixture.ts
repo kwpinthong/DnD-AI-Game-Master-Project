@@ -14,6 +14,7 @@ export interface Seat {
   name: string;
   appearance: string;
   personality: string;
+  avatarId: string;
 }
 
 // ISK-006: chips + avatar; `appearance` is the sentence the server builds (the old text is the extra).

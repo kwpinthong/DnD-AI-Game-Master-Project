@@ -178,5 +178,13 @@ export const ApiError = z.discriminatedUnion('code', [
   z.object({ code: z.literal('rate_limited'), message: z.string() }),
   /** 404 (ISK-010): no feedback with that id. */
   z.object({ code: z.literal('feedback_not_found'), message: z.string() }),
+  /** 400 (ISK-006): no avatarId, or one that is not a preset avatar. */
+  z.object({ code: z.literal('invalid_avatar'), message: z.string() }),
+  /** 400 (ISK-006): a chip category is missing, or its value is not one offered now; `field` names the category. */
+  z.object({ code: z.literal('invalid_trait'), message: z.string(), field: z.string() }),
+  /** 400 (ISK-006): the appearance free text is over 80 code points. */
+  z.object({ code: z.literal('extra_too_long'), message: z.string() }),
+  /** 400 (ISK-006): the appearance free text holds an NPC's real name or a {{ }} token. */
+  z.object({ code: z.literal('extra_forbidden'), message: z.string() }),
 ]);
 export type ApiError = z.infer<typeof ApiError>;

@@ -298,8 +298,8 @@ describe('GEN-070 crisis & death', { timeout: 60_000 }, () => {
     // Chosen by appearance (Q-193), never by real name; the spirit itself is not a target.
     expect(view.omen.targets).toEqual(
       expect.arrayContaining([
-        { ref: refOf(t.b), label: 'ชายร่างสูงสวมเกราะหนังเก่า' },
-        { ref: refOf(t.c), label: 'เด็กหนุ่มผมขาวถือไม้เท้า' },
+        { ref: refOf(t.b), label: t.b.appearance },
+        { ref: refOf(t.c), label: t.c.appearance },
       ]),
     );
     expect(view.omen.targets).toHaveLength(2);

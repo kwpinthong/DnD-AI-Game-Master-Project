@@ -11,17 +11,17 @@ import { crossPlayerState } from '../src/crossplayer/phase.ts';
 import { tagContexts } from '../src/crossplayer/tags.ts';
 import { LOOT_AI_FAILED } from '../src/game/loot.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
-import { makeTempDir } from './helpers.ts';
+import { makeTempDir, withLooks } from './helpers.ts';
 
 const CREATE_CODE = 'ลับเฉพาะ-2026';
 const assets = loadGameAssets();
 
 /** The personality names the character, so the prompt check (Q-045) has something to catch. */
-const lin = {
+const lin = withLooks({
   name: 'ลิน',
   appearance: 'หญิงผ้าคลุมเทา แผลเป็นที่คาง',
   personality: 'ลินเป็นคนช่างสังเกต พูดน้อย ขี้ระแวง กลัวความมืด',
-};
+});
 const OWNER_NAME = 'นกฮูก';
 
 /** Rank B rows of the sheet (Ability `Name`, Item English name), three sets for rerolls. */
@@ -533,7 +533,7 @@ describe('character loot from the Asset sheet: Rank B skills / items (GEN-048, G
     const joined = await call('POST', '/api/join', { body: { inviteCode: me.game.inviteCode, name: 'เบล', pin: '1111' } });
     expect(joined.status, JSON.stringify(joined.body)).toBe(200);
     const bel = JoinResponse.parse(joined.body);
-    const belCharacter = { name: 'เบลล่า', appearance: 'ชายร่างสูงถือไม้เท้า', personality: 'ใจร้อน ชอบเสี่ยง' };
+    const belCharacter = withLooks({ name: 'เบลล่า', appearance: 'ชายร่างสูงถือไม้เท้า', personality: 'ใจร้อน ชอบเสี่ยง' });
     expect((await call('POST', '/api/game/character', { token: bel.token, body: belCharacter })).status).toBe(201);
 
     const seen = [
@@ -636,7 +636,7 @@ describe('character loot from the Asset sheet: Rank B skills / items (GEN-048, G
     const me = await playerWithCharacter();
     const chosen = lootOf(await pickFirst(me.token, lootOf(await rollLoot(me.token)).offer!)).chosen!;
 
-    expect((await putCharacter(me.token, { ...lin, name: 'ลินดา', appearance: 'หญิงผ้าคลุมดำ' })).status).toBe(200);
+    expect((await putCharacter(me.token, withLooks({ ...lin, name: 'ลินดา', appearance: 'หญิงผ้าคลุมดำ' }))).status).toBe(200);
 
     expect(lootOf(await getLoot(me.token)).chosen).toEqual(chosen);
   });

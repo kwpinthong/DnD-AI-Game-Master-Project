@@ -45,6 +45,8 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'DELETE /api/game': { method: 'DELETE', path: '/api/game' },
     'DELETE /api/game/members/:memberId': { method: 'DELETE', path: `/api/game/members/${t.c.memberId}` },
     'POST /api/game/start': { method: 'POST', path: '/api/game/start' },
+    // ISK-006: the appearance chips a new character may pick (no login).
+    'GET /api/appearance-options': { method: 'GET', path: '/api/appearance-options' },
     'POST /api/game/character': { method: 'POST', path: '/api/game/character', body: LIN },
     'PUT /api/game/character': { method: 'PUT', path: '/api/game/character', body: LIN },
     // GEN-048 loot step (after the character exists). The ids are not in the offer: the 400 is scanned too.

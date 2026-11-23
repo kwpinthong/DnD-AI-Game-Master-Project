@@ -1,4 +1,4 @@
-import { APPEARANCE_CATEGORIES, composeAppearance, type AppearanceLabels, type AppearanceOption, type AppearanceTraits } from '@isekai/protocol';
+import { appearanceLabels, composeAppearance, type AppearanceLabels, type AppearanceOption, type AppearanceTraits } from '@isekai/protocol';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -9,8 +9,7 @@ import { offerFrom } from '../src/game/loot.ts';
 
 /** ISK-006: the seed labels of apps/server/assets/appearance-options.json, grouped as GET /api/appearance-options gives them. */
 export function seedAppearanceLabels(): AppearanceLabels {
-  const options = JSON.parse(readFileSync(join(DEFAULT_ASSETS_DIR, 'appearance-options.json'), 'utf8')) as AppearanceOption[];
-  return Object.fromEntries(APPEARANCE_CATEGORIES.map((c) => [c, options.filter((o) => o.category === c).map(({ id, label }) => ({ id, label }))])) as AppearanceLabels;
+  return appearanceLabels(JSON.parse(readFileSync(join(DEFAULT_ASSETS_DIR, 'appearance-options.json'), 'utf8')) as AppearanceOption[]);
 }
 
 export const DEFAULT_CHIPS = { hairColor: 'black', hairStyle: 'short', eyes: 'black', build: 'average', outfit: 'commoner', feature: 'none' } as const;

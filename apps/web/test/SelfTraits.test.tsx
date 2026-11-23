@@ -12,6 +12,8 @@ const base: CharacterView = {
   name: 'ลิน',
   appearance: 'x',
   personality: 'บุคลิกดิบ',
+  avatarId: null,
+  appearanceTraits: null,
   hp: { current: 10, max: 30 },
   stamina: { current: 10, max: 30 },
   coins: 0,

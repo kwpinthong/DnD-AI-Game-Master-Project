@@ -127,6 +127,9 @@ export const character = sqliteTable('character', {
   coins: integer('coins').notNull().default(0),
   /** Initial_Title of the start scenario; null before the start (the Social Title of Reputation then). */
   initialTitle: text('initial_title'),
+  // --- ISK-006: preset avatar + the chips (JSON AppearanceTraits) `appearance` was built from; null = made before ---
+  avatarId: text('avatar_id'),
+  appearanceTraits: text('appearance_traits'),
 });
 
 // GEN-038: AI usage lives in its own file so parallel schema work merges cleanly.

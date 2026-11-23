@@ -29,17 +29,22 @@ import type { KarmaTier } from '@isekai/rules';
 import type { z } from 'zod';
 import { KARMA_TIERS_CATEGORY, karmaTiersFrom } from './karma.ts';
 import { SERVER_LINES_FILE, ServerLines, type ServerLineRecord } from './server-lines.ts';
-import { defaultScenario } from '@isekai/protocol';
+import { AppearanceOptions, defaultScenario, type AppearanceOption } from '@isekai/protocol';
 import { realNamesInProfiles, VOICE_FILE, VoiceAsset } from './voice.ts';
 
 export const DEFAULT_ASSETS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets');
 
 /** Hand-written data sets (not sheet tabs): a missing file stops start-up with no import hint. */
-const HAND_WRITTEN = ['Server_Lines', 'Voice'] as const;
-/** Every data set: the sheet tabs + GEN-150's server-line templates + GEN-176's voice. The DB keys its rows by these names. */
+const HAND_WRITTEN = ['Server_Lines', 'Voice', 'Appearance_Options'] as const;
+/** Every data set: the sheet tabs + GEN-150's server-line templates + GEN-176's voice + ISK-006's appearance chips. The DB keys its rows by these names. */
 export const DATA_SETS = [...ALL_TABS, ...HAND_WRITTEN] as const;
 export type DataSetName = (typeof DATA_SETS)[number];
-export const DATA_SET_FILES: Readonly<Record<DataSetName, string>> = { ...TAB_FILES, Server_Lines: SERVER_LINES_FILE, Voice: VOICE_FILE };
+export const DATA_SET_FILES: Readonly<Record<DataSetName, string>> = {
+  ...TAB_FILES,
+  Server_Lines: SERVER_LINES_FILE,
+  Voice: VOICE_FILE,
+  Appearance_Options: 'appearance-options.json',
+};
 /** Data set → its JSON value as stored (before the schema's defaults); a missing optional set is absent. */
 export type RawDataSets = Partial<Record<DataSetName, unknown>>;
 
@@ -80,14 +85,16 @@ export interface GameAssets {
   readonly serverLines: readonly ServerLineRecord[];
   /** GEN-176: style guide + NPC speech profiles (voice.json). */
   readonly voice: VoiceAsset;
+  /** ISK-006: the appearance chip values (appearance-options.json), hidden ones included. */
+  readonly appearanceOptions: readonly AppearanceOption[];
 }
 
 function fieldPath(path: readonly PropertyKey[]): string {
   return path.map((p) => (typeof p === 'number' ? `[${p}]` : `.${String(p)}`)).join('').replace(/^\./, '');
 }
 
-const SCHEMAS: Readonly<Record<DataSetName, z.ZodType>> = { ...TAB_SCHEMAS, Server_Lines: ServerLines, Voice: VoiceAsset };
-const SCHEMA_LABEL: Partial<Record<DataSetName, string>> = { Server_Lines: 'server lines', Voice: 'voice' };
+const SCHEMAS: Readonly<Record<DataSetName, z.ZodType>> = { ...TAB_SCHEMAS, Server_Lines: ServerLines, Voice: VoiceAsset, Appearance_Options: AppearanceOptions };
+const SCHEMA_LABEL: Partial<Record<DataSetName, string>> = { Server_Lines: 'server lines', Voice: 'voice', Appearance_Options: 'appearance options' };
 
 /** `where`: how an error names the source ("asset file /…/npc.json", "game data set NPC"). */
 function parseSet<T extends DataSetName>(raw: unknown, set: T, where: string): unknown {
@@ -157,6 +164,9 @@ export function buildGameAssets(raw: RawDataSets, where: (set: DataSetName) => s
   const leaks = realNamesInProfiles(voice, names);
   if (Object.keys(leaks).length > 0) throw new AssetLoadError(`${where('Voice')} has a real NPC name in: ${Object.keys(leaks).join(', ')}`, leaks);
 
+  if (raw.Appearance_Options === undefined) throw new AssetLoadError(`${where('Appearance_Options')} is missing`, { '(root)': 'ไม่มีข้อมูล' });
+  const appearanceOptions = parseSet(raw.Appearance_Options, 'Appearance_Options', where('Appearance_Options')) as AppearanceOption[];
+
   return {
     abilities,
     items,
@@ -167,6 +177,7 @@ export function buildGameAssets(raw: RawDataSets, where: (set: DataSetName) => s
     karmaTiers: karma.tiers,
     serverLines,
     voice,
+    appearanceOptions,
     worldTimeline: tab('World_Timeline')!,
     ...(npcSchedule ? { npcSchedule } : {}),
     ...(day10Strategies ? { day10Strategies } : {}),

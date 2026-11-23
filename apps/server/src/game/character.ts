@@ -1,10 +1,11 @@
-import type { CharacterRequest, CharacterView } from '@isekai/protocol';
+import type { AppearanceTraits, CharacterRequest, CharacterView } from '@isekai/protocol';
 import { karmaTitle, socialTitle, STARTING_STATS, type KarmaTier } from '@isekai/rules';
 import { eq } from 'drizzle-orm';
 import type { Clock } from '../auth/join.ts';
 import type { Db } from '../db/client.ts';
 import { character, game } from '../db/schema.ts';
 import { curseLabelsOf } from '../statuses/curses.ts';
+import type { Looks } from './appearance.ts';
 import { clearLoot, keptTraits } from './loot.ts';
 import type { MemberRow } from './service.ts';
 
@@ -27,6 +28,8 @@ function toView(row: CharacterRow, gameStarted: boolean, karmaTiers: readonly Ka
     name: row.name,
     appearance: row.appearance,
     personality: row.personality,
+    avatarId: row.avatarId,
+    appearanceTraits: row.appearanceTraits === null ? null : (JSON.parse(row.appearanceTraits) as AppearanceTraits),
     hp: { current: row.hp, max: row.hpMax },
     stamina: { current: row.stamina, max: row.staminaMax },
     coins: row.coins,
@@ -36,6 +39,9 @@ function toView(row: CharacterRow, gameStarted: boolean, karmaTiers: readonly Ka
     editable: !gameStarted,
   };
 }
+
+/** ISK-006: the sentence is built once here and stored; a later chip label edit leaves it as it is. */
+const stored = (looks: Looks) => ({ appearance: looks.appearance, avatarId: looks.avatarId, appearanceTraits: JSON.stringify(looks.appearanceTraits) });
 
 export type CharacterOutcome =
   | { kind: 'ok'; character: CharacterView }
@@ -59,7 +65,7 @@ export function getCharacter(db: Db, me: MemberRow, karmaTiers: readonly KarmaTi
  * Creates the caller's character with the starting stats. One per member (the primary key), so
  * one per player per game; the Human GM has none (Q-059).
  */
-export function createCharacter(db: Db, me: MemberRow, input: CharacterRequest, now: Clock, karmaTiers: readonly KarmaTier[]): CharacterOutcome {
+export function createCharacter(db: Db, me: MemberRow, input: CharacterRequest, looks: Looks, now: Clock, karmaTiers: readonly KarmaTier[]): CharacterOutcome {
   if (me.role === 'gm') return { kind: 'gm_has_no_character' };
   return db.transaction((tx) => {
     if (gameStarted(tx, me.gameId)) return { kind: 'game_started' };
@@ -72,8 +78,8 @@ export function createCharacter(db: Db, me: MemberRow, input: CharacterRequest, 
       createdAt: t,
       updatedAt: t,
       name: input.name,
-      appearance: input.appearance,
       personality: input.personality,
+      ...stored(looks),
       ...STARTING_STATS,
       // The start scenario sets the real starting numbers and title at game start (GEN-065).
       coins: 0,
@@ -88,12 +94,12 @@ export function createCharacter(db: Db, me: MemberRow, input: CharacterRequest, 
  * Changes the identity only, and only before the game starts; the stats are not touched. A new
  * personality clears the loot built from the old one (Q-081); name / appearance keep it.
  */
-export function updateCharacter(db: Db, me: MemberRow, input: CharacterRequest, now: Clock, karmaTiers: readonly KarmaTier[]): CharacterOutcome {
+export function updateCharacter(db: Db, me: MemberRow, input: CharacterRequest, looks: Looks, now: Clock, karmaTiers: readonly KarmaTier[]): CharacterOutcome {
   return db.transaction((tx) => {
     const existing = tx.select().from(character).where(eq(character.memberId, me.id)).get();
     if (!existing) return { kind: 'character_not_found' };
     if (gameStarted(tx, me.gameId)) return { kind: 'game_started' };
-    const identity = { name: input.name, appearance: input.appearance, personality: input.personality, updatedAt: now() };
+    const identity = { name: input.name, personality: input.personality, ...stored(looks), updatedAt: now() };
     tx.update(character).set(identity).where(eq(character.memberId, me.id)).run();
     if (input.personality !== existing.personality) clearLoot(tx, me.id, identity.updatedAt);
     return { kind: 'ok', character: toView({ ...existing, ...identity }, false, karmaTiers, [], keptTraits(tx, me.id, input.name)) };

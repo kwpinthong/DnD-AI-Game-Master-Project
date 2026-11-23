@@ -113,6 +113,14 @@ function changesOf(oldJson: string, newJson: string): AuditEntry['changes'] {
   return out;
 }
 
+/** ISK-006: chip ids are fixed: "category:id" of the saved list that `value` no longer has (a bad shape is the schema's to report). */
+function droppedAppearanceIds(oldJson: string, value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const keys = (list: unknown) => (Array.isArray(list) ? list.map((o) => `${(o as { category?: unknown })?.category}:${(o as { id?: unknown })?.id}`) : []);
+  const kept = new Set(keys(value));
+  return keys(JSON.parse(oldJson)).filter((k) => !kept.has(k));
+}
+
 /**
  * Seeds the missing data sets from `seed` (the asset files, already checked), then builds the assets from the DB.
  * GEN-179: a saved row that no longer passes the schema (a deploy changed it) is left as it is and its set runs on
@@ -183,6 +191,13 @@ export function openGameData(
   /** The assets with `value` for `name` and the DB for the rest, or why that is refused. */
   function check(map: ReturnType<typeof rows>, name: DataSetName, value: unknown): { ok: true; next: GameAssets } | Exclude<SaveOutcome, { ok: true }> {
     if (!map.has(name)) return { ok: false, reason: 'not_found' };
+    if (name === 'Appearance_Options') {
+      const dropped = droppedAppearanceIds(map.get(name)!.json, value);
+      if (dropped.length > 0) {
+        const message = `ลบค่าไม่ได้ (ตัวละครเดิมอ้างอยู่) ให้ซ่อนแทน: ${dropped.join(', ')}`;
+        return { ok: false, reason: 'invalid', message, fields: { '(root)': message } };
+      }
+    }
     try {
       return { ok: true, next: buildGameAssets({ ...effective(map), [name]: value }) };
     } catch (error) {

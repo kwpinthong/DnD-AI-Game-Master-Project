@@ -4,7 +4,6 @@ import {
   characterFieldErrors,
   PERSONALITY_MAX_LENGTH,
   type CharacterField,
-  type CharacterRequest,
   type CharacterView,
   type LootView,
 } from '@isekai/protocol';
@@ -30,8 +29,10 @@ function remaining(value: string, max: number): string {
   return left >= 0 ? `เหลือ ${left} ตัวอักษร` : `เกิน ${-left} ตัวอักษร`;
 }
 
-const empty: CharacterRequest = { name: '', appearance: '', personality: '' };
-const identityOf = (c: CharacterView): CharacterRequest => ({ name: c.name, appearance: c.appearance, personality: c.personality });
+/** shortcut: the GEN-047 text form; ISK-007 replaces `appearance` with the avatar + chips the server now requires. */
+type Identity = Record<CharacterField, string>;
+const empty: Identity = { name: '', appearance: '', personality: '' };
+const identityOf = (c: CharacterView): Identity => ({ name: c.name, appearance: c.appearance, personality: c.personality });
 
 /**
  * Character creation v2 (GEN-090, Screens and Flows v2 §3): three steps, ตัวตน → ของติดตัว → ตรวจทาน, with
@@ -57,7 +58,7 @@ export function CharacterScreen({
   /** undefined while loading; null when the player has no character yet. */
   const [character, setCharacter] = useState<CharacterView | null>();
   const [step, setStep] = useState<Step>(0);
-  const [values, setValues] = useState<CharacterRequest>(empty);
+  const [values, setValues] = useState<Identity>(empty);
   const [loot, setLoot] = useState<LootView>();
   const [formError, setFormError] = useState<string>();
   const [busy, setBusy] = useState(false);

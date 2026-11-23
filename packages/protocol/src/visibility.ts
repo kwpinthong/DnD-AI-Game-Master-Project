@@ -18,6 +18,8 @@ export type InjuryText = z.infer<typeof InjuryText>;
  */
 export const OtherCharacterView = z.strictObject({
   ref: z.string(),
+  /** ISK-006: everyone sees the preset avatar (null = a character made before ISK-006). */
+  avatarId: z.string().nullable(),
   appearance: z.string(),
   injury: InjuryText,
   socialTitle: z.string(),

@@ -39,6 +39,7 @@ const dataOf = (a: GameAssets) => ({
   karmaTiers: a.karmaTiers,
   serverLines: a.serverLines,
   voice: a.voice,
+  appearanceOptions: a.appearanceOptions,
 });
 
 const ASSET_KEY: Record<DataSetName, keyof ReturnType<typeof dataOf>> = {
@@ -53,6 +54,7 @@ const ASSET_KEY: Record<DataSetName, keyof ReturnType<typeof dataOf>> = {
   Day10_Strategies: 'day10Strategies',
   Server_Lines: 'serverLines',
   Voice: 'voice',
+  Appearance_Options: 'appearanceOptions',
 };
 
 describe('game data in the DB + admin editor (GEN-147)', { timeout: 120_000 }, () => {
@@ -318,12 +320,15 @@ describe('game data in the DB + admin editor (GEN-147)', { timeout: 120_000 }, (
     const edited =
       name === 'Server_Lines'
         ? value.map((row, i) => (i === 0 ? { ...row, text: `${String(row.text)} (แก้จาก admin)` } : row))
-        : value.map((row, i) => (i === 0 ? { ...row, extra: { ...((row.extra as Record<string, string>) ?? {}), admin_note: 'แก้จาก admin' } } : row));
+        : name === 'Appearance_Options'
+          ? value.map((row, i) => (i === 0 ? { ...row, label: `${String(row.label)} (แก้จาก admin)` } : row))
+          : value.map((row, i) => (i === 0 ? { ...row, extra: { ...((row.extra as Record<string, string>) ?? {}), admin_note: 'แก้จาก admin' } } : row));
     const res = await save(token, name, edited);
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect((await getSet(token, name)).value).toEqual(edited);
     const live = server!.assets[ASSET_KEY[name]] as readonly Record<string, unknown>[];
     if (name === 'Server_Lines') expect(live[0]!.text).toMatch(/\(แก้จาก admin\)$/);
+    else if (name === 'Appearance_Options') expect(live[0]!.label).toMatch(/\(แก้จาก admin\)$/);
     else expect(live[0]!.extra).toMatchObject({ admin_note: 'แก้จาก admin' });
   });
 

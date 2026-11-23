@@ -106,6 +106,9 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await hit(call, 'PUT /api/game/scenario', { token: gm, body: defaultScenario() });
     await hit(call, 'POST /api/game/scenario/reset', { token: gm });
     await hit(call, 'GET /api/game/character', { token: p1.token });
+    await hit(call, 'GET /api/appearance-options');
+    // ISK-006: a chip error is an ApiError too.
+    await hit(call, 'POST /api/game/character', { token: p1.token, body: { ...LIN, appearanceTraits: { ...LIN.appearanceTraits, outfit: 'armor-of-gold' } } });
     await hit(call, 'POST /api/game/character', { token: p1.token, body: LIN });
     await hit(call, 'PUT /api/game/character', { token: p1.token, body: LIN });
     await hit(call, 'GET /api/game/character/loot', { token: p1.token });

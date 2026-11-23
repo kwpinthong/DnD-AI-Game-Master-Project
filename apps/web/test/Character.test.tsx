@@ -54,6 +54,8 @@ const lin = {
 
 const saved: CharacterView = {
   ...lin,
+  avatarId: null,
+  appearanceTraits: null,
   hp: { current: 100, max: 100 },
   stamina: { current: 30, max: 30 },
   coins: 0,

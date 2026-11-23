@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { deleteLearningEntry, examplesFor, npcCandidates, syncExamples } from '../src/learning/examples.ts';
 import { ensurePhaseState, insertEntry, recordAction, savePhaseState, type EntryMeta } from '../src/room/store.ts';
 import type { RunningServer } from '../src/server.ts';
-import { makeTempDir, seedChosenLoot } from './helpers.ts';
+import { makeTempDir, seedChosenLoot, withLooks } from './helpers.ts';
 import { caller, CLOCK, CREATE_CODE, DARIN, LIN, MEKHA, startTestServer, type Call } from './visibility-fixture.ts';
 
 /**
@@ -11,7 +11,7 @@ import { caller, CLOCK, CREATE_CODE, DARIN, LIN, MEKHA, startTestServer, type Ca
  * with kind, NPC, scrubbed text and tags, kept in step with votes after the end, capped per game, retrieved by tag
  * for GEN-083, and the good NPC lines handed to GEN-151 as candidates.
  */
-const PIM = { name: 'พิม', appearance: 'หญิงสาวผมเปียถือตะเกียง', personality: 'ร่าเริง' };
+const PIM = withLooks({ name: 'พิม', appearance: 'หญิงสาวผมเปียถือตะเกียง', personality: 'ร่าเริง' });
 const AT = { day: 1, phase: 'EOSORIA', turn: 1 } as const;
 
 interface Seat {
