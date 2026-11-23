@@ -8,7 +8,7 @@ import {
 } from '@isekai/protocol';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DATA_SET_FILES, DATA_SETS, DEFAULT_ASSETS_DIR, loadGameAssets, type DataSetName, type GameAssets } from '../src/assets/load.ts';
 import { hashPin } from '../src/auth/pin.ts';
 import { CREATE_CODE_LIMIT } from '../src/game/create-code.ts';
@@ -325,5 +325,59 @@ describe('game data in the DB + admin editor (GEN-147)', { timeout: 120_000 }, (
     const live = server!.assets[ASSET_KEY[name]] as readonly Record<string, unknown>[];
     if (name === 'Server_Lines') expect(live[0]!.text).toMatch(/\(แก้จาก admin\)$/);
     else expect(live[0]!.extra).toMatchObject({ admin_note: 'แก้จาก admin' });
+  });
+
+  describe('GEN-179: a DB set that a new schema no longer accepts falls back to its asset file', () => {
+    const npcRow = () => (server!.db.prepare("select json from game_data_set where name = 'NPC'").get() as { json: string }).json;
+    /** Simulates a deploy whose schema change rejects the saved NPC edit: [0].grade is not a rank any more. */
+    async function bootWithStaleNpc() {
+      await boot();
+      const npcs = JSON.parse(npcRow()) as Record<string, unknown>[];
+      npcs[0] = { ...npcs[0], grade: 'Z' };
+      server!.db.prepare("update game_data_set set json = ? where name = 'NPC'").run(JSON.stringify(npcs));
+      const stale = npcRow();
+      const warnings: string[] = [];
+      const spy = vi.spyOn(console, 'warn').mockImplementation((line: unknown) => void warnings.push(String(line)));
+      try {
+        await restart();
+      } finally {
+        spy.mockRestore();
+      }
+      return { stale, warnings };
+    }
+
+    it('C1: the server starts on the NPC file; the DB row stays as it was; the log names the set', async () => {
+      const { stale, warnings } = await bootWithStaleNpc();
+      expect(server!.assets.npcs).toEqual(loadGameAssets().npcs);
+      expect(npcRow()).toBe(stale);
+      expect(warnings.join('\n')).toMatch(/NPC/);
+      expect(warnings.join('\n')).toMatch(/\[0\]\.grade/);
+      // Other sets still save while NPC is on its file.
+      const token = await adminToken();
+      expect((await save(token, 'NPC_Schedule', scheduleWithNoaAtInn((await getSet(token, 'NPC_Schedule')).value))).status).toBe(200);
+      expect(npcRow()).toBe(stale);
+    });
+
+    it('C2 / C3: /admin names the set + wrong fields; a fixed save uses the DB again and clears the warning', async () => {
+      await bootWithStaleNpc();
+      const token = await adminToken();
+      const listed = async () => {
+        const res = await call('GET', '/api/admin/game-data', { token });
+        expect(res.status).toBe(200);
+        return GameDataListResponse.parse(res.body).sets.find((s) => s.name === 'NPC')!;
+      };
+      const npc = await listed();
+      expect(npc.fallback?.fields).toHaveProperty(['[0].grade']);
+      expect((await getSet(token, 'NPC')).set.fallback).toBeDefined();
+      expect((await getSet(token, 'NPC_Schedule')).set.fallback).toBeUndefined();
+
+      const fixed = (JSON.parse(npcRow()) as Record<string, unknown>[]).map((row, i) => (i === 0 ? { ...row, grade: 'S', extra: { admin_note: 'แก้แล้ว' } } : row));
+      const res = await save(token, 'NPC', fixed);
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect((await listed()).fallback).toBeUndefined();
+      expect(server!.assets.npcs[0]).toMatchObject({ grade: 'S', extra: { admin_note: 'แก้แล้ว' } });
+      await restart();
+      expect(server!.assets.npcs[0]).toMatchObject({ grade: 'S' });
+    });
   });
 });

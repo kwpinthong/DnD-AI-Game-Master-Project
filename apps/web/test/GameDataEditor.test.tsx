@@ -63,6 +63,27 @@ describe('game data editor (GEN-147)', () => {
     expect(screen.getByRole('button', { name: /^NPC \(/ })).toBeTruthy();
   });
 
+  it('GEN-179 C2: a set running on its asset file shows a warning with the set and the wrong fields', async () => {
+    const fallback = { message: 'game data set NPC does not match the NPC schema', fields: { '[0].grade': 'Invalid option' } };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input).endsWith('/api/admin/game-data') ? Response.json({ sets: [{ ...summary('NPC'), fallback }, summary('NPC_Schedule')] }) : Response.json({ entries: [] }),
+      ),
+    );
+    render(<GameDataEditor apiBaseUrl="" token="adm-1" onForbidden={() => {}} />);
+    const warning = await screen.findByRole('alert', { name: /ใช้ไฟล์ asset แทน/ });
+    expect(warning.textContent).toMatch(/NPC/);
+    expect(within(warning).getByText(/\[0\]\.grade: Invalid option/)).toBeTruthy();
+    expect(warning.textContent).not.toMatch(/NPC_Schedule/);
+  });
+
+  it('GEN-179 C3: no warning when every set uses the DB', async () => {
+    fakeServer();
+    await openSchedule();
+    expect(screen.queryByRole('alert', { name: /ใช้ไฟล์ asset แทน/ })).toBeNull();
+  });
+
   it('C5: shows the wrong fields the server names; text that is not JSON is never sent', async () => {
     const calls = fakeServer();
     const box = await openSchedule();
