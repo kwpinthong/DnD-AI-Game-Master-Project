@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TraitView } from './loot.ts';
 
 /** Longest values, counted in Unicode code points after normalisation (Thai marks count). */
 export const CHARACTER_NAME_MAX_LENGTH = 40;
@@ -96,6 +97,12 @@ export const CharacterView = z.strictObject({
    * the d20 number or the time left: those are the Human GM's (`GmCharacterView.curses`).
    */
   statuses: z.array(z.string()),
+  /**
+   * GEN-130: the strength / weakness kept in the loot step (GEN-048), {{p:id}} tokens already resolved. Only the owner gets
+   * them (never `OtherCharacterView`); null until a choice is kept.
+   */
+  strength: TraitView.nullable(),
+  weakness: TraitView.nullable(),
   /** Name, appearance and personality can change until the game starts. */
   editable: z.boolean(),
 });

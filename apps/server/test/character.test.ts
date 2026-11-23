@@ -102,6 +102,9 @@ describe('character: name, appearance, personality + starting values (GEN-047)',
       conduct: 'เป็นกลางสุดๆ',
       // GEN-095: no timed status before the game.
       statuses: [],
+      // GEN-130: no loot kept yet.
+      strength: null,
+      weakness: null,
       editable: true,
     });
     expect(storedRow(created.member.id)).toMatchObject({ hp: 100, hp_max: 100, stamina: 30, stamina_max: 30, reputation: 0, karma: 0 });
