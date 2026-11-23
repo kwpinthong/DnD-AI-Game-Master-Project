@@ -1603,6 +1603,24 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
           expect(dialogueRequests()).toEqual([]);
           expect(npcEntries(again[0]!).map((e) => e.text)).toEqual(lines.map((e) => e.text));
         });
+
+        it('GEN-197 C1: A left the fountain after the turn: the redone lines still reach A, not C who came in since', async () => {
+          await boot({}, hangDialogue);
+          const { t, clients } = await atFountain();
+          for (const [i, c] of clients.entries()) await send(c, ['ทักลูเซีย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'][i]!);
+          for (const c of clients) await c.waitFor(at(1, 'SOLARION', 2));
+          await expect.poll(() => dialogueRequests().length, { timeout: 5_000 }).toBeGreaterThan(0);
+          await restart();
+          move(t.a, 'inn');
+          move(t.c, 'fountain');
+
+          const again = [await enter(t.a), await enter(t.b), await enter(t.c)];
+          await until(() => npcEntries(again[1]!).length > 0);
+          const lines = npcEntries(again[1]!).filter((e) => e.place?.id === 'fountain');
+          expect(lines.length).toBeGreaterThan(0);
+          expect(npcEntries(again[0]!).filter((e) => e.place?.id === 'fountain').map((e) => e.text)).toEqual(lines.map((e) => e.text));
+          expect(npcEntries(again[2]!).filter((e) => e.place?.id === 'fountain')).toEqual([]);
+        });
       });
 
       describe('C3: a Human GM game', () => {
@@ -1662,6 +1680,30 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
           const next = await approveHeldTurn(t.call, t.gm!.token);
           expect(next).toMatchObject({ at: { day: 1, phase: 'SOLARION', turn: 2 } });
           expect(next.dialogue).toBeUndefined();
+        });
+
+        it('GEN-197 C2: the GM approves the lines after A left the fountain: A still gets them, not C who came in since', async () => {
+          await boot({}, noRoll);
+          const t = await startedTable(server!, true);
+          move(t.a, 'fountain');
+          move(t.b, 'fountain');
+          jumpTo(t, { day: 1, phase: 'SOLARION', turn: 1 });
+          const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+          for (const [i, c] of clients.entries()) await send(c, ['ทักลูเซีย', 'ยืนมองน้ำพุ', 'ล้างแก้ว'][i]!);
+          await expect.poll(async () => (await gmView(t)).pending?.entries.length ?? 0, { timeout: 5_000 }).toBeGreaterThan(0);
+          expect((await t.call('POST', '/api/game/gm/turn/approve', { token: t.gm!.token })).status).toBe(200);
+          for (const c of clients) await c.waitFor(at(1, 'SOLARION', 2));
+          await expect.poll(async () => (await gmView(t)).pending?.dialogue ?? false, { timeout: 5_000 }).toBe(true);
+
+          move(t.a, 'inn');
+          move(t.c, 'fountain');
+          expect((await t.call('POST', '/api/game/gm/turn/approve', { token: t.gm!.token })).status).toBe(200);
+          await until(() => npcEntries(clients[1]!).length > 0);
+          const lines = npcEntries(clients[1]!).filter((e) => e.place?.id === 'fountain');
+          expect(lines.length).toBeGreaterThan(0);
+          expect(npcEntries(clients[0]!).filter((e) => e.place?.id === 'fountain').map((e) => e.text)).toEqual(lines.map((e) => e.text));
+          await pause(50);
+          expect(npcEntries(clients[2]!).filter((e) => e.place?.id === 'fountain')).toEqual([]);
         });
       });
     });
