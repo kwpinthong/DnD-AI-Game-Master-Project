@@ -8,6 +8,8 @@ import {
   MemorySourcesResponse,
   type MemorySourcesRequest,
   OriginResponse,
+  PlayerStyleResponse,
+  type PlayerStyleRequest,
   type GameMemorySetting,
   type InventoryView,
   type MemorySourceGame,
@@ -213,6 +215,32 @@ export async function memorySourcesCall(baseUrl: string, playerCode: string): Pr
     return parsed.success ? { kind: 'ok', games: parsed.data.games } : { kind: 'error', message: UNREACHABLE };
   }
   const error = ApiError.safeParse(answer.json);
+  return { kind: 'error', message: error.success ? error.data.message : UNREACHABLE };
+}
+
+/**
+ * GEN-200: "สไตล์ของฉัน" on the GEN-082 routes: look up, delete, or switch keeping off (`optOut`). The code goes in
+ * the body only. A 403 says nothing about whether the code exists: the server's "not found" wording stays out.
+ */
+export type PlayerStyleResult = { kind: 'ok'; data: PlayerStyleResponse } | { kind: 'error'; message: string };
+export const WRONG_PLAYER_CODE = 'ใช้รหัสนี้ไม่ได้ ตรวจรหัสแล้วลองใหม่';
+
+export async function playerStyleCall(baseUrl: string, action: 'view' | 'delete' | { optOut: boolean }, playerCode: string): Promise<PlayerStyleResult> {
+  const body: PlayerStyleRequest = typeof action === 'object' ? { playerCode, optOut: action.optOut } : { playerCode };
+  const path = action === 'view' ? '/api/style' : action === 'delete' ? '/api/style/delete' : '/api/style/opt-out';
+  const answer = await send(apiUrl(baseUrl, path), {
+    method: typeof action === 'object' ? 'PUT' : 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!answer) return { kind: 'error', message: UNREACHABLE };
+  if (answer.res.ok) {
+    const parsed = PlayerStyleResponse.safeParse(answer.json);
+    return parsed.success ? { kind: 'ok', data: parsed.data } : { kind: 'error', message: UNREACHABLE };
+  }
+  if (answer.res.status === 403) return { kind: 'error', message: WRONG_PLAYER_CODE };
+  const error = ApiError.safeParse(answer.json);
+  if (error.success && error.data.code === 'invalid_input') return { kind: 'error', message: Object.values(error.data.fields).join(' / ') || error.data.message };
   return { kind: 'error', message: error.success ? error.data.message : UNREACHABLE };
 }
 

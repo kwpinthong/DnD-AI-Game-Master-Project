@@ -9,6 +9,7 @@ import { JoinForm } from '../JoinForm.tsx';
 import { LearningLibrary } from '../LearningLibrary.tsx';
 import { GameDataEditor } from '../GameDataEditor.tsx';
 import { Lobby } from '../Lobby.tsx';
+import { MyStyle } from '../MyStyle.tsx';
 import { OriginCard } from '../OriginCard.tsx';
 import { PlayRoom } from '../PlayRoom.tsx';
 import { ScenarioEditor } from '../ScenarioEditor.tsx';
@@ -37,7 +38,6 @@ const playRoom = ({ baseUrl, token }: FrameContext) => (
   <PlayRoom apiBaseUrl={baseUrl} token={token} onBack={noop} onGameList={noop} onNeedCharacter={noop} onSessionLost={noop} />
 );
 const PLAY: ScreenView = { page: 'PlayRoom', socket: true, render: playRoom };
-const NONE: ScreenView = { page: '', socket: false, render: null };
 /** The end page (GEN-091): the reveal and the rating are two parts of the same page. */
 const END: ScreenView = {
   page: 'GameSummaryPage',
@@ -110,7 +110,7 @@ export const SCREEN_VIEWS: Record<ScreenId, ScreenView> = {
     ),
   },
   'ai-usage': { page: 'AdminDashboard', socket: false, render: ({ baseUrl }) => <AdminDashboard apiBaseUrl={baseUrl} /> },
-  'my-style': NONE,
+  'my-style': { page: 'MyStyle', socket: false, render: ({ baseUrl }) => <MyStyle apiBaseUrl={baseUrl} /> },
   'game-data': {
     page: 'GameDataEditor',
     socket: false,

@@ -4,6 +4,7 @@ import { CreateGameForm } from './CreateGameForm.tsx';
 import { JoinForm } from './JoinForm.tsx';
 import { Lobby } from './Lobby.tsx';
 import { GameHistory } from './GameHistory.tsx';
+import { MyStyle } from './MyStyle.tsx';
 import { apiUrl, fetchMe, fetchWithTimeout, forgetToken, loadToken, rememberToken, saveToken } from './session.ts';
 
 type Status = 'checking' | 'connected' | 'unreachable';
@@ -36,6 +37,7 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
   const [auth, setAuth] = useState<Auth>(() => (loadToken() ? { state: 'restoring' } : { state: 'guest' }));
   const [guestView, setGuestView] = useState<'join' | 'create'>('join');
   const [showHistory, setShowHistory] = useState(false);
+  const [showStyle, setShowStyle] = useState(false);
   /** The play room is open (reported by the lobby). */
   const [playing, setPlaying] = useState(false);
 
@@ -99,6 +101,10 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
             </button>
           )}
           {showHistory && <GameHistory apiBaseUrl={apiBaseUrl} onClose={() => setShowHistory(false)} />}
+          <button type="button" aria-pressed={showStyle} onClick={() => setShowStyle((v) => !v)}>
+            สไตล์ของฉัน
+          </button>
+          {showStyle && <MyStyle apiBaseUrl={apiBaseUrl} onClose={() => setShowStyle(false)} />}
         </>
       )}
       {auth.state === 'guest' && guestView === 'join' && (
