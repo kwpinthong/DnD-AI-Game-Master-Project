@@ -59,7 +59,7 @@ export function registerGmConsoleRoutes(app: FastifyInstance, db: Db, now: Clock
   app.post(`${GM_CONSOLE_PATH}/adjust`, async (request, reply) => {
     const gm = gmOf(request, reply);
     if (!gm) return reply;
-    const result = adjustValue(db, gm, request.body, now());
+    const result = adjustValue(db, room, assets, gm, request.body, now());
     if (result.ok) log(`[gm-console] game=${gm.gameId} adjust override=${result.value.id}`);
     return answer(reply, result, (override): GmAdjustResponse => ({ override }));
   });
