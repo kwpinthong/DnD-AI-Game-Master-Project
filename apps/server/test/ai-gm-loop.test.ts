@@ -395,6 +395,27 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(turnEntries(clients[0]!, 1, 'EOSORIA', 1).filter((e) => e.kind === 'narration')).toHaveLength(1);
   });
 
+  it('GEN-163 C1: a narration refused for unknown_ref logs which ref and at which stage (no prompt text)', async () => {
+    let refA = '';
+    await boot({}, async (req) => {
+      if (!isNarration(req)) return undefined;
+      const audience = narrationFor(req);
+      if (!('player' in audience) || audience.player !== refA || lastUserText(req).includes('unknown_ref')) return undefined;
+      const answer = (await cannedGmAnswer(req)) as { segments: { actionId: string; text: string }[] };
+      answer.segments[0]!.text += ' แล้วคุยกับ{{n:ghost-npc}}';
+      return mockReply.ok(answer);
+    });
+    const t = await startedTable(server!, false);
+    refA = refOf(t.a);
+    const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+    await playTurn(clients, ['ทักทายคนข้างโต๊ะ', 'ดื่มชา', 'อ่านประกาศ'], { day: 1, phase: 'EOSORIA', turn: 2 });
+    const refused = logs.filter((l) => l.startsWith('[gm]') && l.includes('refused:'));
+    expect(refused).toHaveLength(1);
+    expect(refused[0]).toContain('purpose=narrate_player stage=first refused: unknown_ref');
+    expect(refused[0]).toContain('{{n:ghost-npc}} at segments[0].text');
+    expect(refused[0]).not.toContain('แล้วคุยกับ');
+  });
+
   it('Q-219: a narration with a grade S NPC\'s real name is refused; its {{n:id}} token shows the sheet Public_Alias to a player who has not met it', async () => {
     let refA = '';
     await boot({}, async (req) => {
