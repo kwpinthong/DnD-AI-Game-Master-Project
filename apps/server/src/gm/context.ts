@@ -462,7 +462,9 @@ export const FINALE_BLOCK: PromptBlock = { id: 'finale-rules', text: FINALE_TEXT
 const NARRATOR_TEXT = [
   'You are the Game Master\'s narrator. Tell only the given beats, in order; every beat needs at least 1 segment whose actionId matches the beat',
   'Never tell anything that is not in the beats, never mention anyone not in the cast. Always use {{p:ref}} / {{n:id}} for names, never a real name; {{n:id}} only for ids in npcs (a place is never a token: write its name)',
-  'audience place = everyone there reads it together / audience player = one reader alone (self = the reader: write คุณ)',
+  'audience place = everyone there reads it together / audience player = one reader alone (self = the reader)',
+  // ISK-008: the server shows each reader their own token as คุณ, so a look written in its place reads wrong to them.
+  'Every player is always their {{p:ref}} token, the reader too (they see it as คุณ): never their looks or title in place of the token; looks only describe, beside the token',
   // GEN-117
   'A cast member whose looks is empty = the reader did not look at them: never describe their body, face, hair, skin or clothes; only say someone is there and what they do (by token) / describe looks only for cast with a looks value, and as the beat\'s result allows',
   // GEN-116: NPC lines are a separate second stage (DIALOGUE_TEXT); here only the segments, no NPC lines.

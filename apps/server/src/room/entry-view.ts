@@ -1,9 +1,10 @@
-import { isVotableEntry, type NpcLineView, type PlaceView, type RoomEntry } from '@isekai/protocol';
+import { appearanceLabels, appearanceParts, isVotableEntry, type AppearanceTraits, type NpcLineView, type PlaceView, type RoomEntry } from '@isekai/protocol';
 import { eq } from 'drizzle-orm';
 import { npcSpeaker } from '../companions/store.ts';
 import type { DbOrTx } from '../db/client.ts';
 import { character, member } from '../db/schema.ts';
 import { titleOf } from '../game/character.ts';
+import { youInText } from '../game/tokens.ts';
 import { maskNames } from '../gm/check.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { ASTRAL_PLANE, namesVisibleTo, npcBondsOf } from '../visibility/store.ts';
@@ -56,6 +57,21 @@ function playerTextOf(db: DbOrTx, row: RoomEntryRow, actorId: string, viewer: { 
   return aliases.size === 0 ? row.text : maskNames(row.text, aliases);
 }
 
+/**
+ * ISK-008: the text as this player reads it, their own look / title written by the AI as "คุณ" (the row keeps the raw text).
+ * shortcut: one character query per entry read, fine for a game's log; batch per request if replay gets slow.
+ */
+function readerTextOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string; role: string }, assets: GameAssets): string {
+  if (viewer.role !== 'player') return row.text;
+  const people = db.select({ c: character }).from(character).innerJoin(member, eq(member.id, character.memberId)).where(eq(member.gameId, row.gameId)).all();
+  const me = people.find(({ c }) => c.memberId === viewer.id)?.c;
+  if (!me) return row.text;
+  // A chip part the label no longer spells (admin edit, ISK-006 C8) is not in the stored sentence: left out.
+  const parts = me.appearanceTraits === null ? [] : appearanceParts(JSON.parse(me.appearanceTraits) as AppearanceTraits, appearanceLabels(assets.appearanceOptions, true)).filter((p) => me.appearance.includes(p));
+  const others = people.filter(({ c }) => c.memberId !== viewer.id).map(({ c }) => ({ appearance: c.appearance, title: titleOf(c) }));
+  return youInText(row.text, { appearance: me.appearance, title: titleOf(me), parts }, others);
+}
+
 /** A stored feed / narration / whisper / hit entry as `viewer` receives it, live, on replay and in the game log (GEN-037). */
 export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string; role: string }, assets: GameAssets): RoomEntry {
   const meta = row.meta === null ? {} : (JSON.parse(row.meta) as EntryMeta);
@@ -66,7 +82,8 @@ export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string;
     phase: row.phase,
     turn: row.turn === 2 ? 2 : 1,
     place: placeViewOf(db, row.gameId, row.locationId, assets),
-    text: row.kind === 'player' && meta.actor ? playerTextOf(db, row, meta.actor, viewer) : row.text,
+    // ISK-008: someone's own words (an action, a whisper) are never rewritten for the reader.
+    text: row.kind === 'player' && meta.actor ? playerTextOf(db, row, meta.actor, viewer) : row.kind === 'whisper' || row.kind === 'player' ? row.text : readerTextOf(db, row, viewer, assets),
     // Q-229: the viewer's own roll / hit card; only the entries made for one reader carry them.
     ...(meta.roll ? { roll: meta.roll } : {}),
     ...(meta.hit ? { hit: meta.hit } : {}),
