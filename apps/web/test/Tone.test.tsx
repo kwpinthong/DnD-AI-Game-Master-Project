@@ -66,17 +66,11 @@ describe('GEN-177 create game', () => {
 });
 
 describe('GEN-177 lobby', () => {
-  it('C3: the owner changes the tone before the start; after the start it is locked', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    render(<Lobby apiBaseUrl={base('lobby')} token={MOCK_TOKEN} onSessionLost={noop} />);
-    await screen.findByRole('radiogroup', { name: 'โทนภาษา' });
-    fireEvent.click(radio(/ขี้เล่น/));
-    await waitFor(() => expect(bodiesOf(fetchSpy, 'PATCH')).toEqual([{ tone: 'C' }]));
-    cleanup();
+  it('C3 / ISK-019: the tone is set at creation; the lobby shows it read-only', async () => {
     const started = { ...LOBBY, tone: 'B' as const, status: 'started' as const, startedAt: '2026-01-01T00:00:00.000Z' };
     render(<Lobby apiBaseUrl={base('lobby')} token={MOCK_TOKEN} onSessionLost={noop} initial={started} />);
-    expect(radio(/ตำนานโบราณ/).checked).toBe(true);
-    for (const r of within(group()).getAllByRole('radio')) expect((r as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByText('โทนภาษา: ตำนานโบราณ ภาษาสูง')).toBeTruthy();
+    expect(screen.queryByRole('radiogroup', { name: 'โทนภาษา' })).toBeNull();
   });
 });
 

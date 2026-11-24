@@ -1,7 +1,10 @@
-import { defaultScenario, sortTimeline, type GameView, type Scenario } from '@isekai/protocol';
+// GEN-046 scenario editor. ISK-019: it is a step of the create-game form (the Human GM's game) and its scenario goes
+// in POST /api/games; in the lobby the GM only reads it.
+import { defaultScenario, type GameView, type Scenario } from '@isekai/protocol';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App.tsx';
+import { CreateGameForm } from '../src/CreateGameForm.tsx';
 import { TOKEN_KEY } from '../src/session.ts';
 
 type Handler = (url: string, init: RequestInit | undefined) => Response | Promise<Response>;
@@ -25,7 +28,6 @@ function stubApi(routes: Record<string, Handler>) {
 
 const callsTo = (fetchMock: ReturnType<typeof stubApi>, method: string, path: string) =>
   fetchMock.mock.calls.filter(([input, init]) => String(input).endsWith(path) && (init?.method ?? 'GET') === method);
-const bodyOf = (call: unknown[] | undefined) => JSON.parse(String((call![1] as RequestInit).body)) as Scenario;
 
 const gm = { id: 'm-gm', gameId: 'g-1', name: 'ต้น' };
 
@@ -47,41 +49,67 @@ function view(patch: Partial<GameView> = {}): GameView {
   };
 }
 
-/** Logged in as the GM, scenario routes answered by `routes`. */
-function loggedIn(game: GameView, routes: Record<string, Handler> = {}) {
-  localStorage.setItem(TOKEN_KEY, 'tok-gm');
-  const me = game.members.find((m) => m.id === game.you.memberId) ?? { id: game.you.memberId, name: 'นก' };
-  return stubApi({
-    'GET /api/me': () => Response.json({ member: { id: me.id, gameId: game.id, name: me.name } }),
-    'GET /api/game/scenario': () => Response.json({ scenario: defaultScenario(), locked: game.status === 'started' }),
-    'GET /api/game': () => Response.json(game),
-    ...routes,
-  });
+const created = { token: 'tok-new', expiresAt: '2026-12-22T12:00:00.000Z', member: gm, game: view() };
+
+/** The create form of a Human GM game with the scenario step open; POST /api/games answered by `answer`. */
+async function openEditor(answer: Handler = () => Response.json(created)) {
+  const fetchMock = stubApi({ 'POST /api/games': answer });
+  render(<CreateGameForm apiBaseUrl="" onCreated={() => {}} onBack={() => {}} />);
+  for (const [label, value] of [['Create code', 'ลับเฉพาะ'], ['ชื่อเกม', 'ห้องทดสอบ'], ['ชื่อผู้เล่นของคุณ', 'ต้น'], ['PIN ของคุณ', '1234']] as const) {
+    const input = screen.getByLabelText(label);
+    fireEvent.change(input, { target: { value } });
+    fireEvent.blur(input);
+  }
+  fireEvent.click(screen.getByLabelText(/มี GM คน/));
+  fireEvent.click(screen.getByRole('button', { name: 'แก้ scenario' }));
+  await screen.findByRole('region', { name: 'แก้ scenario' });
+  return fetchMock;
 }
 
-async function openEditor() {
-  fireEvent.click(await screen.findByRole('button', { name: 'แก้ scenario' }));
-  return screen.findByRole('region', { name: 'แก้ scenario' });
+/** Back to the form and create the game: the scenario that was sent. */
+async function create(fetchMock: ReturnType<typeof stubApi>): Promise<Scenario> {
+  fireEvent.click(screen.getByRole('button', { name: 'กลับไปฟอร์ม' }));
+  fireEvent.click(screen.getByRole('button', { name: 'สร้างเกมและรับโค้ด' }));
+  await waitFor(() => expect(callsTo(fetchMock, 'POST', '/api/games')).toHaveLength(1));
+  return (JSON.parse(String((callsTo(fetchMock, 'POST', '/api/games')[0]![1] as RequestInit).body)) as { scenario: Scenario }).scenario;
+}
+
+const refused = (fields: Record<string, string>) => () => Response.json({ code: 'invalid_input', message: 'scenario ไม่ถูกต้อง', fields }, { status: 400 });
+/** Create, get refused, and the step opens again with the messages. */
+async function createRefused(fetchMock: ReturnType<typeof stubApi>) {
+  fireEvent.click(screen.getByRole('button', { name: 'กลับไปฟอร์ม' }));
+  fireEvent.click(screen.getByRole('button', { name: 'สร้างเกมและรับโค้ด' }));
+  await screen.findByRole('region', { name: 'แก้ scenario' });
+  expect(callsTo(fetchMock, 'POST', '/api/games')).toHaveLength(1);
 }
 
 const events = () => screen.getAllByRole('group', { name: /^เหตุการณ์ / });
 
-describe('Scenario editor (GEN-046)', () => {
-  beforeEach(() => localStorage.clear());
+/** Logged in as the GM of a created game (the lobby reads the scenario). */
+function loggedIn(game: GameView) {
+  localStorage.setItem(TOKEN_KEY, 'tok-gm');
+  return stubApi({
+    'GET /api/me': () => Response.json({ member: { id: gm.id, gameId: game.id, name: gm.name } }),
+    'GET /api/game/scenario': () => Response.json({ scenario: defaultScenario(), locked: game.status === 'started' }),
+    'GET /api/game': () => Response.json(game),
+  });
+}
+
+describe('Scenario editor (GEN-046, ISK-019 at creation)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
 
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
     localStorage.clear();
+    sessionStorage.clear();
   });
 
-  it('C1: the GM adds an event on day 4 afternoon, saves it, and the list follows the server order', async () => {
-    const fetchMock = loggedIn(view(), {
-      'PUT /api/game/scenario': (_url, init) =>
-        Response.json({ scenario: sortTimeline(JSON.parse(String(init!.body)) as Scenario), locked: false }),
-    });
-    render(<App apiBaseUrl="" />);
-    await openEditor();
+  it('C1: the GM adds an event on day 4 afternoon and it goes in the create request', async () => {
+    const fetchMock = await openEditor();
     const before = events().length;
 
     fireEvent.click(screen.getByRole('button', { name: 'เพิ่มเหตุการณ์' }));
@@ -90,25 +118,14 @@ describe('Scenario editor (GEN-046)', () => {
     fireEvent.change(within(added).getByLabelText('ช่วง'), { target: { value: 'NOCTHERION' } });
     fireEvent.change(within(added).getByLabelText('หัวข้อ'), { target: { value: 'คาราวานมาถึง' } });
     fireEvent.change(within(added).getByLabelText('ผลถ้าไม่มีใครแทรกแซง'), { target: { value: 'ถูกปล้นตอนค่ำ' } });
-    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
 
-    expect(await screen.findByText('บันทึกแล้ว')).toBeTruthy();
-    const sent = bodyOf(callsTo(fetchMock, 'PUT', '/api/game/scenario')[0]);
+    const sent = await create(fetchMock);
     expect(sent.timeline.at(-1)).toMatchObject({ day: 4, phase: 'NOCTHERION', title: 'คาราวานมาถึง', outcome: 'ถูกปล้นตอนค่ำ' });
     expect(sent.timeline.at(-1)!.id).toMatch(/^[a-z0-9][a-z0-9-]*$/);
-    // Shown in day order now: the new event sits between day 1 and day 5.
-    const titles = events().map((g) => (within(g).getByLabelText('หัวข้อ') as HTMLInputElement).value);
-    const at = titles.indexOf('คาราวานมาถึง');
-    expect((within(events()[at - 1]!).getByLabelText('วัน') as HTMLInputElement).value).toBe('1');
-    expect((within(events()[at + 1]!).getByLabelText('วัน') as HTMLInputElement).value).toBe('5');
   });
 
   it('C1: the GM edits the Legendary condition and an NPC secret note', async () => {
-    const fetchMock = loggedIn(view(), {
-      'PUT /api/game/scenario': (_url, init) => Response.json({ scenario: JSON.parse(String(init!.body)), locked: false }),
-    });
-    render(<App apiBaseUrl="" />);
-    await openEditor();
+    const fetchMock = await openEditor();
 
     fireEvent.click(screen.getByRole('button', { name: 'ตำนานลับ' }));
     const legendary = screen.getAllByRole('group', { name: /^ตำนาน / })[0]!;
@@ -119,14 +136,12 @@ describe('Scenario editor (GEN-046)', () => {
     const npc = screen.getAllByRole('group', { name: /^NPC / })[0]!;
     fireEvent.change(within(npc).getByLabelText('โน้ตลับของ GM'), { target: { value: 'เป็นสายลับ' } });
 
-    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
-    await screen.findByText('บันทึกแล้ว');
-    const sent = bodyOf(callsTo(fetchMock, 'PUT', '/api/game/scenario')[0]);
+    const sent = await create(fetchMock);
     expect(sent.legendaries[0]).toMatchObject({ condition: 'ช่วยเด็กกำพร้า 3 วันติด', target: 3 });
     expect(sent.npcs[0]!.gmNote).toBe('เป็นสายลับ');
   });
 
-  it('C3 / Q-028: without canEditScenario (a player, or a game with no Human GM) there is no editor', async () => {
+  it('C3 / Q-028: a player of the game (or a game with no Human GM) has no scenario button', async () => {
     const fetchMock = loggedIn(
       view({
         humanGm: false,
@@ -142,8 +157,6 @@ describe('Scenario editor (GEN-046)', () => {
   });
 
   it('C4: the day 12 finale has no delete button; other events do', async () => {
-    loggedIn(view());
-    render(<App apiBaseUrl="" />);
     await openEditor();
     const finale = events().find((g) => (within(g).getByLabelText('วัน') as HTMLInputElement).value === '12')!;
     expect(within(finale).queryByRole('button', { name: /ลบ/ })).toBeNull();
@@ -154,66 +167,41 @@ describe('Scenario editor (GEN-046)', () => {
     expect(events()).toHaveLength(before - 1);
   });
 
-  it('C5: a refused save shows each message at its field', async () => {
-    loggedIn(view(), {
-      'PUT /api/game/scenario': () =>
-        Response.json(
-          {
-            code: 'invalid_input',
-            message: 'scenario ไม่ถูกต้อง',
-            fields: { 'timeline.5.day': 'วันต้องอยู่ระหว่าง 1 ถึง 12', 'timeline.5.title': 'ห้ามว่าง' },
-          },
-          { status: 400 },
-        ),
-    });
-    render(<App apiBaseUrl="" />);
-    await openEditor();
+  it('C5: a refused scenario shows each message at its field', async () => {
+    const fetchMock = await openEditor(refused({ 'timeline.5.day': 'วันต้องอยู่ระหว่าง 1 ถึง 12', 'timeline.5.title': 'ห้ามว่าง' }));
     fireEvent.click(screen.getByRole('button', { name: 'เพิ่มเหตุการณ์' }));
-    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
+    await createRefused(fetchMock);
 
     const added = events()[5]!;
-    expect(await within(added).findByText('วันต้องอยู่ระหว่าง 1 ถึง 12')).toBeTruthy();
+    expect(within(added).getByText('วันต้องอยู่ระหว่าง 1 ถึง 12')).toBeTruthy();
     expect(within(added).getByText('ห้ามว่าง')).toBeTruthy();
-    expect(screen.getByRole('alert').textContent).toMatch(/บันทึกไม่ได้/);
-    expect(screen.queryByText('บันทึกแล้ว')).toBeNull();
+    expect(screen.getByRole('alert').textContent).toMatch(/แก้ช่องที่บอกไว้/);
   });
 
-  it('C6: after the start the editor is read-only (no save, no reset)', async () => {
+  it('C6: in the lobby the GM reads the scenario only (no save, no reset, inputs off)', async () => {
     loggedIn(view({ status: 'started', startedAt: '2026-11-22T12:00:00.000Z', canEditScenario: false }));
     render(<App apiBaseUrl="" />);
     fireEvent.click(await screen.findByRole('button', { name: 'ดู scenario' }));
     await screen.findByRole('region', { name: 'แก้ scenario' });
-    expect(await screen.findByText(/เกมเริ่มแล้ว.*แก้ไม่ได้/)).toBeTruthy();
+    expect(await screen.findByText(/แก้ไม่ได้/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'บันทึก' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'คืนค่า default' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'ใช้ค่ามาตรฐาน' })).toBeNull();
     expect((within(events()[0]!).getByLabelText('หัวข้อ') as HTMLInputElement).disabled).toBe(true);
   });
 
-  it('C7: "คืนค่า default" asks first, then shows the template the server sends back', async () => {
-    const edited = { ...defaultScenario(), timeline: defaultScenario().timeline.map((e) => ({ ...e, title: `แก้แล้ว ${e.id}` })) };
+  it('C7: [ใช้ค่ามาตรฐาน] asks first, puts the template back, and nothing is sent as scenario', async () => {
     vi.stubGlobal('confirm', vi.fn(() => true));
-    const fetchMock = loggedIn(view(), {
-      'GET /api/game/scenario': () => Response.json({ scenario: edited, locked: false }),
-      'POST /api/game/scenario/reset': () => Response.json({ scenario: defaultScenario(), locked: false }),
-    });
-    render(<App apiBaseUrl="" />);
-    await openEditor();
-    expect((within(events()[0]!).getByLabelText('หัวข้อ') as HTMLInputElement).value).toMatch(/^แก้แล้ว/);
+    const fetchMock = await openEditor();
+    fireEvent.change(within(events()[0]!).getByLabelText('หัวข้อ'), { target: { value: 'แก้แล้ว' } });
 
-    fireEvent.click(screen.getByRole('button', { name: 'คืนค่า default' }));
-    await waitFor(() =>
-      expect((within(events()[0]!).getByLabelText('หัวข้อ') as HTMLInputElement).value).toBe(defaultScenario().timeline[0]!.title),
-    );
-    expect(callsTo(fetchMock, 'POST', '/api/game/scenario/reset')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'ใช้ค่ามาตรฐาน' }));
     expect(confirm).toHaveBeenCalled();
+    expect((within(events()[0]!).getByLabelText('หัวข้อ') as HTMLInputElement).value).toBe(defaultScenario().timeline[0]!.title);
+    expect(await create(fetchMock)).toBeUndefined();
   });
 
   it('GEN-071 C5: each sheet event shows its period range and turns; the GM sets an end period and it is sent', async () => {
-    const fetchMock = loggedIn(view(), {
-      'PUT /api/game/scenario': (_url, init) => Response.json({ scenario: JSON.parse(String(init!.body)), locked: false }),
-    });
-    render(<App apiBaseUrl="" />);
-    await openEditor();
+    const fetchMock = await openEditor();
     expect(events()).toHaveLength(5);
     expect(events().map((g) => g.querySelector('legend')!.textContent)).toEqual([
       expect.stringMatching(/วัน 1 EOSORIA.* · 2 เทิร์น$/),
@@ -232,35 +220,21 @@ describe('Scenario editor (GEN-046)', () => {
     fireEvent.change(within(day7).getByLabelText('ถึงช่วง'), { target: { value: 'NOCTHERION' } });
     expect(day7.querySelector('legend')!.textContent).toMatch(/ถึง NOCTHERION.* · 4 เทิร์น$/);
     fireEvent.change(within(day7).getByLabelText('ผลที่ผู้เล่นแทรกแซงได้'), { target: { value: 'ช่วยชาวบ้านหนีทัน' } });
-    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
 
-    await screen.findByText('บันทึกแล้ว');
-    const sent = bodyOf(callsTo(fetchMock, 'PUT', '/api/game/scenario')[0]);
+    const sent = await create(fetchMock);
     expect(sent.timeline[2]).toMatchObject({ endPhase: 'NOCTHERION', interventionEffects: 'ช่วยชาวบ้านหนีทัน' });
     expect(sent.timeline[1]).toMatchObject({ endPhase: null, foreshadowAt: { day: 4, phase: 'EOSORIA' } });
   });
 
   it('GEN-071 C5: the server refusing an end period shows the message at that field', async () => {
-    loggedIn(view(), {
-      'PUT /api/game/scenario': () =>
-        Response.json(
-          { code: 'invalid_input', message: 'scenario ไม่ถูกต้อง', fields: { 'timeline.2.endPhase': 'ช่วงสิ้นสุดต้องไม่อยู่ก่อนช่วงเริ่ม' } },
-          { status: 400 },
-        ),
-    });
-    render(<App apiBaseUrl="" />);
-    await openEditor();
+    const fetchMock = await openEditor(refused({ 'timeline.2.endPhase': 'ช่วงสิ้นสุดต้องไม่อยู่ก่อนช่วงเริ่ม' }));
     fireEvent.change(within(events()[2]!).getByLabelText('ถึงช่วง'), { target: { value: 'SOLARION' } });
-    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
-    expect(await within(events()[2]!).findByText('ช่วงสิ้นสุดต้องไม่อยู่ก่อนช่วงเริ่ม')).toBeTruthy();
+    await createRefused(fetchMock);
+    expect(within(events()[2]!).getByText('ช่วงสิ้นสุดต้องไม่อยู่ก่อนช่วงเริ่ม')).toBeTruthy();
   });
 
   it('GEN-096: the GM sets start / end turns, the legend counts them and they are sent', async () => {
-    const fetchMock = loggedIn(view(), {
-      'PUT /api/game/scenario': (_url, init) => Response.json({ scenario: JSON.parse(String(init!.body)), locked: false }),
-    });
-    render(<App apiBaseUrl="" />);
-    await openEditor();
+    const fetchMock = await openEditor();
     const day7 = events()[2]!;
     expect((within(day7).getByLabelText('เริ่มเทิร์น') as HTMLInputElement).value).toBe('1');
     expect((within(day7).getByLabelText('จบเทิร์น') as HTMLInputElement).value).toBe('2');
@@ -269,33 +243,23 @@ describe('Scenario editor (GEN-046)', () => {
     const day12 = events()[4]!;
     fireEvent.change(within(day12).getByLabelText('จบเทิร์น'), { target: { value: '1' } });
     expect(day12.querySelector('legend')!.textContent).toMatch(/ถึง NOCTHERION.* เทิร์น 1 · 3 เทิร์น \(ฉากจบ\)$/);
-    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
 
-    await screen.findByText('บันทึกแล้ว');
-    const sent = bodyOf(callsTo(fetchMock, 'PUT', '/api/game/scenario')[0]);
+    const sent = await create(fetchMock);
     expect(sent.timeline[2]).toMatchObject({ startTurn: 2, endTurn: 2 });
     expect(sent.timeline[4]).toMatchObject({ startTurn: 1, endTurn: 1 });
   });
 
   it('GEN-096 C4: turn 3 is sent as typed and the server refusal shows at that field', async () => {
-    const fetchMock = loggedIn(view(), {
-      'PUT /api/game/scenario': () =>
-        Response.json({ code: 'invalid_input', message: 'scenario ไม่ถูกต้อง', fields: { 'timeline.2.startTurn': 'เทิร์นต้องเป็น 1 หรือ 2' } }, { status: 400 }),
-    });
-    render(<App apiBaseUrl="" />);
-    await openEditor();
+    const fetchMock = await openEditor(refused({ 'timeline.2.startTurn': 'เทิร์นต้องเป็น 1 หรือ 2' }));
     fireEvent.change(within(events()[2]!).getByLabelText('เริ่มเทิร์น'), { target: { value: '3' } });
-    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
-    expect(await within(events()[2]!).findByText('เทิร์นต้องเป็น 1 หรือ 2')).toBeTruthy();
-    expect(bodyOf(callsTo(fetchMock, 'PUT', '/api/game/scenario')[0]).timeline[2]!.startTurn).toBe(3);
+    await createRefused(fetchMock);
+    expect(within(events()[2]!).getByText('เทิร์นต้องเป็น 1 หรือ 2')).toBeTruthy();
+    const body = JSON.parse(String((callsTo(fetchMock, 'POST', '/api/games')[0]![1] as RequestInit).body)) as { scenario: Scenario };
+    expect(body.scenario.timeline[2]!.startTurn).toBe(3);
   });
 
   it('GEN-097: the GM picks several places for an event, or the whole town, and it is sent', async () => {
-    const fetchMock = loggedIn(view(), {
-      'PUT /api/game/scenario': (_url, init) => Response.json({ scenario: JSON.parse(String(init!.body)), locked: false }),
-    });
-    render(<App apiBaseUrl="" />);
-    await openEditor();
+    const fetchMock = await openEditor();
     const placeName = (id: string) => defaultScenario().locations.find((l) => l.id === id)!.name;
     const day10 = within(events()[3]!).getByRole('group', { name: 'สถานที่' });
     expect((within(day10).getByLabelText(placeName('temple')) as HTMLInputElement).checked).toBe(true);
@@ -309,39 +273,25 @@ describe('Scenario editor (GEN-046)', () => {
     expect((within(day5).getByLabelText(placeName('temple')) as HTMLInputElement).disabled).toBe(true);
     const day1 = within(events()[0]!).getByRole('group', { name: 'สถานที่' });
     fireEvent.click(within(day1).getByLabelText('ทั้งเมือง'));
-    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
 
-    await screen.findByText('บันทึกแล้ว');
-    const sent = bodyOf(callsTo(fetchMock, 'PUT', '/api/game/scenario')[0]);
+    const sent = await create(fetchMock);
     expect(sent.timeline.map((e) => e.locationIds)).toEqual([null, null, ['community', 'temple', 'fountain'], ['temple', 'fountain'], null]);
   });
 
   it('GEN-097 C5: an empty place list is sent and the server refusal shows at the places', async () => {
-    const fetchMock = loggedIn(view(), {
-      'PUT /api/game/scenario': () =>
-        Response.json(
-          {
-            code: 'invalid_input',
-            message: 'scenario ไม่ถูกต้อง',
-            fields: { 'timeline.2.locationIds': 'ต้องมีสถานที่อย่างน้อย 1 แห่ง', 'timeline.3.locationIds.1': 'ไม่มีสถานที่ id "atlantis"' },
-          },
-          { status: 400 },
-        ),
-    });
-    render(<App apiBaseUrl="" />);
-    await openEditor();
+    const fetchMock = await openEditor(refused({ 'timeline.2.locationIds': 'ต้องมีสถานที่อย่างน้อย 1 แห่ง', 'timeline.3.locationIds.1': 'ไม่มีสถานที่ id "atlantis"' }));
     const day7 = within(events()[2]!).getByRole('group', { name: 'สถานที่' });
     for (const id of ['community', 'temple']) fireEvent.click(within(day7).getByLabelText(defaultScenario().locations.find((l) => l.id === id)!.name));
-    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }));
-    expect(await within(events()[2]!).findByText('ต้องมีสถานที่อย่างน้อย 1 แห่ง')).toBeTruthy();
+    await createRefused(fetchMock);
+    expect(within(events()[2]!).getByText('ต้องมีสถานที่อย่างน้อย 1 แห่ง')).toBeTruthy();
     expect(within(events()[3]!).getByText('ไม่มีสถานที่ id "atlantis"')).toBeTruthy();
-    expect(bodyOf(callsTo(fetchMock, 'PUT', '/api/game/scenario')[0]).timeline[2]!.locationIds).toEqual([]);
   });
 
-  it('back to the lobby', async () => {
+  it('back to the lobby from the read-only scenario', async () => {
     loggedIn(view());
     render(<App apiBaseUrl="" />);
-    await openEditor();
+    fireEvent.click(await screen.findByRole('button', { name: 'ดู scenario' }));
+    await screen.findByRole('region', { name: 'แก้ scenario' });
     fireEvent.click(screen.getByRole('button', { name: 'กลับห้องรอ' }));
     expect(await screen.findByRole('region', { name: 'ห้องรอ' })).toBeTruthy();
     expect(screen.queryByRole('region', { name: 'แก้ scenario' })).toBeNull();

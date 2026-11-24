@@ -53,26 +53,12 @@ describe('GEN-127 C1 create game', () => {
   });
 });
 
-describe('GEN-127 C2 / C3 lobby', () => {
-  it('the owner changes the level before the start (PATCH /api/game)', async () => {
+describe('GEN-127 C2 / C3 lobby (ISK-019: set at creation, read-only for everyone)', () => {
+  it('every member reads the level; nothing in the lobby changes it', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    render(<Lobby apiBaseUrl={base('lobby')} token={MOCK_TOKEN} onSessionLost={noop} />);
-    await screen.findByRole('radiogroup', { name: 'บทพูดของ NPC' });
-    expect(radio(/ปกติ/).checked).toBe(true);
-    fireEvent.click(radio(/น้อย/));
-    await waitFor(() => expect(bodiesOf(fetchSpy, 'PATCH')).toEqual([{ npcDialogue: 'low' }]));
-  });
-
-  it('another member sees the level but cannot change it', async () => {
-    const other = { ...LOBBY, npcDialogue: 'high' as const, you: { ...LOBBY.you, memberId: 'm-not-the-creator' } };
-    render(<Lobby apiBaseUrl={base('lobby')} token={MOCK_TOKEN} onSessionLost={noop} initial={other} pollMs={60_000} />);
-    expect(radio(/เยอะ/).checked).toBe(true);
-    for (const r of within(group()).getAllByRole('radio')) expect((r as HTMLInputElement).disabled).toBe(true);
-  });
-
-  it('after the start the control is locked for the owner too', async () => {
-    const started = { ...LOBBY, status: 'started' as const, startedAt: '2026-01-01T00:00:00.000Z' };
-    render(<Lobby apiBaseUrl={base('lobby')} token={MOCK_TOKEN} onSessionLost={noop} initial={started} />);
-    for (const r of within(group()).getAllByRole('radio')) expect((r as HTMLInputElement).disabled).toBe(true);
+    render(<Lobby apiBaseUrl={base('lobby')} token={MOCK_TOKEN} onSessionLost={noop} initial={{ ...LOBBY, npcDialogue: 'high' }} pollMs={60_000} />);
+    expect(screen.getByText('บทพูดของ NPC: เยอะ')).toBeTruthy();
+    expect(screen.queryByRole('radiogroup', { name: 'บทพูดของ NPC' })).toBeNull();
+    expect(bodiesOf(fetchSpy, 'PATCH')).toEqual([]);
   });
 });

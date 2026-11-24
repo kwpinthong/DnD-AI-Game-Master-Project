@@ -205,107 +205,24 @@ describe('Create game + Lobby (GEN-025)', () => {
     expect(callsTo(fetchMock, 'POST', '/api/games')).toHaveLength(0);
   });
 
-  it('C5: the owner sees why the game cannot start yet and the start button is off', async () => {
+  it('C5 / ISK-019: every member sees why the game cannot start yet; there is no start button', async () => {
     loggedIn(view());
 
     render(<App apiBaseUrl="" />);
 
     expect(await screen.findByText('ยังไม่สร้างตัวละคร: เบล')).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'เริ่มเกม' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'เริ่มเกม' })).toBeNull();
     const list = screen.getByRole('list', { name: 'สมาชิก' });
     expect(within(list).getByText(/เบล/).closest('li')!.textContent).toContain('ยังไม่สร้างตัวละคร');
   });
 
-  it('C5: the owner starts the game once nothing blocks it', async () => {
-    const ready = view({ startBlockers: [] });
-    const fetchMock = loggedIn(ready, {
-      'POST /api/game/start': () => Response.json({ ...ready, status: 'started', startedAt: '2026-11-22T12:00:00.000Z' }),
-    });
-
-    render(<App apiBaseUrl="" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'เริ่มเกม' }));
-
-    expect(await screen.findByText(/เกมเริ่มแล้ว/)).toBeTruthy();
-    expect(new Headers(callsTo(fetchMock, 'POST', '/api/game/start')[0]![1]?.headers).get('authorization')).toBe('Bearer tok-abc');
-    expect(screen.queryByRole('button', { name: /เตะ/ })).toBeNull();
-  });
-
-  it('C5: reasons the server gives when the start is refused are shown', async () => {
-    const ready = view({ startBlockers: [] });
-    loggedIn(ready, {
-      'POST /api/game/start': () =>
-        Response.json(
-          { code: 'cannot_start', message: 'ยังเริ่มเกมไม่ได้', reasons: ['ขาดผู้เล่นอีก 1 คน (Online ต้องมีผู้เล่นอย่างน้อย 2 คน)'] },
-          { status: 409 },
-        ),
-    });
-
-    render(<App apiBaseUrl="" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'เริ่มเกม' }));
-
-    expect(await screen.findByText('ขาดผู้เล่นอีก 1 คน (Online ต้องมีผู้เล่นอย่างน้อย 2 คน)')).toBeTruthy();
-  });
-
-  it('C6: the owner gets a new invite code and the lobby shows it', async () => {
-    const fetchMock = loggedIn(view(), { 'POST /api/game/invite-code': () => Response.json(view({ inviteCode: 'ZX9PQR' })) });
-
-    render(<App apiBaseUrl="" />);
-    expect(await screen.findByText('K7Q-2MX')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'ออกโค้ดใหม่' }));
-
-    expect(await screen.findByText('ZX9-PQR')).toBeTruthy();
-    expect(screen.queryByText('K7Q-2MX')).toBeNull();
-    expect(callsTo(fetchMock, 'POST', '/api/game/invite-code')).toHaveLength(1);
-  });
-
-  it('C7: the owner kicks a member with DELETE and the member leaves the list', async () => {
-    const after = view({ members: [view().members[0]!], players: { count: 1, min: 2, max: 6 } });
-    const fetchMock = loggedIn(view(), { 'DELETE /api/game/members/m-bel': () => Response.json(after) });
-
-    render(<App apiBaseUrl="" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'เตะ เบล' }));
-
-    await waitFor(() => expect(within(screen.getByRole('list', { name: 'สมาชิก' })).queryByText(/เบล/)).toBeNull());
-    const [call] = callsTo(fetchMock, 'DELETE', '/api/game/members/m-bel');
-    expect(new Headers(call![1]?.headers).get('authorization')).toBe('Bearer tok-abc');
-    expect(screen.queryByRole('button', { name: 'เตะ นก' })).toBeNull();
-  });
-
-  it('GEN-112 C6: deleting the game is a separate button; it needs the game name typed, then goes back to the join form', async () => {
-    const fetchMock = loggedIn(view(), { 'DELETE /api/game': () => new Response(null, { status: 204 }) });
-
-    render(<App apiBaseUrl="" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'ลบเกม' }));
-    const confirm = screen.getByRole('button', { name: 'ยืนยันลบเกม' }) as HTMLButtonElement;
-    expect(confirm.disabled).toBe(true);
-    expect(callsTo(fetchMock, 'DELETE', '/api/game')).toHaveLength(0);
-
-    fireEvent.change(screen.getByLabelText('พิมพ์ชื่อเกมเพื่อยืนยัน'), { target: { value: 'เมืองก่อนอุกกาบาต' } });
-    expect(confirm.disabled).toBe(false);
-    fireEvent.click(confirm);
-
-    expect(await screen.findByLabelText('PIN')).toBeTruthy();
-    const [call] = callsTo(fetchMock, 'DELETE', '/api/game');
-    expect(JSON.parse(String(call![1]?.body))).toEqual({ confirmName: 'เมืองก่อนอุกกาบาต' });
-    expect(localStorage.getItem(TOKEN_KEY)).toBeNull();
-  });
-
-  it('GEN-112 C6: a member who is not the owner has no delete button', async () => {
-    loggedIn(view({ you: { memberId: 'm-bel', role: 'player' } }));
-    render(<App apiBaseUrl="" />);
-    expect(await screen.findByText('K7Q-2MX')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'ลบเกม' })).toBeNull();
-  });
-
-  it('C7: a member who is not the owner sees no kick, new code or start controls', async () => {
-    loggedIn(view({ you: { memberId: 'm-bel', role: 'player' } }));
+  it('ISK-019: the creator sees no kick, new code, delete or start controls either', async () => {
+    loggedIn(view());
 
     render(<App apiBaseUrl="" />);
 
     expect(await screen.findByText('K7Q-2MX')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /เตะ/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'ออกโค้ดใหม่' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'เริ่มเกม' })).toBeNull();
+    for (const name of [/เตะ/, 'ออกโค้ดใหม่', 'เริ่มเกม', 'ลบเกม']) expect(screen.queryByRole('button', { name })).toBeNull();
   });
 
   it('C7: a kicked member (session refused) is sent back to the join form and the token is forgotten', async () => {
