@@ -1,7 +1,7 @@
 import { SaveCompanionRequest, type CompanionsResponse } from '@isekai/protocol';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { memberRowForToken, type Clock } from '../auth/join.ts';
-import { bearerToken, sendError } from '../auth/routes.ts';
+import { bearerToken, noSession, sendError } from '../auth/routes.ts';
 import type { GameAssets } from '../assets/load.ts';
 import type { Db } from '../db/client.ts';
 import { companionsOf, releaseCompanion, saveCompanion, type CompanionOutcome } from './store.ts';
@@ -35,7 +35,7 @@ export function registerCompanionRoutes(app: FastifyInstance, db: Db, now: Clock
   function caller(request: { headers: { authorization?: string | undefined } }, reply: FastifyReply) {
     const token = bearerToken(request.headers.authorization);
     const me = token ? memberRowForToken(db, token, now) : undefined;
-    if (!me) sendError(reply, 401, { code: 'unauthorized', message: 'ยังไม่ได้เข้าเกม หรือ session หมดอายุ' });
+    if (!me) sendError(reply, 401, noSession(request.headers.authorization));
     return me;
   }
 

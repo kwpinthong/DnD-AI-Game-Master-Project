@@ -1,7 +1,7 @@
 import type { GameTimelineResponse } from '@isekai/protocol';
 import type { FastifyInstance } from 'fastify';
 import { memberRowForToken, type Clock } from '../auth/join.ts';
-import { bearerToken, sendError } from '../auth/routes.ts';
+import { bearerToken, noSession, sendError } from '../auth/routes.ts';
 import type { Db } from '../db/client.ts';
 import type { MemberRow } from '../game/service.ts';
 import { getGameScenario } from '../scenario/store.ts';
@@ -18,7 +18,7 @@ export function registerTimelineRoutes(app: FastifyInstance, db: Db, now: Clock)
   app.get('/api/game/timeline', async (request, reply) => {
     const token = bearerToken(request.headers.authorization);
     const me = token ? memberRowForToken(db, token, now) : undefined;
-    if (!me) return sendError(reply, 401, { code: 'unauthorized', message: 'ยังไม่ได้เข้าเกม หรือ session หมดอายุ' });
+    if (!me) return sendError(reply, 401, noSession(request.headers.authorization));
     return reply.send(timelineFor(db, me));
   });
 }

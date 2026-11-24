@@ -18,7 +18,7 @@ import {
 import type { KarmaTier, Rng } from '@isekai/rules';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { memberRowForToken, type Clock } from '../auth/join.ts';
-import { bearerToken, sendError } from '../auth/routes.ts';
+import { bearerToken, noSession, sendError } from '../auth/routes.ts';
 import type { AiService } from '../ai/core/service.ts';
 import type { GameAssets } from '../assets/load.ts';
 import type { Db } from '../db/client.ts';
@@ -139,7 +139,7 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
   function caller(request: FastifyRequest, reply: FastifyReply): MemberRow | undefined {
     const token = bearerToken(request.headers.authorization);
     const found = token ? memberRowForToken(db, token, now) : undefined;
-    if (!found) void sendError(reply, 401, { code: 'unauthorized', message: 'ยังไม่ได้เข้าเกม หรือ session หมดอายุ' });
+    if (!found) void sendError(reply, 401, noSession(request.headers.authorization));
     return found;
   }
 

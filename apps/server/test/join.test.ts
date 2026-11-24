@@ -247,7 +247,8 @@ describe('POST /api/join (invite code + name + PIN)', { timeout: 30_000 }, () =>
     clock = Date.parse(joined.expiresAt);
     const expired = await me(running, joined.token);
     expect(expired.status).toBe(401);
-    expect(ApiError.parse(expired.body).code).toBe('unauthorized');
+    // ISK-021: a sent token the server no longer knows is session_expired.
+    expect(ApiError.parse(expired.body).code).toBe('session_expired');
   });
 
   it('POST /api/logout ends the session on the server', async () => {

@@ -3,7 +3,7 @@ import { restorePhaseState } from '@isekai/rules';
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { memberRowForToken, type Clock } from '../auth/join.ts';
-import { bearerToken, sendError } from '../auth/routes.ts';
+import { bearerToken, noSession, sendError } from '../auth/routes.ts';
 import type { Db } from '../db/client.ts';
 import { game, gamePhase } from '../db/schema.ts';
 import { activeMembers } from '../game/service.ts';
@@ -22,10 +22,10 @@ export function registerHistoryRoutes(app: FastifyInstance, db: Db, now: Clock, 
   app.get('/api/game/log', async (request, reply) => {
     const token = bearerToken(request.headers.authorization);
     const me = token ? memberRowForToken(db, token, now) : undefined;
-    if (!me) return sendError(reply, 401, { code: 'unauthorized', message: 'ยังไม่ได้เข้าเกม หรือ session หมดอายุ' });
+    if (!me) return sendError(reply, 401, noSession(request.headers.authorization));
 
     const row = db.select().from(game).where(eq(game.id, me.gameId)).get();
-    if (!row) return sendError(reply, 401, { code: 'unauthorized', message: 'ยังไม่ได้เข้าเกม หรือ session หมดอายุ' });
+    if (!row) return sendError(reply, 401, noSession(request.headers.authorization));
     // ISK-001: a game closed before it was played has no end page.
     const closure = closureOf(db, me.gameId);
     if (closure && !closure.hasSummary) return sendError(reply, 404, { code: 'not_started', message: 'เกมนี้ถูกปิดก่อนเริ่มเล่น จึงไม่มีหน้าสรุป' });

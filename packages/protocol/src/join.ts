@@ -109,6 +109,8 @@ export const ApiError = z.discriminatedUnion('code', [
   z.object({ code: z.literal('wrong_pin'), message: z.string(), attemptsLeft: z.number().int() }),
   z.object({ code: z.literal('locked'), message: z.string(), retryAt: z.string() }),
   z.object({ code: z.literal('unauthorized'), message: z.string() }),
+  /** 401 (ISK-021): a token was sent but is unknown or expired; join again with name + PIN for the same member. */
+  z.object({ code: z.literal('session_expired'), message: z.string() }),
   /** 403: the owner removed this member; the name cannot join this game again. */
   z.object({ code: z.literal('kicked'), message: z.string() }),
   /** 409: no room for another player (Online has 6, Single has its 1). */
