@@ -6,7 +6,7 @@ import { loadAiConfig } from '../src/ai/config.ts';
 import type { AiCallRequest, AiProvider } from '../src/ai/provider.ts';
 import { createMockProvider } from '../src/ai/providers/mock.ts';
 import { hashPin } from '../src/auth/pin.ts';
-import { runStyleEval } from '../src/eval/style-eval.ts';
+import { npcReplyReport, runStyleEval, styleEvalView } from '../src/eval/style-eval.ts';
 import { STYLE_SCENES, THAI_PURPOSES } from '../src/eval/style-scenes.ts';
 import { cannedGmAnswer } from '../src/gm/mock-gm.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
@@ -150,5 +150,80 @@ describe('GEN-167 runner and admin page', { timeout: 120_000 }, () => {
     expect(ApiError.parse(unknown.body).code).toBe('response_not_found');
     expect((await call('PUT', `/api/admin/style-eval/999/marks/${a!.id}`, { token, body: { mark: 'better' } })).status).toBe(404);
     expect((await mark(a!.id, 'great' as 'better')).status).toBe(400);
+  });
+
+  // ISK-025: NPC replies are judged on length and the 4 parts (no real AI here: the Mock plays the judge).
+  const npcScenes = STYLE_SCENES.filter((s) => s.purpose === 'npc_chat' || s.purpose === 'npc_dialogue');
+  const isJudge = (req: AiCallRequest) => req.output.name === 'npc_reply_judge';
+  const judging =
+    (verdict: Record<'persona' | 'feeling' | 'reaction' | 'place', boolean>, reply?: string) =>
+    (req: AiCallRequest, json: unknown): unknown => {
+      if (isJudge(req)) return { verdicts: (JSON.parse(req.messages[0]!.text) as { replies: unknown[] }).replies.map(() => verdict) };
+      if (reply !== undefined && req.output.name === 'npc_chat') return { ...(json as object), reply };
+      return json;
+    };
+  const ALL = { persona: true, feeling: true, reaction: true, place: true };
+  const flagged = (result: Awaited<ReturnType<typeof run>>, flag: string) => result.scenes.filter((s) => s.flags.includes(flag)).map((s) => s.sceneId);
+
+  it('ISK-025 C8 (mock): every NPC scene is judged once on the summary model; short complete replies pass the bar', async () => {
+    const provider = mock([], judging(ALL));
+    const calls: AiCallRequest[] = [];
+    const result = await run({ ...provider, call: (req) => (calls.push(req), provider.call(req)) });
+    const judged = calls.filter(isJudge);
+    expect(judged).toHaveLength(npcScenes.length);
+    expect(judged.every((r) => r.purpose === 'npc_chat' && r.model === config.summaryModel)).toBe(true);
+    expect(result.scenes.every((s) => s.ok)).toBe(true);
+    const report = npcReplyReport(server.orm, result.id);
+    expect(report.replies).toBeGreaterThanOrEqual(npcScenes.length);
+    expect(report).toMatchObject({ withinLength: report.replies, complete: report.replies, completeRate: 1, pass: true });
+    expect(report.samples.length).toBeGreaterThan(0);
+    expect(report.samples.length).toBeLessThanOrEqual(5);
+    // The judge's verdicts stay on the server: the admin page gets the flags only.
+    expect(JSON.stringify(styleEvalView(server.orm))).not.toContain('verdict');
+  });
+
+  it('ISK-025 C8 (mock): a reply over 120 code points is flagged too_long and the round misses the bar', async () => {
+    const result = await run(mock([], judging(ALL, 'ก'.repeat(150))));
+    const chats = STYLE_SCENES.filter((s) => s.purpose === 'npc_chat').map((s) => s.id);
+    expect(flagged(result, 'too_long')).toEqual(chats);
+    const report = npcReplyReport(server.orm, result.id);
+    expect(report.withinLength).toBe(report.replies - chats.length);
+    expect(report.pass).toBe(false);
+  });
+
+  it('ISK-025 C8 (mock): a part the judge misses is flagged; under 80% complete misses the bar', async () => {
+    const result = await run(mock([], judging({ ...ALL, feeling: false })));
+    expect(flagged(result, 'missing_feeling')).toEqual(npcScenes.map((s) => s.id));
+    expect(flagged(result, 'missing_persona')).toEqual([]);
+    expect(npcReplyReport(server.orm, result.id)).toMatchObject({ complete: 0, completeRate: 0, pass: false });
+  });
+
+  it('ISK-025 C8 (mock): a failed judge is flagged and its replies do not count as complete', async () => {
+    const result = await run(mock([], (req, json) => (isJudge(req) ? { verdicts: 'nope' } : json)));
+    expect(flagged(result, 'judge_failed')).toEqual(npcScenes.map((s) => s.id));
+    expect(npcReplyReport(server.orm, result.id).complete).toBe(0);
+  });
+
+  it('ISK-025 C4: a reply that brings up rain in a scene without rain is flagged not_in_scene; with rain it is fine', async () => {
+    const result = await run(mock([], judging(ALL, 'ฝนตกหนักแบบนี้ ยังจะมาอีกหรือ')));
+    const chats = STYLE_SCENES.filter((s) => s.context.kind === 'npc_chat');
+    const rainy = (s: (typeof chats)[number]) => s.context.kind === 'npc_chat' && (s.context.chat.scene.weather === 'Rain' || s.context.chat.scene.weather === 'Storm');
+    expect(chats.filter(rainy).length).toBeGreaterThan(0);
+    expect(chats.filter((s) => !rainy(s)).length).toBeGreaterThan(0);
+    expect(flagged(result, 'not_in_scene')).toEqual(chats.filter((s) => !rainy(s)).map((s) => s.id));
+  });
+});
+
+describe('ISK-025 the NPC scenes of the eval set', () => {
+  it('at least 6 NPC chat scenes and 6 turn NPC line scenes, every chat a real chat prompt (tokens only)', () => {
+    const chats = STYLE_SCENES.filter((s) => s.purpose === 'npc_chat');
+    expect(chats.length).toBeGreaterThanOrEqual(6);
+    expect(STYLE_SCENES.filter((s) => s.purpose === 'npc_dialogue' && s.context.kind === 'gm_dialogue').length).toBeGreaterThanOrEqual(6);
+    for (const s of chats) {
+      expect(s.context.kind).toBe('npc_chat');
+      if (s.context.kind !== 'npc_chat') continue;
+      expect(s.context.chat.npc.token).toBe(`{{n:${s.npcs[0]}}}`);
+      expect(s.context.chat.message.length).toBeGreaterThan(0);
+    }
   });
 });

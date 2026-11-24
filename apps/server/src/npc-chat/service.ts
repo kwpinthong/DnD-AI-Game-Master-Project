@@ -1,6 +1,5 @@
 import { NPC_CHAT_DEFAULT_PER_PERIOD, NPC_CHAT_MAX_LENGTH, normalizeActionText, type ApiError, type NpcChatResponse, type NpcChatStatus } from '@isekai/protocol';
 import { and, count, desc, eq, ne } from 'drizzle-orm';
-import { z } from 'zod';
 import type { AiService } from '../ai/core/service.ts';
 import type { GameAssets } from '../assets/load.ts';
 import type { SystemRuleRecord } from '../assets/model.ts';
@@ -11,14 +10,14 @@ import { activeMembers, type MemberRow } from '../game/service.ts';
 import { loadWorld, npcToken, playerToken } from '../gm/context.ts';
 import { renderTokens } from '../gm/loop.ts';
 import { dialoguePrompt } from '../gm/npc-examples.ts';
-import { cutLine, npcPrompt, npcRealNames, npcsHereNow, withVoice } from '../gm/npc-lines.ts';
+import { clampLine, cutLine, npcPrompt, npcRealNames, npcsHereNow, withVoice } from '../gm/npc-lines.ts';
 import { MEMORY_LIMITS } from '../gm/npc-memory.ts';
 import { gateStyle, styleIssues } from '../gm/style-check.ts';
 import { gameTone, toneBlock } from '../gm/tone.ts';
 import { ensurePhaseState, insertEntry, karmaOf, type RoomEntryRow } from '../room/store.ts';
 import { npcBondsOf, presenceOf, presencesInGame } from '../visibility/store.ts';
 import { weatherAt } from '../weather/service.ts';
-import { NPC_CHAT_BLOCK } from './prompt.ts';
+import { NPC_CHAT_BLOCK, NpcChatAnswer, type NpcChatContext } from './prompt.ts';
 import { closureOf } from '../admin/games.ts';
 
 /**
@@ -27,16 +26,8 @@ import { closureOf } from '../admin/games.ts';
  * other players at the place get the talk as `player` + `npc` entries (a whisper only the speaker, and the Human GM).
  */
 
-/** What the AI answers. */
-const NpcChatAnswer = z.object({
-  reply: z.string().min(1).describe('The NPC answer in Thai, 1-3 sentences, names only as tokens.'),
-  suggestion: z.string().nullable().describe('Thai: try it as your action this turn; null unless the player asked for a world effect.'),
-  mood: z.enum(['warmer', 'same', 'colder']).describe('How the talk left the NPC about this player.'),
-});
-type NpcChatAnswer = z.infer<typeof NpcChatAnswer>;
-
-/** Characters of a reply / suggestion that go out. */
-const REPLY_CHARS = 300;
+/** Characters of a suggestion that go out (the reply: `clampLine`, ISK-025). */
+const SUGGESTION_CHARS = 300;
 /** Lines of the earlier talk of the pair in the prompt. */
 const RECENT = 6;
 
@@ -130,10 +121,10 @@ export async function sendNpcChat(deps: NpcChatDeps, me: MemberRow, input: { npc
     .limit(RECENT / 2)
     .all()
     .reverse()
-    .flatMap((r) => [{ from: 'player', text: r.text }, { from: 'npc', text: r.reply }]);
+    .flatMap((r) => [{ from: 'player' as const, text: r.text }, { from: 'npc' as const, text: r.reply }]);
   const others = presencesInGame(db, me.gameId).filter((p) => p.locationId === here.locationId && p.memberId !== me.id);
-  const context = {
-    npc: { token: npcToken(npc.id), ...npcView },
+  const context: NpcChatContext = {
+    npc: { token: npcToken(npc.id), ...npcView! },
     player: { token: playerToken(player.ref), look: player.appearance, socialTitle: player.socialTitle },
     scene: {
       place: world.places.find((p) => p.id === here.locationId)?.name ?? here.locationId,
@@ -158,7 +149,7 @@ export async function sendNpcChat(deps: NpcChatDeps, me: MemberRow, input: { npc
     deps.log(`[npc-chat] game=${me.gameId} npc=${npcId} failed: ${result.error.code}`);
     return unavailable;
   }
-  const clean = (a: NpcChatAnswer) => ({ ...a, reply: cutLine(tokenise(a.reply), REPLY_CHARS), suggestion: a.suggestion ? cutLine(tokenise(a.suggestion), REPLY_CHARS) || null : null });
+  const clean = (a: NpcChatAnswer) => ({ ...a, reply: clampLine(tokenise(a.reply)), suggestion: a.suggestion ? cutLine(tokenise(a.suggestion), SUGGESTION_CHARS) || null : null });
   // GEN-169: the reply against the NPC's speech profile before any player reads it.
   const { value: answer } = await gateStyle({
     db,

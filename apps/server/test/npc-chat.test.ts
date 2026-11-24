@@ -189,6 +189,56 @@ describe('GEN-149 NPC chat', { timeout: 60_000 }, () => {
     expect(bond.affinity).toBe(1);
   });
 
+  // ISK-025: short replies (1-2 sentences, at most 120 code points).
+  const cps = (s: string) => [...s].length;
+
+  it('ISK-025 C2: a 150 code point reply of 3 sentences reaches the player and the room cut at its last sentence end within 120', async () => {
+    const { t, ref } = await start();
+    const [, b] = await rooms(t);
+    answer = { reply: `${'ก'.repeat(49)}. ${'ข'.repeat(49)}. ${'ค'.repeat(47)}.`, suggestion: null, mood: 'same' };
+    const body = NpcChatResponse.parse((await chat(t, t.a.token, { npc: ref, text: 'เล่าเรื่องตลาดหน่อย' })).body);
+    expect(body.reply).toBe(`${'ก'.repeat(49)}. ${'ข'.repeat(49)}.`);
+    const line = await b.waitFor((m) => m.type === 'entry' && m.entry.kind === 'npc');
+    expect(line.type === 'entry' && line.entry.text).toBe(body.reply);
+  });
+
+  it('ISK-025 C5: a never word of the NPC is still caught (GEN-193); a world-changing ask keeps its suggestion as before', async () => {
+    const { t, ref } = await start();
+    const never = server!.assets.voice.npcs[merchant.id]!.neverWords[0]!;
+    answer = { reply: `ไม่ขายหรอก${never}`, suggestion: `ลองต่อรองซื้อเป็น action ของเทิร์นนี้ ${'ก'.repeat(130)}`, mood: 'same' };
+    const body = NpcChatResponse.parse((await chat(t, t.a.token, { npc: ref, text: 'ขอดาบเล่มนั้นหน่อย' })).body);
+    expect(styleFlagStats(server!.orm).some((s) => s.npc?.id === merchant.id && s.reason === 'never_word')).toBe(true);
+    // The suggestion is not a reply: it keeps its old limit.
+    expect(cps(body.suggestion!)).toBeGreaterThan(120);
+  });
+
+  it('ISK-025 C6: a cut reply has no real name and no half token', async () => {
+    const { t, ref } = await start();
+    answer = { reply: `${'ก'.repeat(110)}${merchant.name}${'ข'.repeat(30)}`, suggestion: null, mood: 'same' };
+    const body = NpcChatResponse.parse((await chat(t, t.a.token, { npc: ref, text: 'สวัสดี' })).body);
+    expect(body.reply).toBe(`${'ก'.repeat(110)}…`);
+    expect(body.reply).not.toContain(merchant.name);
+  });
+
+  it('ISK-025 C7: still one npc_chat call per message', async () => {
+    const { t, ref, provider } = await start();
+    expect((await chat(t, t.a.token, { npc: ref, text: 'สวัสดี' })).status).toBe(200);
+    expect(provider.requests.filter((r) => r.purpose === 'npc_chat')).toHaveLength(1);
+  });
+
+  it('ISK-025 C13: an old 200 code point reply in the DB loads whole in the room and in the next prompt', async () => {
+    const { t, ref, provider } = await start();
+    expect((await chat(t, t.a.token, { npc: ref, text: 'สวัสดี' })).status).toBe(200);
+    const old = 'ฮ'.repeat(200);
+    server!.db.prepare('update npc_chat set reply = ?').run(old);
+    server!.db.prepare("update room_entry set text = ? where kind = 'npc'").run(old);
+    const [a] = await rooms(t);
+    expect(entriesOf(a).find((e) => e.kind === 'npc')?.text).toBe(old);
+    expect((await chat(t, t.a.token, { npc: ref, text: 'จำได้ไหม' })).status).toBe(200);
+    const recent = (JSON.parse(provider.requests.filter((r) => r.purpose === 'npc_chat').at(-1)!.messages[0]!.text) as { recent: { text: string }[] }).recent;
+    expect(recent.map((r) => r.text)).toContain(old);
+  });
+
   it('the Human GM and empty / too long messages are refused', async () => {
     const { t, ref } = await start();
     expect((await chat(t, t.a.token, { npc: ref, text: '   ' })).status).toBe(400);

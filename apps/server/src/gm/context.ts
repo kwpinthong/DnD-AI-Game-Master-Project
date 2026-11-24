@@ -476,6 +476,19 @@ const NARRATOR_TEXT = [
   THAI_OUTPUT,
 ].join('\n');
 
+/** ISK-025: the two good replies of `NPC_SPEECH_RULES`, in the Thai the AI writes (the only Thai of those blocks besides "รู้สึก"). */
+export const NPC_SPEECH_EXAMPLES = [
+  'รับขนมปังอย่างลังเล "น้ำพุเช้านี้เย็นจัด ของอุ่นๆ ไม่ได้กินนานแล้ว"',
+  'หัวเราะแห้งๆ หลังชิดกำแพงชื้น "ตรอกมืดขนาดนี้ ขู่ไปก็ไม่มีพยานหรอก"',
+] as const;
+
+/** ISK-025 (Nok 2026-11-23): how every NPC reply reads, in the NPC chat and the turn's NPC lines alike. */
+export const NPC_SPEECH_RULES = [
+  'NPC reply / line: 1-2 sentences, at most 120 characters, with all 4: persona + voice; feeling now by tone or gesture (never "รู้สึก"); reaction to what the player just said / did; one real detail of here and now from the scene (place, period, weather, people; never invent one)',
+  `Good (bread, morning fountain): ${NPC_SPEECH_EXAMPLES[0]}`,
+  `Good (threat, night alley): ${NPC_SPEECH_EXAMPLES[1]}`,
+].join('\n');
+
 /** GEN-116: the second stage. Same rules as GEN-110 had inside the narration; the narration is given so the lines follow it. */
 const DIALOGUE_TEXT = [
   'You write the NPC lines for the Game Master. The players have already read the turn\'s results and the narration: write only the NPC lines that follow it, never retell it',
@@ -485,7 +498,8 @@ const DIALOGUE_TEXT = [
   // GEN-143
   '- answers: every NPC in answers must be the main answerer (at least 1 kind dialogue line), answering what the beats of actionIds really ask / request (the narration did not answer for them) / via partner = the earlier conversation partner: answers when that action talks / asks without saying to whom / several players asking the same NPC = one conversation, answered together in one set, at most limits.dialoguePerNpc × the number of actionIds',
   '- Key moments (a beat with targetNpc, a player meeting the NPC for the first time = bonds met false, or a beat of kind event): speak more. An ordinary turn: little, 0-2 lines',
-  '- Each line is short, at most 120 characters, in Thai, spoken by that NPC\'s persona, with a manner toward the player by bonds (high affinity = friendly, low = wary), karmaBand (-2 cruel .. +2 kind) and the player\'s looks / title (an NPC knows a player only by looks and title: never call them by a real name)',
+  NPC_SPEECH_RULES,
+  '- Manner toward the player by bonds (high affinity = friendly, low = wary), karmaBand (-2 cruel .. +2 kind) and the player\'s looks / title (an NPC knows a player only by these: never call them by a real name)',
   // GEN-193
   '- voice = how that NPC speaks now (its current form): self = what it calls itself ([] = it drops the subject), you = what it calls the player, particles, register, catchphrases, never = what it never says. Keep to it',
   // GEN-146

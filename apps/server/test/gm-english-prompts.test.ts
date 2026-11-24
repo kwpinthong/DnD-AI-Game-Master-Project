@@ -9,6 +9,7 @@ import {
   FINALE_BLOCK,
   JOURNAL_BLOCK,
   NARRATOR_BLOCK,
+  NPC_SPEECH_EXAMPLES,
   REPAIR_INSTRUCTION,
   RULES_BLOCK,
   STYLE_REWRITE_INSTRUCTION,
@@ -30,7 +31,8 @@ import { WEATHER_RULES } from '../src/weather/service.ts';
  * system block may keep is this allowlist: words the AI must write as they are (the reader's "คุณ").
  */
 // GEN-083: the avoid lead-in of the learning block is Thai by the requirement (GEN-108 R5).
-const ALLOWED_THAI = ['คุณ', AVOID_LEAD];
+// ISK-025: the NPC reply rules show 2 good replies in Thai and name the word not to write (รู้สึก).
+const ALLOWED_THAI = ['คุณ', AVOID_LEAD, ...NPC_SPEECH_EXAMPLES, 'รู้สึก'];
 const THAI = /[฀-๿]/;
 const thaiLeft = (text: string) => ALLOWED_THAI.reduce((t, word) => t.split(word).join(''), text).match(/[฀-๿]+/g) ?? [];
 

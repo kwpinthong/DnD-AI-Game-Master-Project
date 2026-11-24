@@ -1,4 +1,7 @@
+import type { Period, Weather } from '@isekai/rules';
+import { z } from 'zod';
 import type { PromptBlock } from '../ai/provider.ts';
+import { NPC_SPEECH_RULES, type NarrationContext } from '../gm/context.ts';
 
 /**
  * GEN-149: the rules of the NPC chat call (purpose `npc_chat`). In its own file, in English, so the GEN-164 rewrite of
@@ -12,7 +15,7 @@ const NPC_CHAT_TEXT = [
   '- recent: the last lines of your talk with this player (oldest first).',
   '- message: what the player says now. whisper: true = only the two of you hear it.',
   '',
-  'Answer as that NPC, in character, in 1-3 short sentences (at most 200 characters).',
+  NPC_SPEECH_RULES,
   'Reply in natural literary Thai: no translated phrasing, no "ทำการ", no emoji, no markdown.',
   'Never write a real name. Write a person only as a token: {{p:ref}} for a player, {{n:id}} for an NPC (the server fills in the name each reader knows).',
   'Speak only of what this NPC could know: the persona, the memories, the scene. Do not invent events, items or places.',
@@ -24,3 +27,21 @@ const NPC_CHAT_TEXT = [
 ].join('\n');
 
 export const NPC_CHAT_BLOCK: PromptBlock = { id: 'npc-chat-rules', text: NPC_CHAT_TEXT, cache: true };
+
+/** What the AI answers. */
+export const NpcChatAnswer = z.object({
+  reply: z.string().min(1).describe('The NPC answer in Thai, 1-2 sentences, at most 120 characters, names only as tokens.'),
+  suggestion: z.string().nullable().describe('Thai: try it as your action this turn; null unless the player asked for a world effect.'),
+  mood: z.enum(['warmer', 'same', 'colder']).describe('How the talk left the NPC about this player.'),
+});
+export type NpcChatAnswer = z.infer<typeof NpcChatAnswer>;
+
+/** The message JSON of one NPC chat call (what `sendNpcChat` sends; the style eval writes the same shape). */
+export interface NpcChatContext {
+  npc: { token: string } & NarrationContext['npcs'][number];
+  player: { token: string; look: string; socialTitle: string };
+  scene: { place: string; day: number; period: Period; weather: Weather | null; playersHere: string[]; npcsHere: string[] };
+  recent: { from: 'player' | 'npc'; text: string }[];
+  message: string;
+  whisper: boolean;
+}
