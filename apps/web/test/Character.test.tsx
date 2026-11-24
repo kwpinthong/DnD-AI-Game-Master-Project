@@ -1,6 +1,7 @@
 import type { CharacterView, GameView, LootOption, LootView } from '@isekai/protocol';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CONTRACT_FIXTURES } from '@isekai/protocol/contract';
 import { App } from '../src/App.tsx';
 import { TOKEN_KEY } from '../src/session.ts';
 
@@ -48,14 +49,16 @@ function view(patch: Partial<GameView> = {}): GameView {
 
 const lin = {
   name: 'ลิน',
-  appearance: 'หญิงผ้าคลุมเทา แผลเป็นที่คาง',
+  appearance: 'ผมมัดหางสีดำ ดวงตาสีน้ำตาล รูปร่างผอมสูง สวมเกราะหนัง มีแผลเป็นที่แก้ม',
   personality: 'ช่างสังเกต พูดน้อย กลัวความมืด',
 };
+/** ISK-007: what the form sends: the avatar (avatar-03 and its default chips), no appearance text. */
+const AVATAR_03 = { avatarId: 'avatar-03', appearanceTraits: { hairColor: 'black', hairStyle: 'ponytail', eyes: 'brown', build: 'tall', outfit: 'leather', feature: 'scar' } };
+const sent = (values: { name?: string; personality?: string } = {}) => ({ name: values.name ?? lin.name, personality: values.personality ?? lin.personality, ...AVATAR_03 });
 
 const saved: CharacterView = {
   ...lin,
-  avatarId: null,
-  appearanceTraits: null,
+  ...AVATAR_03,
   hp: { current: 100, max: 100 },
   stamina: { current: 30, max: 30 },
   coins: 0,
@@ -75,6 +78,7 @@ function loggedIn(game: GameView, more: Record<string, Handler> = {}) {
     'GET /api/game': () => Response.json(game),
     // GEN-090: the page is three steps; the review (step 3) opens once a loot set is kept.
     'GET /api/game/character/loot': () => Response.json({ loot: keptLoot }),
+    'GET /api/appearance-options': () => Response.json(CONTRACT_FIXTURES.AppearanceOptionsResponse[1]),
     ...more,
   });
 }
@@ -112,11 +116,13 @@ async function openCharacter(button: RegExp = /ตัวละคร/) {
 function fill(values: Partial<typeof lin> = {}) {
   const v = { ...lin, ...values };
   // GEN-090 C2: a field tells its error once the player leaves it.
-  for (const [label, value] of [['ชื่อจริง', v.name], ['ลักษณะภายนอก', v.appearance], ['บุคลิก', v.personality]] as const) {
+  for (const [label, value] of [['ชื่อจริง', v.name], ['บุคลิก', v.personality]] as const) {
     const input = screen.getByLabelText(label);
     fireEvent.change(input, { target: { value } });
     fireEvent.blur(input);
   }
+  // ISK-007: the looks are picked: avatar-03 brings its default chips.
+  fireEvent.click(within(screen.getByRole('group', { name: 'รูปตัวละคร' })).getAllByRole('button')[2]!);
 }
 
 /** Step 1 → step 2 (saves the identity). Off while a field is wrong. */
@@ -138,7 +144,7 @@ describe('Character creation step 1 (GEN-047)', () => {
     localStorage.clear();
   });
 
-  it('C1: a complete form is saved with only name, appearance, personality and shows the starting values', async () => {
+  it('C1: a complete form is saved with only name, personality, avatar + chips and shows the starting values', async () => {
     const fetchMock = loggedIn(view(), {
       'GET /api/game/character': () => Response.json({ character: null }),
       'POST /api/game/character': () => Response.json({ character: saved }, { status: 201 }),
@@ -159,7 +165,7 @@ describe('Character creation step 1 (GEN-047)', () => {
     expect(within(card).getByText('ลิน')).toBeTruthy();
     expect(card.textContent).not.toMatch(/karma|กรรม|ชื่อเสียง|reputation/i);
     const [call] = callsTo(fetchMock, 'POST', '/api/game/character');
-    expect(JSON.parse(String(call![1]?.body))).toEqual(lin);
+    expect(JSON.parse(String(call![1]?.body))).toEqual(sent());
     expect(new Headers(call![1]?.headers).get('authorization')).toBe('Bearer tok-abc');
   });
 
@@ -197,7 +203,7 @@ describe('Character creation step 1 (GEN-047)', () => {
       'GET /api/game/character': () => Response.json({ character: null }),
       'POST /api/game/character': () =>
         Response.json(
-          { code: 'invalid_input', message: 'ข้อมูลไม่ถูกต้อง', fields: { appearance: 'ลักษณะภายนอกยาวได้ไม่เกิน 500 ตัวอักษร' } },
+          { code: 'invalid_input', message: 'ข้อมูลไม่ถูกต้อง', fields: { personality: 'บุคลิกยาวได้ไม่เกิน 1000 ตัวอักษร' } },
           { status: 400 },
         ),
     });
@@ -208,8 +214,8 @@ describe('Character creation step 1 (GEN-047)', () => {
     fill();
     save();
 
-    expect(await screen.findByText('ลักษณะภายนอกยาวได้ไม่เกิน 500 ตัวอักษร')).toBeTruthy();
-    expect(screen.getByLabelText('ลักษณะภายนอก').getAttribute('aria-invalid')).toBe('true');
+    expect(await screen.findByText('บุคลิกยาวได้ไม่เกิน 1000 ตัวอักษร')).toBeTruthy();
+    expect(screen.getByLabelText('บุคลิก').getAttribute('aria-invalid')).toBe('true');
   });
 
   it('C3: with a character already, the lobby offers to view it and no second create form opens', async () => {
@@ -244,7 +250,7 @@ describe('Character creation step 1 (GEN-047)', () => {
     save();
 
     expect(await screen.findByText('ลินดา')).toBeTruthy();
-    expect(JSON.parse(String(callsTo(fetchMock, 'PUT', '/api/game/character')[0]![1]?.body))).toEqual({ ...lin, name: 'ลินดา' });
+    expect(JSON.parse(String(callsTo(fetchMock, 'PUT', '/api/game/character')[0]![1]?.body))).toEqual(sent({ name: 'ลินดา' }));
   });
 
   it('C5: once the game started the lobby has no character button (GEN-090 C4: the character is in Play)', async () => {
@@ -292,7 +298,8 @@ describe('Character creation step 1 (GEN-047)', () => {
     const card = await review();
     expect(within(card).getByText(lin.appearance)).toBeTruthy();
     expect(within(card).getByText(lin.personality)).toBeTruthy();
-    expect(callsTo(fetchMock, 'GET', '/api/game/character')).toHaveLength(1);
+    // once for the lobby's own avatar (ISK-007), once for this page
+    expect(callsTo(fetchMock, 'GET', '/api/game/character')).toHaveLength(2);
   });
 
   it('back to the lobby reloads it, so the player now counts as having a character', async () => {

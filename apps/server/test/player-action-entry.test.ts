@@ -61,10 +61,11 @@ describe('GEN-129 player action entries', { timeout: 60_000 }, () => {
 
     const forB = players(clients[1]!).find((e) => e.text === 'เช็ดโต๊ะ');
     expect(RoomEntry.safeParse(forB).success).toBe(true);
-    expect(forB?.actor).toEqual({ name: LIN.name });
+    // ISK-007: everyone sees the preset avatar, known or not
+    expect(forB?.actor).toEqual({ name: LIN.name, avatarId: 'avatar-01' });
     expect(forB?.place).not.toBeNull();
     const forC = players(clients[2]!).find((e) => e.text === 'เช็ดโต๊ะ');
-    expect(forC?.actor).toEqual({ name: socialTitle(0) });
+    expect(forC?.actor).toEqual({ name: socialTitle(0), avatarId: 'avatar-01' });
     expect(JSON.stringify(clients[2]!.entries())).not.toContain(LIN.name);
     // Not votable: a player wrote it, not the AI.
     expect(forB && 'myVote' in forB).toBe(false);
