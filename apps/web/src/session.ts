@@ -1,4 +1,5 @@
 import { ApiError, JoinResponse, MeResponse, type JoinField, type Member } from '@isekai/protocol';
+import { lateJoinText } from './ui/strings.ts';
 
 /** localStorage key of the bearer token (the server keeps only its hash, with an expiry). */
 export const TOKEN_KEY = 'isekai.sessionToken';
@@ -107,7 +108,8 @@ export async function postJoin(
   }
 
   const error = ApiError.safeParse(json);
-  if (!error.success) return { ok: false, fields: {}, form: UNREACHABLE };
+  // The server answered with a code this web does not know yet (ISK-016 C6).
+  if (!error.success) return { ok: false, fields: {}, form: lateJoinText.otherError };
   switch (error.data.code) {
     case 'invalid_input':
       return { ok: false, fields: error.data.fields };
@@ -121,9 +123,15 @@ export async function postJoin(
         fields: {},
         form: `ชื่อนี้ถูกล็อกชั่วคราวเพราะใส่ PIN ผิดหลายครั้ง ลองใหม่ได้เวลา ${clockTime(error.data.retryAt)}`,
       };
-    default:
-      // game_full, game_started, kicked and anything newer: the server's Thai message as is.
+    case 'game_full':
+    case 'join_closed_day':
+    case 'single_mode':
+    case 'game_ended':
+      return { ok: false, fields: {}, form: lateJoinText.errors[error.data.code] };
+    case 'kicked':
       return { ok: false, fields: {}, form: error.data.message };
+    default:
+      return { ok: false, fields: {}, form: lateJoinText.otherError };
   }
 }
 

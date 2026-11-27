@@ -34,6 +34,16 @@
   margin-bottom: var(--space-3);
 }
 
+/* ISK-016: joining a game that already started (the day they joined on). */
+.late-join {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: var(--line-w) solid var(--accent);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
 .pregame__group {
   margin: var(--space-4) 0;
   min-width: 0;
