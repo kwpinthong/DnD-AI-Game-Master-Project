@@ -26,6 +26,9 @@ import { closureOf } from '../admin/games.ts';
  * other players at the place get the talk as `player` + `npc` entries (a whisper only the speaker, and the Human GM).
  */
 
+/** ISK-027: 400 cut 31 of 74 npc_chat calls (15 chats) with max_tokens in the Railway log of 2026-11-23; good ones used out 114-385. */
+const NPC_CHAT_MAX_OUTPUT_TOKENS = 1000;
+
 /** Characters of a suggestion that go out (the reply: `clampLine`, ISK-025). */
 const SUGGESTION_CHARS = 300;
 /** Lines of the earlier talk of the pair in the prompt. */
@@ -140,7 +143,7 @@ export async function sendNpcChat(deps: NpcChatDeps, me: MemberRow, input: { npc
   };
 
   const ask = (messages: { role: 'user' | 'assistant'; text: string }[], signal?: AbortSignal) =>
-    ai.call({ gameId: me.gameId, purpose: 'npc_chat', ...at, system, messages, output: { name: 'npc_chat', schema: NpcChatAnswer }, maxOutputTokens: 400, maxRetries: 1, ...(signal ? { signal } : {}) });
+    ai.call({ gameId: me.gameId, purpose: 'npc_chat', ...at, system, messages, output: { name: 'npc_chat', schema: NpcChatAnswer }, maxOutputTokens: NPC_CHAT_MAX_OUTPUT_TOKENS, maxRetries: 1, ...(signal ? { signal } : {}) });
   const first = [{ role: 'user' as const, text: JSON.stringify(context) }];
   const result = await ask(first);
   // C8: no answer = nothing stored, the quota is not used.
