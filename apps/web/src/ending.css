@@ -441,6 +441,11 @@
   min-height: 44px;
 }
 
+/* ISK-013: a clue in the log reads in the clue colour (the word เบาะแส replaces the kind). */
+.history-clue {
+  color: var(--clue);
+}
+
 @media (max-width: 767px) {
   .end-toc {
     position: sticky;

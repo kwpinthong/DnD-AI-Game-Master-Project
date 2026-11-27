@@ -71,6 +71,7 @@ export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string;
     ...(meta.roll ? { roll: meta.roll } : {}),
     ...(meta.hit ? { hit: meta.hit } : {}),
     ...(meta.changes ? { changes: [...meta.changes] } : {}),
+    ...(meta.clue ? { clue: true as const } : {}),
     // GEN-110: who says the line, as this viewer may know them (alias until the name is learned, grade only then).
     ...(row.kind === 'npc' && meta.npc ? npcOf(db, meta.npc, viewer.id, assets) : {}),
     ...(row.kind === 'player' && meta.actor ? actorOf(db, meta.actor, viewer) : {}),
@@ -80,6 +81,6 @@ export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string;
     // Q-177: players learn only that it is the template, never why.
     ...(row.fallback !== null ? { fallback: true as const } : {}),
     // GEN-107: only a player sees the buttons, and only on what the AI GM wrote.
-    ...(viewer.role === 'player' && isVotableEntry(row) ? myVoteFields(db, row.gameId, viewer.id, row.id) : {}),
+    ...(viewer.role === 'player' && isVotableEntry(row) && !meta.clue ?myVoteFields(db, row.gameId, viewer.id, row.id) : {}),
   };
 }

@@ -64,6 +64,10 @@ export const textPairs: readonly Pair[] = [
     ['--on-accent', `--npc-${n}`, `ตัวอักษรบน avatar NPC สีที่ ${n}`],
   ]),
   ['--text-soft', '--bubble-npc', '"กำลังพิมพ์…" ในกล่อง NPC'],
+  // ISK-013 กล่องเบาะแส
+  ['--clue', '--page', 'กล่องเบาะแส บนพื้นหลังสุด'],
+  ['--clue', '--panel', 'กล่องเบาะแส (พื้นกล่อง)'],
+  ['--clue', '--bg', 'กล่องเบาะแส บนพื้น feed'],
 ];
 
 // Non-text UI parts (WCAG 1.4.11, >= 3:1).

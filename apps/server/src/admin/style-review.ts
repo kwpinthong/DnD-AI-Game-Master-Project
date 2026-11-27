@@ -19,7 +19,7 @@ import { appMeta, gameDataAudit, npcExample, responseVote, roomEntry, styleRevie
 import { exampleTokens } from '../gm/npc-examples.ts';
 import { styleFlagStats, styleIssues } from '../gm/style-check.ts';
 import { gameVotes } from '../room/vote.ts';
-import type { EntryMeta, RoomEntryRow } from '../room/store.ts';
+import { isClueRow, type EntryMeta, type RoomEntryRow } from '../room/store.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { memberNames, npcOf, sceneOf } from './vote-review.ts';
 import { npcCandidates } from '../learning/examples.ts';
@@ -167,7 +167,8 @@ function examplesOf(db: Db, voice: Voice, signals: ReturnType<typeof newSignals>
     .orderBy(desc(roomEntry.id))
     .limit(2_000)
     .all()
-    .filter((r) => isVotableEntry(r) && !signals.downvoted.has(r.id))
+    // ISK-013: a clue is the server's template, not AI text to review.
+    .filter((r) => isVotableEntry(r) && !isClueRow(r) && !signals.downvoted.has(r.id))
     .map((row) => ({ row, flags: issues(row) }))
     .filter((e) => e.flags.length > 0)
     .sort((a, b) => b.flags.length - a.flags.length || b.row.id - a.row.id);
