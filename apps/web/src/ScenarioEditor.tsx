@@ -1,6 +1,6 @@
 import { eventTurnCount, PHASE_LABEL, PHASES as PERIODS, TURNS_PER_PERIOD, type Phase, type Scenario } from '@isekai/protocol';
 import { useEffect, useState, type ReactNode } from 'react';
-import { scenarioCall, type ScenarioAction } from './scenario-api.ts';
+import { scenarioCall } from './scenario-api.ts';
 
 type Event = Scenario['timeline'][number];
 type Npc = Scenario['npcs'][number];
@@ -18,11 +18,10 @@ const num = (raw: string) => (raw === '' ? Number.NaN : Number(raw));
 const shown = (n: number) => (Number.isNaN(n) ? '' : n);
 
 /**
- * Scenario editor before the start (GEN-046, GEN-044 wireframe 2b): the Human GM edits this game's
- * copy (events, NPCs, secret Legendaries) and saves it whole; the server validates and sorts the
- * timeline. Read-only once the game has started. No styling yet (Q-073).
+ * ISK-019: the Human GM reads the game's scenario in the lobby; it was set at creation (POST /api/games) and nobody
+ * edits it after (ISK-017).
  */
-export function ScenarioEditor({
+export function ScenarioViewer({
   apiBaseUrl,
   token,
   onClose,
@@ -33,47 +32,71 @@ export function ScenarioEditor({
   onClose: () => void;
   onSessionLost: () => void;
 }) {
-  const [draft, setDraft] = useState<Scenario>();
-  const [locked, setLocked] = useState(false);
-  const [tab, setTab] = useState<Tab>('events');
-  const [fields, setFields] = useState<Record<string, string>>({});
+  const [scenario, setScenario] = useState<Scenario>();
   const [error, setError] = useState<string>();
-  const [saved, setSaved] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  async function run(action: ScenarioAction) {
-    setBusy(true);
-    const result = await scenarioCall(apiBaseUrl, token, action);
-    setBusy(false);
-    if (result.kind === 'session_lost') return onSessionLost();
-    if (result.kind === 'invalid') {
-      setFields(result.fields);
-      setError('บันทึกไม่ได้ แก้ช่องที่บอกไว้ก่อน');
-      return;
-    }
-    if (result.kind === 'error') return setError(result.message);
-    setDraft(result.data.scenario);
-    setLocked(result.data.locked);
-    setFields({});
-    setError(undefined);
-    setSaved(action.kind !== 'load');
-  }
-
   useEffect(() => {
-    void run({ kind: 'load' });
-    // Loaded once per token.
+    let cancelled = false;
+    void scenarioCall(apiBaseUrl, token).then((result) => {
+      if (cancelled) return;
+      if (result.kind === 'session_lost') onSessionLost();
+      else if (result.kind === 'error') setError(result.message);
+      else setScenario(result.data.scenario);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [apiBaseUrl, token]);
+  const back = (
+    <button type="button" onClick={onClose}>
+      กลับห้องรอ
+    </button>
+  );
+  if (!scenario) {
+    return (
+      <section aria-label="แก้ scenario">
+        {back}
+        {error ? <p role="alert">โหลด scenario ไม่ได้: {error}</p> : <p>กำลังโหลด scenario…</p>}
+      </section>
+    );
+  }
+  return (
+    <ScenarioEditor value={scenario} locked lockedNote="ตั้ง scenario ตอนสร้างเกมแล้ว แก้ไม่ได้ (แทรกเหตุการณ์ระหว่างเล่นทำใน GM console)" actions={back} />
+  );
+}
 
-  function edit(change: (s: Scenario) => Scenario, structural = false) {
-    setDraft((s) => (s ? change(s) : s));
-    setSaved(false);
-    if (structural) setFields({});
+/**
+ * Scenario editor (GEN-046, GEN-044 wireframe 2b): the Human GM edits the game's copy (events, NPCs, secret
+ * Legendaries). ISK-019: a step of the create-game form; the form sends the whole scenario in POST /api/games and the
+ * server checks it (`fields`: its messages by path). `locked` = read-only. No styling yet (Q-073).
+ */
+export function ScenarioEditor({
+  value: draft,
+  onChange,
+  fields = {},
+  error,
+  locked = false,
+  lockedNote,
+  actions,
+}: {
+  value: Scenario;
+  onChange?: (scenario: Scenario) => void;
+  fields?: Record<string, string>;
+  error?: string | undefined;
+  locked?: boolean;
+  lockedNote?: string;
+  /** The step's own buttons (back to the form, default, close). */
+  actions?: ReactNode;
+}) {
+  const [tab, setTab] = useState<Tab>('events');
+
+  function edit(change: (s: Scenario) => Scenario) {
+    onChange?.(change(draft));
   }
 
   const setAt = <K extends 'timeline' | 'npcs' | 'legendaries'>(key: K, i: number, patch: Partial<Scenario[K][number]>) =>
     edit((s) => ({ ...s, [key]: s[key].map((item, j) => (j === i ? { ...item, ...patch } : item)) }));
   const removeAt = (key: 'timeline' | 'npcs' | 'legendaries', i: number) =>
-    edit((s) => ({ ...s, [key]: s[key].filter((_, j) => j !== i) }), true);
+    edit((s) => ({ ...s, [key]: s[key].filter((_, j) => j !== i) }));
 
   const fieldError = (path: string) => (fields[path] ? <small className="field-error"> {fields[path]}</small> : null);
 
@@ -115,17 +138,6 @@ export function ScenarioEditor({
         ))}
       </select>
     ));
-  }
-
-  if (!draft) {
-    return (
-      <section aria-label="แก้ scenario">
-        <button type="button" onClick={onClose}>
-          กลับห้องรอ
-        </button>
-        {error ? <p role="alert">โหลด scenario ไม่ได้: {error}</p> : <p>กำลังโหลด scenario…</p>}
-      </section>
-    );
   }
 
   /**
@@ -321,7 +333,6 @@ export function ScenarioEditor({
           },
         ],
       }),
-      true,
     );
   const addNpc = () =>
     edit(
@@ -332,7 +343,6 @@ export function ScenarioEditor({
           { id: newId('npc'), name: '', alias: '', rank: 'F', locationId: s.locations[0]!.id, personality: '', obsTrait: 0, otherNames: [], gmNote: '' },
         ],
       }),
-      true,
     );
   const addLegendary = () =>
     edit(
@@ -340,24 +350,15 @@ export function ScenarioEditor({
         ...s,
         legendaries: [...s.legendaries, { id: newId('leg'), name: '', type: 'item', condition: '', counter: 'count', target: 1, progress: 0, unlocked: false }],
       }),
-      true,
     );
-
-  function reset() {
-    if (!window.confirm('คืนค่า scenario ทั้งหมดเป็นค่าตั้งต้น? สิ่งที่แก้ไว้จะหายหมด')) return;
-    void run({ kind: 'reset' });
-  }
 
   return (
     <section aria-label="แก้ scenario">
       <p>
-        <button type="button" onClick={onClose}>
-          กลับห้องรอ
-        </button>{' '}
-        แก้ scenario: <strong>{draft.name}</strong> {saved && <span role="status">บันทึกแล้ว</span>}
+        {actions} แก้ scenario: <strong>{draft.name}</strong>
       </p>
       <p>เฉพาะ GM เห็นหน้านี้ ผู้เล่นไม่เห็นเนื้อหา scenario</p>
-      {locked && <p>เกมเริ่มแล้ว scenario ล็อก แก้ไม่ได้ (แทรกเหตุการณ์ระหว่างเล่นทำใน GM console)</p>}
+      {locked && lockedNote && <p>{lockedNote}</p>}
       <nav>
         <button type="button" aria-pressed={tab === 'events'} onClick={() => setTab('events')}>
           เหตุการณ์ 12 วัน
@@ -416,16 +417,6 @@ export function ScenarioEditor({
             </button>
           )}
         </div>
-      )}
-      {!locked && (
-        <p>
-          <button type="button" disabled={busy} onClick={() => void run({ kind: 'save', scenario: draft })}>
-            บันทึก
-          </button>{' '}
-          <button type="button" disabled={busy} onClick={reset}>
-            คืนค่า default
-          </button>
-        </p>
       )}
     </section>
   );

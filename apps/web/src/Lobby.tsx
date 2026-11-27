@@ -3,13 +3,12 @@ import { useEffect, useRef, useState } from 'react';
 import { CharacterScreen } from './CharacterScreen.tsx';
 import { GameClosedModal, type GameClosure } from './GameClosed.tsx';
 import { GameSummaryPage } from './GameHistory.tsx';
-import { deleteGameCall, gameCall, type GameAction } from './game-api.ts';
-import { NpcDialoguePicker } from './NpcDialoguePicker.tsx';
-import { npcDialogueText, toneText } from './ui/strings.ts';
-import { TonePicker } from './TonePicker.tsx';
+import { getGame, readyCall } from './game-api.ts';
+import { connectLobby } from './room-api.ts';
+import { lobbyText, npcDialogueText, toneText } from './ui/strings.ts';
 import { OriginCard } from './OriginCard.tsx';
 import { PlayRoom } from './PlayRoom.tsx';
-import { ScenarioEditor } from './ScenarioEditor.tsx';
+import { ScenarioViewer } from './ScenarioEditor.tsx';
 import { FeedbackButton } from './ui/FeedbackDialog.tsx';
 import { Button, Panel, Skeleton, Toast } from './ui/index.ts';
 import './pregame.css';
@@ -38,50 +37,22 @@ function rememberOriginSeen(game: GameView): void {
   }
 }
 
-/** GEN-112: the owner deletes the game for everyone, apart from "leave"; the game name must be typed first. */
-function DeleteGame({ apiBaseUrl, token, gameName, onDeleted }: { apiBaseUrl: string; token: string; gameName: string; onDeleted: () => void }) {
-  const [asking, setAsking] = useState(false);
-  const [typed, setTyped] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string>();
-  if (!asking) {
-    return (
-      <Button variant="danger" onClick={() => setAsking(true)}>
-        ลบเกม
-      </Button>
-    );
-  }
-  async function confirm() {
-    setBusy(true);
-    const result = await deleteGameCall(apiBaseUrl, token, typed);
-    setBusy(false);
-    if (result.ok) onDeleted();
-    else setProblem(result.message);
-  }
-  return (
-    <div role="group" aria-label="ยืนยันลบเกม">
-      <p>ลบเกมนี้ถาวร ทุกคนในเกมจะเข้าไม่ได้ และกู้คืนไม่ได้ (ถ้าแค่พักเล่น ให้กด "ออกจากเกม")</p>
-      <label>
-        พิมพ์ชื่อเกมเพื่อยืนยัน
-        <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={gameName} />
-      </label>
-      <Button variant="danger" disabled={busy || typed !== gameName} onClick={() => void confirm()}>
-        ยืนยันลบเกม
-      </Button>
-      <Button disabled={busy} onClick={() => setAsking(false)}>
-        ยกเลิก
-      </Button>
-      {problem && <p role="alert">{problem}</p>}
-    </div>
-  );
+/** ISK-019: the lobby's status line. "ผู้เล่น" = members with role player (the GM never presses ready). */
+function readyLine(game: GameView): string {
+  const players = game.members.filter((m) => m.role === 'player');
+  if (game.mode === 'single') return lobbyText.single;
+  if (players.length < 2) return lobbyText.needPlayer;
+  return lobbyText.waiting(players.filter((m) => m.ready).length, players.length);
 }
 
+const label = <T extends string>(list: readonly { value: T; label: string }[], value: T | undefined) => list.find((o) => o.value === value)?.label;
+
 /**
- * Lobby v2 (GEN-090, Screens and Flows v2 §2c): invite code, members, your character, and the owner's
- * kick / new code / start. While the game has not started the member list keeps itself current by asking
- * GET /api/game every `pollMs` (C6; the contract has no lobby socket event), so a newcomer, a finished
- * character or the start shows without a reload. If the game starts while the character page is open,
- * the page is swapped for the play room (C4).
+ * Lobby v2 (GEN-090, Screens and Flows v2 §2c): invite code, members, your character. ISK-019: no host; every
+ * player presses [พร้อม] and the server starts the game itself once everyone is ready. The settings are the ones
+ * fixed at creation, read-only. The ready marks and a blocked start arrive on the lobby socket (ISK-017); the rest
+ * (newcomers, characters, the start) by asking GET /api/game every `pollMs`, so it shows without a reload. If the
+ * game starts while the character page is open, the page is swapped for the play room (C4).
  */
 export function Lobby({
   apiBaseUrl,
@@ -106,8 +77,11 @@ export function Lobby({
   pollMs?: number;
 }) {
   const [game, setGame] = useState<GameView | undefined>(initial);
-  const [error, setError] = useState<{ message: string; reasons?: string[] }>();
+  const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  /** ISK-017: everyone was ready but the AI GM was not (503 / lobby_start_blocked): the reason. */
+  const [blocked, setBlocked] = useState<string>();
+  const sending = useRef(false);
   const [copied, setCopied] = useState(false);
   const [scenarioOpen, setScenarioOpen] = useState(false);
   /** Character creation opens over the lobby; going back reloads the lobby. */
@@ -129,24 +103,33 @@ export function Lobby({
     return () => onPlayingChange?.(false);
   }, [playing]);
 
-  async function run(action: GameAction) {
+  /** A reload, or the ready button (`ready`): not optimistic, the shown state is what the server answered. */
+  async function run(ready?: boolean) {
+    if (sending.current) return;
+    sending.current = true;
     actions.current++;
     setBusy(true);
-    const result = await gameCall(apiBaseUrl, token, action);
+    const result = ready === undefined ? await getGame(apiBaseUrl, token) : await readyCall(apiBaseUrl, token, ready);
+    sending.current = false;
     setBusy(false);
     if (result.kind === 'session_lost') return onSessionLost();
-    if (result.kind === 'error') return setError({ message: result.message, ...(result.reasons ? { reasons: result.reasons } : {}) });
+    if (result.kind === 'blocked') {
+      setError(undefined);
+      return setBlocked(result.message);
+    }
+    if (result.kind === 'error') return setError(result.message);
     setError(undefined);
+    if (ready !== undefined) setBlocked(undefined);
     setGame(result.game);
   }
 
   useEffect(() => {
     if (initial) return;
     let cancelled = false;
-    void gameCall(apiBaseUrl, token, { method: 'GET', path: '/api/game' }).then((result) => {
+    void getGame(apiBaseUrl, token).then((result) => {
       if (cancelled) return;
       if (result.kind === 'session_lost') onSessionLost();
-      else if (result.kind === 'error') setError({ message: result.message });
+      else if (result.kind !== 'ok') setError(result.message);
       else setGame(result.game);
     });
     return () => {
@@ -164,7 +147,7 @@ export function Lobby({
       // A hidden tab does not ask; it catches up on the next tick after it shows again.
       if (document.hidden) return;
       const before = actions.current;
-      void gameCall(apiBaseUrl, token, { method: 'GET', path: '/api/game' }).then((result) => {
+      void getGame(apiBaseUrl, token).then((result) => {
         if (stopped || before !== actions.current) return;
         if (result.kind === 'session_lost') onSessionLost();
         // A failed poll keeps what is shown; the next one tries again.
@@ -176,6 +159,20 @@ export function Lobby({
       clearInterval(timer);
     };
   }, [apiBaseUrl, token, asking, pollMs]);
+
+  // ISK-017: the lobby socket, before the start only (after it the play room has its own).
+  const inLobby = asking && game?.status === 'lobby';
+  useEffect(() => {
+    if (!inLobby) return;
+    const socket = connectLobby(apiBaseUrl, token, {
+      ready(memberId, ready) {
+        actions.current++; // a poll already on its way left before this mark
+        setGame((g) => g && { ...g, members: g.members.map((m) => (m.id === memberId ? { ...m, ready } : m)) });
+      },
+      startBlocked: setBlocked,
+    });
+    return () => socket.close();
+  }, [apiBaseUrl, token, inLobby]);
 
   function enterRoom(of: GameView) {
     setCharacterOpen(false);
@@ -207,11 +204,11 @@ export function Lobby({
         onSessionLost={onSessionLost}
         onGameStarted={() => {
           if (game) enterRoom({ ...game, status: 'started' });
-          void run({ method: 'GET', path: '/api/game' });
+          void run();
         }}
         onBack={() => {
           setCharacterOpen(false);
-          void run({ method: 'GET', path: '/api/game' });
+          void run();
         }}
       />
     );
@@ -252,20 +249,15 @@ export function Lobby({
   }
 
   if (!game) {
-    return error ? <p role="alert">โหลดห้องรอไม่ได้: {error.message}</p> : <Skeleton lines={4} label="กำลังโหลดห้องรอ…" />;
+    return error ? <p role="alert">โหลดห้องรอไม่ได้: {error}</p> : <Skeleton lines={4} label="กำลังโหลดห้องรอ…" />;
   }
 
-  // shortcut: GameView has no owner since ISK-017 (the server answers these owner calls 404); the creator (first
-  // member) keeps the old controls only until ISK-019 replaces them with the ready button.
-  const owner = game.members[0]?.id === game.you.memberId;
   const lobby = game.status === 'lobby';
-  // The Human GM edits before the start (canEditScenario) and can still read it after; nobody else (Q-028).
+  // Only the Human GM reads the scenario (Q-028); it was set at creation, nobody edits it here.
   const gmOfGame = game.humanGm && game.you.role === 'gm';
 
   if (scenarioOpen) {
-    return (
-      <ScenarioEditor apiBaseUrl={apiBaseUrl} token={token} onClose={() => setScenarioOpen(false)} onSessionLost={onSessionLost} />
-    );
+    return <ScenarioViewer apiBaseUrl={apiBaseUrl} token={token} onClose={() => setScenarioOpen(false)} onSessionLost={onSessionLost} />;
   }
   const you = game.members.find((m) => m.id === game.you.memberId);
   const code = formatInviteCode(game.inviteCode);
@@ -275,7 +267,7 @@ export function Lobby({
       await navigator.clipboard.writeText(code);
       setCopied(true);
     } catch {
-      setError({ message: 'คัดลอกไม่ได้ เลือกโค้ดแล้วคัดลอกเอง' });
+      setError('คัดลอกไม่ได้ เลือกโค้ดแล้วคัดลอกเอง');
     }
   }
 
@@ -291,12 +283,6 @@ export function Lobby({
           <span className="invite__label">โค้ดเกม</span>
           <strong className="invite__code">{code}</strong>
           <Button onClick={() => void copyCode()}>คัดลอก</Button>
-          {owner && lobby && (
-            <Button disabled={busy} onClick={() => void run({ method: 'POST', path: '/api/game/invite-code' })}>
-              ออกโค้ดใหม่
-            </Button>
-          )}
-          {owner && lobby && <small className="invite__note">ออกโค้ดใหม่แล้วโค้ดเก่าใช้ไม่ได้ทันที สมาชิกเดิมเข้าด้วยโค้ดใหม่ + ชื่อ + PIN เดิม</small>}
         </div>
         {copied && (
           <Toast tone="success" onClose={() => setCopied(false)}>
@@ -316,22 +302,26 @@ export function Lobby({
             </Button>
           </div>
         )}
-        <NpcDialoguePicker
-          value={game.npcDialogue ?? 'normal'}
-          disabled={!owner || !lobby || busy}
-          note={!lobby ? npcDialogueText.locked : owner ? undefined : npcDialogueText.ownerOnly}
-          onChange={(npcDialogue) => void run({ method: 'PATCH', path: '/api/game', body: { npcDialogue } })}
-        />
-        <TonePicker
-          value={game.tone}
-          disabled={!owner || !lobby || busy}
-          note={!lobby ? toneText.locked : owner ? undefined : toneText.ownerOnly}
-          onChange={(tone) => void run({ method: 'PATCH', path: '/api/game', body: { tone } })}
-        />
-        {(game.canEditScenario || gmOfGame) && (
+        <dl className="lobby__settings" aria-label="ตั้งค่าเกม">
+          <div>
+            <dt>{npcDialogueText.group}:</dt> <dd>{label(npcDialogueText.levels, game.npcDialogue ?? 'normal')}</dd>
+          </div>
+          {game.tone && (
+            <div>
+              <dt>{toneText.group}:</dt> <dd>{label(toneText.tones, game.tone)}</dd>
+            </div>
+          )}
+          {game.memory && (
+            <div>
+              <dt>ความทรงจำจากเกมก่อน:</dt> <dd>{game.memory.enabled ? `เปิด (${game.memory.sources.map((s) => s.name).join(', ')})` : 'ปิด'}</dd>
+            </div>
+          )}
+          <small className="pregame__note">{lobbyText.settingsLocked}</small>
+        </dl>
+        {gmOfGame && (
           <p className="lobby__row">
             <span>Scenario</span>
-            <Button onClick={() => setScenarioOpen(true)}>{game.canEditScenario ? 'แก้ scenario' : 'ดู scenario'}</Button>
+            <Button onClick={() => setScenarioOpen(true)}>ดู scenario</Button>
             <small>เฉพาะ GM ผู้เล่นไม่เห็นเนื้อหา</small>
           </p>
         )}
@@ -341,45 +331,24 @@ export function Lobby({
             ผู้เล่น {game.players.count}/{game.players.max}
           </p>
           <ul aria-label="สมาชิก" className="members">
-            {game.members.map((m) => {
-              const ready = m.role === 'gm' || m.hasCharacter;
-              return (
-                <li key={m.id} className="members__row">
-                  <span className="members__mark" aria-hidden="true">
-                    {ready ? '●' : '○'}
-                  </span>
-                  <span className="members__name">{m.name}</span>
-                  <span className="members__status">{memberStatus(m)}</span>
-                  {m.id === game.members[0]?.id && <span className="members__tag">(เจ้าของเกม)</span>}
-                  {m.id === game.you.memberId && <span className="members__tag">(คุณ)</span>}
-                  {owner && lobby && m.id !== game.you.memberId && (
-                    <Button
-                      variant="danger"
-                      className="members__kick"
-                      aria-label={`เตะ ${m.name}`}
-                      disabled={busy}
-                      onClick={() => void run({ method: 'DELETE', path: `/api/game/members/${encodeURIComponent(m.id)}` })}
-                    >
-                      เตะ
-                    </Button>
-                  )}
-                </li>
-              );
-            })}
+            {game.members.map((m) => (
+              <li key={m.id} className="members__row">
+                <span className="members__mark" aria-hidden="true">
+                  {m.ready ? '●' : '○'}
+                </span>
+                <span className="members__name">{m.name}</span>
+                <span className="members__status">{memberStatus(m)}</span>
+                {m.ready && <span className="members__tag members__ready">{lobbyText.readyMark}</span>}
+                {m.id === game.you.memberId && <span className="members__tag">(คุณ)</span>}
+              </li>
+            ))}
           </ul>
-          {lobby && <small className="lobby__live">รายชื่ออัปเดตเองเมื่อมีคนเข้าหรือสร้างตัวละครเสร็จ</small>}
+          {lobby && <small className="lobby__live">รายชื่ออัปเดตเองเมื่อมีคนเข้า สร้างตัวละครเสร็จ หรือกดพร้อม</small>}
         </div>
 
-        {lobby && you?.role === 'player' && (
-          <div className="pregame__actions">
-            <Button variant={you.hasCharacter ? 'secondary' : 'primary'} onClick={() => setCharacterOpen(true)}>
-              {you.hasCharacter ? 'แก้ตัวละคร' : 'สร้างตัวละคร'}
-            </Button>
-          </div>
-        )}
-
-        {owner && lobby && (
+        {lobby && (
           <div className="lobby__start">
+            <p role="status">{readyLine(game)}</p>
             {game.startBlockers.length > 0 && (
               <div>
                 <p>ยังเริ่มเกมไม่ได้:</p>
@@ -390,37 +359,44 @@ export function Lobby({
                 </ul>
               </div>
             )}
-            <Button
-              variant={you?.role === 'gm' || you?.hasCharacter ? 'primary' : 'secondary'}
-              disabled={busy || game.startBlockers.length > 0}
-              onClick={() => void run({ method: 'POST', path: '/api/game/start' })}
-            >
-              เริ่มเกม
-            </Button>
+            {you?.role === 'player' && (
+              <div className="pregame__actions">
+                <Button variant={you.hasCharacter ? 'secondary' : 'primary'} onClick={() => setCharacterOpen(true)}>
+                  {you.hasCharacter ? 'แก้ตัวละคร' : 'สร้างตัวละคร'}
+                </Button>
+                <Button
+                  variant={you.ready ? 'secondary' : 'primary'}
+                  className="lobby__ready"
+                  aria-pressed={you.ready}
+                  loading={busy}
+                  loadingText={you.ready ? lobbyText.unready : lobbyText.ready}
+                  onClick={() => void run(!you.ready)}
+                >
+                  {you.ready ? lobbyText.unready : lobbyText.ready}
+                </Button>
+              </div>
+            )}
           </div>
         )}
-        {game.memory && (
-          <p className="lobby__memory">
-            {game.memory.enabled ? `ความทรงจำจากเกมก่อน: เปิด (${game.memory.sources.map((s) => s.name).join(', ')})` : 'ความทรงจำจากเกมก่อน: ปิด'}
-          </p>
+        {lobby && blocked && (
+          <div role="alert" className="lobby__blocked">
+            <p>{blocked}</p>
+            {you?.role === 'player' && (
+              <Button variant="primary" disabled={busy} onClick={() => void run(true)}>
+                {lobbyText.retry}
+              </Button>
+            )}
+          </div>
         )}
         <div className="lobby__foot">
-          <Button disabled={busy} onClick={() => void run({ method: 'GET', path: '/api/game' })}>
+          <Button disabled={busy} onClick={() => void run()}>
             รีเฟรช
           </Button>
         </div>
-        {owner && <DeleteGame apiBaseUrl={apiBaseUrl} token={token} gameName={game.name} onDeleted={onSessionLost} />}
         {error && (
-          <div role="alert">
-            <p>{error.message}</p>
-            {error.reasons && (
-              <ul>
-                {error.reasons.map((reason) => (
-                  <li key={reason}>{reason}</li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <p role="alert" className="field-error">
+            {error}
+          </p>
         )}
       </Panel>
     </div>

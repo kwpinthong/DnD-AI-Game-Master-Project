@@ -48,6 +48,62 @@ export interface RoomConnection {
 /** Waits before reconnecting: 1 s, 2 s, 4 s, then every 8 s. */
 const backoff = (attempt: number) => Math.min(8_000, 1_000 * 2 ** attempt);
 
+export interface LobbyListener {
+  ready(memberId: string, ready: boolean): void;
+  /** Everyone is ready but the AI GM is not, so the game did not start (`reason`: Thai). */
+  startBlocked(reason: string): void;
+}
+
+/**
+ * ISK-017 / ISK-019: the lobby's socket (`hello` with `lobby: true`). It only hears the ready marks and the blocked
+ * start; the start itself still shows on GET /api/game. Reconnects by itself after a drop.
+ */
+export function connectLobby(baseUrl: string, token: string, listener: LobbyListener): { close(): void } {
+  let socket: WebSocket | undefined;
+  let attempt = 0;
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  function open() {
+    const ws = new WebSocket(roomSocketUrl(baseUrl));
+    socket = ws;
+    ws.onopen = () => {
+      attempt = 0;
+      ws.send(JSON.stringify({ type: 'hello', token, afterSeq: 0, lobby: true }));
+    };
+    ws.onmessage = (event) => {
+      const parsed = RoomServerMessage.safeParse(safeJson(String(event.data)));
+      if (!parsed.success) return;
+      const message = parsed.data;
+      if (message.type === 'lobby_ready') listener.ready(message.memberId, message.ready);
+      else if (message.type === 'lobby_start_blocked') listener.startBlocked(message.reason);
+      // A refusal (bad session, closed game) is for GET /api/game to tell; this socket just stops.
+      else if (message.type === 'error' || message.type === 'game_closed') stopped = true;
+    };
+    ws.onclose = () => {
+      if (socket !== ws || stopped) return;
+      timer = setTimeout(open, backoff(attempt++));
+    };
+  }
+
+  open();
+  return {
+    close() {
+      stopped = true;
+      clearTimeout(timer);
+      socket?.close();
+    },
+  };
+}
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * One play-room socket that reconnects by itself after a drop. The token goes in the first message, not
  * the URL. On every (re)connect it asks for the entries after the last one it has (C6).

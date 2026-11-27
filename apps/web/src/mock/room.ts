@@ -56,6 +56,11 @@ export class MockRoomServer {
       peer.drop();
       return;
     }
+    // ISK-019: a lobby socket hears only the scenario's lobby events (the Lobby closes it once the game starts).
+    if (hello.data.lobby) {
+      for (const event of this.scenario.room.lobby ?? []) peer.deliver(clone(event));
+      return;
+    }
     this.peers.add(peer);
     peer.deliver(clone(this.state));
     for (const entry of this.entries) if (entry.seq > hello.data.afterSeq) peer.deliver({ type: 'entry', entry });

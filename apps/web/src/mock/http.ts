@@ -38,7 +38,6 @@ const REPORTS = [
 /** Defaults for every scenario: the game has started (so the app goes on to the play room). */
 const DEFAULTS: Readonly<Record<string, MockReply>> = {
   'GET /api/game': ok(CONTRACT_FIXTURES.GameView[1]),
-  'POST /api/game/start': ok(CONTRACT_FIXTURES.GameView[1]),
   // GEN-091: a delete answers with what is left, so the library visibly loses the entry / the game.
   'DELETE /api/admin/learning/:id': ok({ entries: LIBRARY.entries.slice(1), counts: { ...LIBRARY.counts, [LIBRARY.entries[0]!.type]: 0 } }),
   'DELETE /api/admin/learning/games/:gameId': ok(CONTRACT_FIXTURES.LearningLibraryResponse[1]),

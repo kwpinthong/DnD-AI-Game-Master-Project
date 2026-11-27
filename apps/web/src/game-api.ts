@@ -23,10 +23,9 @@ import {
   type Member,
   type NpcDialogueLevel,
   type GameTone,
+  type Scenario,
+  CreateGameRequest,
 } from '@isekai/protocol';
-
-/** The old PATCH /api/game body: the server removed the route in ISK-017 (404); ISK-019 removes the lobby edits. */
-type UpdateGameRequest = { gameName?: string; mode?: 'online' | 'single'; npcDialogue?: NpcDialogueLevel; tone?: GameTone; memory?: GameMemorySetting };
 import { apiUrl, fetchWithTimeout } from './session.ts';
 
 const UNREACHABLE = 'ติดต่อ server ไม่ได้ ลองใหม่อีกครั้ง';
@@ -46,11 +45,16 @@ export interface CreateGameInput {
   /** GEN-201: the creator's opt-out tick (absent = keep). */
   noStyle?: boolean;
   memory?: GameMemorySetting;
+  /** ISK-017 / ISK-019: the Human GM's edited scenario, set once here (absent = the default). */
+  scenario?: Scenario;
 }
 
+/** `scenarioFields`: the refused scenario's messages by its own paths (`timeline.0.title`), for the scenario step. */
 export type CreateGameResult =
   | { ok: true; member: Member; token: string; game: GameView }
-  | { ok: false; fields: Partial<Record<CreateGameField, string>>; form?: string };
+  | { ok: false; fields: Partial<Record<CreateGameField, string>>; form?: string; scenarioFields?: Record<string, string> };
+
+const FORM_FIELDS = new Set<string>(Object.keys(CreateGameRequest.shape).filter((k) => k !== 'scenario'));
 
 async function send(url: string, init: RequestInit): Promise<{ res: Response; json: unknown } | undefined> {
   try {
@@ -76,8 +80,12 @@ export async function postCreateGame(baseUrl: string, body: CreateGameInput): Pr
   const error = ApiError.safeParse(answer.json);
   if (!error.success) return { ok: false, fields: {}, form: UNREACHABLE };
   switch (error.data.code) {
-    case 'invalid_input':
-      return { ok: false, fields: error.data.fields };
+    case 'invalid_input': {
+      const fields: Record<string, string> = {};
+      const scenarioFields: Record<string, string> = {};
+      for (const [path, message] of Object.entries(error.data.fields)) (FORM_FIELDS.has(path) ? fields : scenarioFields)[path] = message;
+      return { ok: false, fields, ...(Object.keys(scenarioFields).length > 0 ? { scenarioFields } : {}) };
+    }
     case 'wrong_create_code':
       return { ok: false, fields: { createCode: error.data.message } };
     default:
@@ -85,26 +93,18 @@ export async function postCreateGame(baseUrl: string, body: CreateGameInput): Pr
   }
 }
 
-/** A lobby call's result: the game, the session is gone (kicked / expired), or a Thai error to show. */
+/**
+ * A lobby call's result: the game, the session is gone (kicked / expired), the AI GM not ready so the game did not
+ * start (ISK-017 503, `blocked`), or a Thai error to show.
+ */
 export type GameResult =
   | { kind: 'ok'; game: GameView }
   | { kind: 'session_lost' }
-  | { kind: 'error'; message: string; reasons?: string[] };
+  | { kind: 'blocked'; message: string }
+  | { kind: 'error'; message: string };
 
-export type GameAction =
-  | { method: 'GET'; path: '/api/game' }
-  | { method: 'POST'; path: '/api/game/invite-code' | '/api/game/start' }
-  | { method: 'DELETE'; path: `/api/game/members/${string}` }
-  /** GEN-127: the owner edits the game before the start (npcDialogue). */
-  | { method: 'PATCH'; path: '/api/game'; body: UpdateGameRequest };
-
-export async function gameCall(baseUrl: string, token: string, action: GameAction): Promise<GameResult> {
-  const patch = action.method === 'PATCH';
-  const answer = await send(apiUrl(baseUrl, action.path), {
-    method: action.method,
-    headers: { authorization: `Bearer ${token}`, ...(patch ? { 'content-type': 'application/json' } : {}) },
-    ...(patch ? { body: JSON.stringify(action.body) } : {}),
-  });
+async function lobbyCall(baseUrl: string, token: string, path: string, init: RequestInit): Promise<GameResult> {
+  const answer = await send(apiUrl(baseUrl, path), { ...init, headers: { authorization: `Bearer ${token}`, ...init.headers } });
   if (!answer) return { kind: 'error', message: UNREACHABLE };
   if (answer.res.ok) {
     const parsed = GameView.safeParse(answer.json);
@@ -113,26 +113,16 @@ export async function gameCall(baseUrl: string, token: string, action: GameActio
   if (answer.res.status === 401) return { kind: 'session_lost' };
   const error = ApiError.safeParse(answer.json);
   if (!error.success) return { kind: 'error', message: UNREACHABLE };
-  if (error.data.code === 'cannot_start') return { kind: 'error', message: error.data.message, reasons: error.data.reasons };
+  if (error.data.code === 'ai_not_ready') return { kind: 'blocked', message: error.data.message };
   return { kind: 'error', message: error.data.message };
 }
 
-/** DELETE /api/game (GEN-112): the owner deletes the game for everyone; `confirmName` is the typed game name. */
-export async function deleteGameCall(baseUrl: string, token: string, confirmName: string): Promise<{ ok: true } | { ok: false; message: string }> {
-  try {
-    // 204 has no body, so this does not go through `send` (which reads JSON).
-    const res = await fetchWithTimeout(apiUrl(baseUrl, '/api/game'), {
-      method: 'DELETE',
-      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ confirmName }),
-    });
-    if (res.ok) return { ok: true };
-    const error = ApiError.safeParse(await res.json());
-    return { ok: false, message: error.success ? error.data.message : UNREACHABLE };
-  } catch {
-    return { ok: false, message: UNREACHABLE };
-  }
-}
+/** GET /api/game: the lobby as the caller sees it. */
+export const getGame = (baseUrl: string, token: string) => lobbyCall(baseUrl, token, '/api/game', { method: 'GET' });
+
+/** POST /api/game/ready (ISK-017): press / release ready; the server starts the game itself once everyone is ready. */
+export const readyCall = (baseUrl: string, token: string, ready: boolean) =>
+  lobbyCall(baseUrl, token, '/api/game/ready', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ready }) });
 
 /** A character call's result (GEN-047): the character (null = none yet), field errors, or a Thai error. */
 export type CharacterResult =
