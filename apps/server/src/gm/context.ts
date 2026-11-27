@@ -44,10 +44,12 @@ export function estimateTokens(text: string): number {
 
 /** GEN-195: the most the Voice style block (gm/tone.ts styleBlock) may add to every narration / dialogue call. */
 export const STYLE_BLOCK_TOKENS = 1_000;
+/** ISK-009: the most an arrival (its `arrival` and beat) may add to a player narration. */
+export const ARRIVAL_TOKENS = 300;
 /** ADR §6.2 hard caps per call. GEN-195: the narration / dialogue caps grow by the style block, so it never stops a turn. */
 export const CONTEXT_BUDGET = {
   gm_adjudicate: 20_000,
-  narrate_player: 6_000 + STYLE_BLOCK_TOKENS,
+  narrate_player: 6_000 + STYLE_BLOCK_TOKENS + ARRIVAL_TOKENS,
   narrate_place: 5_000 + STYLE_BLOCK_TOKENS,
   /** GEN-116: the narration context without the journal, plus the narration. */
   npc_dialogue: 6_000 + STYLE_BLOCK_TOKENS,
@@ -319,7 +321,20 @@ export function memoryContext(db: DbOrTx, gameId: string, at: { day: number; pha
 
 // --- narrate_place / narrate_player ---
 
-export type BeatKind = 'own_action' | 'affected' | 'public_action' | 'event' | 'evidence';
+/** ISK-009 `arrival`: a player came to this place this turn (`arrival:<ref>`). */
+export type BeatKind = 'own_action' | 'affected' | 'public_action' | 'event' | 'evidence' | 'arrival';
+
+/** ISK-009: what a player who has just come to a place sees around them (the crossing's end, an arrival beat). */
+export interface Arrival {
+  /** `description`: the Location sheet's Characteristics, cut short. */
+  place: { id: string; name: string; description: string };
+  phase: Phase;
+  weather: string | null;
+  /** By alias, never a real name (Q-045). */
+  npcs: { id: string; alias: string }[];
+  /** Refs of the other players there. */
+  players: string[];
+}
 
 export interface Beat {
   /** The action the beat is about (`event:<id>` for a timeline event, `evidence:<id>` for found evidence). */
@@ -379,6 +394,8 @@ export interface NarrationContext {
   beats: Beat[];
   /** The reader's own journal (Q-153), for a private narration only; null for a place feed. */
   journal: { saga: string | null; yesterday: string | null } | null;
+  /** ISK-009: a private narration whose reader arrived somewhere this turn (its beat is the last one). */
+  arrival?: Arrival;
 }
 
 /** GEN-116: what the dialogue stage is given for one audience: its narration context (no journal) and the narration it follows. */
@@ -475,6 +492,8 @@ const NARRATOR_TEXT = [
   'bonds.memories = what the NPC remembers about that player (newest first): let it shape the NPC\'s manner and expression toward the player; never tell a memory as a new beat',
   // GEN-143
   'answers = NPCs who will answer the beats that ask / talk / request (actionIds) with their own lines in the dialogue stage: in that beat\'s segments tell only gestures, expressions and mood; never sum up the answer or say what the NPC answers for them',
+  // ISK-009
+  'A beat of kind arrival: that player has just come here. Audience player: 2-3 sentences of arrival.place as it looks now (arrival.phase, arrival.weather, its description; never what it hides) and who is here (arrival.npcs as {{n:id}}, arrival.players as {{p:ref}}; these may be named too)',
   THAI_OUTPUT,
 ].join('\n');
 

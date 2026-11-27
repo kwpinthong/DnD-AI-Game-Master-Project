@@ -206,8 +206,9 @@ export function checkNarration(ctx: NarrationContext, out: GmNarration, forbidde
   const errors: GmError[] = [];
   const fail = (code: string, path: string, message: string) => errors.push({ code, path, message });
   const beatIndex = new Map(ctx.beats.map((b, i) => [b.actionId, i]));
-  const cast = new Set(ctx.cast.map((c) => c.ref));
-  const npcs = new Set(ctx.npcs.map((n) => n.id));
+  // ISK-009: who is at the place the reader arrived at may be named too.
+  const cast = new Set([...ctx.cast.map((c) => c.ref), ...(ctx.arrival?.players ?? [])]);
+  const npcs = new Set([...ctx.npcs, ...(ctx.arrival?.npcs ?? [])].map((n) => n.id));
   let last = -1;
   out.segments.forEach((s, i) => {
     const path = `segments[${i}]`;

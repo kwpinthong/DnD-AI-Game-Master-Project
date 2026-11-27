@@ -26,6 +26,7 @@ import { checkedMemory } from '../learning/memory.ts';
 import { playerKeyOf, saveJoinStyle } from '../learning/style.ts';
 import type { Lobby } from '../room/lobby.ts';
 import { readScenario } from '../scenario/editor.ts';
+import type { WeatherService } from '../weather/service.ts';
 import { checkLooks, type Looks } from './appearance.ts';
 import { createCharacter, getCharacter, updateCharacter, type CharacterOutcome } from './character.ts';
 import { createCodeChecker } from './create-code.ts';
@@ -51,6 +52,8 @@ export interface GameRouteOptions {
   rng: Rng | null;
   /** ISK-017: the lobby sockets that hear `lobby_ready` / `lobby_start_blocked`. */
   lobby: Lobby;
+  /** ISK-009: the start's weather, picked before the crossing narrations tell it. */
+  weather?: Pick<WeatherService, 'ensure'>;
 }
 
 const minutesUntil = (at: number, t: number) => Math.max(1, Math.ceil((at - t) / 60_000));
@@ -177,7 +180,7 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
     }
     // The start scenarios are already stored; the private narrations follow. A failed one stays null and
     // is written on the player's next GET /api/game/origin (GEN-065 C8).
-    if (outcome.started) await narrateOrigins(db, options.ai, options.assets, me.gameId, now);
+    if (outcome.started) await narrateOrigins(db, options.ai, options.assets, me.gameId, now, options.weather);
     return reply.code(200).send(outcome.view);
   });
 

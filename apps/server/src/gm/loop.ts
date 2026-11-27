@@ -23,7 +23,7 @@ import { applyPhaseActions, crisesOf, crossPlayerState, seatedKarmaByMember, sea
 import { outdoorLocationIds, tagContexts, weatherTagging, type TaggingOptions } from '../crossplayer/tags.ts';
 import { eq } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db/client.ts';
-import { game, gamePhase } from '../db/schema.ts';
+import { game, gamePhase, travelPending } from '../db/schema.ts';
 import type { GmFallbackCause } from '@isekai/protocol';
 import type { ClosedPhase, DialogueStage, PhaseResolution, PhaseResolver, ResolutionEntry, ResolutionHit, ResolverStuck } from '../room/resolver.ts';
 import { spentOnTurn } from '../ai/core/usage.ts';
@@ -62,6 +62,7 @@ import {
   requestTokens,
   stripStrayTokens,
   withinTokens,
+  type Arrival,
   type Beat,
   type DayContext,
   type DialogueContext,
@@ -78,7 +79,7 @@ import { recordNpcMemories } from './npc-memory.ts';
 import { capTotal, cleanNpcLines, lingerAfter, lingersNow, npcAnswers, npcLineLimits, npcPlacesNow, npcPrompt, npcsPresentAt, saveLingers, withVoice } from './npc-lines.ts';
 import { npcFarewellFor } from './server-lines.ts';
 import { newsSources, publicNews, saveNews, storedNews } from './news.ts';
-import { periodScenes } from './scene.ts';
+import { arrivalAt, arrivalBeatId, periodScenes } from './scene.ts';
 import { GM_OUTPUT, GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmTurnProposal } from './schema.ts';
 import { gateStyle, styleIssues, type StyleScope } from './style-check.ts';
 import { gameTone, styleBlock, toneBlock } from './tone.ts';
@@ -538,7 +539,17 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     // GEN-117 (Q-292): who learned whose real name this turn, before any text is rendered. Idempotent, so a replay after a restart is safe.
     introduce(db, world, order, start, lookedAt, now());
     introduceNpcs(db, assets, world, order, proposal.actions, start, hereAt, now());
-    const audiences = narrationAudiences(world, resolved.log, textOf, start, events.active, evidenceFor, npcsFor, (m) => karmaBand(karmaOf(m)), (id) => targetNpcs.get(id) ?? null, (m) => lookedAt.get(m) ?? new Set());
+    // ISK-009: where each player is when the turn ends, whatever moved them (the AI's moveTo, a trip or a rift visit that ends at
+    // the close), against where they were when it opened (`movedFrom`: a same-zone move during the turn).
+    const trips = new Map(db.select().from(travelPending).where(eq(travelPending.gameId, gameId)).all().map((p) => [p.memberId, p.locationId]));
+    const endOf = (m: string) => trips.get(m) ?? resolved.state.players[m]?.locationId ?? start.get(m);
+    const arrivalOf = (m: string) => {
+      const to = endOf(m);
+      if (to === undefined || to === (input.movedFrom?.get(m) ?? start.get(m)) || !world.places.some((p) => p.id === to)) return null;
+      const others = [...world.players.values()].filter((p) => p.memberId !== m && endOf(p.memberId) === to).map((p) => p.ref);
+      return arrivalAt(world, assets, to, { ...presence([karmaOf(m)]), lingering }, others);
+    };
+    const audiences = narrationAudiences(world, resolved.log, textOf, start, events.active, evidenceFor, npcsFor, (m) => karmaBand(karmaOf(m)), (id) => targetNpcs.get(id) ?? null, (m) => lookedAt.get(m) ?? new Set(), arrivalOf);
     const journalWait = writing.get(gameId)?.journals;
     if (journalWait) await timer.time('journal_wait', () => journalWait);
     // GEN-115: the narrations do not depend on each other, so they run together: the wait is the slowest one, not the sum.
@@ -1032,7 +1043,7 @@ interface Audience {
   placeId: string;
   /** Members who read the text (the player, or everyone at the place when the turn closed). */
   readers: string[];
-  ctx: Pick<NarrationContext, 'audience' | 'cast' | 'npcs' | 'beats'>;
+  ctx: Pick<NarrationContext, 'audience' | 'cast' | 'npcs' | 'beats' | 'arrival'>;
 }
 
 function narrationAudiences(
@@ -1048,6 +1059,8 @@ function narrationAudiences(
   targetNpcOf: (actionId: string) => string | null,
   /** GEN-117: the player refs this member's action really looked at (target or `looksAt`); only they get looks in that member's narration. */
   lookedAt: (memberId: string) => ReadonlySet<string>,
+  /** ISK-009: what a player who arrived somewhere this turn sees there; null = did not arrive. */
+  arrivalOf: (memberId: string) => Arrival | null,
 ): Audience[] {
   const ref = (memberId: string) => world.players.get(memberId)!.ref;
   const placeBeats = new Map<string, Beat[]>();
@@ -1091,6 +1104,18 @@ function narrationAudiences(
       if (placeId) push(placeBeats, placeId, { actionId: `event:${e.id}`, kind: 'event', actor: null, text: e.title, result: 'scene', target: null, targetNpc: null, moved: null, items: [] });
     }
   }
+  // ISK-009: an arrival ends the arriver's own narration, and joins the feed of a place that has one already (never a new call).
+  const arrivals = new Map<string, Arrival>();
+  for (const p of world.players.values()) {
+    const arrival = arrivalOf(p.memberId);
+    if (!arrival) continue;
+    const beat: Beat = { actionId: arrivalBeatId(p.ref), kind: 'arrival', actor: p.ref, text: `มาถึง${arrival.place.name}`, result: 'scene', target: null, targetNpc: null, moved: null, items: [] };
+    if (playerBeats.has(p.memberId)) {
+      push(playerBeats, p.memberId, beat);
+      arrivals.set(p.memberId, arrival);
+    }
+    if (placeBeats.has(arrival.place.id)) push(placeBeats, arrival.place.id, beat);
+  }
 
   // GEN-117: looks only of the reader themself and of whoever the reader looked at; a place feed (many readers) has none.
   const castOf = (beats: Beat[], extra: string[], self: string | null, looked: ReadonlySet<string> = new Set()) => {
@@ -1115,7 +1140,8 @@ function narrationAudiences(
     if (!p) continue;
     const placeId = start.get(memberId) ?? p.locationId;
     const cast = castOf(beats, [p.ref], p.ref, lookedAt(memberId));
-    out.push({ key: `player:${p.ref}`, placeId, readers: [memberId], ctx: { audience: { player: p.ref }, cast, npcs: npcsAt(placeId, cast), beats } });
+    const arrival = arrivals.get(memberId);
+    out.push({ key: `player:${p.ref}`, placeId, readers: [memberId], ctx: { audience: { player: p.ref }, cast, npcs: npcsAt(placeId, cast), beats, ...(arrival ? { arrival } : {}) } });
   }
   return out;
 }

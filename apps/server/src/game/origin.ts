@@ -1,5 +1,5 @@
 import type { OriginResponse, OriginView, Scenario } from '@isekai/protocol';
-import { pickWeighted, RULES, type Rng, type StatusEffect, type TagSource } from '@isekai/rules';
+import { pickWeighted, restorePhaseState, RULES, type Period, type Rng, type StatusEffect, type TagSource } from '@isekai/rules';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { AiService } from '../ai/core/service.ts';
@@ -8,10 +8,14 @@ import type { GameAssets } from '../assets/load.ts';
 import type { StartScenarioRecord } from '../assets/model.ts';
 import { startPassiveSource } from '../assets/tags.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
-import { character, characterLoot, characterOrigin, lateJoin, member, npcBond, phaseAction } from '../db/schema.ts';
+import { character, characterLoot, characterOrigin, gamePhase, lateJoin, member, npcBond, phaseAction } from '../db/schema.ts';
 import { maskNames } from '../gm/check.ts';
+import { loadWorld, TOKEN_PATTERN, type GmWorld } from '../gm/context.ts';
 import { forAi, THAI_OUTPUT } from '../gm/language.ts';
+import { renderTokens } from '../gm/loop.ts';
+import { arrivalAt } from '../gm/scene.ts';
 import { latestSaga } from '../gm/store.ts';
+import { weatherAt, type WeatherService } from '../weather/service.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { PLACE_TAG } from '../travel/rules.ts';
 import { placeCharacter } from '../visibility/store.ts';
@@ -269,7 +273,9 @@ export const RULES_PROMPT = [
   'You are the AI GM of Isekai Chronicles: a player has just crossed over into another world',
   'Tell this player alone, in Thai, why and how they crossed worlds, drawing on their personality, starting skill and item',
   'and end at their spawn point (as given: who they are in this world and where they open their eyes). Second person (คุณ), 1-3 paragraphs',
-  `At most ${NARRATION_MAX} characters. No stat numbers (HP, Stamina, Coins, Karma, DC, bonuses), never mention other players`,
+  // ISK-009
+  'The last 2-3 sentences: the place as it looks now (around.phase, around.weather, its description; never what it hides) and who is around (around.npcs as {{n:id}}, around.players as {{p:ref}})',
+  `At most ${NARRATION_MAX} characters. No stat numbers (HP, Stamina, Coins, Karma, DC, bonuses), never mention other players besides around.players`,
   'Names of people are tokens such as {{p:id}}: use the token as it is, never guess or invent a real name',
   THAI_OUTPUT,
 ].join('\n');
@@ -295,6 +301,27 @@ function arrivalText(scenario: Scenario, assets: GameAssets, row: OriginRow): st
   ]
     .filter((l) => l.length > 0)
     .join('\n');
+}
+
+/** The game's period now; before the room ever opened, the start (day 1 EOSORIA). */
+function periodNow(db: DbOrTx, gameId: string): { day: number; phase: Period } {
+  const row = db.select({ state: gamePhase.state }).from(gamePhase).where(eq(gamePhase.gameId, gameId)).get();
+  return row ? restorePhaseState(JSON.parse(row.state)) : { day: 1, phase: 'EOSORIA' };
+}
+
+/** ISK-009: who and what is around the spawn point now (the period, its weather, the NPCs there, the players there by ref). */
+function aroundLine(db: DbOrTx, assets: GameAssets, row: OriginRow, karma: number): string[] {
+  const world = loadWorld(db, row.gameId, assets);
+  if (!world.places.some((p) => p.id === row.locationId)) return [];
+  const at = periodNow(db, row.gameId);
+  const others = [...world.players.values()].filter((p) => p.memberId !== row.memberId && p.locationId === row.locationId).map((p) => p.ref);
+  const around = arrivalAt(world, assets, row.locationId, { phase: at.phase, weather: weatherAt(db, row.gameId, at)?.weather ?? null, karmas: [karma] }, others);
+  return [`Around you now: ${JSON.stringify(around)}`];
+}
+
+/** ISK-009: the people around in a crossing as `reader` may see them (GEN-117: a known name, else the title / alias); other tokens are left to resolveOwnTokens. */
+function renderAround(db: DbOrTx, world: GmWorld, reader: string | null, text: string): string {
+  return text.replace(TOKEN_PATTERN, (token, kind: string, id: string) => ((kind === 'n' ? world.npcs.some((n) => n.id === id) : world.byRef.has(id)) ? renderTokens(db, world, token, reader) : token));
 }
 
 const inFlight = new Map<string, Promise<void>>();
@@ -332,6 +359,7 @@ function narrateOne(db: Db, ai: Pick<AiService, 'call'>, assets: GameAssets, mem
       chosen ? `Starting skill: ${safe(chosen.skill.name)} — ${safe(forAi(chosen.skill.description, assets.ability(chosen.skill.name)?.descriptionEn))}` : 'Starting skill: none',
       chosen ? `Starting item: ${safe(chosen.item.name)} — ${safe(forAi(chosen.item.description, assets.item(chosen.item.name)?.effectEn))}` : 'Starting item: none',
       safe(arrivalText(scenario, assets, row)),
+      ...aroundLine(db, assets, row, me.karma).map(safe),
     ];
     const system: PromptBlock[] = [
       { id: 'rules', text: RULES_PROMPT, cache: true },
@@ -360,20 +388,29 @@ function narrateOne(db: Db, ai: Pick<AiService, 'call'>, assets: GameAssets, mem
 }
 
 /** Writes every missing narration of the game in parallel. Failures leave them null (retried on read). */
-export async function narrateOrigins(db: Db, ai: Pick<AiService, 'call'>, assets: GameAssets, gameId: string, now: () => number): Promise<void> {
+export async function narrateOrigins(
+  db: Db,
+  ai: Pick<AiService, 'call'>,
+  assets: GameAssets,
+  gameId: string,
+  now: () => number,
+  weather?: Pick<WeatherService, 'ensure'>,
+): Promise<void> {
   const missing = db
     .select({ memberId: characterOrigin.memberId })
     .from(characterOrigin)
     .where(and(eq(characterOrigin.gameId, gameId), isNull(characterOrigin.narration)))
     .all();
+  // ISK-009: the crossing tells the weather, so the period's weather is picked now rather than when the room opens (the same call).
+  if (missing.length > 0) await weather?.ensure(gameId, periodNow(db, gameId)).catch(() => null);
   await Promise.allSettled(missing.map((r) => narrateOne(db, ai, assets, r.memberId, now)));
 }
 
-function toView(scenario: Scenario | null, assets: GameAssets, row: OriginRow, characterName: string): OriginView {
+function toView(scenario: Scenario | null, assets: GameAssets, row: OriginRow, characterName: string, around: (text: string) => string): OriginView {
   const tier = scenario?.origins.find((o) => o.id === row.tierId);
   const record = recordOf(assets, row);
   const narration =
-    row.narration === null ? null : resolveOwnTokens(row.narration, row.memberId, characterName);
+    row.narration === null ? null : resolveOwnTokens(around(row.narration), row.memberId, characterName);
   return {
     kind: row.kind,
     tierLabel: tier?.label ?? row.tierId,
@@ -392,11 +429,12 @@ function toView(scenario: Scenario | null, assets: GameAssets, row: OriginRow, c
  */
 export async function getOrigin(db: Db, ai: Pick<AiService, 'call'>, assets: GameAssets, me: MemberRow, now: () => number): Promise<OriginResponse> {
   const scenario = getGameScenario(db, me.gameId);
+  const world = loadWorld(db, me.gameId, assets);
   if (me.role === 'gm') {
     const rows = new Map(db.select().from(characterOrigin).where(eq(characterOrigin.gameId, me.gameId)).all().map((r) => [r.memberId, r]));
     const origins = seatedPlayers(db, me.gameId).flatMap((p) => {
       const row = rows.get(p.memberId);
-      return row ? [{ memberId: p.memberId, ...toView(scenario, assets, row, p.characterName) }] : [];
+      return row ? [{ memberId: p.memberId, ...toView(scenario, assets, row, p.characterName, (t) => renderAround(db, world, null, t)) }] : [];
     });
     return { view: 'gm', origins };
   }
@@ -408,5 +446,5 @@ export async function getOrigin(db: Db, ai: Pick<AiService, 'call'>, assets: Gam
     row = originOf(db, me.id)!;
   }
   const own = db.select({ name: character.name }).from(character).where(eq(character.memberId, me.id)).get();
-  return { view: 'player', origin: toView(scenario, assets, row, own?.name ?? '') };
+  return { view: 'player', origin: toView(scenario, assets, row, own?.name ?? '', (t) => renderAround(db, world, me.id, t)) };
 }
