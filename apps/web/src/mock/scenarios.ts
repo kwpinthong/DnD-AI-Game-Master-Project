@@ -1,5 +1,6 @@
-import { GameView, OriginResponse, isVotableEntry, RoomEntry, RoomState, SurroundingsResponse, type CharacterView } from '@isekai/protocol';
+import { defaultScenario, GameView, OriginResponse, isVotableEntry, RoomEntry, RoomState, SurroundingsResponse, type CharacterView, type LobbyReadyEvent, type LobbyStartBlockedEvent } from '@isekai/protocol';
 import { CONTRACT_FIXTURES as F, CONTRACT_SCREENS, type ScreenId } from '@isekai/protocol/contract';
+import type { CreateDraft } from '../CreateGameForm.tsx';
 
 /**
  * isekai-mock-layer (GEN-100): the states the web can be put in without a server, all built from the GEN-099
@@ -39,7 +40,11 @@ export interface MockScenario {
     state: RoomState;
     entries: readonly RoomEntry[];
     script: readonly MockStep[];
+    /** ISK-019: what a lobby socket (`hello` + `lobby: true`) hears right after its hello. */
+    lobby?: readonly (LobbyReadyEvent | LobbyStartBlockedEvent)[];
   };
+  /** ISK-019: the create form's half-filled state (the gallery's `create-game` frame). */
+  createDraft?: CreateDraft;
 }
 
 const ok = (body: unknown): MockReply => ({ status: 200, body });
@@ -100,6 +105,19 @@ const noCharacterGame: GameView = {
   ...LOBBY_GAME,
   members: LOBBY_GAME.members.map((m) => (m.id === ME ? { ...m, hasCharacter: false } : m)),
   startBlockers: ['ยังไม่สร้างตัวละคร: นก, ต้น'],
+};
+
+// --- ISK-019: the lobby with no host ---
+const readyAs = (game: GameView, ready: Record<string, boolean>): GameView => ({ ...game, members: game.members.map((m) => ({ ...m, ready: ready[m.id] ?? m.ready })) });
+const aloneGame: GameView = { ...LOBBY_GAME, members: [{ ...LOBBY_GAME.members[0]!, ready: false }], players: { ...LOBBY_GAME.players, count: 1 }, startBlockers: ['ขาดผู้เล่นอีก 1 คน (Online ต้องมีผู้เล่นอย่างน้อย 2 คน)'] };
+const waitingGame = readyAs(LOBBY_GAME, { [ME]: false, 'm-bell': true });
+const LOBBY_GAME_TWO_READY = readyAs(LOBBY_GAME, { 'm-bell': true });
+const allReadyGame: GameView = { ...readyAs(LOBBY_GAME, Object.fromEntries(LOBBY_GAME.members.map((m) => [m.id, true]))), startBlockers: [] };
+const singleGame: GameView = { ...aloneGame, mode: 'single', players: { count: 1, min: 1, max: 1 }, startBlockers: [] };
+const START_BLOCKED = F.LobbyStartBlockedEvent[0]!.reason;
+const FILLED_DRAFT: CreateDraft = {
+  values: { createCode: 'ลับเฉพาะ', gameName: 'เมืองก่อนอุกกาบาต', mode: 'online', humanGm: true, npcDialogue: 'high', tone: 'C', name: 'ต้น', pin: '1234' },
+  scenario: { ...defaultScenario(), timeline: defaultScenario().timeline.map((e, i) => (i === 0 ? { ...e, title: 'คาราวานมาถึงก่อนรุ่งสาง' } : e)) },
 };
 
 // --- GEN-090: the pages before the game starts ---
@@ -215,11 +233,69 @@ export const SCENARIOS: readonly MockScenario[] = [
   {
     id: 'lobby',
     title: 'ห้องรอ ก่อนเริ่ม',
-    note: 'เจ้าของเกม ยังมีคนไม่สร้างตัวละคร',
+    note: 'เรากด [พร้อม] แล้ว (1/3) ยังมีคนไม่สร้างตัวละคร',
     session: 'player',
     screens: ['home', 'lobby'],
     http: { 'GET /api/game': ok(LOBBY_GAME) },
     room: room(BASE_ROOM),
+  },
+  // ISK-019: the lobby with no host, one frame per state.
+  {
+    id: 'lobby-alone',
+    title: 'ห้องรอ ยังมีผู้เล่นคนเดียว',
+    note: 'Online ต้องมีผู้เล่นอย่างน้อย 2 คน: รอผู้เล่นอีกอย่างน้อย 1 คน',
+    session: 'player',
+    screens: ['lobby'],
+    http: { 'GET /api/game': ok(aloneGame), 'POST /api/game/ready': ok(aloneGame) },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'lobby-waiting',
+    title: 'ห้องรอ รอทุกคนพร้อม',
+    note: 'เรายังไม่กด [พร้อม]; อีกคนพร้อมแล้ว (1/3) กดแล้วได้ (2/3)',
+    session: 'player',
+    screens: ['lobby'],
+    http: { 'GET /api/game': ok(waitingGame), 'POST /api/game/ready': ok(LOBBY_GAME_TWO_READY) },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'lobby-start-blocked',
+    title: 'ทุกคนพร้อมแต่ AI GM ยังไม่พร้อม',
+    note: 'lobby_start_blocked: แถบเหตุผล + [ลองเริ่มอีกครั้ง] (ตอบ 503)',
+    session: 'player',
+    screens: ['lobby'],
+    http: { 'GET /api/game': ok(allReadyGame), 'POST /api/game/ready': { status: 503, body: { code: 'ai_not_ready', message: START_BLOCKED } } },
+    room: { ...room(BASE_ROOM), lobby: [{ type: 'lobby_start_blocked', reason: START_BLOCKED }] },
+  },
+  {
+    id: 'lobby-single',
+    title: 'ห้องรอ เล่นคนเดียว',
+    note: 'กดพร้อมเพื่อเริ่มเกม',
+    session: 'player',
+    screens: ['lobby'],
+    http: { 'GET /api/game': ok(singleGame), 'POST /api/game/ready': ok(singleGame) },
+    room: room(BASE_ROOM),
+  },
+  // ISK-019: the create form filled from a draft; `create-error` refuses the memory (409, Q-400) when you press สร้าง.
+  {
+    id: 'create-filled',
+    title: 'สร้างเกม กรอกแล้ว',
+    note: 'ฟอร์มที่กรอกครบ GM คน + scenario แก้แล้ว',
+    session: 'guest',
+    screens: ['create-game'],
+    http: {},
+    room: room(BASE_ROOM),
+    createDraft: FILLED_DRAFT,
+  },
+  {
+    id: 'create-error',
+    title: 'สร้างเกมไม่สำเร็จ',
+    note: 'กด [สร้างเกมและรับโค้ด]: 409 ความทรงจำใช้ไม่ได้ ข้อความ error ค่าที่กรอกยังอยู่',
+    session: 'guest',
+    screens: ['create-game'],
+    http: { 'POST /api/games': { status: 409, body: { code: 'not_allowed', message: 'เลือกเกมนี้เป็นความทรงจำไม่ได้' } } },
+    room: room(BASE_ROOM),
+    createDraft: FILLED_DRAFT,
   },
   {
     id: 'no-character',
@@ -248,7 +324,7 @@ export const SCENARIOS: readonly MockScenario[] = [
   {
     id: 'start-while-creating',
     title: 'เกมเริ่มระหว่างสร้างตัวละคร',
-    note: 'เจ้าของกดเริ่มเกมตอนหน้าสร้างตัวละครยังเปิดอยู่: พาไปหน้าเล่น แก้ไม่ได้แล้ว',
+    note: 'ทุกคนพร้อมแล้วเกมเริ่มเองตอนหน้าสร้างตัวละครยังเปิดอยู่: พาไปหน้าเล่น แก้ไม่ได้แล้ว',
     session: 'player',
     screens: ['lobby'],
     http: { 'GET /api/game': ok({ ...LOBBY_GAME, startBlockers: [] }), 'GET /api/game/character': ok(DRAFT_CHARACTER), 'GET /api/game/character/loot': ok(LOOT_KEPT), ...DRAFT_SAVES },
@@ -475,7 +551,7 @@ export const SCENARIOS: readonly MockScenario[] = [
   {
     id: 'ended-learning-failed',
     title: 'จบเกม สกัดความรู้ไม่สำเร็จ',
-    note: 'Q-363: เจ้าของเกมเห็น "สกัดไม่สำเร็จ" พร้อมปุ่มลองใหม่ (คนอื่นได้ 403 ไม่เห็นกล่องนี้)',
+    note: 'Q-363: ผู้สร้างเกมเห็น "สกัดไม่สำเร็จ" พร้อมปุ่มลองใหม่ (คนอื่นได้ 403 ไม่เห็นกล่องนี้)',
     session: 'player',
     screens: ['ending'],
     http: { 'GET /api/game/log': ok(F.GameLogResponse[1]), 'GET /api/game/learning': ok(F.GameLearningResponse[1]) },

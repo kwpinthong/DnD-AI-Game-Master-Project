@@ -48,7 +48,7 @@ function Frame({ screen, scenarioId }: { screen: ScreenId; scenarioId: string })
   return (
     <figure className="gallery-frame" aria-label={`${screen} · ${scenario.id}`}>
       <div className="gallery-frame__plate">
-        <div className="gallery-frame__screen">{view.render?.({ baseUrl, token: MOCK_TOKEN })}</div>
+        <div className="gallery-frame__screen">{view.render?.({ baseUrl, token: MOCK_TOKEN, scenario: scenario.id })}</div>
       </div>
       <figcaption className="gallery-frame__caption">
         <span className="gallery-frame__title">{scenario.title}</span>

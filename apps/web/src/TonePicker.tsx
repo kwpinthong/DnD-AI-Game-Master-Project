@@ -6,12 +6,10 @@ import './pregame.css';
 export function TonePicker({
   value,
   onChange,
-  disabled = false,
   note,
 }: {
   value: GameTone | undefined;
   onChange: (tone: GameTone) => void;
-  disabled?: boolean;
   note?: string | undefined;
 }) {
   return (
@@ -19,7 +17,7 @@ export function TonePicker({
       <legend>{toneText.group}</legend>
       {toneText.tones.map((tone) => (
         <label className="check" key={tone.value}>
-          <input type="radio" name="tone" checked={value === tone.value} disabled={disabled} onChange={() => onChange(tone.value)} />
+          <input type="radio" name="tone" checked={value === tone.value} onChange={() => onChange(tone.value)} />
           <span>
             {tone.label} <small className="pregame__note">{tone.hint}</small>
           </span>

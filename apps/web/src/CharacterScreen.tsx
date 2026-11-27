@@ -264,7 +264,7 @@ export function CharacterScreen({
                 </ul>
               )}
               <p className="pregame__note">จุดเกิดของคุณจะสุ่มตอนเกมเริ่ม จาก 15 แบบ (บางแบบหายาก) แล้วแสดงเป็นการ์ดตอนเข้าหน้าเล่น</p>
-              <p className="pregame__note">ยังกลับมาแก้ได้ทุกขั้นจนกว่าเจ้าของเกมจะกดเริ่มเกม</p>
+              <p className="pregame__note">ยังกลับมาแก้ได้ทุกขั้นจนกว่าเกมจะเริ่ม</p>
               <div className="pregame__actions pregame__actions--split">
                 <Button onClick={() => setStep(1)}>ย้อนกลับ</Button>
                 <Button variant="primary" onClick={onBack}>

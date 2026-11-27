@@ -57,7 +57,7 @@ export function JoinForm({ apiBaseUrl, onJoined }: { apiBaseUrl: string; onJoine
       <Panel title="เข้าร่วมเกม" className="pregame__panel">
         <form onSubmit={submit} noValidate>
           <h2 className="pregame__title">เข้าร่วมเกม</h2>
-          <p className="pregame__lead">ใส่โค้ดเกมที่เจ้าของเกมส่งให้ แล้วตั้งชื่อกับ PIN ของคุณ</p>
+          <p className="pregame__lead">ใส่โค้ดเกมที่เพื่อนส่งให้ แล้วตั้งชื่อกับ PIN ของคุณ</p>
           <Field id="join-inviteCode" label="โค้ดเกม" error={errors.errorOf('inviteCode')}>
             {(control) => <input {...control} {...bind('inviteCode')} className="code-input" autoComplete="off" autoCapitalize="characters" spellCheck={false} />}
           </Field>
@@ -91,7 +91,7 @@ export function JoinForm({ apiBaseUrl, onJoined }: { apiBaseUrl: string; onJoine
               เข้าร่วม
             </Button>
           </div>
-          <p className="pregame__foot">ลืม PIN? ขอให้เจ้าของเกมรีเซ็ตให้</p>
+          <p className="pregame__foot">ลืม PIN? ขอให้ผู้ดูแลรีเซ็ตให้</p>
         </form>
       </Panel>
     </div>

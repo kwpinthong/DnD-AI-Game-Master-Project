@@ -14,9 +14,10 @@ import { Lobby } from '../Lobby.tsx';
 import { MyStyle } from '../MyStyle.tsx';
 import { OriginCard } from '../OriginCard.tsx';
 import { PlayRoom } from '../PlayRoom.tsx';
-import { ScenarioEditor } from '../ScenarioEditor.tsx';
+import { ScenarioViewer } from '../ScenarioEditor.tsx';
 import { VoteReview } from '../VoteReview.tsx';
 import { FeedbackAdmin } from '../FeedbackAdmin.tsx';
+import { scenarioById } from '../mock/scenarios.ts';
 import { FeedbackFrame, GmConsoleFrame } from './previews.tsx';
 
 /**
@@ -26,6 +27,8 @@ import { FeedbackFrame, GmConsoleFrame } from './previews.tsx';
 export interface FrameContext {
   baseUrl: string;
   token: string;
+  /** The mock scenario of the frame (ISK-019: the create form's draft comes from it). */
+  scenario: string;
 }
 
 export interface ScreenView {
@@ -68,11 +71,19 @@ const MOCK_ADMIN_TOKEN = 'mock-admin';
 export const SCREEN_VIEWS: Record<ScreenId, ScreenView> = {
   home: { page: 'App', socket: false, render: ({ baseUrl }) => <App apiBaseUrl={baseUrl} /> },
   join: { page: 'JoinForm', socket: false, render: ({ baseUrl }) => <JoinForm apiBaseUrl={baseUrl} onJoined={noop} /> },
-  'create-game': { page: 'CreateGameForm', socket: false, render: ({ baseUrl }) => <CreateGameForm apiBaseUrl={baseUrl} onCreated={noop} onBack={noop} /> },
-  'scenario-editor': {
-    page: 'ScenarioEditor',
+  'create-game': {
+    page: 'CreateGameForm',
     socket: false,
-    render: ({ baseUrl, token }) => <ScenarioEditor apiBaseUrl={baseUrl} token={token} onClose={noop} onSessionLost={noop} />,
+    render: ({ baseUrl, scenario }) => {
+      const draft = scenarioById(scenario).createDraft;
+      return <CreateGameForm apiBaseUrl={baseUrl} onCreated={noop} onBack={noop} {...(draft ? { draft } : {})} />;
+    },
+  },
+  'scenario-editor': {
+    // ISK-019: the editor itself is a step of the create form (`create-filled`); after creation the GM reads it.
+    page: 'ScenarioViewer',
+    socket: false,
+    render: ({ baseUrl, token }) => <ScenarioViewer apiBaseUrl={baseUrl} token={token} onClose={noop} onSessionLost={noop} />,
   },
   lobby: {
     page: 'Lobby',

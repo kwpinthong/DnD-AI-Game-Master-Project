@@ -90,7 +90,7 @@ export const endText = {
   // Q-363: the game owner's retry of a failed learning extract.
   learningTitle: 'ความรู้จากเกมนี้',
   learningFailed: 'สกัดไม่สำเร็จ',
-  learningNote: 'AI GM ยังเก็บตำนานและข้อเสนอของเกมนี้ไม่ได้ (เห็นเฉพาะเจ้าของเกม)',
+  learningNote: 'AI GM ยังเก็บตำนานและข้อเสนอของเกมนี้ไม่ได้ (เห็นเฉพาะคุณ)',
   learningRetry: 'ลองสกัดอีกครั้ง',
   gameScore: 'คะแนนเกม',
   average: (average: number, raters: number) => `คะแนนเกม ${average.toFixed(2)} จาก ${raters} คน`,
@@ -526,8 +526,6 @@ export const npcDialogueText = {
     { value: 'normal', label: 'ปกติ', hint: 'NPC พูดพอประมาณ สมดุลระหว่างบทพูดกับการบรรยาย' },
     { value: 'high', label: 'เยอะ', hint: 'NPC พูดคุยโต้ตอบมาก เหมือนมีตัวละครมีชีวิตรอบตัว' },
   ],
-  locked: 'ล็อกแล้ว เปลี่ยนระดับบทพูดไม่ได้หลังเริ่มเล่น',
-  ownerOnly: 'เฉพาะเจ้าของเกมเปลี่ยนได้ก่อนเริ่มเกม',
 } as const;
 
 // GEN-177: the language tone of narration and NPC lines (game.tone); NPC speech profiles stay the same.
@@ -539,7 +537,30 @@ export const toneText = {
     { value: 'C', label: 'ขี้เล่น เป็นกันเอง', hint: 'ภาษาพูด มีมุก ประโยคสั้น' },
   ],
   unset: 'ไม่เลือก = ใช้โทนเริ่มต้นของ server',
-  locked: 'ล็อกแล้ว เปลี่ยนโทนไม่ได้หลังเริ่มเล่น',
-  ownerOnly: 'เฉพาะเจ้าของเกมเปลี่ยนได้ก่อนเริ่มเกม',
   adminDefault: 'โทนเริ่มต้นของเกมใหม่',
+} as const;
+
+// ISK-019: every setting is fixed at creation; the scenario step is the Human GM's.
+export const createGameText = {
+  cancel: 'ยกเลิก',
+  scenarioOpen: 'แก้ scenario',
+  scenarioDone: 'กลับไปฟอร์ม',
+  scenarioDefault: 'ใช้ค่ามาตรฐาน',
+  scenarioStandard: 'ค่ามาตรฐาน',
+  scenarioEdited: 'แก้แล้ว',
+  scenarioNote: 'ไม่แก้ = ใช้ค่ามาตรฐาน; ตั้งแล้วแก้ไม่ได้หลังสร้างเกม',
+  scenarioRefused: 'scenario ไม่ถูกต้อง แก้ช่องที่บอกไว้ก่อน แล้วกดสร้างเกมอีกครั้ง',
+  defaultConfirm: 'คืนค่า scenario ทั้งหมดเป็นค่ามาตรฐาน? สิ่งที่แก้ไว้จะหายหมด',
+} as const;
+
+// ISK-019: a lobby with no host; the server starts the game once every player is ready.
+export const lobbyText = {
+  ready: 'พร้อม',
+  unready: 'ยกเลิกพร้อม',
+  readyMark: 'พร้อม',
+  needPlayer: 'รอผู้เล่นอีกอย่างน้อย 1 คน',
+  waiting: (ready: number, players: number) => `รอทุกคนพร้อม (${ready}/${players})`,
+  single: 'กดพร้อมเพื่อเริ่มเกม',
+  retry: 'ลองเริ่มอีกครั้ง',
+  settingsLocked: 'ตั้งค่าตอนสร้างเกมแล้ว แก้ไม่ได้',
 } as const;

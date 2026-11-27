@@ -1,16 +1,53 @@
-import { createGameFieldErrors, MEMORY_MAX_SOURCES, type CreateGameField, type GameView, type Member, type MemorySourceGame } from '@isekai/protocol';
-import { useState, type FormEvent } from 'react';
+import { createGameFieldErrors, defaultScenario, MEMORY_MAX_SOURCES, type CreateGameField, type GameView, type Member, type MemorySourceGame, type Scenario } from '@isekai/protocol';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useFieldErrors } from './form-state.ts';
 import { memorySourcesCall, postCreateGame, type CreateGameInput } from './game-api.ts';
 import { NpcDialoguePicker } from './NpcDialoguePicker.tsx';
+import { ScenarioEditor } from './ScenarioEditor.tsx';
 import { TonePicker } from './TonePicker.tsx';
-import { toneText } from './ui/strings.ts';
+import { createGameText, toneText } from './ui/strings.ts';
 import { PinInput } from './PinInput.tsx';
 import { Button, Field, Panel } from './ui/index.ts';
 import './pregame.css';
 
 type TextField = 'createCode' | 'gameName' | 'name' | 'pin';
-type Base = Omit<CreateGameInput, 'playerCode' | 'noStyle' | 'memory'>;
+type Base = Omit<CreateGameInput, 'playerCode' | 'noStyle' | 'memory' | 'scenario'>;
+
+/** ISK-019: the half-filled form of this tab. The create code and the PIN are never kept. */
+export const CREATE_DRAFT_KEY = 'createDraft';
+export interface CreateDraft {
+  values: Partial<Base>;
+  scenario?: Scenario;
+}
+
+const EMPTY: Base = { createCode: '', gameName: '', mode: 'online', humanGm: false, npcDialogue: 'normal', name: '', pin: '' };
+
+// sessionStorage can throw (blocked site data, private mode): the form then simply works without a draft.
+function loadDraft(): CreateDraft | undefined {
+  try {
+    const raw = sessionStorage.getItem(CREATE_DRAFT_KEY);
+    const draft = raw ? (JSON.parse(raw) as CreateDraft) : undefined;
+    return draft && typeof draft.values === 'object' ? draft : undefined;
+  } catch {
+    return undefined;
+  }
+}
+function saveDraft(draft: CreateDraft): void {
+  try {
+    sessionStorage.setItem(CREATE_DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    // no storage: no draft
+  }
+}
+function dropDraft(): void {
+  try {
+    sessionStorage.removeItem(CREATE_DRAFT_KEY);
+  } catch {
+    // no storage: nothing kept
+  }
+}
+
+const listSizes = (s: Scenario | undefined) => (s ? `${s.timeline.length}/${s.npcs.length}/${s.legendaries.length}` : '');
 
 const endedOn = (iso: string) => new Date(iso).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
 
@@ -19,19 +56,34 @@ const endedOn = (iso: string) => new Date(iso).toLocaleDateString('th-TH', { day
  * creator's own login. A field says what is wrong once the creator leaves it; the create button stays off
  * until everything passes (C2). "ความทรงจำจากเกมก่อน" (GEN-083, off by default) lists the ended games found by
  * the creator's player code (Q-225); with none the toggle stays off and says why.
+ * ISK-019: every setting is fixed here, in one POST /api/games; the Human GM's game has a scenario step (skipped = the
+ * default). The half-filled form is kept in sessionStorage until the game is created or [ยกเลิก].
  */
 export function CreateGameForm({
   apiBaseUrl,
   onCreated,
   onBack,
+  draft: given,
 }: {
   apiBaseUrl: string;
   onCreated: (member: Member, token: string, game: GameView) => void;
   onBack: () => void;
+  /** The gallery's filled form; the app reads the tab's draft instead. */
+  draft?: CreateDraft;
 }) {
-  const [values, setValues] = useState<Base>({ createCode: '', gameName: '', mode: 'online', humanGm: false, npcDialogue: 'normal', name: '', pin: '' });
+  const [start] = useState(() => given ?? loadDraft());
+  const [values, setValues] = useState<Base>(() => ({ ...EMPTY, ...start?.values, ...(given ? {} : { createCode: '', pin: '' }) }));
+  const [scenario, setScenario] = useState<Scenario | undefined>(start?.scenario);
+  const [scenarioOpen, setScenarioOpen] = useState(false);
+  const [scenarioFields, setScenarioFields] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string>();
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (given) return;
+    const { createCode: _code, pin: _pin, ...kept } = values;
+    saveDraft({ values: kept, ...(scenario ? { scenario } : {}) });
+  }, [values, scenario]);
 
   const [memoryOn, setMemoryOn] = useState(false);
   const [playerCode, setPlayerCode] = useState('');
@@ -44,6 +96,8 @@ export function CreateGameForm({
 
   // Single is AI GM only, so the Human GM choice is dropped with it.
   const base: Base = { ...values, humanGm: values.mode === 'online' && values.humanGm };
+  // Q-028: only the Human GM's game has a scenario step; in an AI GM game the creator is a player, who never sees it.
+  const scenarioStep = base.humanGm;
   const errors = useFieldErrors<CreateGameField>(createGameFieldErrors(base));
   const noSources = !sources || sources.length === 0;
   const memoryMissing = memoryOn && picked.length === 0;
@@ -56,13 +110,62 @@ export function CreateGameForm({
     if (busy) return;
 
     const code = playerCode.trim();
-    const body: CreateGameInput = { ...base, ...(code === '' ? {} : { playerCode: code }), ...(noStyle ? { noStyle } : {}), ...(memoryOn ? { memory: { enabled: true, sourceGameIds: picked } } : {}) };
+    const body: CreateGameInput = {
+      ...base,
+      ...(code === '' ? {} : { playerCode: code }),
+      ...(noStyle ? { noStyle } : {}),
+      ...(memoryOn ? { memory: { enabled: true, sourceGameIds: picked } } : {}),
+      ...(scenarioStep && scenario ? { scenario } : {}),
+    };
     setBusy(true);
     const result = await postCreateGame(apiBaseUrl, body);
     setBusy(false);
-    if (result.ok) return onCreated(result.member, result.token, result.game);
+    if (result.ok) {
+      dropDraft();
+      return onCreated(result.member, result.token, result.game);
+    }
     errors.setServer(result.fields);
-    setFormError(result.form);
+    // Q-400: a memory refusal (409 not_allowed) is a message for the whole form.
+    setFormError(result.form ?? (result.scenarioFields ? createGameText.scenarioRefused : undefined));
+    if (result.scenarioFields) {
+      setScenarioFields(result.scenarioFields);
+      setScenarioOpen(true);
+    }
+  }
+
+  function editScenario(next: Scenario) {
+    // An added / removed row moves the paths the server's messages point at.
+    if (listSizes(next) !== listSizes(scenario ?? defaultScenario())) setScenarioFields({});
+    setScenario(next);
+  }
+
+  function useDefault() {
+    if (!window.confirm(createGameText.defaultConfirm)) return;
+    setScenario(undefined);
+    setScenarioFields({});
+  }
+
+  function cancel() {
+    dropDraft();
+    onBack();
+  }
+
+  if (scenarioOpen) {
+    return (
+      <div className="pregame">
+        <ScenarioEditor
+          value={scenario ?? defaultScenario()}
+          onChange={editScenario}
+          fields={scenarioFields}
+          error={Object.keys(scenarioFields).length > 0 ? createGameText.scenarioRefused : undefined}
+          actions={
+            <>
+              <Button onClick={() => setScenarioOpen(false)}>{createGameText.scenarioDone}</Button> <Button onClick={useDefault}>{createGameText.scenarioDefault}</Button>
+            </>
+          }
+        />
+      </div>
+    );
   }
 
   async function lookUpSources() {
@@ -90,8 +193,8 @@ export function CreateGameForm({
     <div className="pregame">
       <Panel title="สร้างเกมใหม่" className="pregame__panel">
         <form onSubmit={submit} noValidate>
-          <Button className="pregame__back" onClick={onBack}>
-            &lt; กลับ
+          <Button className="pregame__back" onClick={cancel}>
+            {createGameText.cancel}
           </Button>
           <h2 className="pregame__title">สร้างเกมใหม่</h2>
           <Field
@@ -131,6 +234,13 @@ export function CreateGameForm({
                 </p>
               )}
             </fieldset>
+          )}
+          {scenarioStep && (
+            <div className="lobby__row">
+              <span>Scenario: {scenario ? createGameText.scenarioEdited : createGameText.scenarioStandard}</span>
+              <Button onClick={() => setScenarioOpen(true)}>{createGameText.scenarioOpen}</Button>
+              <small>{createGameText.scenarioNote}</small>
+            </div>
           )}
           <NpcDialoguePicker value={values.npcDialogue ?? 'normal'} onChange={(npcDialogue) => setValues((v) => ({ ...v, npcDialogue }))} />
           <TonePicker value={values.tone} onChange={(tone) => setValues((v) => ({ ...v, tone }))} note={values.tone ? undefined : toneText.unset} />
