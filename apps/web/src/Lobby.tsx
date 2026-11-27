@@ -4,6 +4,8 @@ import { CharacterScreen } from './CharacterScreen.tsx';
 import { GameClosedModal, type GameClosure } from './GameClosed.tsx';
 import { GameSummaryPage } from './GameHistory.tsx';
 import { deleteGameCall, gameCall, type GameAction } from './game-api.ts';
+import { loadLateJoin } from './late-join.ts';
+import { LateJoinSetup } from './LateJoinSetup.tsx';
 import { NpcDialoguePicker } from './NpcDialoguePicker.tsx';
 import { npcDialogueText, toneText } from './ui/strings.ts';
 import { TonePicker } from './TonePicker.tsx';
@@ -118,6 +120,10 @@ export function Lobby({
   /** ISK-002: the play room's socket said the server owner closed the game. */
   const [closedEvent, setClosedEvent] = useState<GameClosure | null>(null);
   const [summaryOpen, setSummaryOpen] = useState(false);
+  /** ISK-016: the late joiner spawned on this page (the polled view may still say "no character" for a moment). */
+  const [spawned, setSpawned] = useState(false);
+  /** ISK-016: Play said "no character" in a started game (opened on a browser that has no setup mark). */
+  const [needSetup, setNeedSetup] = useState(false);
   /** Counts the owner / reload calls, so a poll answer that left before one of them is dropped. */
   const actions = useRef(0);
   // Q-387 A: outside the play room the close comes from GET /api/game (`closed`), inside it from the socket.
@@ -199,6 +205,24 @@ export function Lobby({
     return <GameClosedModal closed={closed} onSummary={() => setSummaryOpen(true)} onHome={() => onLeave?.()} />;
   }
 
+  // ISK-016: a player of a started game who has not spawned yet prepares first; no lobby, no Play until then.
+  const ownRow = game?.members.find((m) => m.id === game.you.memberId);
+  if (game && !spawned && game.status === 'started' && game.you.role === 'player' && (needSetup || loadLateJoin(token) !== null || ownRow?.hasCharacter === false)) {
+    return (
+      <LateJoinSetup
+        apiBaseUrl={apiBaseUrl}
+        token={token}
+        onSessionLost={onSessionLost}
+        onSpawned={() => {
+          setSpawned(true);
+          setNeedSetup(false);
+          enterRoom(game);
+          void run({ method: 'GET', path: '/api/game' });
+        }}
+      />
+    );
+  }
+
   if (characterOpen) {
     return (
       <CharacterScreen
@@ -243,7 +267,8 @@ export function Lobby({
           }}
           onNeedCharacter={() => {
             setRoomOpen(false);
-            setCharacterOpen(true);
+            if (game?.status === 'started') setNeedSetup(true);
+            else setCharacterOpen(true);
           }}
           onClosed={setClosedEvent}
         />

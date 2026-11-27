@@ -174,16 +174,19 @@ describe('GEN-056 play room (web)', () => {
     expect(screen.getByRole('status', { name: 'การเชื่อมต่อห้อง' }).textContent).toBe('เชื่อมต่อแล้ว');
   });
 
-  it('C2: without a character the lobby button opens character creation, and so does the server saying no_character', async () => {
+  // ISK-016: in a started game only a late joiner has no character (the start needs everyone's): they go
+  // straight to the setup, never through the lobby button.
+  it('C2: without a character the started game opens character creation, and so does the server saying no_character', async () => {
     loggedIn(gameView({ members: [{ id: me.id, name: 'นก', role: 'player', ready: false, hasCharacter: false }] }), {
       'GET /api/game/character': () => Response.json({ character: null }),
     });
     render(<App apiBaseUrl="" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'เข้าห้องเล่น' }));
     expect(await screen.findByLabelText('ชื่อจริง')).toBeTruthy();
     expect(FakeSocket.all).toEqual([]);
     cleanup();
+    localStorage.clear();
 
+    // a saved character on a browser that never prepared here: the lobby, then Play says no_character
     loggedIn(gameView(), {
       'GET /api/game/character': () => Response.json({ character: null }),
     });

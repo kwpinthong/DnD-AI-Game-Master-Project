@@ -16,11 +16,11 @@ type Values = Record<JoinField, string>;
  * GEN-082: the optional player code + style opt-out (`JoinStyleFields`) go in the same body; the server keeps
  * only a hash of the code.
  */
-export function JoinForm({ apiBaseUrl, onJoined }: { apiBaseUrl: string; onJoined: (member: Member, token: string) => void }) {
+export function JoinForm({ apiBaseUrl, onJoined, notice }: { apiBaseUrl: string; onJoined: (member: Member, token: string) => void; notice?: string }) {
   const [values, setValues] = useState<Values>({ inviteCode: '', name: '', pin: '' });
   const [playerCode, setPlayerCode] = useState('');
   const [noStyle, setNoStyle] = useState(false);
-  const [formError, setFormError] = useState<string>();
+  const [formError, setFormError] = useState<string | undefined>(notice);
   const [busy, setBusy] = useState(false);
   const errors = useFieldErrors<JoinField>(joinFieldErrors(values));
 

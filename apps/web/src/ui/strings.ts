@@ -544,3 +544,25 @@ export const toneText = {
   ownerOnly: 'เฉพาะเจ้าของเกมเปลี่ยนได้ก่อนเริ่มเกม',
   adminDefault: 'โทนเริ่มต้นของเกมใหม่',
 } as const;
+
+// ISK-016: joining a game that already started.
+export const lateJoinText = {
+  /** The join form's line per 409 code (ISK-015); any other code says `otherError`, 403 kicked keeps the server's. */
+  errors: {
+    game_full: 'ห้องเต็มแล้ว (6 คน)',
+    join_closed_day: 'เกมผ่านวันที่ 9 แล้ว เข้าร่วมไม่ได้',
+    single_mode: 'เกมนี้เล่นคนเดียว',
+    game_ended: 'เกมนี้จบแล้ว',
+  },
+  otherError: 'เข้าร่วมไม่ได้ ลองใหม่ภายหลัง',
+  banner: (day: number | null) => (day === null ? 'คุณกำลังเข้าร่วมเกมที่เริ่มไปแล้ว' : `คุณกำลังเข้าร่วมเกมที่เริ่มไปแล้ว (วันที่ ${day})`),
+  expired: 'หมดเวลาเตรียมตัว กรุณาเข้าร่วมใหม่',
+  spawn: {
+    title: 'จุดเกิด',
+    lead: 'พร้อมแล้ว กดเข้าเมืองเพื่อสุ่มจุดเกิดของคุณ แล้วอ่านเรื่องการข้ามโลกกับเรื่องที่เกิดขึ้นก่อนคุณมาถึง',
+    note: 'ส่ง action ได้ตั้งแต่เทิร์นที่เปิดถัดไป ไม่มีของชดเชยวันที่พลาดไป',
+    go: 'เข้าเมือง',
+    going: 'กำลังสุ่มจุดเกิด…',
+    back: 'กลับไปแก้ตัวละคร',
+  },
+} as const;
