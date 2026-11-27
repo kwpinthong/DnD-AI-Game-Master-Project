@@ -109,6 +109,8 @@ export type ResolutionEntry = (
       readonly text: string;
       /** Q-229 (F5): the roll of this player's own action, shown on this narration only. */
       readonly roll?: RollView;
+      /** ISK-013: the server's "found Hidden Evidence" text for the investigator (`RoomEntry.clue`). */
+      readonly clue?: true;
     }
   | {
       /**

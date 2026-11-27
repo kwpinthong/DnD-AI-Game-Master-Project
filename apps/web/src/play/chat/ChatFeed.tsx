@@ -1,7 +1,8 @@
 import { FALLBACK_NARRATION_LABEL, PHASES, type EntryVote, type RoomEntry, type RoomState, type VoteReason } from '@isekai/protocol';
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { hitChangeText } from '../../screen-models.ts';
-import { VoteButtons, playText } from '../../ui/index.ts';
+import investigateIcon from '../../assets/icons/action-investigate.svg';
+import { MaskIcon, VoteButtons, playText } from '../../ui/index.ts';
 import { FeedDivider, NarrationLine, NpcBubble, OwnBubble, PlayerBubble, ResultBadge, RollBadge, TypingBubble } from './Bubbles.tsx';
 import { changeBadges, dividerText, entryLook, shownVote } from './chat-model.ts';
 import { awaitingDialogue, npcSlots, revealBubbles, revealPhase, revealPlan, revealShare, splitBubbles, useReducedMotion, type Reveal, type RevealPhase } from './stream.ts';
@@ -190,6 +191,17 @@ function entryView(e: RoomEntry, look: ReturnType<typeof entryLook>, vote: (entr
           </NarrationLine>
           {e.roll && done && <RollBadge roll={e.roll} />}
         </>
+      );
+    case 'clue':
+      // ISK-013: found Hidden Evidence, the server's text for us alone (no votes).
+      return (
+        <div className="chat-clue">
+          <p className="chat-clue-title">
+            <MaskIcon src={investigateIcon} />
+            {t.chat.clue}
+          </p>
+          <p className="chat-clue__text">{e.text}</p>
+        </div>
       );
     case 'npc-dialogue':
       if (view.phase === 'typing') return <TypingBubble name={e.npc!.name} grade={e.npc!.grade} slot={view.slot} />;

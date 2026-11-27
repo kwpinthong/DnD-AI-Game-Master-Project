@@ -54,7 +54,7 @@ const lockState = (code: string) => ROOM_STATES.find((s) => s.you.lock?.code ===
  * The entries a player has at the start: everything but the hit (it arrives live) and the omen (Astral only).
  * An AI-written entry the fixtures give no vote state gets "not voted" (GEN-107: the server sends `myVote` for each of them).
  */
-const START_ENTRIES = ENTRIES.filter((e) => e.kind !== 'hit' && e.kind !== 'omen').map((e) => (isVotableEntry({ kind: e.kind, ...(e.fallback ? { fallback: true as const } : {}) }) && e.myVote === undefined ? { ...e, myVote: null } : e));
+const START_ENTRIES = ENTRIES.filter((e) => e.kind !== 'hit' && e.kind !== 'omen').map((e) => (isVotableEntry({ kind: e.kind, ...(e.fallback ? { fallback: true as const } : {}) }) && !e.clue && e.myVote === undefined ? { ...e, myVote: null } : e));
 /** GEN-107 C6: the Human GM never gets `myVote`, so no vote buttons. */
 const GM_ENTRIES = START_ENTRIES.map(({ myVote: _myVote, ...entry }) => entry);
 /** The pinned hit of the fixtures, sent by the `hit` op. */

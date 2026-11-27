@@ -301,6 +301,11 @@ export const RoomEntry = z.strictObject({
   /** `player` entries (GEN-129): who did `text`, as this viewer may know them (alias until the name is learned; the Human GM sees the name). */
   actor: z.strictObject({ name: z.string() }).optional(),
   /**
+   * ISK-013: a `narration` entry the server wrote for the one player whose INVESTIGATE found Hidden Evidence
+   * ("พบร่องรอยลับ…"); shown as a clue box. Present only when true; server text, so never votable.
+   */
+  clue: z.literal(true).optional(),
+  /**
    * GEN-107: this player's own vote on an AI-written entry (`isVotableEntry`): null = not voted. Absent on
    * every other entry and for the Human GM, so "has the key" = "show the buttons". Others' votes are never sent.
    */

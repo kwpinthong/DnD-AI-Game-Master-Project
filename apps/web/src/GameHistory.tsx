@@ -7,7 +7,7 @@ import { TurnChangesList } from './play/TurnChanges.tsx';
 import { Button } from './ui/Button.tsx';
 import { FeedbackButton } from './ui/FeedbackDialog.tsx';
 import { ErrorState, Skeleton } from './ui/parts.tsx';
-import { endText, gameClosedText } from './ui/strings.ts';
+import { endText, gameClosedText, playText } from './ui/strings.ts';
 
 /**
  * The game list (GEN-037 C3): every game this browser joined or created, newest first, and a read-only
@@ -100,8 +100,8 @@ function FullLog({ log }: { log: GameLogResponse }) {
       <ul aria-label="บันทึกของคุณ">
         {log.entries.length === 0 && <li>ยังไม่มี</li>}
         {log.entries.map((e) => (
-          <li key={e.seq}>
-            {at(e)} · {KIND_LABEL[e.kind]}
+          <li key={e.seq} {...(e.clue ? { className: 'history-clue' } : {})}>
+            {at(e)} · {e.clue ? playText.chat.clue : KIND_LABEL[e.kind]}
             {e.place ? ` · ${e.place.name}` : ''}
             {e.whisper ? ` · ${e.whisper.from} → ${e.whisper.to}` : ''}: {e.kind === 'changes' ? <TurnChangesList entry={e} /> : e.text}
           </li>
