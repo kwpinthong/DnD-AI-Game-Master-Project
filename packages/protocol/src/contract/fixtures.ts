@@ -598,6 +598,8 @@ export const CONTRACT_FIXTURES: Fixtures = {
   GameClosedEvent: [{ type: 'game_closed', reason: 'ทดสอบระบบ', hasSummary: true }, { type: 'game_closed', reason: null, hasSummary: false }],
   LobbyReadyEvent: [{ type: 'lobby_ready', memberId: 'm-bell', ready: true }, { type: 'lobby_ready', memberId: 'm-bell', ready: false }],
   LobbyStartBlockedEvent: [{ type: 'lobby_start_blocked', reason: 'ยังไม่ได้ตั้งค่า AI' }],
+  RematchReadyEvent: [{ type: 'rematch_ready', memberId: 'm-bell', ready: true }, { type: 'rematch_ready', memberId: 'm-bell', ready: false }],
+  RematchStartedEvent: [{ type: 'rematch_started', gameId: 'g-round-2' }],
   AdminGamesResponse: [{ games: [adminGameRow, { ...adminGameRow, id: 'g-lobby', name: 'ห้องรอ', phase: 'lobby', day: null, period: null, playerCount: 2, lastActionAt: null, aiUsd: 0 }] }, { games: [] }],
   AdminGameRow: [adminGameRow, { ...adminGameRow, phase: 'ended', endedReason: 'closed' }],
   AdminCloseGameRequest: [{ confirmName: 'เมืองก่อนอุกกาบาต', reason: 'ทดสอบระบบ' }, { confirmName: 'เมืองก่อนอุกกาบาต' }],

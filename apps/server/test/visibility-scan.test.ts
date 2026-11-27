@@ -43,6 +43,9 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'GET /api/appearance-options': { method: 'GET', path: '/api/appearance-options' },
     // ISK-017: the lobby's ready (the game here has started: the 409 is scanned).
     'POST /api/game/ready': { method: 'POST', path: '/api/game/ready', body: { ready: true } },
+    // ISK-023: the new round after the end (the game here is being played: the 409 is scanned) and its session.
+    'POST /api/game/rematch-ready': { method: 'POST', path: '/api/game/rematch-ready', body: { ready: true } },
+    'POST /api/game/rematch/session': { method: 'POST', path: '/api/game/rematch/session' },
     'POST /api/game/character': { method: 'POST', path: '/api/game/character', body: LIN },
     'PUT /api/game/character': { method: 'PUT', path: '/api/game/character', body: LIN },
     // GEN-048 loot step (after the character exists). The ids are not in the offer: the 400 is scanned too.

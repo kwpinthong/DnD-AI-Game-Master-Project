@@ -107,7 +107,7 @@ describe('games: create, members, ready + start (GEN-025, ISK-017)', { timeout: 
     expect(created.game).toMatchObject({ name: 'เมืองก่อนอุกกาบาต', mode: 'online', humanGm: true, status: 'lobby' });
     expect(created.game.you).toEqual({ memberId: created.member.id, role: 'gm' });
     expect(created.game.members).toEqual([
-      { id: created.member.id, name: 'ต้น', role: 'gm', ready: false, hasCharacter: false },
+      { id: created.member.id, name: 'ต้น', role: 'gm', ready: false, hasCharacter: false, rematchReady: false },
     ]);
     // The GM has no character and is not a player.
     expect(created.game.players).toEqual({ count: 0, min: 2, max: 6 });

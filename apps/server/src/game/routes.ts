@@ -14,6 +14,9 @@ import {
   type AppearanceOptionsResponse,
   type Scenario,
   type CreateGameResponse,
+  type JoinResponse,
+  type RematchReadyEvent,
+  type RematchStartedEvent,
 } from '@isekai/protocol';
 import type { KarmaTier, Rng } from '@isekai/rules';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -33,7 +36,7 @@ import { spawnLateJoiner } from './late-join.ts';
 import { chooseLoot, getLoot, LOOT_AI_FAILED, rollLoot, type LootOutcome } from './loot.ts';
 import { getOrigin, narrateOrigins } from './origin.ts';
 import { closureOf } from '../admin/games.ts';
-import { createGame, gameView, setReady, type MemberRow } from './service.ts';
+import { createGame, gameView, rematchSession, setReady, setRematchReady, type MemberRow } from './service.ts';
 
 export interface GameRouteOptions {
   /** scrypt hash of the create code (CREATE_CODE_HASH); without it nobody can create a game. */
@@ -51,6 +54,8 @@ export interface GameRouteOptions {
   rng: Rng | null;
   /** ISK-017: the lobby sockets that hear `lobby_ready` / `lobby_start_blocked`. */
   lobby: Lobby;
+  /** ISK-023: tells every open room socket of a game (the end page) about `rematch_ready` / `rematch_started`. */
+  notify: (gameId: string, message: RematchReadyEvent | RematchStartedEvent) => void;
 }
 
 const minutesUntil = (at: number, t: number) => Math.max(1, Math.ceil((at - t) / 60_000));
@@ -179,6 +184,37 @@ export function registerGameRoutes(app: FastifyInstance, db: Db, now: Clock, opt
     // is written on the player's next GET /api/game/origin (GEN-065 C8).
     if (outcome.started) await narrateOrigins(db, options.ai, options.assets, me.gameId, now);
     return reply.code(200).send(outcome.view);
+  });
+
+  // ISK-023: a new round in the same room once every player of the ended latest round pressed ready.
+  app.post('/api/game/rematch-ready', async (request, reply) => {
+    const me = caller(request, reply);
+    if (!me) return reply;
+    const parsed = GameReadyRequest.safeParse(request.body ?? {});
+    if (!parsed.success) return sendError(reply, 400, { code: 'invalid_input', message: 'ข้อมูลไม่ถูกต้อง', fields: { ready: 'ส่ง true หรือ false' } });
+    const outcome = setRematchReady(db, me, parsed.data.ready, now, () => options.ai.ready());
+    switch (outcome.kind) {
+      case 'not_latest_round':
+        return sendError(reply, 409, { code: 'not_latest_round', message: 'ห้องนี้มีรอบใหม่แล้ว ไปที่รอบล่าสุดของห้อง' });
+      case 'not_ended':
+        return sendError(reply, 409, { code: 'not_ended', message: 'เกมยังไม่จบ กดเล่นรอบใหม่ได้หลังจบเกม' });
+      case 'not_player':
+        return sendError(reply, 409, { code: 'not_allowed', message: 'เฉพาะผู้เล่นกดพร้อมเล่นรอบใหม่' });
+    }
+    options.notify(me.gameId, { type: 'rematch_ready', memberId: me.id, ready: parsed.data.ready });
+    if (outcome.kind === 'ai_not_ready') return sendError(reply, 503, { code: 'ai_not_ready', message: outcome.message });
+    if (outcome.newGameId !== null) options.notify(me.gameId, { type: 'rematch_started', gameId: outcome.newGameId });
+    return reply.code(200).send(outcome.view);
+  });
+
+  app.post('/api/game/rematch/session', async (request, reply) => {
+    const me = caller(request, reply);
+    if (!me) return reply;
+    const outcome = rematchSession(db, me, now);
+    if (outcome.kind === 'kicked') return sendError(reply, 403, { code: 'kicked', message: 'ชื่อนี้ถูกเชิญออกจากห้องนี้แล้ว เข้ารอบใหม่ไม่ได้' });
+    if (outcome.kind === 'member_not_found') return sendError(reply, 404, { code: 'member_not_found', message: 'ไม่พบชื่อของคุณในรอบล่าสุดของห้องนี้' });
+    const body: JoinResponse = { token: outcome.token, expiresAt: new Date(outcome.expiresAt).toISOString(), created: false, member: outcome.member };
+    return reply.code(200).send(body);
   });
 
   // --- Start scenario (GEN-065): the caller's own origin; the Human GM sees every player's. ---

@@ -6,7 +6,7 @@ import { memberRowForToken, type Clock } from '../auth/join.ts';
 import { bearerToken, noSession, sendError } from '../auth/routes.ts';
 import type { Db } from '../db/client.ts';
 import { game, gamePhase } from '../db/schema.ts';
-import { activeMembers } from '../game/service.ts';
+import { activeMembers, memberInRound } from '../game/service.ts';
 import { entryViewOf } from '../room/entry-view.ts';
 import { entriesFor } from '../room/store.ts';
 import { timelineFor } from '../timeline/routes.ts';
@@ -19,10 +19,14 @@ import { closureOf } from '../admin/games.ts';
  * play. It only reads: it never creates the engine state (`ensurePhaseState` would) or touches the room.
  */
 export function registerHistoryRoutes(app: FastifyInstance, db: Db, now: Clock, assets: GameAssets) {
-  app.get('/api/game/log', async (request, reply) => {
+  app.get<{ Querystring: { gameId?: unknown } }>('/api/game/log', async (request, reply) => {
     const token = bearerToken(request.headers.authorization);
-    const me = token ? memberRowForToken(db, token, now) : undefined;
-    if (!me) return sendError(reply, 401, noSession(request.headers.authorization));
+    const caller = token ? memberRowForToken(db, token, now) : undefined;
+    if (!caller) return sendError(reply, 401, noSession(request.headers.authorization));
+    // ISK-023: `?gameId=` reads another round of the caller's room, as the caller's member of that round.
+    const asked = request.query.gameId;
+    const me = typeof asked === 'string' && asked !== caller.gameId ? memberInRound(db, caller, asked) : caller;
+    if (!me) return sendError(reply, 404, { code: 'game_not_found', message: 'ไม่พบรอบนี้ในห้องของคุณ' });
 
     const row = db.select().from(game).where(eq(game.id, me.gameId)).get();
     if (!row) return sendError(reply, 401, noSession(request.headers.authorization));

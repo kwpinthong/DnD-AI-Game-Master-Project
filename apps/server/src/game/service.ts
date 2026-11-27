@@ -15,7 +15,9 @@ import { isUniqueViolation, openSession, type Clock } from '../auth/join.ts';
 import { hashPin } from '../auth/pin.ts';
 import { snapshotVotes } from '../admin/vote-review.ts';
 import type { Db } from '../db/client.ts';
-import { character, game, learningEntry, member, session } from '../db/schema.ts';
+import { character, game, learningEntry, member, memberStyle, session } from '../db/schema.ts';
+import { closureOf } from '../admin/games.ts';
+import { gameEnded } from '../rating/store.ts';
 import { canEditScenario } from '../scenario/editor.ts';
 import { membersWithLootChoice } from './loot.ts';
 import { copyTemplateForGame, getGameScenario } from '../scenario/store.ts';
@@ -98,12 +100,36 @@ function characterOwners(db: Db | Tx, members: MemberRow[]): Set<string> {
   return new Set(rows.map((r) => r.memberId));
 }
 
+/** ISK-023: the room's latest round, from any of its rounds (a round has at most one next round). */
+export function latestRound(db: Db | Tx, row: GameRow): GameRow {
+  for (;;) {
+    const next = db.select().from(game).where(eq(game.previousGameId, row.id)).get();
+    if (!next) return row;
+    row = next;
+  }
+}
+
+/** ISK-023: the same person in another round: name + PIN (the PIN hash is copied as is to the next round). */
+function sameMemberIn(db: Db | Tx, me: MemberRow, gameId: string): MemberRow | undefined {
+  return db.select().from(member).where(and(eq(member.gameId, gameId), eq(member.nameKey, me.nameKey), eq(member.pinHash, me.pinHash))).get();
+}
+
+/** ISK-023: `me` as a (not kicked) member of another round `gameId` of the same room; undefined = not theirs. */
+export function memberInRound(db: Db | Tx, me: MemberRow, gameId: string): MemberRow | undefined {
+  const target = db.select().from(game).where(eq(game.id, gameId)).get();
+  const mine = db.select().from(game).where(eq(game.id, me.gameId)).get();
+  if (!target || !mine || latestRound(db, target).id !== latestRound(db, mine).id) return undefined;
+  const found = sameMemberIn(db, me, gameId);
+  return found?.kickedAt === null ? found : undefined;
+}
+
 export function gameView(db: Db | Tx, gameId: string, viewer: MemberRow): GameView {
   const row = db.select().from(game).where(eq(game.id, gameId)).get();
   if (!row) throw new Error(`game ${gameId} is gone`);
   const members = activeMembers(db, gameId);
   const withCharacter = characterOwners(db, members);
   const limits = playerLimits(row.mode);
+  const latest = latestRound(db, row);
   return {
     id: row.id,
     name: row.name,
@@ -111,7 +137,8 @@ export function gameView(db: Db | Tx, gameId: string, viewer: MemberRow): GameVi
     humanGm: row.humanGm,
     npcDialogue: row.npcDialogue,
     tone: row.tone,
-    inviteCode: row.inviteCode,
+    // ISK-023: an old round shows the room's code (it moved to the latest round).
+    inviteCode: latest.inviteCode,
     status: row.startedAt === null ? 'lobby' : 'started',
     startedAt: row.startedAt === null ? null : new Date(row.startedAt).toISOString(),
     you: { memberId: viewer.id, role: viewer.role },
@@ -121,11 +148,13 @@ export function gameView(db: Db | Tx, gameId: string, viewer: MemberRow): GameVi
       role: m.role,
       ready: m.readyAt !== null,
       hasCharacter: withCharacter.has(m.id),
+      rematchReady: m.rematchReadyAt !== null,
     })),
     players: { count: members.filter((m) => m.role === 'player').length, ...limits },
     canEditScenario: canEditScenario(row, viewer),
     startBlockers: row.startedAt === null ? startBlockers(db, row, members, withCharacter) : [],
     memory: memoryView(db, row.learningSources),
+    round: { roundNo: row.roundNo, previousGameId: row.previousGameId, latestGameId: latest.id === row.id ? null : latest.id },
   };
 }
 
@@ -166,6 +195,7 @@ export async function createGame(db: Db, input: CreateGameRequest, now: Clock, d
       role: input.humanGm ? 'gm' : 'player',
       kickedAt: null,
       readyAt: null,
+      rematchReadyAt: null,
       createdAt: t,
     };
     withFreshInviteCode((inviteCode) =>
@@ -227,6 +257,73 @@ export function setReady(db: Db, me: MemberRow, ready: boolean, now: Clock, asse
     const start = tryStart(tx, row, now, assets, rng, aiReady);
     if (start.kind === 'ai_not_ready') return start;
     return { kind: 'ok', view: gameView(tx, row.id, me), started: start.kind === 'started' };
+  });
+}
+
+export type RematchOutcome =
+  | { kind: 'ok'; view: GameView; newGameId: string | null }
+  | { kind: 'not_ended' }
+  | { kind: 'not_latest_round' }
+  | { kind: 'not_player' }
+  | { kind: 'ai_not_ready'; message: string };
+
+/**
+ * ISK-023: a player's "เล่นรอบใหม่" in the room's latest round once it ended (finale, game over or closed), then the
+ * check in the same transaction (two last readies at once make one round). Every player not kicked ready (Online ≥ 2,
+ * Single 1) makes the next round; an AI GM that is not ready keeps the ready and makes none.
+ */
+export function setRematchReady(db: Db, me: MemberRow, ready: boolean, now: Clock, aiReady: () => AiReadiness): RematchOutcome {
+  return db.transaction((tx): RematchOutcome => {
+    const row = tx.select().from(game).where(eq(game.id, me.gameId)).get()!;
+    if (latestRound(tx, row).id !== row.id) return { kind: 'not_latest_round' };
+    if (!gameEnded(tx, row.id) && closureOf(tx, row.id) === null) return { kind: 'not_ended' };
+    if (me.role !== 'player') return { kind: 'not_player' };
+    tx.update(member).set({ rematchReadyAt: ready ? now() : null }).where(eq(member.id, me.id)).run();
+    const players = activeMembers(tx, row.id).filter((m) => m.role === 'player');
+    let newGameId: string | null = null;
+    if (players.length >= playerLimits(row.mode).min && players.every((m) => m.rematchReadyAt !== null)) {
+      const ai = aiReady();
+      if (!ai.ok) return { kind: 'ai_not_ready', message: ai.message };
+      newGameId = createNextRound(tx, row, now());
+    }
+    return { kind: 'ok', view: gameView(tx, row.id, me), newGameId };
+  });
+}
+
+/**
+ * ISK-023: the next round of the room: the same settings and scenario, the room code, and every member not kicked
+ * (name + PIN hash + role, player code link) with nothing of the old round (no character, loot, Karma). It waits at
+ * the lobby like a new game: characters first, then everyone's ready starts it at day 1 (`tryStart`).
+ */
+function createNextRound(tx: Tx, old: GameRow, t: number): string {
+  const id = randomUUID();
+  const ids = new Map<string, string>();
+  const members: MemberRow[] = activeMembers(tx, old.id).map((m) => {
+    ids.set(m.id, randomUUID());
+    return { ...m, id: ids.get(m.id)!, gameId: id, lockedUntil: null, readyAt: null, rematchReadyAt: null, createdAt: t };
+  });
+  // The old round keeps its id as its code: a typed code is normalised (no '-', upper case), so it never matches.
+  tx.update(game).set({ inviteCode: old.id }).where(eq(game.id, old.id)).run();
+  tx.insert(game)
+    .values({ ...old, id, ownerMemberId: ids.get(old.ownerMemberId ?? '') ?? null, startedAt: null, createdAt: t, previousGameId: old.id, roundNo: old.roundNo + 1 })
+    .run();
+  tx.insert(member).values(members).run();
+  copyTemplateForGame(tx, id, getGameScenario(tx, old.id) ?? undefined, t);
+  const styles = tx.select().from(memberStyle).where(inArray(memberStyle.memberId, [...ids.keys()])).all();
+  for (const s of styles) tx.insert(memberStyle).values({ ...s, memberId: ids.get(s.memberId)!, gameId: id, updatedAt: t }).run();
+  return id;
+}
+
+export type RematchSessionOutcome = { kind: 'ok'; member: Member; token: string; expiresAt: number } | { kind: 'kicked' } | { kind: 'member_not_found' };
+
+/** ISK-023: a session of `me`'s own member in the room's latest round (any round's token; again = another token, no new member). */
+export function rematchSession(db: Db, me: MemberRow, now: Clock): RematchSessionOutcome {
+  return db.transaction((tx): RematchSessionOutcome => {
+    const latest = latestRound(tx, tx.select().from(game).where(eq(game.id, me.gameId)).get()!);
+    const mine = sameMemberIn(tx, me, latest.id);
+    if (!mine) return { kind: 'member_not_found' };
+    if (mine.kickedAt !== null) return { kind: 'kicked' };
+    return { kind: 'ok', member: { id: mine.id, gameId: mine.gameId, name: mine.name }, ...openSession(tx, mine.id, now()) };
   });
 }
 

@@ -95,8 +95,10 @@ export function registerAdminGameRoutes(app: FastifyInstance, db: Db, now: Clock
   });
 }
 
-/** What a member may still change in a closed game: the end page's rating and votes, the owner's extract retry and delete. */
+/** What a member may still change in a closed game: the end page's rating and votes, the owner's extract retry and delete, the new round (ISK-023). */
 const OPEN_AFTER_CLOSE: ReadonlySet<string> = new Set([
+  'POST /api/game/rematch-ready',
+  'POST /api/game/rematch/session',
   'PUT /api/game/rating',
   'PUT /api/game/rating/votes/:sourceRef',
   'PUT /api/game/entries/:seq/vote',

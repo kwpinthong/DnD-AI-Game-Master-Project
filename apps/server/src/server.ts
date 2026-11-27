@@ -152,6 +152,8 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   const lobby = createLobby();
   registerGameRoutes(app, db, now, {
     lobby,
+    // ISK-023: the room is made below; a rematch only happens after it exists.
+    notify: (gameId, message) => room.notify(gameId, message),
     ai,
     // A getter: an admin edit of the Karma Tiers rows reaches the next request (GEN-147).
     get karmaTiers() {

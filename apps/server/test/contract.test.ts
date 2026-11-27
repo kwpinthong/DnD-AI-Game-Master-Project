@@ -269,6 +269,14 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     await rulingVote(tgm, likedRef!, 'up');
     await rulingVote(t.a.token, likedRef!, null);
     await hit(call, 'GET /api/game/rating');
+    // ISK-023: a new round of the closed table (A + B, C was kicked); the old tokens get the new round's.
+    await hit(call, 'POST /api/game/rematch-ready', { token: t.b.token, body: { ready: 'yes' } });
+    await hit(call, 'POST /api/game/rematch-ready', { token: tgm, body: { ready: true } });
+    await hit(call, 'POST /api/game/rematch-ready', { token: t.a.token, body: { ready: true } });
+    await hit(call, 'POST /api/game/rematch-ready', { token: t.b.token, body: { ready: true } });
+    await a.waitFor((m) => m.type === 'rematch_started');
+    await hit(call, 'POST /api/game/rematch/session', { token: t.a.token });
+    await hit(call, 'POST /api/game/rematch-ready', { token: t.a.token, body: { ready: true } });
 
     // --- Server owner ---
     const admin = await hit(call, 'POST /api/admin/session', { body: { code: ADMIN_CODE } });

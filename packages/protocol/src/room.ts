@@ -410,6 +410,14 @@ export type LobbyReadyEvent = z.infer<typeof LobbyReadyEvent>;
 export const LobbyStartBlockedEvent = z.strictObject({ type: z.literal('lobby_start_blocked'), reason: z.string() });
 export type LobbyStartBlockedEvent = z.infer<typeof LobbyStartBlockedEvent>;
 
+/** ISK-023: after the end, a player pressed "เล่นรอบใหม่" (or took it back); sent to every open socket of that round. */
+export const RematchReadyEvent = z.strictObject({ type: z.literal('rematch_ready'), memberId: z.string(), ready: z.boolean() });
+export type RematchReadyEvent = z.infer<typeof RematchReadyEvent>;
+
+/** ISK-023: everyone was ready, so the new round `gameId` exists; POST /api/game/rematch/session gives its token. */
+export const RematchStartedEvent = z.strictObject({ type: z.literal('rematch_started'), gameId: z.string() });
+export type RematchStartedEvent = z.infer<typeof RematchStartedEvent>;
+
 export const RoomServerMessage = z.discriminatedUnion('type', [
   RoomState,
   RoomEntryMessage,
@@ -427,5 +435,7 @@ export const RoomServerMessage = z.discriminatedUnion('type', [
   GameClosedEvent,
   LobbyReadyEvent,
   LobbyStartBlockedEvent,
+  RematchReadyEvent,
+  RematchStartedEvent,
 ]);
 export type RoomServerMessage = z.infer<typeof RoomServerMessage>;

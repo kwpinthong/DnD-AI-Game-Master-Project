@@ -49,6 +49,9 @@ export async function joinGame(db: Db, input: JoinRequest, now: Clock): Promise<
 
   const existing = findMember();
   if (existing) return joinExisting(db, existing, input.pin, now);
+  // ISK-023: a name kicked in an earlier round of the room stays blocked (as in its own round: kicked only after a right PIN).
+  const kicked = kickedEarlier(db, found.previousGameId, key);
+  if (kicked) return joinExisting(db, kicked, input.pin, now);
 
   if (found.startedAt !== null) {
     const late = lateJoinCheck(db, found);
@@ -66,6 +69,7 @@ export async function joinGame(db: Db, input: JoinRequest, now: Clock): Promise<
     role: 'player',
     kickedAt: null,
     readyAt: null,
+    rematchReadyAt: null,
     createdAt,
   };
   try {
@@ -96,6 +100,16 @@ export async function joinGame(db: Db, input: JoinRequest, now: Clock): Promise<
     return joinExisting(db, winner, input.pin, now);
   }
   return { kind: 'joined', created: true, member: toMember(row), ...openSession(db, row.id, createdAt) };
+}
+
+/** The kicked member with this name key in the rounds before (walking `previousGameId` back), if any. */
+function kickedEarlier(db: Db, previousGameId: string | null, key: string): MemberRow | undefined {
+  for (let id = previousGameId; id !== null; ) {
+    const row = db.select().from(member).where(and(eq(member.gameId, id), eq(member.nameKey, key))).get();
+    if (row?.kickedAt != null) return row;
+    id = db.select({ previous: game.previousGameId }).from(game).where(eq(game.id, id)).get()?.previous ?? null;
+  }
+  return undefined;
 }
 
 async function joinExisting(db: Db, row: MemberRow, pin: string, now: Clock): Promise<JoinOutcome> {

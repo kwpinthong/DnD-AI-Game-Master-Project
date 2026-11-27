@@ -33,7 +33,14 @@ export const game = sqliteTable('game', {
   /** Set once by the start; mode and members are locked from then on. */
   startedAt: integer('started_at'),
   createdAt: integer('created_at').notNull(),
-});
+  /**
+   * ISK-023: the round this one was played after in the same room (null = the room's first round, every old game).
+   * No FK: deleting an old round must not touch the newer one. Unique: a round has at most one next round.
+   */
+  previousGameId: text('previous_game_id'),
+  /** ISK-023: 1 for the room's first round (every old game), then previous + 1. */
+  roundNo: integer('round_no').notNull().default(1),
+}, (t) => [uniqueIndex('game_previous_game_id').on(t.previousGameId)]);
 
 /**
  * A player inside one game, identified by name + PIN. The same name in another game is another
@@ -58,6 +65,8 @@ export const member = sqliteTable(
     kickedAt: integer('kicked_at'),
     /** ISK-017: when the player pressed ready in the lobby; null = not ready (a newcomer, and everyone of an old game). */
     readyAt: integer('ready_at'),
+    /** ISK-023: when the player pressed "เล่นรอบใหม่" after the end; null = not (everyone of an old game). */
+    rematchReadyAt: integer('rematch_ready_at'),
     createdAt: integer('created_at').notNull(),
   },
   (t) => [uniqueIndex('member_game_name_key').on(t.gameId, t.nameKey)],

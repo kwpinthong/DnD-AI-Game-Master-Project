@@ -12,6 +12,8 @@ import {
   type RoomLockCode,
   type RoomMoveCode,
   type RoomOmenCode,
+  type RematchReadyEvent,
+  type RematchStartedEvent,
   type RoomServerMessage,
   type RoomState,
   type RoomWhisperCode,
@@ -162,6 +164,8 @@ export interface RoomService {
   publish(gameId: string, rows: readonly { row: RoomEntryRow; recipients: ReadonlySet<string> }[]): void;
   /** ISK-001: the server owner closed the game (already stored): drop what waits for it and tell every open socket. */
   closed(gameId: string, event: { reason: string | null; hasSummary: boolean }): void;
+  /** ISK-023: sends `message` to every open socket of the game (the end page hears the new round's readies). */
+  notify(gameId: string, message: RematchReadyEvent | RematchStartedEvent): void;
   /**
    * ISK-018: the server owner kicked `memberId` (already stored): their open sockets get `unauthorized` and close
    * (like an ended session); `turnClosed` = the kick closed the turn, so it is resolved now.
@@ -1037,6 +1041,10 @@ export function createRoomService(
       stuck.delete(gameId);
       for (const socket of rooms.get(gameId)?.keys() ?? []) send(socket, { type: 'game_closed', ...event });
       broadcastRoom(gameId);
+    },
+
+    notify(gameId, message) {
+      for (const socket of rooms.get(gameId)?.keys() ?? []) send(socket, message);
     },
 
     kicked(gameId, memberId, turnClosed) {

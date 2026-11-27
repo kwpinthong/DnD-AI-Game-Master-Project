@@ -99,6 +99,8 @@ export const GameMember = z.object({
   ready: z.boolean(),
   /** Players only: whether their character is created (GEN-047 creates characters). */
   hasCharacter: z.boolean(),
+  /** ISK-023: after the end, the player pressed "เล่นรอบใหม่" (POST /api/game/rematch-ready). The server always sends it; optional for older web fixtures. */
+  rematchReady: z.boolean().optional(),
 });
 export type GameMember = z.infer<typeof GameMember>;
 
@@ -130,6 +132,11 @@ export const GameView = z.object({
   memory: GameMemoryView.optional(),
   /** ISK-001: the server owner closed the game (null = not closed); the lobby polls this. Optional for older web fixtures. */
   closed: z.strictObject({ reason: z.string().nullable(), hasSummary: z.boolean() }).nullable().optional(),
+  /**
+   * ISK-023: the rounds of the room (same invite code). `latestGameId` = the room's latest round when it is not this
+   * one (null = this is the latest). The server always sends it; optional for older web fixtures.
+   */
+  round: z.strictObject({ roundNo: z.number().int(), previousGameId: z.string().nullable(), latestGameId: z.string().nullable() }).optional(),
 });
 export type GameView = z.infer<typeof GameView>;
 
