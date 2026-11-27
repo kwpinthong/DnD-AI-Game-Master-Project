@@ -157,6 +157,34 @@ export const adminGamesText = {
   cancel: 'ยกเลิก',
 } as const;
 
+// ISK-020: a game's players in the เกม tab, the kick and a new invite code.
+export const adminMembersText = {
+  title: (game: string) => `ผู้เล่นในเกม ${game}`,
+  loading: 'กำลังโหลดรายชื่อผู้เล่น…',
+  empty: 'เกมนี้ยังไม่มีผู้เล่น',
+  head: { name: 'ชื่อ', role: 'บทบาท', character: 'ตัวละคร', ready: 'พร้อม', status: 'สถานะ' },
+  role: { player: 'ผู้เล่น', gm: 'GM' },
+  character: { yes: 'มีแล้ว', no: 'ยังไม่มี' },
+  ready: { yes: 'พร้อม', no: 'ยังไม่พร้อม' },
+  status: { in: 'อยู่ในเกม', kicked: 'ถูกเตะแล้ว' },
+  kick: 'เตะ',
+  kickLabel: (name: string) => `เตะ ${name}`,
+  kickTitle: (name: string) => `เตะ ${name} ออกจากเกม?`,
+  kickText: (name: string) => `${name} จะหลุดออกจากเกมทันที และเข้าเกมนี้ใหม่ด้วยชื่อนี้ไม่ได้ ทำแล้วย้อนกลับไม่ได้`,
+  kickConfirm: 'ยืนยันเตะ',
+  newCode: 'ออกรหัสเชิญใหม่',
+  newCodeTitle: 'ออกรหัสเชิญใหม่?',
+  newCodeText: 'รหัสเชิญเดิมจะใช้ไม่ได้ทันที คนที่อยู่ในเกมแล้วไม่หลุด ส่งรหัสใหม่ให้คนที่จะเข้าเกมเอง',
+  newCodeConfirm: 'ยืนยันออกรหัสใหม่',
+  codeTitle: 'รหัสเชิญใหม่',
+  codeNote: 'รหัสนี้แสดงครั้งเดียว ปิดกล่องแล้วดูอีกไม่ได้',
+  copy: 'คัดลอก',
+  copied: 'คัดลอกแล้ว',
+  copyYourself: 'คัดลอกอัตโนมัติไม่ได้ รหัสถูกเลือกไว้แล้ว ให้คัดลอกเอง',
+  done: 'ปิด',
+  cancel: 'ยกเลิก',
+} as const;
+
 // ISK-002: what a player sees when the server owner closed the game.
 export const gameClosedText = {
   title: 'เกมถูกปิดโดยผู้ดูแล',

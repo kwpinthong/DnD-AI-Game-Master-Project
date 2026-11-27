@@ -206,6 +206,10 @@ const ADMIN_GAMES = {
     { ...ADMIN_ROW, id: 'g-closed', name: 'ทดลองระบบ', phase: 'ended', endedReason: 'closed', day: 2, period: 'SOLARION', aiUsd: 0.1 },
   ],
 };
+/** ISK-020: a GM, a player with a character, a kicked one and one ready (every state of the player panel). */
+const ADMIN_MEMBERS = {
+  members: [...F.AdminMembersResponse[0]!.members, { id: 'm-3', name: 'ลิน', role: 'player' as const, hasCharacter: true, ready: true, kickedAt: null }],
+};
 const CLOSED_LOG = F.GameLogResponse.find((l) => l.game.closedEarly)!;
 
 const ALL_SCREENS =CONTRACT_SCREENS.map((s) => s.id);
@@ -631,6 +635,54 @@ export const SCENARIOS: readonly MockScenario[] = [
     session: 'guest',
     screens: ['admin-games'],
     http: { 'GET /api/admin/games': ok(ADMIN_GAMES), 'POST /api/admin/games/:id/close': { pending: true } },
+    room: room(BASE_ROOM),
+  },
+  // ISK-020 C1-C6: a game's players, the kick and a new invite code (press a game's name)
+  {
+    id: 'admin-members',
+    title: 'ผู้เล่นในเกม',
+    note: 'กดชื่อเกม: GM / มีตัวละคร / พร้อม / ถูกเตะแล้ว; [เตะ] แล้วแถวเป็น ถูกเตะแล้ว; [ออกรหัสเชิญใหม่] แสดงรหัสครั้งเดียว; เกมที่จบแล้วไม่มีทั้งสองปุ่ม',
+    session: 'guest',
+    screens: ['admin-games'],
+    http: { 'GET /api/admin/games': ok(ADMIN_GAMES), 'GET /api/admin/games/:id/members': ok(ADMIN_MEMBERS) },
+    room: room(BASE_ROOM),
+  },
+  { id: 'admin-members-loading', title: 'ผู้เล่นกำลังโหลด', note: 'กดชื่อเกม: คำตอบไม่มาเลย', session: 'guest', screens: ['admin-games'], http: { 'GET /api/admin/games': ok(ADMIN_GAMES), 'GET /api/admin/games/:id/members': { pending: true } }, room: room(BASE_ROOM) },
+  { id: 'admin-members-error', title: 'ผู้เล่นโหลดไม่ได้', note: 'กดชื่อเกม: ติดต่อ server ไม่ได้ มีปุ่มลองใหม่', session: 'guest', screens: ['admin-games'], http: { 'GET /api/admin/games': ok(ADMIN_GAMES), 'GET /api/admin/games/:id/members': { fail: 'network' } }, room: room(BASE_ROOM) },
+  { id: 'admin-members-empty', title: 'เกมยังไม่มีผู้เล่น', note: 'กดชื่อเกม: รายชื่อว่าง', session: 'guest', screens: ['admin-games'], http: { 'GET /api/admin/games': ok(ADMIN_GAMES), 'GET /api/admin/games/:id/members': ok(F.AdminMembersResponse[1]) }, room: room(BASE_ROOM) },
+  {
+    id: 'admin-kick-error',
+    title: 'เตะไม่สำเร็จ',
+    note: 'กดชื่อเกม → [เตะ] → ยืนยัน: server ตอบ 409 already_kicked ข้อความอยู่ในกล่อง แถวไม่เปลี่ยน',
+    session: 'guest',
+    screens: ['admin-games'],
+    http: {
+      'GET /api/admin/games': ok(ADMIN_GAMES),
+      'GET /api/admin/games/:id/members': ok(ADMIN_MEMBERS),
+      'POST /api/admin/games/:id/members/:memberId/kick': { status: 409, body: { code: 'already_kicked', message: 'ผู้เล่นคนนี้ถูกเชิญออกไปแล้ว' } },
+    },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'admin-invite-error',
+    title: 'ออกรหัสใหม่ไม่สำเร็จ',
+    note: 'กดชื่อเกม → [ออกรหัสเชิญใหม่] → ยืนยัน: server ตอบ 409 already_ended ข้อความอยู่ในกล่อง',
+    session: 'guest',
+    screens: ['admin-games'],
+    http: {
+      'GET /api/admin/games': ok(ADMIN_GAMES),
+      'GET /api/admin/games/:id/members': ok(ADMIN_MEMBERS),
+      'POST /api/admin/games/:id/invite-code': { status: 409, body: { code: 'already_ended', message: 'เกมนี้จบหรือถูกปิดไปแล้ว' } },
+    },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'admin-members-unauthorized',
+    title: 'admin token หมดอายุ',
+    note: 'กดชื่อเกม: server ตอบ 401 กลับไปหน้าใส่รหัส admin',
+    session: 'guest',
+    screens: ['admin-games'],
+    http: { 'GET /api/admin/games': ok(ADMIN_GAMES), 'GET /api/admin/games/:id/members': { status: 401, body: { code: 'unauthorized', message: 'หน้านี้สำหรับเจ้าของ server เท่านั้น เข้าด้วย admin code ก่อน' } } },
     room: room(BASE_ROOM),
   },
   // ISK-002 C4-C7: the players' side of a close

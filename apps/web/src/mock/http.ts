@@ -77,6 +77,16 @@ function closeGameReply(scenario: MockScenario, request: MockRequest): MockReply
   return ok({ ...game, phase: 'ended', endedReason: 'closed' });
 }
 
+const KICK = 'POST /api/admin/games/:id/members/:memberId/kick';
+
+/** ISK-020: a kick answers with the scenario's members (or the default fixture) where that member is now kicked. */
+function kickReply(scenario: MockScenario, request: MockRequest): MockReply {
+  const shown = scenario.http['GET /api/admin/games/:id/members'];
+  const list = (shown && 'status' in shown && shown.status === 200 ? shown.body : CONTRACT_FIXTURES.AdminMembersResponse[0]) as (typeof CONTRACT_FIXTURES.AdminMembersResponse)[number];
+  const id = decodeURIComponent(request.path.split('/').at(-2)!);
+  return ok({ members: list.members.map((m) => (m.id === id ? { ...m, kickedAt: new Date().toISOString() } : m)) });
+}
+
 function invalidInput(issues: readonly { path: readonly PropertyKey[]; message: string }[]): MockReply {
   const fields: Record<string, string> = {};
   for (const issue of issues) {
@@ -104,6 +114,7 @@ export function mockHttp(scenario: MockScenario, request: MockRequest, elapsedMs
   if (reply) return reply;
   if (routeKey(route) === RULING_VOTE) return rulingVoteReply(scenario, request);
   if (routeKey(route) === CLOSE_GAME) return closeGameReply(scenario, request);
+  if (routeKey(route) === KICK) return kickReply(scenario, request);
   if (routeKey(route) === FEEDBACK_STATUS) return feedbackStatusReply(request);
   if (route.response === null) return { status: 204, body: null };
   return ok(CONTRACT_FIXTURES[route.response][0]);

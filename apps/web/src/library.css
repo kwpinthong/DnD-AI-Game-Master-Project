@@ -367,6 +367,46 @@
   color: var(--muted);
 }
 
+/* ISK-020: a game's players (an `.agames` table too) and the new invite code box. */
+.amembers {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.amembers__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.amembers__head h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.amembers__head .btn {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.invite-code {
+  min-height: 44px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-2);
+  font: inherit;
+  font-size: 1.5rem;
+  letter-spacing: 0.15em;
+  text-align: center;
+  background: var(--panel);
+  color: var(--text);
+  border: var(--line-w) solid var(--line-input);
+  border-radius: var(--radius-sm);
+}
+
 /* 390 px: each game is a card, its cells label themselves (no sideways scroll). */
 @media (max-width: 767px) {
   .agames thead {

@@ -2,6 +2,8 @@ import {
   type AdminCloseGameRequest,
   AdminGameRow,
   AdminGamesResponse,
+  AdminInviteCodeResponse,
+  AdminMembersResponse,
   AdminCorrectionResponse,
   AdminCorrectionsExportResponse,
   AdminDownvotesResponse,
@@ -206,6 +208,21 @@ export function fetchAdminGames(baseUrl: string, token: string) {
 /** ISK-001/002: closes a game early; answers the game's row after the close. */
 export function closeAdminGame(baseUrl: string, token: string, id: string, body: AdminCloseGameRequest) {
   return call(baseUrl, `/api/admin/games/${encodeURIComponent(id)}/close`, { method: 'POST', headers: { ...auth(token), 'content-type': 'application/json' }, body: JSON.stringify(body) }, AdminGameRow);
+}
+
+/** ISK-018/020: every member of a game, kicked ones too, join order. */
+export function fetchAdminMembers(baseUrl: string, token: string, gameId: string) {
+  return call(baseUrl, `/api/admin/games/${encodeURIComponent(gameId)}/members`, { headers: auth(token) }, AdminMembersResponse);
+}
+
+/** ISK-018/020: kicks a member; answers every member after the kick. */
+export function kickAdminMember(baseUrl: string, token: string, gameId: string, memberId: string) {
+  return call(baseUrl, `/api/admin/games/${encodeURIComponent(gameId)}/members/${encodeURIComponent(memberId)}/kick`, { method: 'POST', headers: auth(token) }, AdminMembersResponse);
+}
+
+/** ISK-018/020: a new invite code (the old one stops at once). Shown once; never logged or stored. */
+export function renewAdminInviteCode(baseUrl: string, token: string, gameId: string) {
+  return call(baseUrl, `/api/admin/games/${encodeURIComponent(gameId)}/invite-code`, { method: 'POST', headers: auth(token) }, AdminInviteCodeResponse);
 }
 
 /** ISK-010: the players' reports (latest 200, newest first) and their status. */

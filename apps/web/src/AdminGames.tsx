@@ -1,6 +1,7 @@
 import { CLOSE_REASON_MAX, type AdminGameRow } from '@isekai/protocol';
 import { useEffect, useId, useRef, useState } from 'react';
 import { closeAdminGame, fetchAdminGames } from './admin-api.ts';
+import { AdminMembers } from './AdminMembers.tsx';
 import { Button } from './ui/Button.tsx';
 import { EmptyState, ErrorState, Skeleton } from './ui/parts.tsx';
 import { adminGamesText as t } from './ui/strings.ts';
@@ -25,6 +26,7 @@ export function AdminGames({ apiBaseUrl, token, onForbidden }: { apiBaseUrl: str
   const [games, setGames] = useState<AdminGameRow[] | 'loading' | { error: string }>('loading');
   const [attempt, setAttempt] = useState(0);
   const [closing, setClosing] = useState<AdminGameRow | null>(null);
+  const [shown, setShown] = useState<string | null>(null);
   const onForbiddenRef = useRef(onForbidden);
   onForbiddenRef.current = onForbidden;
 
@@ -44,6 +46,7 @@ export function AdminGames({ apiBaseUrl, token, onForbidden }: { apiBaseUrl: str
   if (games === 'loading') return <Skeleton lines={4} label={t.loading} />;
   if (!Array.isArray(games)) return <ErrorState message={games.error} onRetry={() => setAttempt((n) => n + 1)} />;
   if (games.length === 0) return <EmptyState title={t.empty} />;
+  const shownGame = games.find((g) => g.id === shown);
 
   return (
     <>
@@ -64,7 +67,12 @@ export function AdminGames({ apiBaseUrl, token, onForbidden }: { apiBaseUrl: str
         <tbody>
           {games.map((g) => (
             <tr key={g.id}>
-              <th scope="row">{g.name}</th>
+              <th scope="row">
+                {/* ISK-020: the game's players open under the list; pressed again they close. */}
+                <Button aria-expanded={shown === g.id} onClick={() => setShown((id) => (id === g.id ? null : g.id))}>
+                  {g.name}
+                </Button>
+              </th>
               <td data-label={t.head.status}>{statusText(g)}</td>
               <td data-label={t.head.day}>{g.day === null ? '-' : t.day(g.day)}</td>
               <td data-label={t.head.players}>{g.playerCount}</td>
@@ -81,6 +89,7 @@ export function AdminGames({ apiBaseUrl, token, onForbidden }: { apiBaseUrl: str
           ))}
         </tbody>
       </table>
+      {shownGame && <AdminMembers key={shownGame.id} apiBaseUrl={apiBaseUrl} token={token} game={shownGame} onForbidden={onForbidden} />}
       {closing && (
         <CloseGameDialog
           apiBaseUrl={apiBaseUrl}

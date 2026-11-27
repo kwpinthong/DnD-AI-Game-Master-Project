@@ -184,7 +184,7 @@ export function AdminDashboard({ apiBaseUrl }: { apiBaseUrl: string }) {
   );
 }
 
-function AdminLogin({ apiBaseUrl, onSignedIn, notice }: { apiBaseUrl: string; onSignedIn: (token: string) => void; notice?: string }) {
+export function AdminLogin({ apiBaseUrl, onSignedIn, notice }: { apiBaseUrl: string; onSignedIn: (token: string) => void; notice?: string }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | undefined>(notice);
   const [busy, setBusy] = useState(false);

@@ -1,6 +1,6 @@
 import type { ScreenId } from '@isekai/protocol/contract';
 import { useState, type ReactNode } from 'react';
-import { AdminDashboard } from '../AdminDashboard.tsx';
+import { AdminDashboard, AdminLogin } from '../AdminDashboard.tsx';
 import { AdminGames } from '../AdminGames.tsx';
 import { GameClosedModal, type GameClosure } from '../GameClosed.tsx';
 import { App } from '../App.tsx';
@@ -67,6 +67,20 @@ const END: ScreenView = {
 };
 /** The mock admin routes answer any token; the real page gets one from the admin code (AdminDashboard). */
 const MOCK_ADMIN_TOKEN = 'mock-admin';
+
+/** ISK-020 C6: a 401 goes to the admin code page, as AdminDashboard does. */
+function AdminGamesFrame({ baseUrl }: { baseUrl: string }) {
+  const [signedOut, setSignedOut] = useState<string | null>(null);
+  return (
+    <div className="preview gallery-inline">
+      {signedOut === null ? (
+        <AdminGames apiBaseUrl={baseUrl} token={MOCK_ADMIN_TOKEN} onForbidden={setSignedOut} />
+      ) : (
+        <AdminLogin apiBaseUrl={baseUrl} notice={signedOut} onSignedIn={() => setSignedOut(null)} />
+      )}
+    </div>
+  );
+}
 
 export const SCREEN_VIEWS: Record<ScreenId, ScreenView> = {
   home: { page: 'App', socket: false, render: ({ baseUrl }) => <App apiBaseUrl={baseUrl} /> },
@@ -165,15 +179,7 @@ export const SCREEN_VIEWS: Record<ScreenId, ScreenView> = {
     ),
   },
   // ISK-002: the close dialog stays inside the frame (`gallery-inline`).
-  'admin-games': {
-    page: 'AdminGames',
-    socket: false,
-    render: ({ baseUrl }) => (
-      <div className="preview gallery-inline">
-        <AdminGames apiBaseUrl={baseUrl} token={MOCK_ADMIN_TOKEN} onForbidden={noop} />
-      </div>
-    ),
-  },
+  'admin-games': { page: 'AdminGames', socket: false, render: ({ baseUrl }) => <AdminGamesFrame baseUrl={baseUrl} /> },
   // ISK-011
   feedback: { page: 'FeedbackDialog', socket: false, render: ({ baseUrl, token }) => <FeedbackFrame apiBaseUrl={baseUrl} token={token} /> },
   'admin-feedback': {
