@@ -1,6 +1,7 @@
 import type { CharacterView, GameView, LootOption, LootView } from '@isekai/protocol';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CONTRACT_FIXTURES } from '@isekai/protocol/contract';
 import { App } from '../src/App.tsx';
 import { LootStep } from '../src/LootStep.tsx';
 import { TOKEN_KEY } from '../src/session.ts';
@@ -48,8 +49,9 @@ const saved: CharacterView = {
   name: 'ลิน',
   appearance: 'หญิงผ้าคลุมเทา',
   personality: 'ช่างสังเกต กลัวความมืด',
-  avatarId: null,
-  appearanceTraits: null,
+  // ISK-007: the server requires the looks on every save, so the editable character carries them
+  avatarId: 'avatar-03',
+  appearanceTraits: { hairColor: 'black', hairStyle: 'ponytail', eyes: 'brown', build: 'tall', outfit: 'leather', feature: 'scar' },
   hp: { current: 100, max: 100 },
   stamina: { current: 30, max: 30 },
   coins: 0,
@@ -107,6 +109,7 @@ function loggedIn(routes: Record<string, Handler>) {
     'GET /api/me': () => Response.json({ member: me }),
     'GET /api/game': () => Response.json(game),
     'GET /api/game/character': () => Response.json({ character: saved }),
+    'GET /api/appearance-options': () => Response.json(CONTRACT_FIXTURES.AppearanceOptionsResponse[1]),
     ...routes,
   });
 }

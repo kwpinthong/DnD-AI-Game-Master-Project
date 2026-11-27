@@ -67,6 +67,17 @@
   border-color: transparent;
 }
 
+/* ISK-007: the preset picture fills the circle under the ring (the letter stays when there is none) */
+.chat-avatar__face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 .chat-avatar__ring {
   position: absolute;
   left: 50%;

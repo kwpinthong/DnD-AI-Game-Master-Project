@@ -31,10 +31,11 @@ function npcOf(db: DbOrTx, npc: NonNullable<EntryMeta['npc']>, viewerId: string,
 }
 
 /** GEN-129: the actor of a `player` entry as `viewer` may know them: the real name for the Human GM and for a person they know (GEN-117), else the Social Title. */
-function actorOf(db: DbOrTx, memberId: string, viewer: { id: string; role: string }): { actor: { name: string } } {
+function actorOf(db: DbOrTx, memberId: string, viewer: { id: string; role: string }): { actor: { name: string; avatarId: string | null } } {
   const c = db.select().from(character).where(eq(character.memberId, memberId)).get();
-  if (!c) return { actor: { name: '' } };
-  return { actor: { name: viewer.role === 'gm' || namesVisibleTo(db, viewer.id).has(memberId) ? c.name : titleOf(c) } };
+  if (!c) return { actor: { name: '', avatarId: null } };
+  // ISK-007: the avatar is public (like OtherCharacterView.avatarId), the name is not.
+  return { actor: { name: viewer.role === 'gm' || namesVisibleTo(db, viewer.id).has(memberId) ? c.name : titleOf(c), avatarId: c.avatarId } };
 }
 
 /**

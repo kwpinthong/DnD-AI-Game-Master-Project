@@ -1,5 +1,9 @@
 import {
+  APPEARANCE_CATEGORIES,
   ApiError,
+  AppearanceOptionsResponse,
+  type AppearanceCategory,
+  type AppearanceLabels,
   CharacterResponse,
   CreateGameResponse,
   GameView,
@@ -139,7 +143,17 @@ export type CharacterResult =
   | { kind: 'ok'; character: CharacterView | null }
   | { kind: 'session_lost' }
   | { kind: 'invalid'; fields: Partial<Record<CharacterField, string>> }
+  /** ISK-006's 400s on the avatar / a chip category / the free text, for the part of the form they name. */
+  | { kind: 'looks'; field: LooksField; message: string }
   | { kind: 'error'; message: string };
+export type LooksField = 'avatar' | AppearanceCategory | 'extra';
+
+/** GET /api/appearance-options (ISK-006, no login): the chips offered per category, or a Thai error. */
+export async function appearanceOptionsCall(baseUrl: string): Promise<{ kind: 'ok'; labels: AppearanceLabels } | { kind: 'error'; message: string }> {
+  const answer = await send(apiUrl(baseUrl, '/api/appearance-options'), {});
+  const parsed = answer?.res.ok ? AppearanceOptionsResponse.safeParse(answer.json) : null;
+  return parsed?.success ? { kind: 'ok', labels: parsed.data.categories } : { kind: 'error', message: UNREACHABLE };
+}
 
 /** A loot call's result (GEN-048): the step's state, or a Thai error (first field error when refused). */
 export type LootResult = { kind: 'ok'; loot: LootView } | { kind: 'session_lost' } | { kind: 'error'; message: string };
@@ -270,5 +284,8 @@ export async function characterCall(
   const error = ApiError.safeParse(answer.json);
   if (!error.success) return { kind: 'error', message: UNREACHABLE };
   if (error.data.code === 'invalid_input') return { kind: 'invalid', fields: error.data.fields };
+  if (error.data.code === 'invalid_avatar') return { kind: 'looks', field: 'avatar', message: error.data.message };
+  if (error.data.code === 'invalid_trait' && (APPEARANCE_CATEGORIES as readonly string[]).includes(error.data.field)) return { kind: 'looks', field: error.data.field as AppearanceCategory, message: error.data.message };
+  if (error.data.code === 'extra_too_long' || error.data.code === 'extra_forbidden') return { kind: 'looks', field: 'extra', message: error.data.message };
   return { kind: 'error', message: error.data.message };
 }

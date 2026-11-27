@@ -10,7 +10,9 @@ export const APPEARANCE_CATEGORIES = ['hairColor', 'hairStyle', 'eyes', 'build',
 export type AppearanceCategory = (typeof APPEARANCE_CATEGORIES)[number];
 export const APPEARANCE_EXTRA_MAX_LENGTH = 80;
 
-/** The preset avatars (packages/protocol/src/avatar-presets.json). */
+/** The preset avatars (packages/protocol/src/avatar-presets.json): `alt` for the picture, the default chip per category. */
+export type AvatarPreset = { id: string; alt: string } & Record<AppearanceCategory, string>;
+export const AVATAR_PRESETS: readonly AvatarPreset[] = presets;
 export const AVATAR_IDS: readonly string[] = presets.map((p) => p.id);
 
 /** The chips a character was made with (ids; `extra` already normalised). */

@@ -1,7 +1,7 @@
 import type { NpcLineView, RollView } from '@isekai/protocol';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { playText } from '../../ui/strings.ts';
-import { RING_ART, ringFor } from '../ring-art.ts';
+import { avatarArt, RING_ART, ringFor } from '../ring-art.ts';
 import type { BadgeTone } from './chat-model.ts';
 import { rollBadge } from './chat-model.ts';
 import { splitBubbles } from './stream.ts';
@@ -14,21 +14,24 @@ import { splitBubbles } from './stream.ts';
 export type Grade = NonNullable<NpcLineView['grade']>;
 
 /**
- * A round avatar with the first letter and the painted ring of its kind (GEN-132): the NPC's grade when the payload gave
- * it, our own character = player, anyone else (another player, a grade we are not told) = the neutral B ring.
+ * A round avatar with the painted ring of its kind (GEN-132): the NPC's grade when the payload gave it, our own character =
+ * player, anyone else (another player, a grade we are not told) = the neutral B ring. Inside: the preset picture of
+ * `avatarId` (ISK-007), or the first letter when there is none (a character made before ISK-006) or it does not load.
  */
-export function Avatar({ name, grade, size = 'md', own = false, slot }: { name: string; grade?: Grade | undefined; size?: 'md' | 'lg'; own?: boolean; slot?: number | undefined }) {
+export function Avatar({ name, grade, size = 'md', own = false, slot, avatarId }: { name: string; grade?: Grade | undefined; size?: 'md' | 'lg'; own?: boolean; slot?: number | undefined; avatarId?: string | null | undefined }) {
   const ring = ringFor({ own, grade });
+  const [broken, setBroken] = useState<string>();
+  const art = broken === avatarId ? null : avatarArt(avatarId);
   return (
     <span className={`chat-avatar chat-avatar--${size} chat-avatar--${grade ? `g-${grade.toLowerCase()}` : 'plain'}${slot ? ` chat-avatar--npc-${slot}` : ''}`} data-ring={ring} aria-hidden="true">
-      {[...name][0] ?? '?'}
+      {art ? <img className="chat-avatar__face" src={art.src} srcSet={art.srcSet} alt="" onError={() => setBroken(avatarId ?? undefined)} /> : ([...name][0] ?? '?')}
       <img className="chat-avatar__ring" src={RING_ART[ring]} alt="" />
     </span>
   );
 }
 
 /** Our own action: amber box on the right with "คุณ" above; "ลับ" is a word badge, not only a colour. */
-export function OwnBubble({ text, secret = false }: { text: string; secret?: boolean }) {
+export function OwnBubble({ text, secret = false, self }: { text: string; secret?: boolean; /** ISK-007: our avatar beside the box (left out = none). */ self?: { name: string; avatarId: string | null } | undefined }) {
   return (
     <div className="chat-row chat-row--own">
       <div className="chat-col chat-col--own">
@@ -38,6 +41,7 @@ export function OwnBubble({ text, secret = false }: { text: string; secret?: boo
         </span>
         <p className="chat-box chat-box--own">{text}</p>
       </div>
+      {self && <Avatar name={self.name} avatarId={self.avatarId} own />}
     </div>
   );
 }
@@ -104,10 +108,10 @@ export function TypingBubble({ name, grade, slot }: { name?: string | undefined;
 }
 
 /** What another player did: avatar + their alias (never the name, GEN-117) + box, on the left. */
-export function PlayerBubble({ alias, text }: { alias: string; text: string }) {
+export function PlayerBubble({ alias, text, avatarId }: { alias: string; text: string; avatarId?: string | null | undefined }) {
   return (
     <div className="chat-row chat-row--left">
-      <Avatar name={alias} />
+      <Avatar name={alias} avatarId={avatarId} />
       <div className="chat-col">
         <span className="chat-who chat-who--player">{alias}</span>
         <p className="chat-box chat-box--player">{text}</p>

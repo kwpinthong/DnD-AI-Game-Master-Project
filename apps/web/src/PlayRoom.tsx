@@ -266,7 +266,7 @@ export function PlayRoom({
         const feed = (
           <>
             <HitPin pinned={pinned} onAcknowledge={acknowledge} />
-            <ChatFeed entries={entries} day={room.day} placeId={you.place?.id ?? null} placeName={you.place?.name} astral={Boolean(you.astral)} acknowledged={acked} ownAction={you.action} voting={voting} live={live.current} />
+            <ChatFeed entries={entries} day={room.day} placeId={you.place?.id ?? null} placeName={you.place?.name} astral={Boolean(you.astral)} acknowledged={acked} ownAction={you.action} self={data.character ?? undefined} voting={voting} live={live.current} />
             {travelOpen && (
               <TravelSheet
                 apiBaseUrl={apiBaseUrl}

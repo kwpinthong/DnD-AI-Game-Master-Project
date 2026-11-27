@@ -111,8 +111,10 @@ const joinedGame: GameView = {
   players: { ...LOBBY_GAME.players, count: LOBBY_GAME.players.count + 1 },
   startBlockers: ['ยังไม่สร้างตัวละคร: ต้น, ปลา'],
 };
-/** The fixture character before the start: still editable. */
-const DRAFT_CHARACTER = { character: { ...F.CharacterResponse[0]!.character!, editable: true } };
+/** The fixture character before the start (with its ISK-006 avatar + chips): still editable. */
+const DRAFT_CHARACTER = { character: { ...F.CharacterResponse[2]!.character!, editable: true } };
+/** ISK-007: the server refusing the looks, each at the part it names. */
+const refused = (body: unknown): MockReply => ({ status: 400, body });
 const LOOT_OFFER = F.LootResponse[0]!;
 const LOOT_EMPTY = { loot: { ...LOOT_OFFER.loot, offer: null } };
 const LOOT_KEPT = { loot: { ...F.LootResponse[1]!.loot, canReroll: true } };
@@ -218,7 +220,7 @@ export const SCENARIOS: readonly MockScenario[] = [
     note: 'เจ้าของเกม ยังมีคนไม่สร้างตัวละคร',
     session: 'player',
     screens: ['home', 'lobby'],
-    http: { 'GET /api/game': ok(LOBBY_GAME) },
+    http: { 'GET /api/game': ok(LOBBY_GAME), 'GET /api/game/character': ok(DRAFT_CHARACTER) },
     room: room(BASE_ROOM),
   },
   {
@@ -234,6 +236,60 @@ export const SCENARIOS: readonly MockScenario[] = [
       ...DRAFT_SAVES,
     },
     room: room(BASE_ROOM),
+  },
+  // ISK-007: the looks part of the identity step
+  {
+    id: 'looks-loading',
+    title: 'ตัวเลือกหน้าตากำลังโหลด',
+    note: 'รูป avatar 12 แบบขึ้นแล้ว ชิปยังไม่มา',
+    session: 'player',
+    screens: ['character'],
+    http: { 'GET /api/game': ok(noCharacterGame), 'GET /api/game/character': ok(F.CharacterResponse[1]), 'GET /api/appearance-options': { pending: true } },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'looks-error',
+    title: 'ตัวเลือกหน้าตาโหลดไม่ได้',
+    note: 'ติดต่อ server ไม่ได้: ข้อความ + ลองใหม่',
+    session: 'player',
+    screens: ['character'],
+    http: { 'GET /api/game': ok(noCharacterGame), 'GET /api/game/character': ok(F.CharacterResponse[1]), 'GET /api/appearance-options': { fail: 'network' } },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'looks-extra-forbidden',
+    title: 'รายละเอียดเพิ่มเติมมีชื่อ NPC',
+    note: 'กดถัดไปแล้ว server ตอบ 400 extra_forbidden: ข้อความใต้ช่องรายละเอียดเพิ่มเติม',
+    session: 'player',
+    screens: ['character'],
+    http: {
+      'GET /api/game': ok(noCharacterGame),
+      'GET /api/game/character': ok(F.CharacterResponse[1]),
+      'POST /api/game/character': refused({ code: 'extra_forbidden', message: 'รายละเอียดเพิ่มเติมใส่ชื่อ NPC หรือ {{ }} ไม่ได้' }),
+    },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'looks-invalid-trait',
+    title: 'ชิปที่เลือกถูกซ่อนไปแล้ว',
+    note: 'กดถัดไปแล้ว server ตอบ 400 invalid_trait (build): ข้อความที่หมวดรูปร่าง',
+    session: 'player',
+    screens: ['character'],
+    http: {
+      'GET /api/game': ok(noCharacterGame),
+      'GET /api/game/character': ok(F.CharacterResponse[1]),
+      'POST /api/game/character': refused({ code: 'invalid_trait', message: 'กรุณาเลือกลักษณะภายนอกให้ครบทุกหมวด', field: 'build' }),
+    },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'avatars',
+    title: 'รูป avatar ในห้องเล่น',
+    note: 'ตัวเรามี avatar-03 (HUD + กล่องของเรา) ผู้เล่นอื่นที่ไม่รู้จักมี avatar-05; ตัวละครเก่าไม่มี avatar = ตัวอักษรแรก (ดู "ปกติ")',
+    session: 'player',
+    screens: ['play-top-bar', 'play-feed'],
+    http: surroundingsWith({ avatarId: 'avatar-03', appearance: F.CharacterResponse[2]!.character!.appearance }),
+    room: room(waitingRoom),
   },
   {
     id: 'lobby-join',
