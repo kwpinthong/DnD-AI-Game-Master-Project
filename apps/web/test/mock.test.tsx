@@ -274,10 +274,12 @@ describe('C4 every mock payload passes the GEN-099 schema', () => {
   it.each(SCENARIOS.map((s) => [s.id]))('%s: every HTTP answer of the contract', async (id) => {
     const scenario = scenarioById(id);
     const failures: string[] = [];
-    for (const item of CONTRACT.filter((c): c is HttpItem => c.kind === 'http')) {
-      const reply = mockHttp(scenario, { method: item.method, path: concrete(item), body: sampleRequest(item) });
+    // ISK-022: and every answer the scenario gives one token only
+    const tokens = [undefined, ...Object.keys(scenario.byToken ?? {})];
+    for (const token of tokens) for (const item of CONTRACT.filter((c): c is HttpItem => c.kind === 'http')) {
+      const reply = mockHttp(scenario, { method: item.method, path: concrete(item), body: sampleRequest(item), ...(token ? { token } : {}) });
       if (!('status' in reply)) continue; // network failure / still loading: no payload
-      const where = `${item.method} ${item.path}`;
+      const where = `${token ?? ''} ${item.method} ${item.path}`;
       if (reply.status === 204) {
         if (item.response !== null) failures.push(`${where}: 204 but the contract has a body`);
         continue;

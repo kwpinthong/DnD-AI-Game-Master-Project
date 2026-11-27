@@ -27,31 +27,70 @@ export function saveToken(token: string | null) {
  */
 export const KNOWN_TOKENS_KEY = 'isekai.knownSessions';
 
-/** Newest first; a broken or missing value reads as none. */
-export function loadKnownTokens(): string[] {
+/** ISK-022: one row of เกมของฉัน. Never the PIN. A pre-ISK-022 entry (a bare token string) reads as `{ token }`. */
+export interface KnownSession {
+  token: string;
+  gameId?: string;
+  gameName?: string;
+  /** Normalised (no dash), as GameView sends it. */
+  inviteCode?: string;
+  playerName?: string;
+  /** ISO time of the last join / entry. */
+  lastSeen?: string;
+}
+
+const FIELDS = ['gameId', 'gameName', 'inviteCode', 'playerName', 'lastSeen'] as const;
+
+/** One stored entry as a row: only string fields are kept (whatever else is there, a PIN never is). */
+function sessionOf(entry: unknown): KnownSession | null {
+  if (typeof entry === 'string') return entry ? { token: entry } : null;
+  if (typeof entry !== 'object' || entry === null) return null;
+  const e = entry as Record<string, unknown>;
+  if (typeof e.token !== 'string' || !e.token) return null;
+  const row: KnownSession = { token: e.token };
+  for (const f of FIELDS) if (typeof e[f] === 'string') row[f] = e[f];
+  return row;
+}
+
+/** Newest first; a broken value reads as none; null = this browser's storage cannot be used. */
+export function loadKnownSessions(): KnownSession[] | null {
+  let raw: string | null;
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(KNOWN_TOKENS_KEY) ?? '[]');
-    return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === 'string' && t.length > 0) : [];
+    raw = localStorage.getItem(KNOWN_TOKENS_KEY);
+  } catch {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw ?? '[]');
+    return Array.isArray(parsed) ? parsed.map(sessionOf).filter((s) => s !== null) : [];
   } catch {
     return [];
   }
 }
 
-function saveKnownTokens(tokens: string[]) {
+function saveKnownSessions(rows: KnownSession[]) {
   try {
-    localStorage.setItem(KNOWN_TOKENS_KEY, JSON.stringify(tokens));
+    localStorage.setItem(KNOWN_TOKENS_KEY, JSON.stringify(rows));
   } catch {
     // ignore: see loadToken
   }
 }
 
-export function rememberToken(token: string): void {
-  saveKnownTokens([token, ...loadKnownTokens().filter((t) => t !== token)]);
+/** A join or an entry: the row of the same token or game is replaced (fields merged, new token) and moved to the top. */
+export function rememberSession(session: KnownSession): void {
+  const rows = loadKnownSessions() ?? [];
+  const same = (r: KnownSession) => r.token === session.token || (session.gameId !== undefined && r.gameId === session.gameId);
+  // oldest first, so a newer row's fields win over an older one's
+  const merged = Object.assign({}, ...rows.filter(same).reverse(), session, { lastSeen: new Date().toISOString() }) as KnownSession;
+  saveKnownSessions([merged, ...rows.filter((r) => !same(r))]);
 }
 
-export function forgetToken(token: string): void {
-  saveKnownTokens(loadKnownTokens().filter((t) => t !== token));
+export function forgetSession(token: string): void {
+  saveKnownSessions((loadKnownSessions() ?? []).filter((r) => r.token !== token));
 }
+
+/** The tokens of the rows, newest first (the GEN-037 game list). */
+export const loadKnownTokens = (): string[] => (loadKnownSessions() ?? []).map((r) => r.token);
 
 /** A server that accepts the connection but never answers counts as unreachable after this long. */
 export const REQUEST_TIMEOUT_MS = 8_000;

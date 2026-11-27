@@ -81,7 +81,9 @@ function mockFetch(realFetch: typeof fetch): typeof fetch {
     // GEN-122: a vote is kept by the mock room (the contract's default answer would always say the same).
     const voteAt = /^\/api\/game\/entries\/(\d+)\/vote$/.exec(new URL(url).pathname);
     const voteBody = method === 'PUT' && voteAt ? ResponseVoteRequest.safeParse(body) : undefined;
-    const reply = voteBody?.success ? serverFor(target).vote(Number(voteAt![1]), voteBody.data.vote) : mockHttp(scenarioById(target.scenario), { method, path: new URL(url).pathname, body }, elapsedMs);
+    const token = /^Bearer (\S+)$/.exec(new Headers(init?.headers).get('authorization') ?? '')?.[1];
+    const request = { method, path: new URL(url).pathname, body, ...(token ? { token } : {}) };
+    const reply = voteBody?.success ? serverFor(target).vote(Number(voteAt![1]), voteBody.data.vote) : mockHttp(scenarioById(target.scenario), request, elapsedMs);
     // `pending` = loading on purpose: it never settles, not even on abort, so the page stays in its loading state.
     if ('pending' in reply) return new Promise<Response>(() => {});
     return new Promise<Response>((resolve, reject) => {

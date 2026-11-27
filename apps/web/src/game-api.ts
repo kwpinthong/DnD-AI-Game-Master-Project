@@ -26,6 +26,7 @@ import {
   type Scenario,
   CreateGameRequest,
 } from '@isekai/protocol';
+import { fetchGameLog } from './history-api.ts';
 import { apiUrl, fetchWithTimeout } from './session.ts';
 
 const UNREACHABLE = 'ติดต่อ server ไม่ได้ ลองใหม่อีกครั้ง';
@@ -119,6 +120,33 @@ async function lobbyCall(baseUrl: string, token: string, path: string, init: Req
 
 /** GET /api/game: the lobby as the caller sees it. */
 export const getGame = (baseUrl: string, token: string) => lobbyCall(baseUrl, token, '/api/game', { method: 'GET' });
+
+/** ISK-022: where the game of one เกมของฉัน row is, asked with that row's own token. */
+export type MyGameState =
+  | { kind: 'lobby' | 'setup' | 'ended' | 'closed'; game: GameView }
+  | { kind: 'playing'; game: GameView; day: number }
+  | { kind: 'expired' | 'kicked' | 'gone' | 'offline' };
+
+export async function myGameState(baseUrl: string, token: string): Promise<MyGameState> {
+  const answer = await send(apiUrl(baseUrl, '/api/game'), { headers: { authorization: `Bearer ${token}` } });
+  if (!answer) return { kind: 'offline' };
+  // 401 = session_expired or any other refused token: the join form asks for the PIN (ISK-021).
+  if (answer.res.status === 401) return { kind: 'expired' };
+  if (answer.res.status === 403) return { kind: 'kicked' };
+  if (answer.res.status === 404) return { kind: 'gone' };
+  const parsed = GameView.safeParse(answer.json);
+  if (!answer.res.ok || !parsed.success) return { kind: 'offline' };
+  const game = parsed.data;
+  if (game.closed) return { kind: 'closed', game };
+  if (game.status === 'lobby') return { kind: 'lobby', game };
+  // A started game whose player has no character yet: the character step (the lobby's own rule for [เข้าห้องเล่น]).
+  if (game.you.role === 'player' && !game.members.find((m) => m.id === game.you.memberId)?.hasCharacter) return { kind: 'setup', game };
+  // shortcut: the day and the end come from GET /api/game/log (GameView has neither); one request less once GameView carries them.
+  const log = await fetchGameLog(baseUrl, token);
+  if (log === null) return { kind: 'expired' };
+  if (log === 'unreachable') return { kind: 'offline' };
+  return log.game.status === 'ended' ? { kind: 'ended', game } : { kind: 'playing', game, day: log.game.at?.day ?? 1 };
+}
 
 /** POST /api/game/ready (ISK-017): press / release ready; the server starts the game itself once everyone is ready. */
 export const readyCall = (baseUrl: string, token: string, ready: boolean) =>

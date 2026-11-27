@@ -11,6 +11,8 @@ export interface MockRequest {
   method: string;
   path: string;
   body?: unknown;
+  /** The bearer token sent, for the scenario's `byToken` answers (ISK-022). */
+  token?: string;
 }
 
 const ROUTES = CONTRACT.filter((c): c is HttpItem => c.kind === 'http').map((item) => ({
@@ -105,7 +107,8 @@ export function mockHttp(scenario: MockScenario, request: MockRequest, elapsedMs
   // Not in the contract: the screens must not call it, so it fails the way an unreachable server does.
   if (!route) return { fail: 'network' };
   const due = (scenario.httpScript?.[routeKey(route)] ?? []).filter((step) => step.afterMs <= elapsedMs).at(-1);
-  const reply = due?.reply ?? scenario.http[routeKey(route)] ?? DEFAULTS[routeKey(route)];
+  const byToken = request.token === undefined ? undefined : scenario.byToken?.[request.token]?.[routeKey(route)];
+  const reply = due?.reply ?? byToken ?? scenario.http[routeKey(route)] ?? DEFAULTS[routeKey(route)];
   if (reply && !('status' in reply)) return reply;
   if (route.request) {
     const parsed = CONTRACT_SCHEMAS[route.request].safeParse(request.body);

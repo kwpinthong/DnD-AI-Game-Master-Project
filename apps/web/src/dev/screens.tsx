@@ -11,6 +11,7 @@ import { JoinForm } from '../JoinForm.tsx';
 import { LearningLibrary } from '../LearningLibrary.tsx';
 import { GameDataEditor } from '../GameDataEditor.tsx';
 import { Lobby } from '../Lobby.tsx';
+import { MyGames } from '../MyGames.tsx';
 import { MyStyle } from '../MyStyle.tsx';
 import { OriginCard } from '../OriginCard.tsx';
 import { PlayRoom } from '../PlayRoom.tsx';
@@ -83,7 +84,15 @@ function AdminGamesFrame({ baseUrl }: { baseUrl: string }) {
 }
 
 export const SCREEN_VIEWS: Record<ScreenId, ScreenView> = {
-  home: { page: 'App', socket: false, render: ({ baseUrl }) => <App apiBaseUrl={baseUrl} /> },
+  home: {
+    page: 'App',
+    socket: false,
+    // ISK-022: a เกมของฉัน scenario lists its own rows (the app reads this browser's, shared by every frame).
+    render: ({ baseUrl, scenario }) => {
+      const rows = scenarioById(scenario).myGames;
+      return rows ? <MyGames apiBaseUrl={baseUrl} sessions={rows} onOpen={noop} /> : <App apiBaseUrl={baseUrl} />;
+    },
+  },
   join: { page: 'JoinForm', socket: false, render: ({ baseUrl }) => <JoinForm apiBaseUrl={baseUrl} onJoined={noop} /> },
   'create-game': {
     page: 'CreateGameForm',

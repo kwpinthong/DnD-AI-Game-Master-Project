@@ -4,7 +4,7 @@ import { AdminDashboard } from '../AdminDashboard.tsx';
 import { App } from '../App.tsx';
 import { ChatColours } from '../dev/ChatColours.tsx';
 import { GALLERY_PATH, Gallery, MockBar } from '../dev/Gallery.tsx';
-import { rememberToken, saveToken } from '../session.ts';
+import { rememberSession, saveToken } from '../session.ts';
 import { MOCK_TOKEN, installMock, mockBaseUrl } from './install.ts';
 import { scenarioById } from './scenarios.ts';
 
@@ -24,7 +24,7 @@ export function bootMock(root: HTMLElement): void {
   if (path === GALLERY_PATH) {
     // Frames get their token as a prop; the home frames start signed out.
     saveToken(null);
-    rememberToken(MOCK_TOKEN);
+    rememberSession({ token: MOCK_TOKEN });
     createRoot(root).render(
       <StrictMode>
         <Gallery search={search} />
@@ -47,8 +47,10 @@ export function bootMock(root: HTMLElement): void {
   if (scenario.session === 'guest') saveToken(null);
   else {
     saveToken(MOCK_TOKEN);
-    rememberToken(MOCK_TOKEN);
+    rememberSession({ token: MOCK_TOKEN });
   }
+  // ISK-022: the scenario's เกมของฉัน rows, stored last to first so the first one ends on top.
+  for (const row of [...(scenario.myGames ?? [])].reverse()) rememberSession(row);
   createRoot(root).render(
     <StrictMode>
       {path === '/admin' ? <AdminDashboard apiBaseUrl={baseUrl} /> : <App apiBaseUrl={baseUrl} />}

@@ -2,7 +2,7 @@ import type { GameLogResponse, GameRatingView } from '@isekai/protocol';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App.tsx';
-import { KNOWN_TOKENS_KEY, forgetToken, loadKnownTokens, rememberToken } from '../src/session.ts';
+import { KNOWN_TOKENS_KEY, forgetSession, loadKnownTokens, rememberSession } from '../src/session.ts';
 
 /** GEN-037 C3: the game list (every game this browser joined) and the read-only summary + log of one. */
 
@@ -129,13 +129,14 @@ afterEach(() => {
 
 describe('known sessions (GEN-037)', () => {
   it('remembers each token once, newest first, and forgets one', () => {
-    rememberToken('a');
-    rememberToken('b');
-    rememberToken('a');
+    rememberSession({ token: 'a' });
+    rememberSession({ token: 'b' });
+    rememberSession({ token: 'a' });
     expect(loadKnownTokens()).toEqual(['a', 'b']);
-    forgetToken('a');
+    forgetSession('a');
     expect(loadKnownTokens()).toEqual(['b']);
-    expect(JSON.parse(localStorage.getItem(KNOWN_TOKENS_KEY)!)).toEqual(['b']);
+    // ISK-022: stored as rows
+    expect(JSON.parse(localStorage.getItem(KNOWN_TOKENS_KEY)!)).toEqual([expect.objectContaining({ token: 'b' })]);
   });
 
   it('reads a broken stored value as no tokens', () => {
@@ -157,7 +158,7 @@ describe('C3: game list and the summary + log of a finished game', () => {
         return Response.json({}, { status: 200 });
       }),
     );
-    rememberToken('tok-old');
+    rememberSession({ token: 'tok-old' });
     render(<App apiBaseUrl="" />);
     fireEvent.change(await screen.findByLabelText('โค้ดเกม'), { target: { value: 'ABC123' } });
     fireEvent.change(screen.getByLabelText('ชื่อผู้เล่น'), { target: { value: 'นก' } });
@@ -170,7 +171,7 @@ describe('C3: game list and the summary + log of a finished game', () => {
     expect(loadKnownTokens()).toEqual(['tok-new', 'tok-old']);
   });
 
-  it('lists every game this browser joined with its status, and drops a session the server no longer knows', async () => {
+  it('lists every game this browser joined with its status, and leaves out a session the server no longer knows (kept for its PIN, ISK-022)', async () => {
     localStorage.setItem(KNOWN_TOKENS_KEY, JSON.stringify(['tok-ended', 'tok-dead', 'tok-playing']));
     stubServer();
     render(<App apiBaseUrl="" />);
@@ -184,7 +185,7 @@ describe('C3: game list and the summary + log of a finished game', () => {
     expect(items[1]!.textContent).toContain('เกมคืนวันศุกร์');
     expect(items[1]!.textContent).toContain('กำลังเล่น');
     expect(items[1]!.textContent).toContain('วันที่ 5');
-    expect(loadKnownTokens()).toEqual(['tok-ended', 'tok-playing']);
+    expect(loadKnownTokens()).toEqual(['tok-ended', 'tok-dead', 'tok-playing']);
   });
 
   it('opens a finished game read-only: members, timeline, own feed / narration / whispers; no way to act', async () => {

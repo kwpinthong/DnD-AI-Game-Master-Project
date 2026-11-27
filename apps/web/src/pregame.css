@@ -828,3 +828,45 @@
     margin: 0;
   }
 }
+
+/* ---------- ISK-022: เกมของฉัน on the home page (a row wraps its buttons under the name on a phone) ---------- */
+.my-games__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.my-games__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: var(--line-w) solid var(--line);
+  min-width: 0;
+}
+
+.my-games__info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.my-games__status {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.my-games__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.my-games .btn {
+  min-height: 44px;
+  min-width: 44px;
+}

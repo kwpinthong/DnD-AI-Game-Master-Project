@@ -581,6 +581,32 @@ export const createGameText = {
   defaultConfirm: 'คืนค่า scenario ทั้งหมดเป็นค่ามาตรฐาน? สิ่งที่แก้ไว้จะหายหมด',
 } as const;
 
+// ISK-022: เกมของฉัน on the home page, one row per game this device joined.
+export const myGamesText = {
+  title: 'เกมของฉัน',
+  empty: 'ยังไม่มีเกมในเครื่องนี้ เข้าร่วมหรือสร้างเกมก่อน',
+  unnamed: 'เกมที่ยังไม่รู้ชื่อ',
+  as: (name: string) => `ชื่อ ${name}`,
+  status: {
+    loading: 'กำลังโหลด…',
+    lobby: 'รอเริ่ม',
+    setup: 'กำลังเตรียมตัว',
+    playing: (day: number) => `กำลังเล่น วันที่ ${day}`,
+    ended: 'จบแล้ว',
+    closed: gameClosedText.byOwner,
+    expired: 'session หมดอายุ ใส่ PIN เพื่อกลับเข้าเกม',
+    kicked: 'ถูกเชิญออกจากเกมนี้',
+    gone: 'หาเกมไม่พบ',
+    offline: 'ต่อไม่ได้',
+  },
+  enter: 'เข้าเกม',
+  summary: 'ดูสรุป',
+  retry: 'ลองใหม่',
+  remove: 'เอาออกจากรายการ',
+  removed: (name: string) => `เอา ${name} ออกจากรายการในเครื่องนี้แล้ว เกมยังอยู่ ไม่ได้ถูกลบ เข้าใหม่ได้ด้วยโค้ดเกม ชื่อ และ PIN เดิม`,
+  rejoinLead: 'session ของเกมนี้หมดอายุ ใส่ PIN เดิมเพื่อกลับเข้าเกม',
+} as const;
+
 // ISK-019: a lobby with no host; the server starts the game once every player is ready.
 export const lobbyText = {
   ready: 'พร้อม',

@@ -8,6 +8,7 @@ import { connectLobby } from './room-api.ts';
 import { lobbyText, npcDialogueText, toneText } from './ui/strings.ts';
 import { OriginCard } from './OriginCard.tsx';
 import { PlayRoom } from './PlayRoom.tsx';
+import { rememberSession } from './session.ts';
 import { ScenarioViewer } from './ScenarioEditor.tsx';
 import { FeedbackButton } from './ui/FeedbackDialog.tsx';
 import { Button, Panel, Skeleton, Toast } from './ui/index.ts';
@@ -62,6 +63,7 @@ export function Lobby({
   onPlayingChange,
   onGameList,
   onLeave,
+  enter = false,
   pollMs = 3000,
 }: {
   apiBaseUrl: string;
@@ -74,6 +76,8 @@ export function Lobby({
   onGameList?: () => void;
   /** ISK-002: out of a closed game, to the home page's game list. */
   onLeave?: () => void;
+  /** ISK-022: opened from เกมของฉัน: a started `initial` game goes straight on, as [เข้าห้องเล่น] does. */
+  enter?: boolean;
   pollMs?: number;
 }) {
   const [game, setGame] = useState<GameView | undefined>(initial);
@@ -179,6 +183,24 @@ export function Lobby({
     setOriginOpen(of.you.role === 'player' && !originSeen(of));
     setRoomOpen(true);
   }
+
+  /** A player needs a character to play; the Human GM watches without one. */
+  function play(of: GameView) {
+    const you = of.members.find((m) => m.id === of.you.memberId);
+    if (you?.role === 'player' && !you.hasCharacter) setCharacterOpen(true);
+    else enterRoom(of);
+  }
+
+  useEffect(() => {
+    if (enter && initial?.status === 'started' && !initial.closed) play(initial);
+  }, []);
+
+  // ISK-022: every entry refreshes this game's row in เกมของฉัน (its name and code, for a later rejoin with the PIN).
+  useEffect(() => {
+    if (!game) return;
+    const name = game.members.find((m) => m.id === game.you.memberId)?.name;
+    rememberSession({ token, gameId: game.id, gameName: game.name, inviteCode: game.inviteCode, ...(name ? { playerName: name } : {}) });
+  }, [token, game?.id]);
 
   // C4: the game went from lobby to started while the character page was open. Nothing can be edited any
   // more: go to Play. (A started game whose player has no character yet still opens the page, GEN-056 C2.)
@@ -293,11 +315,7 @@ export function Lobby({
         {!lobby && <p role="status">เกมเริ่มแล้ว โหมดและสมาชิกล็อกแล้ว</p>}
         {!lobby && you && (
           <div className="pregame__actions">
-            <Button
-              variant="primary"
-              // A player needs a character to play; the Human GM watches without one.
-              onClick={() => (you.role === 'player' && !you.hasCharacter ? setCharacterOpen(true) : enterRoom(game))}
-            >
+            <Button variant="primary" onClick={() => play(game)}>
               เข้าห้องเล่น
             </Button>
           </div>

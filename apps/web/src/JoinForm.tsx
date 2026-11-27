@@ -5,6 +5,7 @@ import { useFieldErrors } from './form-state.ts';
 import { PinInput } from './PinInput.tsx';
 import { postJoin } from './session.ts';
 import { Button, Field, Panel } from './ui/index.ts';
+import { myGamesText } from './ui/strings.ts';
 import './pregame.css';
 import './home-art.css';
 
@@ -15,9 +16,18 @@ type Values = Record<JoinField, string>;
  * says what is wrong once the player leaves it and the join button stays off until all three pass (C2).
  * GEN-082: the optional player code + style opt-out (`JoinStyleFields`) go in the same body; the server keeps
  * only a hash of the code.
+ * ISK-022 `rejoin`: a kept game whose session expired: code + name come filled in, only the PIN is asked for.
  */
-export function JoinForm({ apiBaseUrl, onJoined }: { apiBaseUrl: string; onJoined: (member: Member, token: string) => void }) {
-  const [values, setValues] = useState<Values>({ inviteCode: '', name: '', pin: '' });
+export function JoinForm({
+  apiBaseUrl,
+  onJoined,
+  rejoin,
+}: {
+  apiBaseUrl: string;
+  onJoined: (member: Member, token: string) => void;
+  rejoin?: { inviteCode: string; name: string };
+}) {
+  const [values, setValues] = useState<Values>({ inviteCode: rejoin?.inviteCode ?? '', name: rejoin?.name ?? '', pin: '' });
   const [playerCode, setPlayerCode] = useState('');
   const [noStyle, setNoStyle] = useState(false);
   const [formError, setFormError] = useState<string>();
@@ -57,7 +67,7 @@ export function JoinForm({ apiBaseUrl, onJoined }: { apiBaseUrl: string; onJoine
       <Panel title="เข้าร่วมเกม" className="pregame__panel">
         <form onSubmit={submit} noValidate>
           <h2 className="pregame__title">เข้าร่วมเกม</h2>
-          <p className="pregame__lead">ใส่โค้ดเกมที่เพื่อนส่งให้ แล้วตั้งชื่อกับ PIN ของคุณ</p>
+          <p className="pregame__lead">{rejoin ? myGamesText.rejoinLead : 'ใส่โค้ดเกมที่เพื่อนส่งให้ แล้วตั้งชื่อกับ PIN ของคุณ'}</p>
           <Field id="join-inviteCode" label="โค้ดเกม" error={errors.errorOf('inviteCode')}>
             {(control) => <input {...control} {...bind('inviteCode')} className="code-input" autoComplete="off" autoCapitalize="characters" spellCheck={false} />}
           </Field>
@@ -70,7 +80,7 @@ export function JoinForm({ apiBaseUrl, onJoined }: { apiBaseUrl: string; onJoine
             hint="ตัวเลข 4-6 หลัก ครั้งแรกที่เข้าเกมนี้ PIN ที่ใส่จะเป็น PIN ของชื่อนี้"
             error={errors.errorOf('pin')}
           >
-            {(control) => <PinInput {...control} {...bind('pin')} autoComplete="current-password" />}
+            {(control) => <PinInput {...control} {...bind('pin')} autoComplete="current-password" autoFocus={Boolean(rejoin)} />}
           </Field>
           <Field id="join-playerCode" label="รหัสผู้เล่น (ไม่บังคับ)" hint="ตั้งรหัสของคุณเอง แล้วใช้รหัสเดิมทุกเกม ระบบจะจำสไตล์การเล่นของคุณข้ามเกม ไม่มีใครเห็นรหัสนี้">
             {(control) => (

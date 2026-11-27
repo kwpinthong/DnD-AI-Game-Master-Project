@@ -2,7 +2,7 @@ import type { GameLogResponse, RoomEntry } from '@isekai/protocol';
 import { useEffect, useId, useState } from 'react';
 import { EndingReveal, EndingToc, LearningRetry, RatingSection, useRating, when as at } from './Ending.tsx';
 import { fetchGameLog } from './history-api.ts';
-import { forgetToken, loadKnownTokens } from './session.ts';
+import { loadKnownTokens } from './session.ts';
 import { TurnChangesList } from './play/TurnChanges.tsx';
 import { Button } from './ui/Button.tsx';
 import { FeedbackButton } from './ui/FeedbackDialog.tsx';
@@ -11,7 +11,7 @@ import { endText, gameClosedText } from './ui/strings.ts';
 
 /**
  * The game list (GEN-037 C3): every game this browser joined or created, newest first, and a read-only
- * summary + log of one. A token the server refuses (expired, logged out, kicked) is dropped from the list.
+ * summary + log of one. A token the server refuses (expired, logged out, kicked) is left out of this list.
  */
 
 type Loaded = { token: string; log: GameLogResponse } | { token: string; log: 'unreachable' };
@@ -35,7 +35,7 @@ export function GameHistory({ apiBaseUrl, onClose }: { apiBaseUrl: string; onClo
     const tokens = loadKnownTokens();
     Promise.all(tokens.map(async (token) => ({ token, log: await fetchGameLog(apiBaseUrl, token) }))).then((results) => {
       if (cancelled) return;
-      for (const r of results) if (r.log === null) forgetToken(r.token);
+      // ISK-022: a refused token stays kept: เกมของฉัน asks for its PIN.
       setGames(results.filter((r): r is Loaded => r.log !== null));
     });
     return () => {

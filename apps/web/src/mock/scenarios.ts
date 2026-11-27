@@ -1,6 +1,7 @@
 import { defaultScenario, GameView, OriginResponse, isVotableEntry, RoomEntry, RoomState, SurroundingsResponse, type CharacterView, type LobbyReadyEvent, type LobbyStartBlockedEvent } from '@isekai/protocol';
 import { CONTRACT_FIXTURES as F, CONTRACT_SCREENS, type ScreenId } from '@isekai/protocol/contract';
 import type { CreateDraft } from '../CreateGameForm.tsx';
+import type { KnownSession } from '../session.ts';
 
 /**
  * isekai-mock-layer (GEN-100): the states the web can be put in without a server, all built from the GEN-099
@@ -45,6 +46,10 @@ export interface MockScenario {
   };
   /** ISK-019: the create form's half-filled state (the gallery's `create-game` frame). */
   createDraft?: CreateDraft;
+  /** ISK-022: answers for one bearer token, over `http` (each row of เกมของฉัน is its own session). */
+  byToken?: Readonly<Record<string, Readonly<Record<string, MockReply>>>>;
+  /** ISK-022: the rows of เกมของฉัน (boot.tsx stores them; the gallery's home frame lists them). */
+  myGames?: readonly KnownSession[];
 }
 
 const ok = (body: unknown): MockReply => ({ status: 200, body });
@@ -211,6 +216,55 @@ const ADMIN_MEMBERS = {
   members: [...F.AdminMembersResponse[0]!.members, { id: 'm-3', name: 'ลิน', role: 'player' as const, hasCharacter: true, ready: true, kickedAt: null }],
 };
 const CLOSED_LOG = F.GameLogResponse.find((l) => l.game.closedEarly)!;
+
+// --- ISK-022: เกมของฉัน, one row per kept session, each answered by its own token (`byToken`) ---
+const PLAYING_LOG = F.GameLogResponse[0]!;
+const row = (key: string, gameName: string, hoursAgo: number): KnownSession => ({
+  token: `mg-${key}`,
+  gameId: `g-${key}`,
+  gameName,
+  inviteCode: 'K7Q2MX',
+  playerName: 'นก',
+  lastSeen: new Date(Date.UTC(2026, 10, 27, 12 - hoursAgo)).toISOString(),
+});
+/** Every row state of the home page's เกมของฉัน, newest first (as stored). */
+export const MY_GAMES = {
+  playing: row('playing', 'เมืองก่อนอุกกาบาต', 1),
+  lobby: row('lobby', 'ห้องรอวันหยุด', 2),
+  setup: row('setup', 'ตั้งตัวละครกันอยู่', 3),
+  ended: row('ended', 'คืนจันทราโลหิต', 4),
+  closed: row('closed', 'ทดลองระบบ', 5),
+  expired: row('expired', 'เกมเมื่อเดือนก่อน', 6),
+  kicked: row('kicked', 'ห้องที่โดนเชิญออก', 7),
+  gone: row('gone', 'เกมที่ถูกลบ', 8),
+  offline: row('offline', 'เกมที่เน็ตหลุด', 9),
+} as const;
+const asGame = (r: KnownSession, game: GameView): GameView => ({ ...game, id: r.gameId!, name: r.gameName! });
+const SESSION_EXPIRED: MockReply = { status: 401, body: { code: 'session_expired', message: 'session หมดอายุ เข้าเกมใหม่ด้วยชื่อและ PIN เดิม' } };
+const MY_GAME_REPLIES: Readonly<Record<string, Readonly<Record<string, MockReply>>>> = {
+  [MY_GAMES.playing.token]: {
+    'GET /api/game': ok(asGame(MY_GAMES.playing, STARTED_GAME)),
+    'GET /api/game/log': ok({ ...PLAYING_LOG, game: { ...PLAYING_LOG.game, id: MY_GAMES.playing.gameId, at: { day: 3, phase: 'SOLARION', turn: 1 } } }),
+  },
+  [MY_GAMES.lobby.token]: { 'GET /api/game': ok(asGame(MY_GAMES.lobby, LOBBY_GAME)) },
+  [MY_GAMES.setup.token]: {
+    'GET /api/game': ok({ ...asGame(MY_GAMES.setup, STARTED_GAME), members: STARTED_GAME.members.map((m) => (m.id === ME ? { ...m, hasCharacter: false } : m)) }),
+    'GET /api/game/character': ok({ character: null }),
+  },
+  [MY_GAMES.ended.token]: { 'GET /api/game': ok(asGame(MY_GAMES.ended, STARTED_GAME)), 'GET /api/game/log': ok(ENDED_LOG), 'GET /api/game/rating': ok(F.GameRatingResponse[1]) },
+  [MY_GAMES.closed.token]: {
+    'GET /api/game': ok({ ...asGame(MY_GAMES.closed, STARTED_GAME), closed: { reason: 'ทดสอบระบบ', hasSummary: true } }),
+    'GET /api/game/log': ok(CLOSED_LOG),
+    'GET /api/game/rating': ok(F.GameRatingResponse[1]),
+  },
+  [MY_GAMES.expired.token]: { 'GET /api/game': SESSION_EXPIRED },
+  [MY_GAMES.kicked.token]: { 'GET /api/game': { status: 403, body: { code: 'kicked', message: 'ชื่อนี้ถูกเชิญออกจากเกมแล้ว เข้าเกมนี้อีกไม่ได้' } } },
+  [MY_GAMES.gone.token]: { 'GET /api/game': { status: 404, body: { code: 'game_not_found', message: 'ไม่พบเกมนี้' } } },
+  [MY_GAMES.offline.token]: { 'GET /api/game': { fail: 'network' } },
+  // the expired row after a right PIN (`my-games-expired`): the same game, a new token
+  'mg-renewed': { 'GET /api/game': ok(asGame(MY_GAMES.expired, STARTED_GAME)), 'GET /api/game/log': ok(PLAYING_LOG) },
+};
+const RENEWED_JOIN = ok({ token: 'mg-renewed', expiresAt: '2026-12-27T12:00:00.000Z', created: false, member: { id: ME, gameId: MY_GAMES.expired.gameId, name: 'นก' } });
 
 const ALL_SCREENS =CONTRACT_SCREENS.map((s) => s.id);
 const room = (state: RoomState, script: readonly MockStep[] = [], entries: readonly RoomEntry[] = START_ENTRIES) => ({ state, entries, script });
@@ -721,6 +775,51 @@ export const SCENARIOS: readonly MockScenario[] = [
     screens: ['ending', 'home'],
     http: { 'GET /api/game/log': ok(CLOSED_LOG), 'GET /api/game/rating': ok(F.GameRatingResponse[1]) },
     room: room(endedRoom),
+  },
+  // ISK-022: เกมของฉัน on the home page (`/?scenario=my-games` stores the rows; the gallery lists them)
+  {
+    id: 'my-games',
+    title: 'เกมของฉัน หลายเกม',
+    note: 'ทุกสถานะ: รอเริ่ม / กำลังเตรียมตัว / กำลังเล่น วันที่ 3 / จบแล้ว / ปิดโดยผู้ดูแล / session หมดอายุ / ถูกเชิญออก / หาเกมไม่พบ / เน็ตหลุด',
+    session: 'guest',
+    screens: ['home'],
+    http: {},
+    byToken: MY_GAME_REPLIES,
+    myGames: Object.values(MY_GAMES),
+    room: room(BASE_ROOM),
+  },
+  { id: 'my-games-empty', title: 'เกมของฉัน ยังว่าง', note: 'เครื่องนี้ยังไม่เคยเข้าเกม', session: 'guest', screens: ['home'], http: {}, myGames: [], room: room(BASE_ROOM) },
+  {
+    id: 'my-games-expired',
+    title: 'เกมของฉัน session หมดอายุ',
+    note: 'กดเข้าเกม: ฟอร์มเติมโค้ดเกมกับชื่อไว้ ใส่ PIN แล้วกลับเข้าเกมเดิม',
+    session: 'guest',
+    screens: ['home'],
+    http: { 'POST /api/join': RENEWED_JOIN },
+    byToken: MY_GAME_REPLIES,
+    myGames: [MY_GAMES.expired],
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'my-games-wrong-pin',
+    title: 'เกมของฉัน PIN ผิด',
+    note: 'session หมดอายุ ใส่ PIN ผิด: ข้อความ error โค้ดเกมกับชื่อยังอยู่',
+    session: 'guest',
+    screens: ['home'],
+    http: { 'POST /api/join': { status: 401, body: { code: 'wrong_pin', message: 'PIN ไม่ถูกต้อง เหลือ 4 ครั้ง', attemptsLeft: 4 } } },
+    byToken: MY_GAME_REPLIES,
+    myGames: [MY_GAMES.expired],
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'my-games-error',
+    title: 'เกมของฉัน ต่อ server ไม่ได้',
+    note: 'ทุกแถว: ต่อไม่ได้ + [ลองใหม่]',
+    session: 'guest',
+    screens: ['home'],
+    http: { 'GET /api/game': { fail: 'network' } },
+    myGames: [MY_GAMES.playing, MY_GAMES.lobby],
+    room: room(BASE_ROOM),
   },
   // ISK-011: the report box (กด ส่ง to see each answer; `normal` = sent) and the owner's ฟีดแบ็ก tab.
   { id: 'feedback-sending', title: 'กำลังส่งรายงาน', note: 'กดส่งแล้วคำตอบยังไม่มา: ปุ่มส่งกดซ้ำไม่ได้', session: 'player', screens: ['feedback'], http: { 'POST /api/feedback': { pending: true } }, room: room(BASE_ROOM) },
