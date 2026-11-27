@@ -40,7 +40,11 @@ describe('ISK-008 the reader is "คุณ"', () => {
 
   it('C3: A\'s title in what A reads is "คุณ"', () => {
     expect(youInText('ชาวบ้านมอง นักเดินทางเงียบ ด้วยความสงสัย', A, [B])).toBe('ชาวบ้านมองคุณด้วยความสงสัย');
-    expect(youInText('นักเดินทางเงียบเดินเข้ามา', A, [B])).toBe('คุณเดินเข้ามา');
+    expect(youInText('นักเดินทางเงียบ เดินเข้ามา', A, [B])).toBe('คุณเดินเข้ามา');
+    // Social Titles are everyday words: with a word attached after it, it may be someone else (an NPC) and stays.
+    const solo = { appearance: 'ผมดำยาว', title: 'คนแปลกหน้า', parts: [] };
+    expect(youInText('คนแปลกหน้าในชุดคลุมดำเดินเข้ามา', solo, [])).toBe('คนแปลกหน้าในชุดคลุมดำเดินเข้ามา');
+    expect(youInText('ยามจ้องคนแปลกหน้า', solo, [])).toBe('ยามจ้องคุณ');
   });
 
   it('C4: B reading the place feed sees A\'s title / look; B who knows A sees the name', () => {
