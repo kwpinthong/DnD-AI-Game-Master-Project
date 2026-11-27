@@ -134,7 +134,7 @@ const entries: In<typeof p.RoomEntry>[] = [
   { seq: 19, kind: 'npc', ...AT, place: FOUNTAIN_ZONED, text: 'เด็กขอทานเงยหน้ามองแล้วรีบถอยไปชิดกำแพง', npc: { ref: 'n-ref-noah', name: 'โนอา', grade: 'F', kind: 'reaction' } },
   { seq: 20, kind: 'npc', ...AT, place: null, text: 'ข้าเห็นว่าเจ้าไม่ได้มาที่นี่เพื่อน้ำพุเท่านั้น', npc: { ref: 'n-ref-lucia', name: 'ลูเซีย', kind: 'dialogue', private: true } },
   // GEN-129: another player's public action; the actor is the alias (Social Title) until the viewer knows the name
-  { seq: 21, kind: 'player', ...AT, place: FOUNTAIN_ZONED, text: 'โยนเหรียญลงในหมวกของคุณ แล้วเดินจากไป', actor: { name: 'ผู้มาเยือนเสื้อคลุมแดง' } },
+  { seq: 21, kind: 'player', ...AT, place: FOUNTAIN_ZONED, text: 'โยนเหรียญลงในหมวกของคุณ แล้วเดินจากไป', actor: { name: 'ผู้มาเยือนเสื้อคลุมแดง', avatarId: 'avatar-05' } },
   // GEN-145: a new period began (server text, no votes)
   { seq: 23, kind: 'time', day: 6, phase: 'HESPERION', turn: 1, place: null, text: 'ระฆังหอคอยดังกังวานไปทั่วเมือง บัดนี้เข้าสู่ช่วง HESPERION (ค่ำ 18:00-23:59) แล้ว' },
   // ISK-014: the morning news, one line per item, the same for everyone (no votes)
@@ -462,6 +462,17 @@ export const CONTRACT_FIXTURES: Fixtures = {
         build: [{ id: 'tall', label: 'ผอมสูง' }],
         outfit: [{ id: 'traveler', label: 'ชุดเดินทาง' }],
         feature: [{ id: 'none', label: 'ไม่มี' }, { id: 'scar', label: 'แผลเป็นที่แก้ม' }],
+      },
+    },
+    // ISK-007: the whole seed list (apps/server/assets/appearance-options.json), so every preset's default chips are offered
+    {
+      categories: {
+        hairColor: [{ id: 'black', label: 'ดำ' }, { id: 'brown', label: 'น้ำตาล' }, { id: 'blond', label: 'ทอง' }, { id: 'silver', label: 'เงิน' }, { id: 'red', label: 'แดง' }, { id: 'white', label: 'ขาว' }],
+        hairStyle: [{ id: 'short', label: 'สั้น' }, { id: 'long', label: 'ยาว' }, { id: 'ponytail', label: 'มัดหาง' }, { id: 'braid', label: 'ถักเปีย' }, { id: 'wavy', label: 'หยักศก' }, { id: 'shaved', label: 'โกน' }],
+        eyes: [{ id: 'black', label: 'ดำ' }, { id: 'brown', label: 'น้ำตาล' }, { id: 'blue', label: 'ฟ้า' }, { id: 'green', label: 'เขียว' }, { id: 'gold', label: 'ทอง' }, { id: 'heterochromia', label: 'สองสี' }],
+        build: [{ id: 'tall', label: 'ผอมสูง' }, { id: 'average', label: 'สมส่วน' }, { id: 'muscular', label: 'ล่ำสัน' }, { id: 'small', label: 'ตัวเล็ก' }, { id: 'stout', label: 'ท้วม' }],
+        outfit: [{ id: 'commoner', label: 'ชุดชาวบ้าน' }, { id: 'traveler', label: 'ชุดเดินทาง' }, { id: 'leather', label: 'เกราะหนัง' }, { id: 'mage', label: 'เสื้อคลุมนักเวท' }, { id: 'priest', label: 'ชุดนักบวช' }, { id: 'noble', label: 'ชุดสูงศักดิ์' }],
+        feature: [{ id: 'none', label: 'ไม่มี' }, { id: 'scar', label: 'แผลเป็นที่แก้ม' }, { id: 'eyepatch', label: 'ผ้าปิดตา' }, { id: 'tattoo', label: 'รอยสัก' }, { id: 'glasses', label: 'แว่นตา' }, { id: 'veil', label: 'ผ้าคลุมหน้า' }],
       },
     },
   ],

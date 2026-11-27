@@ -6,7 +6,18 @@ import ringPlayer from '../assets/frames/avatar-ring-player.webp';
 import ringS from '../assets/frames/avatar-ring-s.webp';
 import ringSs from '../assets/frames/avatar-ring-ss.webp';
 
-export type RingKey = 'f' | 'b' | 'a' | 's' | 'ss' | 'player';
+/** ISK-005 preset pictures by file name: `avatar-NN.webp` (256 px) and `avatar-NN@2x.webp` (512 px). */
+const AVATAR_FILES = import.meta.glob<string>('../assets/avatars/avatar-*.webp', { eager: true, import: 'default' });
+
+/** The picture of a preset avatar (`src` + 2x `srcSet`); null for no avatar (a character made before ISK-006) or an unknown id. */
+export function avatarArt(avatarId: string | null | undefined): { src: string; srcSet: string } | null {
+  const src = avatarId ? AVATAR_FILES[`../assets/avatars/${avatarId}.webp`] : undefined;
+  if (!src) return null;
+  const big = AVATAR_FILES[`../assets/avatars/${avatarId}@2x.webp`];
+  return { src, srcSet: big ? `${src} 1x, ${big} 2x` : src };
+}
+
+export type RingKey ='f' | 'b' | 'a' | 's' | 'ss' | 'player';
 export const RING_ART: Readonly<Record<RingKey, string>> = { f: ringF, b: ringB, a: ringA, s: ringS, ss: ringSs, player: ringPlayer };
 
 /**

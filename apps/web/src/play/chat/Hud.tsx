@@ -12,10 +12,10 @@ import { ClockHud } from './ClockHud.tsx';
 const t = playText.chat.hud;
 
 /** Avatar + the character's name + how the others see them (the alias); `character` undefined while it loads. */
-export function CharacterTag({ character }: { character: Pick<CharacterView, 'name' | 'appearance'> | null | undefined }) {
+export function CharacterTag({ character }: { character: (Pick<CharacterView, 'name' | 'appearance'> & { avatarId?: string | null }) | null | undefined }) {
   return (
     <div className="hud-who" role="group" aria-label={t.label}>
-      <Avatar name={character?.name ?? '?'} size="lg" own />
+      <Avatar name={character?.name ?? '?'} size="lg" own avatarId={character?.avatarId} />
       <div>
         <div className="hud-who__name display">{character?.name ?? t.loading}</div>
         <div className="hud-who__seen">

@@ -43,6 +43,8 @@ const DEFAULTS: Readonly<Record<string, MockReply>> = {
   'DELETE /api/admin/learning/:id': ok({ entries: LIBRARY.entries.slice(1), counts: { ...LIBRARY.counts, [LIBRARY.entries[0]!.type]: 0 } }),
   'DELETE /api/admin/learning/games/:gameId': ok(CONTRACT_FIXTURES.LearningLibraryResponse[1]),
   'GET /api/admin/feedback': ok({ feedback: REPORTS }),
+  // ISK-007: the whole chip list, so every preset avatar's default chips are offered
+  'GET /api/appearance-options': ok(CONTRACT_FIXTURES.AppearanceOptionsResponse[1]),
 };
 
 const FEEDBACK_STATUS = 'PATCH /api/admin/feedback/:id';

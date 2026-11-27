@@ -298,8 +298,11 @@ export const RoomEntry = z.strictObject({
   changes: z.array(TurnChange).optional(),
   /** `npc` entries (GEN-110): who says `text` (avatar + name + grade for the chat UI) and what kind of line it is. */
   npc: NpcLineView.optional(),
-  /** `player` entries (GEN-129): who did `text`, as this viewer may know them (alias until the name is learned; the Human GM sees the name). */
-  actor: z.strictObject({ name: z.string() }).optional(),
+  /**
+   * `player` entries (GEN-129): who did `text`, as this viewer may know them (alias until the name is learned; the Human GM sees the name).
+   * ISK-007: `avatarId` = their preset avatar, which everyone sees like `OtherCharacterView.avatarId` (null = made before ISK-006; absent from older servers).
+   */
+  actor: z.strictObject({ name: z.string(), avatarId: z.string().nullable().optional() }).optional(),
   /**
    * GEN-107: this player's own vote on an AI-written entry (`isVotableEntry`): null = not voted. Absent on
    * every other entry and for the Human GM, so "has the key" = "show the buttons". Others' votes are never sent.
