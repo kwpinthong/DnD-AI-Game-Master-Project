@@ -60,7 +60,7 @@ function callFor(context: StyleSceneContext, assets: GameAssets): Call<unknown> 
     case 'gm_journal':
       return call({ system: [JOURNAL_BLOCK], output: { name: GM_OUTPUT.journal, schema: GmJournal }, maxOutputTokens: 3_000, scope: 'narration', texts: (v) => [{ text: v.journal, npcId: null }, { text: v.saga, npcId: null }] });
     case 'gm_day':
-      return call({ system: [SUMMARY_BLOCK], output: { name: GM_OUTPUT.daySummary, schema: GmDaySummary }, maxOutputTokens: 1_500, scope: 'narration', texts: (v) => [{ text: v.recap, npcId: null }, { text: v.saga, npcId: null }] });
+      return call({ system: [SUMMARY_BLOCK], output: { name: GM_OUTPUT.daySummary, schema: GmDaySummary }, maxOutputTokens: 3_000, scope: 'narration', texts: (v) => [{ text: v.recap, npcId: null }, { text: v.saga, npcId: null }] });
     case 'gm_finale':
       return call({
         system: [FINALE_BLOCK, tone],
