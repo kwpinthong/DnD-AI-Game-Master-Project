@@ -7,28 +7,31 @@ import { character, characterPresence, member, roomEntry, roomEntryRecipient } f
 import { titleOf } from '../game/character.ts';
 import { companionIdsOf } from '../gm/finale.ts';
 import { rulingsOf } from '../rating/store.ts';
+import { readerText } from '../room/entry-view.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { getEnding } from './store.ts';
 
 /**
  * The secret reveal of an ended game (GEN-059 C5): every player's real name, karma (Q-196: tier word +
  * number), Secret actions, companions, spawn point and ending outcome. The caller makes sure the game
- * ended: before that, none of it may reach a player.
+ * ended: before that, none of it may reach a player. `viewerId`: their own epilogue reads like their log (ISK-008).
  */
-export function revealFor(db: DbOrTx, assets: GameAssets, gameId: string): GameReveal {
+export function revealFor(db: DbOrTx, assets: GameAssets, gameId: string, viewerId?: string): GameReveal {
   const ending = getEnding(db, gameId);
   const scenario = getGameScenario(db, gameId);
   const placeName = new Map((scenario?.locations ?? []).map((l) => [l.id, l.name]));
   const npcName = new Map((scenario?.npcs ?? []).map((n) => [n.id, n.name]));
   /** The ending the GM told this player (the last narration of the finale); null = not told yet. */
-  const epilogueOf = (memberId: string) =>
-    db
+  const epilogueOf = (memberId: string) => {
+    const text = db
       .select({ text: roomEntry.text })
       .from(roomEntry)
       .innerJoin(roomEntryRecipient, eq(roomEntryRecipient.entryId, roomEntry.id))
       .where(and(eq(roomEntry.gameId, gameId), eq(roomEntry.kind, 'narration'), eq(roomEntryRecipient.memberId, memberId), sql`json_extract(${roomEntry.meta}, '$.finale') = 1`))
       .orderBy(desc(roomEntry.id))
       .get()?.text ?? null;
+    return text !== null && memberId === viewerId ? readerText(db, gameId, text, { id: memberId, role: 'player' }, assets) : text;
+  };
   const rows = db
     .select({
       memberId: member.id,

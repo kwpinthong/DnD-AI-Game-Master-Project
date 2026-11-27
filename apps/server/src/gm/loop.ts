@@ -644,7 +644,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       const text = render(null, true);
       const own = new Map<string, string[]>();
       for (const r of readers) {
-        const t = render(r, true);
+        // ISK-008: their own token in the feed reads "คุณ" too.
+        const t = render(r, false);
         if (t !== text) own.set(t, [...(own.get(t) ?? []), r]);
       }
       const feed = { kind: 'feed' as const, locationId: ctx.place.id, actorMemberId: null, ...fallback };

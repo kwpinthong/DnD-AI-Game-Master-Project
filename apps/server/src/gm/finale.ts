@@ -157,7 +157,9 @@ export function finaleEntries(db: DbOrTx, assets: GameAssets, gameId: string, ou
     { kind: 'feed', locationId: null, actorMemberId: null, text: revealTokens(world, out.overall) },
     ...out.players.flatMap((p) => {
       const member = world.byRef.get(p.player);
-      return member ? [{ kind: 'narration' as const, memberId: member.memberId, text: revealTokens(world, p.text) }] : [];
+      // ISK-008: their own token is "คุณ" (no space around it, GEN-143), every other one the real name.
+      const own = new RegExp(`[ \\t]*\\{\\{p:${p.player.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\}\\}[ \\t]*`, 'g');
+      return member ? [{ kind: 'narration' as const, memberId: member.memberId, text: revealTokens(world, p.text.replace(own, 'คุณ')) }] : [];
     }),
   ];
 }
