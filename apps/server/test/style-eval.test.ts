@@ -88,6 +88,28 @@ describe('GEN-167 runner and admin page', { timeout: 120_000 }, () => {
     expect(count('member')).toBe(0);
   });
 
+  it('ISK-028 C5: the day-summary scene asks for the game\'s 3000 output tokens; the journal scene still 3000', async () => {
+    const provider = mock();
+    const calls: AiCallRequest[] = [];
+    await run({ ...provider, call: (req) => (calls.push(req), provider.call(req)) });
+    const day = calls.filter((r) => r.output.name === 'gm_day_summary');
+    const journal = calls.filter((r) => r.output.name === 'gm_journal');
+    expect(day.length).toBeGreaterThan(0);
+    expect(journal.length).toBeGreaterThan(0);
+    for (const r of day) expect([r.purpose, r.maxOutputTokens]).toEqual(['summarize_day', 3_000]);
+    for (const r of journal) expect(r.maxOutputTokens).toBe(3_000);
+  });
+
+  it('ISK-028 thinking: the day-summary scene asks for thinking off like the game; no other scene does', async () => {
+    const provider = mock();
+    const calls: AiCallRequest[] = [];
+    await run({ ...provider, call: (req) => (calls.push(req), provider.call(req)) });
+    const day = calls.filter((r) => r.purpose === 'summarize_day');
+    expect(day.length).toBeGreaterThan(0);
+    for (const r of day) expect(r.thinking).toBe('off');
+    for (const r of calls.filter((c) => c.purpose !== 'summarize_day')) expect(r).not.toHaveProperty('thinking');
+  });
+
   it('C4: scenes the AI fails are reported failed; the rest of the set still runs', async () => {
     const result = await run(mock(['npc_dialogue']));
     const failed = result.scenes.filter((s) => !s.ok);

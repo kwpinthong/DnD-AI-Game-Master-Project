@@ -152,6 +152,8 @@ export function createAiService(deps: AiServiceDeps): AiService {
         output: { name: trigger.output.name, jsonSchema: z.toJSONSchema(trigger.output.schema, { io: 'input' }) as Record<string, unknown> },
         maxOutputTokens: trigger.maxOutputTokens,
         effort: trigger.effort ?? (trigger.purpose === 'gm_adjudicate' || trigger.purpose === 'gm_repair' ? 'medium' : 'low'),
+        // ISK-028 (Q-596 A): Haiku 5.5's default thinking ran day 5's summary to max_tokens at 3,000; off it wrote 566-853.
+        ...(trigger.purpose === 'summarize_day' ? { thinking: 'off' as const } : {}),
         timeoutMs: config.timeoutMs,
         ...(trigger.signal ? { signal: trigger.signal } : {}),
       };

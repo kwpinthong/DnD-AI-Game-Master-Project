@@ -330,13 +330,13 @@ describe('ISK-014 morning news', { timeout: 60_000 }, () => {
     expect(rules).toMatch(/Secret/);
   });
 
-  it('C13: the recap / saga / journals are as before, and the summary may write at most 300 more output tokens', async () => {
+  it('C13: the recap / saga / journals are as before, and the news fits in 300 output tokens of the 3,000 ceiling', async () => {
     await boot();
     const { clients } = await endDay(3);
     await waitNews(clients[0]!, 4);
     const req = summaryRequests().find((r) => contextOf<DayContext>(r).day === 3)!;
-    expect(req.maxOutputTokens).toBeGreaterThan(1_500);
-    expect(req.maxOutputTokens! - 1_500).toBeLessThanOrEqual(300);
+    // ISK-028 (Q-600 A): the base is 3,000 now; the news stays inside it, so the ceiling is not raised for it.
+    expect(req.maxOutputTokens).toBe(3_000);
     const ctx = contextOf<DayContext>(req);
     const recap = server!.db.prepare("select text from gm_memory where kind = 'day' and day = 3").get() as { text: string };
     expect(recap.text).toBe(`วันที่ 3: ${ctx.log.join(' / ')}`.slice(0, 1800));

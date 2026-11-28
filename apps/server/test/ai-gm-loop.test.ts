@@ -739,6 +739,55 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(ctx.memory.yesterday).toContain('เฝ้ายามทั้งคืน');
   });
 
+  describe('ISK-028: the day summary has room (real log: max_tokens at 1500 three times of three)', () => {
+    const memoryOfDay1 = () => server!.db.prepare("select kind, text from gm_memory where day = 1 and kind in ('day', 'saga') order by kind").all() as { kind: string; text: string }[];
+    async function dayOneEnds(handler?: Handler) {
+      await boot({}, handler);
+      const t = await startedTable(server!, false);
+      jumpTo(t, { day: 1, phase: 'NOCTHERION', turn: 2 });
+      const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+      await playTurn(clients, ['เฝ้ายามทั้งคืน', 'นับดาว', 'จุดไฟ'], { day: 2, phase: 'EOSORIA', turn: 1 });
+      return clients;
+    }
+
+    it('C1: the summary request of day 1 asks for 3000 output tokens', async () => {
+      await dayOneEnds();
+      await until(() => provider.requests.some((r) => r.purpose === 'summarize_day'));
+      const reqs = provider.requests.filter((r) => r.purpose === 'summarize_day');
+      expect(reqs.length).toBeGreaterThan(0);
+      for (const r of reqs) expect(r.maxOutputTokens).toBe(3_000);
+    });
+
+    it('ISK-028 thinking: the summary request asks for thinking off; no other purpose carries a thinking field', async () => {
+      await dayOneEnds();
+      await until(() => provider.requests.some((r) => r.purpose === 'summarize_day'));
+      const [summary, others] = [provider.requests.filter((r) => r.purpose === 'summarize_day'), provider.requests.filter((r) => r.purpose !== 'summarize_day')];
+      for (const r of summary) expect(r.thinking).toBe('off');
+      expect(others.length).toBeGreaterThan(0);
+      for (const r of others) expect(r).not.toHaveProperty('thinking');
+    });
+
+    it('C3: a summary that still fails (max_tokens) is logged, leaves no day / saga row and the game goes on', async () => {
+      const clients = await dayOneEnds((req) => (req.purpose === 'summarize_day' ? mockReply.fail('max_tokens') : undefined));
+      await until(() => logs.some((l) => l.includes('summarize_day day=1 failed')));
+      expect(logs.some((l) => l.includes('summarize_day day=1 failed: ai_unavailable (max_tokens)'))).toBe(true);
+      expect(memoryOfDay1()).toEqual([]);
+      await playTurn(clients, ['ล้างหน้า', 'กินข้าว', 'ยืดเส้น'], { day: 2, phase: 'EOSORIA', turn: 2 });
+      expect(turnRows().some((r) => r.day === 2 && r.phase === 'EOSORIA' && r.turn === 1 && r.status !== 'collecting')).toBe(true);
+    });
+
+    it('C4: a recap of 400 and a saga of 900 characters are stored exactly, from one request', async () => {
+      const recap = 'ก'.repeat(400);
+      const saga = 'ข'.repeat(900);
+      await dayOneEnds((req) => (req.purpose === 'summarize_day' ? mockReply.ok({ recap, saga }) : undefined));
+      await expect.poll(memoryOfDay1, { timeout: 5_000 }).toEqual([
+        { kind: 'day', text: recap },
+        { kind: 'saga', text: saga },
+      ]);
+      expect(provider.requests.filter((r) => r.purpose === 'summarize_day' && contextOf<{ day: number }>(r).day === 1)).toHaveLength(1);
+    });
+  });
+
   it('Q-153: a new day stores a journal per player from what that player saw, fed to that player\'s next narrations only', async () => {
     await boot();
     const t = await startedTable(server!, false);

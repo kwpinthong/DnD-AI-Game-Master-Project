@@ -45,6 +45,8 @@ export interface AiCallRequest {
   output: { name: string; jsonSchema: Record<string, unknown> };
   maxOutputTokens: number;
   effort: 'low' | 'medium' | 'high';
+  /** ISK-028: set for summarize_day only; a provider turns thinking off where the model allows it. */
+  thinking?: 'off';
   timeoutMs: number;
   signal?: AbortSignal;
 }
