@@ -480,8 +480,8 @@ export function createRoomService(
             if (entry.kind === 'feed' && entry.locationId !== null && entry.actorMemberId === null) placeAudience.set(entry.locationId, new Set([...(placeAudience.get(entry.locationId) ?? []), ...recipients]));
             const fallback = entry.fallback ? { fallback: entry.fallback } : {};
             const meta =
-              entry.kind === 'narration' && entry.roll
-                ? { meta: { roll: entry.roll } }
+              entry.kind === 'narration' && (entry.roll || entry.clue)
+                ? { meta: { ...(entry.roll ? { roll: entry.roll } : {}), ...(entry.clue ? { clue: true as const } : {}) } }
                 : entry.kind === 'npc'
                   ? { meta: { npc: { id: entry.npcId, kind: entry.npcKind, ...(entry.memberId !== null ? { private: true as const } : {}) } } }
                   : {};

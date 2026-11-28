@@ -5,7 +5,9 @@ import { JoinForm } from './JoinForm.tsx';
 import { Lobby } from './Lobby.tsx';
 import { GameHistory } from './GameHistory.tsx';
 import { MyStyle } from './MyStyle.tsx';
+import { takeLateJoin } from './late-join.ts';
 import { apiUrl, fetchMe, fetchWithTimeout, forgetToken, loadToken, rememberToken, saveToken } from './session.ts';
+import { lateJoinText } from './ui/strings.ts';
 
 type Status = 'checking' | 'connected' | 'unreachable';
 
@@ -40,6 +42,8 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
   const [showStyle, setShowStyle] = useState(false);
   /** The play room is open (reported by the lobby). */
   const [playing, setPlaying] = useState(false);
+  /** A line the join form opens with (ISK-016: the seat was given back). */
+  const [notice, setNotice] = useState<string>();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -55,7 +59,10 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
     let cancelled = false;
     fetchMe(apiBaseUrl, token).then((member) => {
       if (cancelled) return;
-      if (member === null) saveToken(null);
+      if (member === null) {
+        saveToken(null);
+        if (takeLateJoin(token)) setNotice(lateJoinText.expired);
+      }
       // A login kept from before the game list existed joins the list too.
       if (member && member !== 'unreachable') rememberToken(token);
       // Server unreachable: keep the token for the next visit, show the form meanwhile.
@@ -69,12 +76,17 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
   function joined(member: Member, token: string, game?: GameView) {
     saveToken(token);
     rememberToken(token);
+    setNotice(undefined);
     setAuth({ state: 'member', member, token, ...(game ? { game } : {}) });
   }
 
   /** The server refused the session (kicked or expired): back to the join form. */
   function sessionLost() {
-    if (auth.state === 'member') forgetToken(auth.token);
+    if (auth.state === 'member') {
+      forgetToken(auth.token);
+      // ISK-016: the session went while they were still preparing: their seat was given back.
+      setNotice(takeLateJoin(auth.token) ? lateJoinText.expired : undefined);
+    }
     saveToken(null);
     setGuestView('join');
     setAuth({ state: 'guest' });
@@ -109,7 +121,7 @@ export function App({ apiBaseUrl }: { apiBaseUrl: string }) {
       )}
       {auth.state === 'guest' && guestView === 'join' && (
         <>
-          <JoinForm apiBaseUrl={apiBaseUrl} onJoined={joined} />
+          <JoinForm apiBaseUrl={apiBaseUrl} onJoined={joined} {...(notice ? { notice } : {})} />
           <p>
             มี create code?{' '}
             <button type="button" onClick={() => setGuestView('create')}>

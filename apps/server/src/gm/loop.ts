@@ -479,20 +479,19 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     const start = locationSnapshot(db, gameId);
     const investigators = new Set(proposal.actions.filter((a) => a.investigate).map((a) => a.actionId));
     // Q-135: found Hidden Evidence is narrated from its id + place + day only (never who left it).
+    const discoveredBy = (o: ActionOutcome) => (o.status === 'resolved' && investigators.has(o.actionId) ? discoverHiddenEvidence(db, gameId, o.actorId, at.day, o.log.degree) : []);
     const evidenceFor = (o: ActionOutcome): Beat[] =>
-      o.status === 'resolved' && investigators.has(o.actionId)
-        ? discoverHiddenEvidence(db, gameId, o.actorId, at.day, o.log.degree).map((f) => ({
-            actionId: `evidence:${f.id}`,
-            kind: 'evidence' as const,
-            actor: world.players.get(o.actorId)!.ref,
-            text: `พบร่องรอยลับ (หลักฐาน ${f.id}) ที่${placeName.get(f.locationId) ?? f.locationId} ซึ่งมีคนทิ้งไว้ในวันที่ ${f.day}`,
-            result: 'scene',
-            target: null,
-            targetNpc: null,
-            moved: null,
-            items: [],
-          }))
-        : [];
+      discoveredBy(o).map((f) => ({
+        actionId: `evidence:${f.id}`,
+        kind: 'evidence' as const,
+        actor: world.players.get(o.actorId)!.ref,
+        text: `พบร่องรอยลับ (หลักฐาน ${f.id}) ที่${placeName.get(f.locationId) ?? f.locationId} ซึ่งมีคนทิ้งไว้ในวันที่ ${f.day}`,
+        result: 'scene',
+        target: null,
+        targetNpc: null,
+        moved: null,
+        items: [],
+      }));
     const karmaOf = (memberId: string) => state.players[memberId]?.karma ?? 0;
     // GEN-143: who a place was talking to last turn answers an action there that names nobody.
     const partnerAt = (placeId: string) => lastTurn.find((l) => l.talked && l.placeId === placeId)?.npcId ?? null;
@@ -653,7 +652,11 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         ...[...own].map(([t, only]): ResolutionEntry => ({ ...feed, text: t, only })),
       ];
     });
-    const entries: ResolutionEntry[] = [...farewellEntries, ...perAudience.flat()];
+    // ISK-013 (Q-389 = A): each found Hidden Evidence is also its own private clue entry, last so `firstEntry` below holds.
+    const clueEntries = resolved.log.outcomes.flatMap((o) =>
+      discoveredBy(o).map((f): ResolutionEntry => ({ kind: 'narration', memberId: o.actorId, text: `พบร่องรอยลับที่${placeName.get(f.locationId) ?? f.locationId} ซึ่งมีคนทิ้งไว้ในวันที่ ${f.day}`, clue: true })),
+    );
+    const entries: ResolutionEntry[] = [...farewellEntries, ...perAudience.flat(), ...clueEntries];
     // GEN-128: where each audience's own text (its narration, or its place feed as most read it) sits in `entries`.
     const firstEntry = (i: number) => farewellEntries.length + perAudience.slice(0, i).reduce((n, e) => n + e.length, 0);
 

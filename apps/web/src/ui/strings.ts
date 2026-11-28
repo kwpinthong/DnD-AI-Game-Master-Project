@@ -472,6 +472,7 @@ export const playText = {
     hit: 'เกิดกับคุณ',
     arrived: 'คุณมาถึง',
     news: (day: number) => `ข่าวเช้าวันที่ ${day}`,
+    clue: 'เบาะแส',
     hud: { label: 'ตัวละครของคุณ', seenAs: 'คนอื่นเห็นคุณเป็น:', hp: 'HP', stamina: 'แรง', coins: 'เหรียญ', coinsLabel: 'เหรียญ', loading: '…' },
     panel: { label: 'แผงข้อมูล', place: 'สถานที่', scene: 'ฉาก', self: 'ตัวฉัน', bag: 'กระเป๋า', people: 'คนรอบตัว', alias: 'ฉายา', traits: 'จุดแข็ง / จุดอ่อน', strength: 'จุดแข็ง', weakness: 'จุดอ่อน', skills: (n: number) => `สกิล (${n})`, log: 'บันทึกค่าที่เปลี่ยน', logNone: 'ยังไม่มีค่าที่เปลี่ยน', bagEmpty: 'ยังไม่มีของติดตัว', around: 'คนที่อยู่ที่นี่', mates: 'คู่หู' },
     bar: { group: 'แถบ action', more: 'อื่นๆ', moreGroup: 'การกระทำทั้งหมด', close: 'ปิด', input: 'พิมพ์สิ่งที่จะทำ', placeholder: 'พิมพ์สิ่งที่จะทำ…', secret: 'ลับ', send: 'ส่ง', sendLabel: 'ส่ง action', resend: 'ส่งแทนของเดิม', actions: { พูดคุย: 'พูดคุย', สังเกต: 'สังเกต', สืบค้น: 'สืบค้น', โจมตี: 'โจมตี', ป้องกัน: 'ป้องกัน', สวด: 'สวด', ลอบเร้น: 'ลอบเร้น', พัก: 'พัก' }, lockedBecause: (why: string) => `ส่งไม่ได้ตอนนี้: ${why}`, waiting: 'ส่งแล้ว รอเทิร์นถัดไป' },
@@ -542,4 +543,25 @@ export const toneText = {
   locked: 'ล็อกแล้ว เปลี่ยนโทนไม่ได้หลังเริ่มเล่น',
   ownerOnly: 'เฉพาะเจ้าของเกมเปลี่ยนได้ก่อนเริ่มเกม',
   adminDefault: 'โทนเริ่มต้นของเกมใหม่',
+} as const;
+
+// ISK-016: joining a game that already started.
+export const lateJoinText = {
+  /** The join form's line per 409 code (ISK-015); any other code says `otherError`; 409 game_full (ISK-030) and 403 kicked show the server's message. */
+  errors: {
+    join_closed_day: 'เกมผ่านวันที่ 9 แล้ว เข้าร่วมไม่ได้',
+    single_mode: 'เกมนี้เล่นคนเดียว',
+    game_ended: 'เกมนี้จบแล้ว',
+  },
+  otherError: 'เข้าร่วมไม่ได้ ลองใหม่ภายหลัง',
+  banner: (day: number | null) => (day === null ? 'คุณกำลังเข้าร่วมเกมที่เริ่มไปแล้ว' : `คุณกำลังเข้าร่วมเกมที่เริ่มไปแล้ว (วันที่ ${day})`),
+  expired: 'หมดเวลาเตรียมตัว กรุณาเข้าร่วมใหม่',
+  spawn: {
+    title: 'จุดเกิด',
+    lead: 'พร้อมแล้ว กดเข้าเมืองเพื่อสุ่มจุดเกิดของคุณ แล้วอ่านเรื่องการข้ามโลกกับเรื่องที่เกิดขึ้นก่อนคุณมาถึง',
+    note: 'ส่ง action ได้ตั้งแต่เทิร์นที่เปิดถัดไป ไม่มีของชดเชยวันที่พลาดไป',
+    go: 'เข้าเมือง',
+    going: 'กำลังสุ่มจุดเกิด…',
+    back: 'กลับไปแก้ตัวละคร',
+  },
 } as const;

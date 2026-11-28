@@ -131,7 +131,12 @@ export interface EntryMeta {
   /** GEN-129: a `player` entry's actor (member id; the viewer's alias / name comes at read time). */
   readonly actor?: string;
   readonly npc?: { readonly id: string; readonly kind: 'dialogue' | 'reaction'; readonly private?: true };
+  /** ISK-013: a `narration` the server wrote for found Hidden Evidence (not AI text, so not votable). */
+  readonly clue?: true;
 }
+
+/** ISK-013: a stored clue entry (server text): shown as a clue, never votable. */
+export const isClueRow = (row: { readonly meta: string | null }) => row.meta !== null && (JSON.parse(row.meta) as EntryMeta).clue === true;
 
 export interface NewEntry {
   readonly kind: RoomEntryKind | 'hit';

@@ -48,10 +48,14 @@ export function CharacterScreen({
   onBack,
   onSessionLost,
   onGameStarted,
+  onConfirm = onBack,
 }: {
   apiBaseUrl: string;
   token: string;
-  onBack: () => void;
+  /** กลับห้องรอ; none = no lobby to go back to (ISK-016 late joiner). */
+  onBack?: () => void;
+  /** ยืนยันตัวละคร (default: back to the lobby). */
+  onConfirm?: (() => void) | undefined;
   onSessionLost: () => void;
   /** The game has started: open the play room instead of this page. */
   onGameStarted?: () => void;
@@ -112,7 +116,7 @@ export function CharacterScreen({
     if (result.character?.editable) setStep(1);
   }
 
-  const back = (
+  const back = onBack && (
     <Button className="pregame__back" onClick={onBack}>
       กลับห้องรอ
     </Button>
@@ -267,7 +271,7 @@ export function CharacterScreen({
               <p className="pregame__note">ยังกลับมาแก้ได้ทุกขั้นจนกว่าเจ้าของเกมจะกดเริ่มเกม</p>
               <div className="pregame__actions pregame__actions--split">
                 <Button onClick={() => setStep(1)}>ย้อนกลับ</Button>
-                <Button variant="primary" onClick={onBack}>
+                <Button variant="primary" onClick={onConfirm}>
                   ยืนยันตัวละคร
                 </Button>
               </div>

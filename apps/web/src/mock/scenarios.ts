@@ -54,7 +54,7 @@ const lockState = (code: string) => ROOM_STATES.find((s) => s.you.lock?.code ===
  * The entries a player has at the start: everything but the hit (it arrives live) and the omen (Astral only).
  * An AI-written entry the fixtures give no vote state gets "not voted" (GEN-107: the server sends `myVote` for each of them).
  */
-const START_ENTRIES = ENTRIES.filter((e) => e.kind !== 'hit' && e.kind !== 'omen').map((e) => (isVotableEntry({ kind: e.kind, ...(e.fallback ? { fallback: true as const } : {}) }) && e.myVote === undefined ? { ...e, myVote: null } : e));
+const START_ENTRIES = ENTRIES.filter((e) => e.kind !== 'hit' && e.kind !== 'omen').map((e) => (isVotableEntry({ kind: e.kind, ...(e.fallback ? { fallback: true as const } : {}) }) && !e.clue && e.myVote === undefined ? { ...e, myVote: null } : e));
 /** GEN-107 C6: the Human GM never gets `myVote`, so no vote buttons. */
 const GM_ENTRIES = START_ENTRIES.map(({ myVote: _myVote, ...entry }) => entry);
 /** The pinned hit of the fixtures, sent by the `hit` op. */
@@ -189,6 +189,34 @@ const ADMIN_GAMES = {
   ],
 };
 const CLOSED_LOG = F.GameLogResponse.find((l) => l.game.closedEarly)!;
+
+// --- ISK-016: joining a game that already started ---
+/** A newcomer of a started game on day 4: their character is saved, the loot kept, not spawned yet. */
+const lateGame: GameView = { ...STARTED_GAME, members: STARTED_GAME.members.map((m) => (m.id === ME ? { ...m, hasCharacter: false } : m)) };
+const dayOf = (day: number) => ok({ view: 'player', at: { day, phase: 'SOLARION' }, ended: false, events: [] });
+const LATE_ORIGIN =
+  ORIGIN.view === 'player' && ORIGIN.origin
+    ? { view: 'player', origin: { ...ORIGIN.origin, narration: `${ORIGIN.origin.narration}\n\nเรื่องราวก่อนคุณมาถึง: สามวันก่อน หอนาฬิกากลางเมืองหยุดเดิน ชาวเมืองลือกันว่ามีคนแอบเข้าไปข้างใน` } }
+    : ORIGIN;
+const LATE_SETUP = {
+  'GET /api/game': ok(lateGame),
+  'GET /api/game/timeline': dayOf(4),
+  'GET /api/game/character': ok(DRAFT_CHARACTER),
+  'GET /api/game/character/loot': ok(LOOT_KEPT),
+  'POST /api/game/spawn': ok(LATE_ORIGIN),
+  'GET /api/game/origin': ok(LATE_ORIGIN),
+  ...DRAFT_SAVES,
+} as const;
+const SESSION_GONE: MockReply = { status: 401, body: { code: 'session_expired', message: 'session หมดอายุ เข้าเกมใหม่ด้วยชื่อและ PIN เดิม' } };
+/** What an old player sees once the newcomer arrived: the arrival line in the feed and their look in the people list. */
+const ARRIVAL = 'มีผู้มาใหม่ปรากฏตัวในเมือง: คนแปลกหน้า หญิงผมสั้นสีเงิน เสื้อคลุมเดินทางสีเขียว';
+const ARRIVAL_ENTRIES: readonly RoomEntry[] = [...START_ENTRIES, { seq: 40, kind: 'time', day: BASE_ROOM.day, phase: BASE_ROOM.phase, turn: BASE_ROOM.turn, place: null, text: ARRIVAL }];
+const ARRIVAL_PEOPLE = (() => {
+  const base = SurroundingsResponse.parse(F.SurroundingsResponse[0]);
+  if (base.view !== 'player') throw new Error('the first SurroundingsResponse fixture is the player view');
+  const newcomer = { ref: 'p-new', avatarId: 'avatar-02', appearance: 'หญิงผมสั้นสีเงิน เสื้อคลุมเดินทางสีเขียว', injury: 'ปกติ', socialTitle: 'คนแปลกหน้า', name: null };
+  return { 'GET /api/game/surroundings': ok({ ...base, people: [...base.people, newcomer] }) };
+})();
 
 const ALL_SCREENS =CONTRACT_SCREENS.map((s) => s.id);
 const room = (state: RoomState, script: readonly MockStep[] = [], entries: readonly RoomEntry[] = START_ENTRIES) => ({ state, entries, script });
@@ -593,6 +621,53 @@ export const SCENARIOS: readonly MockScenario[] = [
     screens: ['ending', 'home'],
     http: { 'GET /api/game/log': ok(CLOSED_LOG), 'GET /api/game/rating': ok(F.GameRatingResponse[1]) },
     room: room(endedRoom),
+  },
+  // ISK-016: joining a game that already started (the join errors: `join-*`; the newcomer's setup: `late-join*`).
+  ...(['game_full', 'join_closed_day', 'single_mode', 'game_ended'] as const).map((code) => ({
+    id: `join-${code.replaceAll('_', '-')}`,
+    title: `join ไม่ได้: ${code}`,
+    note: 'กดเข้าร่วม: server ตอบ 409 ข้อความใต้ฟอร์มบอกเหตุผล',
+    session: 'guest' as const,
+    screens: ['join'] as const,
+    http: { 'POST /api/join': { status: 409, body: { code, message: code === 'game_full' ? 'เกมเต็ม (เกมนี้เล่นคนเดียว)' : code } } },
+    room: room(BASE_ROOM),
+  })),
+  {
+    id: 'late-join',
+    title: 'เข้าร่วมกลางเกม: เตรียมตัว',
+    note: 'เกมเริ่มแล้ว (วันที่ 4): แถบบอกวันที่เข้าร่วม สร้างตัว → ของติดตัว → จุดเกิด แล้วการ์ดบรรยายข้ามโลก + เรื่องที่ผ่านมา',
+    session: 'player',
+    screens: ['lobby', 'origin-card'],
+    http: LATE_SETUP,
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'late-join-next-day',
+    title: 'เข้าร่วมกลางเกม: เปิดใหม่วันถัดไป',
+    note: 'เกมเลยไปวันที่ 5 ระหว่างเตรียมตัว: แถบยังบอกวันที่ตอนเข้าร่วม',
+    session: 'player',
+    screens: ['lobby'],
+    http: { ...LATE_SETUP, 'GET /api/game/timeline': dayOf(5) },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'late-join-expired',
+    title: 'เข้าร่วมกลางเกม: หมดเวลาเตรียมตัว',
+    note: 'ไม่เกิดภายใน 1 ช่วงเวลา: ที่นั่งถูกคืน (session หาย) กลับหน้า join พร้อมข้อความ (ดูทั้งแอปที่ /?scenario=late-join-expired)',
+    session: 'player',
+    screens: ['lobby'],
+    http: LATE_SETUP,
+    httpScript: { 'GET /api/game': [{ afterMs: 1000, reply: SESSION_GONE }] },
+    room: room(BASE_ROOM),
+  },
+  {
+    id: 'late-join-arrival',
+    title: 'มีผู้มาใหม่ (มุมผู้เล่นเดิม)',
+    note: 'feed บอกมีผู้มาใหม่ด้วยลักษณะ และรายชื่อคนที่นี่มีคนใหม่',
+    session: 'player',
+    screens: ['play-feed', 'play-place'],
+    http: ARRIVAL_PEOPLE,
+    room: room(BASE_ROOM, [], ARRIVAL_ENTRIES),
   },
   // ISK-011: the report box (กด ส่ง to see each answer; `normal` = sent) and the owner's ฟีดแบ็ก tab.
   { id: 'feedback-sending', title: 'กำลังส่งรายงาน', note: 'กดส่งแล้วคำตอบยังไม่มา: ปุ่มส่งกดซ้ำไม่ได้', session: 'player', screens: ['feedback'], http: { 'POST /api/feedback': { pending: true } }, room: room(BASE_ROOM) },
