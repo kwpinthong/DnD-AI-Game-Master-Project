@@ -1,10 +1,10 @@
 import { appearanceLabels, appearanceParts, isVotableEntry, type AppearanceTraits, type NpcLineView, type PlaceView, type RoomEntry } from '@isekai/protocol';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { npcSpeaker } from '../companions/store.ts';
 import type { DbOrTx } from '../db/client.ts';
-import { character, member } from '../db/schema.ts';
+import { character, member, roomEntryRecipient } from '../db/schema.ts';
 import { titleOf } from '../game/character.ts';
-import { youInText } from '../game/tokens.ts';
+import { nameAsYou, youInText } from '../game/tokens.ts';
 import { maskNames } from '../gm/check.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { ASTRAL_PLANE, namesVisibleTo, npcBondsOf } from '../visibility/store.ts';
@@ -73,6 +73,23 @@ export function readerText(db: DbOrTx, gameId: string, text: string, viewer: { i
   return youInText(text, { appearance: me.appearance, title: titleOf(me), parts }, others);
 }
 
+/** ISK-031: an ending (stored with real names) as its owner reads it: their own name is "คุณ", then their looks (readerText). */
+export function ownEndingText(db: DbOrTx, gameId: string, text: string, viewer: { id: string; role: string }, assets: GameAssets): string {
+  if (viewer.role !== 'player') return text;
+  const people = db.select({ memberId: character.memberId, name: character.name }).from(character).innerJoin(member, eq(member.id, character.memberId)).where(eq(member.gameId, gameId)).all();
+  const me = people.find((p) => p.memberId === viewer.id);
+  if (!me) return text;
+  const others = [...people.filter((p) => p !== me).map((p) => p.name), ...(getGameScenario(db, gameId)?.npcs ?? []).map((n) => n.name)];
+  return readerText(db, gameId, nameAsYou(text, me.name, others), viewer, assets);
+}
+
+/** ISK-031: a finale narration read by the one it was told to (its recipient). */
+const isOwnEnding = (db: DbOrTx, row: RoomEntryRow, meta: EntryMeta, viewer: { id: string; role: string }) =>
+  row.kind === 'narration' &&
+  meta.finale === true &&
+  viewer.role === 'player' &&
+  db.select({ id: roomEntryRecipient.entryId }).from(roomEntryRecipient).where(and(eq(roomEntryRecipient.entryId, row.id), eq(roomEntryRecipient.memberId, viewer.id))).get() !== undefined;
+
 /** ISK-008: what someone says or types (an action, a whisper, an NPC's spoken line) is never rewritten for the reader. */
 const ownWords = (row: RoomEntryRow, meta: EntryMeta) => row.kind === 'player' || row.kind === 'whisper' || (row.kind === 'npc' && meta.npc?.kind === 'dialogue');
 
@@ -86,7 +103,14 @@ export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string;
     phase: row.phase,
     turn: row.turn === 2 ? 2 : 1,
     place: placeViewOf(db, row.gameId, row.locationId, assets),
-    text: row.kind === 'player' && meta.actor ? playerTextOf(db, row, meta.actor, viewer) : ownWords(row, meta) ? row.text : readerText(db, row.gameId, row.text, viewer, assets),
+    text:
+      row.kind === 'player' && meta.actor
+        ? playerTextOf(db, row, meta.actor, viewer)
+        : ownWords(row, meta)
+          ? row.text
+          : isOwnEnding(db, row, meta, viewer)
+            ? ownEndingText(db, row.gameId, row.text, viewer, assets)
+            : readerText(db, row.gameId, row.text, viewer, assets),
     // Q-229: the viewer's own roll / hit card; only the entries made for one reader carry them.
     ...(meta.roll ? { roll: meta.roll } : {}),
     ...(meta.hit ? { hit: meta.hit } : {}),

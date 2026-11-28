@@ -136,7 +136,7 @@ describe('ISK-008 C8: history, replay and the ending read like live', { timeout:
     expect(room.entries().find((e) => e.seq === narration.id)?.text).toBe('ทหารหันไปมองคุณ');
     await room.close();
 
-    // The ending: A's own token is "คุณ" in A's ending; B's ending names A (every secret is out).
+    // The ending is stored raw, every token the real name (every secret is out, ISK-031).
     const world = loadWorld(db, gameId, server.assets);
     const refOf = (memberId: string) => [...world.byRef].find(([, p]) => p.memberId === memberId)![0];
     const [ra, rb] = [refOf(t.a.memberId), refOf(t.b.memberId)];
@@ -147,12 +147,16 @@ describe('ISK-008 C8: history, replay and the ending read like live', { timeout:
         { player: rb, text: `{{p:${rb}}} เดินไปหา {{p:${ra}}}` },
       ],
     });
-    expect(entries.find((e) => e.kind === 'narration' && e.memberId === t.a.memberId)?.text).toBe('คุณยืนมองฟ้า');
-    expect(entries.find((e) => e.kind === 'narration' && e.memberId === t.b.memberId)?.text).toBe(`คุณเดินไปหา ${LIN.name}`);
+    const told = entries.find((e) => e.kind === 'narration' && e.memberId === t.a.memberId)?.text;
+    expect(told).toBe('ลิน ยืนมองฟ้า');
+    expect(entries.find((e) => e.kind === 'narration' && e.memberId === t.b.memberId)?.text).toBe('ดาริน เดินไปหา ลิน');
+    const epilogueOf = (viewer?: string) => revealFor(db, server!.assets, gameId, viewer).players.find((p) => p.memberId === t.a.memberId)?.epilogue;
+    insertEntry(db, gameId, { kind: 'narration', at, locationId: null, text: told!, meta: { finale: true } }, [t.a.memberId], 1);
+    expect(epilogueOf(t.a.memberId)).toBe('คุณยืนมองฟ้า');
+    expect(epilogueOf(t.b.memberId)).toBe('ลิน ยืนมองฟ้า');
 
     // The end page: A's own epilogue reads "คุณ" for their look to A; the others read it as it was told.
     insertEntry(db, gameId, { kind: 'narration', at, locationId: null, text: `${LIN.appearance} ยืนมองฟ้า`, meta: { finale: true } }, [t.a.memberId], 1);
-    const epilogueOf = (viewer?: string) => revealFor(db, server!.assets, gameId, viewer).players.find((p) => p.memberId === t.a.memberId)?.epilogue;
     expect(epilogueOf(t.a.memberId)).toBe('คุณยืนมองฟ้า');
     expect(epilogueOf(t.b.memberId)).toBe(`${LIN.appearance} ยืนมองฟ้า`);
     expect(epilogueOf()).toBe(`${LIN.appearance} ยืนมองฟ้า`);
@@ -199,5 +203,149 @@ describe('ISK-008 C8: history, replay and the ending read like live', { timeout:
       entryViewOf(db, insertEntry(db, gameId, { kind: 'npc', at, locationId: null, text, meta: { npc: { id: 'sera', kind } } }, [t.a.memberId], 1), { id: t.a.memberId, role: 'player' }, server!.assets).text;
     expect(npc('dialogue', `${LIN.appearance}คนนั้นมาแล้ว`)).toBe(`${LIN.appearance}คนนั้นมาแล้ว`);
     expect(npc('reaction', `หันไปมอง${LIN.appearance}`)).toBe('หันไปมองคุณ');
+  });
+});
+
+describe('ISK-031 no "คุณคุณ"; the ending is stored raw and its owner reads "คุณ"', { timeout: 60_000 }, () => {
+  const A1 = { appearance: 'ผมดำยาว', title: 'ทหารยามหน้าใหม่ประจำค่าย', parts: [] as string[] };
+  const people = {
+    npcs: [],
+    byRef: new Map([
+      ['a', { memberId: 'm-a', name: 'อาริน', socialTitle: A1.title }],
+      ['b', { memberId: 'm-b', name: 'บี', socialTitle: B.title }],
+    ]),
+    knownNames: () => new Set<string>(),
+  } as unknown as GmWorld;
+  // The live narration path: loop.ts renders per reader before storing, entryViewOf → readerText → youInText on read.
+  const live = (t: string) => youInText(renderTokens(null as never, people, t, 'm-a'), A1, [B]);
+
+  let dataDir = '';
+  let cleanup = () => {};
+  let server: RunningServer | undefined;
+
+  beforeEach(() => {
+    ({ dir: dataDir, cleanup } = makeTempDir());
+  });
+  afterEach(async () => {
+    await server?.close();
+    server = undefined;
+    cleanup();
+  });
+
+  async function table() {
+    const s = (server = await startTestServer(dataDir));
+    const t = await startedTable(s, false);
+    const db = s.orm;
+    const gameId = (s.db.prepare('select game_id from member where id = ?').get(t.a.memberId) as { game_id: string }).game_id;
+    const world = loadWorld(db, gameId, s.assets);
+    const refOf = (memberId: string) => [...world.byRef].find(([, p]) => p.memberId === memberId)![0];
+    const [ra, rb] = [refOf(t.a.memberId), refOf(t.b.memberId)];
+    const at = { day: 12, phase: 'NOCTHERION' as const, turn: 2 as const };
+    /** finaleEntries, each entry stored as publishFinale does: a narration to its owner, the feed to everyone. */
+    const publish = (overall: string, players: { player: string; text: string }[]) => {
+      const entries = finaleEntries(db, s.assets, gameId, { overall, players });
+      const rows = entries.map((e) =>
+        insertEntry(db, gameId, { kind: e.kind, at, locationId: null, text: e.text, meta: { finale: true } }, e.kind === 'narration' ? [e.memberId] : [t.a.memberId, t.b.memberId, t.c.memberId], 1),
+      );
+      const narrationOf = (memberId: string) => rows[entries.findIndex((e) => e.kind === 'narration' && e.memberId === memberId)]!;
+      return { entries, rows, narrationOf };
+    };
+    const epilogue = (owner: string, viewer?: string) => revealFor(db, s.assets, gameId, viewer).players.find((p) => p.memberId === owner)?.epilogue;
+    return { s, t, db, gameId, ra, rb, publish, epilogue };
+  }
+
+  it('ISK-031 C1', () => {
+    expect(live('{{p:a}} ทหารยามหน้าใหม่ประจำค่าย ออกจากโบสถ์')).toBe('คุณออกจากโบสถ์');
+  });
+
+  it('ISK-031 C2', () => {
+    expect(live('{{p:a}} ผมดำยาว กวาดสายตามอง')).toBe('คุณกวาดสายตามอง');
+  });
+
+  it('ISK-031 C3', () => {
+    expect(youInText('คุณ ผมดำยาว เดินไป', A1, [B])).toBe('คุณเดินไป');
+    expect(youInText('ส่งจดหมายให้คุณคุณหญิงรออยู่', A1, [B])).toBe('ส่งจดหมายให้คุณคุณหญิงรออยู่');
+    expect(youInText('บุญคุณคุณ', A1, [B])).toBe('บุญคุณคุณ');
+    expect(youInText('คุณ คุณ เดินไป', A1, [B])).toBe('คุณ คุณ เดินไป');
+    expect(youInText('ทหารพูดว่า "คุณ ผมดำยาว รอก่อน"', A1, [B])).toBe('ทหารพูดว่า "คุณ ผมดำยาว รอก่อน"');
+  });
+
+  it('ISK-031 C4', async () => {
+    const { t, ra, rb, publish } = await table();
+    const { entries } = publish('เมืองรอดพ้น', [
+      { player: ra, text: `{{p:${ra}}} ยืนมองฟ้า` },
+      { player: rb, text: `{{p:${rb}}} เดินไปหา {{p:${ra}}}` },
+    ]);
+    expect(entries.find((e) => e.kind === 'narration' && e.memberId === t.a.memberId)?.text).toBe('ลิน ยืนมองฟ้า');
+    expect(entries.find((e) => e.kind === 'narration' && e.memberId === t.b.memberId)?.text).toBe('ดาริน เดินไปหา ลิน');
+  });
+
+  it('ISK-031 C5', async () => {
+    const { t, ra, rb, publish, epilogue } = await table();
+    publish('เมืองรอดพ้น', [
+      { player: ra, text: `{{p:${ra}}} ยืนมองฟ้า` },
+      { player: rb, text: `{{p:${rb}}} เดินไปหา {{p:${ra}}}` },
+    ]);
+    expect(epilogue(t.a.memberId, t.b.memberId)).toBe('ลิน ยืนมองฟ้า');
+    expect(epilogue(t.b.memberId, t.b.memberId)).toBe('คุณเดินไปหา ลิน');
+    expect(epilogue(t.a.memberId, t.a.memberId)).toBe('คุณยืนมองฟ้า');
+    expect(epilogue(t.b.memberId, t.a.memberId)).toBe('ดาริน เดินไปหา ลิน');
+    expect(epilogue(t.a.memberId)).toBe('ลิน ยืนมองฟ้า');
+    expect(epilogue(t.b.memberId)).toBe('ดาริน เดินไปหา ลิน');
+  });
+
+  it('ISK-031 C6', async () => {
+    const { s, t, db, ra, rb, publish } = await table();
+    const { narrationOf } = publish('เมืองรอดพ้น', [
+      { player: ra, text: `{{p:${ra}}} ยืนมองฟ้า` },
+      { player: rb, text: `{{p:${rb}}} เดินไปหา {{p:${ra}}}` },
+    ]);
+    const row = narrationOf(t.a.memberId);
+    const log = await t.call('GET', '/api/game/log', { token: t.a.token });
+    expect((log.body as { entries: { seq: number; text: string }[] }).entries.find((e) => e.seq === row.id)?.text).toBe('คุณยืนมองฟ้า');
+    const room = await openRoom(s, { token: t.a.token });
+    await room.waitFor(isReady);
+    expect(room.entries().find((e) => e.seq === row.id)?.text).toBe('คุณยืนมองฟ้า');
+    await room.close();
+    expect(entryViewOf(db, row, { id: t.b.memberId, role: 'player' }, s.assets).text).toBe('ลิน ยืนมองฟ้า');
+    expect(entryViewOf(db, row, { id: 'gm', role: 'gm' }, s.assets).text).toBe('ลิน ยืนมองฟ้า');
+    expect((s.db.prepare('select text from room_entry where id = ?').get(row.id) as { text: string }).text).toBe('ลิน ยืนมองฟ้า');
+  });
+
+  it('ISK-031 C7', async () => {
+    const { t, ra, rb, publish } = await table();
+    const { entries, rows } = publish(`{{p:${ra}}} และ{{p:${rb}}} รอดชีวิต`, [{ player: ra, text: `{{p:${ra}}} ยืนมองฟ้า` }]);
+    const feed = rows[entries.findIndex((e) => e.kind === 'feed')]!;
+    expect(feed.text).toBe('ลิน และดาริน รอดชีวิต');
+    const log = await t.call('GET', '/api/game/log', { token: t.a.token });
+    expect((log.body as { entries: { seq: number; text: string }[] }).entries.find((e) => e.seq === feed.id)?.text).toBe('ลิน และดาริน รอดชีวิต');
+  });
+
+  it('ISK-031 C8', async () => {
+    const { t, ra, publish, epilogue } = await table();
+    const { narrationOf } = publish('เมืองรอดพ้น', [{ player: ra, text: `{{p:${ra}}} พูดว่า "{{p:${ra}}} มาแล้ว"` }]);
+    expect(narrationOf(t.a.memberId).text).toBe('ลิน พูดว่า "ลิน มาแล้ว"');
+    expect(epilogue(t.a.memberId, t.a.memberId)).toBe('คุณพูดว่า "ลิน มาแล้ว"');
+  });
+
+  it('ISK-031 C9', async () => {
+    const { t, db, ra, rb, publish, epilogue } = await table();
+    db.update(character).set({ name: 'ลินดา' }).where(eq(character.memberId, t.b.memberId)).run();
+    expect(publish('เมืองรอดพ้น', [{ player: ra, text: `{{p:${ra}}} มอง{{p:${rb}}}` }]).narrationOf(t.a.memberId).text).toBe('ลิน มองลินดา');
+    expect(epilogue(t.a.memberId, t.a.memberId)).toBe('คุณมองลินดา');
+    expect(publish('เมืองรอดพ้น', [{ player: ra, text: `{{p:${rb}}}ยิ้มให้{{p:${ra}}}` }]).narrationOf(t.a.memberId).text).toBe('ลินดายิ้มให้ลิน');
+    expect(epilogue(t.a.memberId, t.a.memberId)).toBe('ลินดายิ้มให้คุณ');
+  });
+
+  it('ISK-031 C10', async () => {
+    const { t, ra, publish, epilogue } = await table();
+    expect(publish('เมืองรอดพ้น', [{ player: ra, text: `{{p:${ra}}}ยืนมองฟ้า` }]).narrationOf(t.a.memberId).text).toBe('ลินยืนมองฟ้า');
+    expect(epilogue(t.a.memberId, t.a.memberId)).toBe('คุณยืนมองฟ้า');
+  });
+
+  it('ISK-031 C11', async () => {
+    const { t, ra, publish, epilogue } = await table();
+    expect(publish('เมืองรอดพ้น', [{ player: ra, text: `{{p:${ra}}} เดินไปคลินิก` }]).narrationOf(t.a.memberId).text).toBe('ลิน เดินไปคลินิก');
+    expect(epilogue(t.a.memberId, t.a.memberId)).toBe('คุณเดินไปคลินิก');
   });
 });

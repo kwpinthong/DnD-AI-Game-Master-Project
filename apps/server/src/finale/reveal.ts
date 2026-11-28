@@ -7,7 +7,7 @@ import { character, characterPresence, member, roomEntry, roomEntryRecipient } f
 import { titleOf } from '../game/character.ts';
 import { companionIdsOf } from '../gm/finale.ts';
 import { rulingsOf } from '../rating/store.ts';
-import { readerText } from '../room/entry-view.ts';
+import { ownEndingText } from '../room/entry-view.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { getEnding } from './store.ts';
 
@@ -30,7 +30,7 @@ export function revealFor(db: DbOrTx, assets: GameAssets, gameId: string, viewer
       .where(and(eq(roomEntry.gameId, gameId), eq(roomEntry.kind, 'narration'), eq(roomEntryRecipient.memberId, memberId), sql`json_extract(${roomEntry.meta}, '$.finale') = 1`))
       .orderBy(desc(roomEntry.id))
       .get()?.text ?? null;
-    return text !== null && memberId === viewerId ? readerText(db, gameId, text, { id: memberId, role: 'player' }, assets) : text;
+    return text !== null && memberId === viewerId ? ownEndingText(db, gameId, text, { id: memberId, role: 'player' }, assets) : text;
   };
   const rows = db
     .select({

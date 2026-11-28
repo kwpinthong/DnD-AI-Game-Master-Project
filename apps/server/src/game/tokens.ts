@@ -31,8 +31,34 @@ export function youInText(text: string, me: Looks, others: readonly Omit<Looks, 
   const all = [...new Set([...(look.length > 0 && !shared(look) ? [look] : []), ...loose])].sort((a, b) => b.length - a.length);
   if (all.length === 0) return text;
   const looks = new RegExp(`[ \\t]*(${all.map(escapeRe).join('|')})[ \\t]*`, 'gu');
-  const replace = (chunk: string) =>
-    chunk.replace(looks, (found: string, m: string, at: number) => (loose.has(m) && found.endsWith(m) && ATTACHED.test(chunk.slice(at + found.length)) ? found : 'คุณ'));
+  const replace = (chunk: string) => {
+    let youEnd = -1;
+    return chunk.replace(looks, (found: string, m: string, at: number) => {
+      if (loose.has(m) && found.endsWith(m) && ATTACHED.test(chunk.slice(at + found.length))) return found;
+      // ISK-031: "คุณ" right before it (their token, or a look just replaced) is the same person: one "คุณ".
+      const merged = at === youEnd || chunk.slice(0, at).endsWith('คุณ');
+      youEnd = at + found.length;
+      return merged ? '' : 'คุณ';
+    });
+  };
+  return text
+    .split(QUOTED)
+    .map((chunk, i) => (i % 2 === 1 ? chunk : replace(chunk)))
+    .join('');
+}
+
+/**
+ * ISK-031: the ending is stored with real names; its owner reads their own name (outside quotes) as "คุณ", no space around it.
+ * `others`: every other name in the game (players, NPCs), so a name holding theirs ("ลินดา" for "ลิน") stays.
+ * shortcut: จับชื่อในภาษาไทยแยกชื่อกับคำเดียวกันไม่ได้ (เช่น ชื่อ มา), upgrade เมื่อเจอจริง: finaleEntries เก็บข้อความของเจ้าของ (token ตัวเอง = คุณ) ไว้คู่กันใน meta
+ */
+export function nameAsYou(text: string, name: string, others: readonly string[]): string {
+  const own = name.trim();
+  if (own.length === 0) return text;
+  const names = [...new Set([own, ...others.map((n) => n.trim()).filter((n) => n.length > 0)])].sort((a, b) => b.length - a.length);
+  const found = new RegExp(`[ \\t]*(${names.map(escapeRe).join('|')})[ \\t]*`, 'gu');
+  // A combining mark (vowel / tone) right after it: the syllable goes on, a word ("คลินิก"), not the name.
+  const replace = (chunk: string) => chunk.replace(found, (all: string, m: string, at: number) => (m === own && !/^\p{M}/u.test(chunk.slice(at + all.length)) ? 'คุณ' : all));
   return text
     .split(QUOTED)
     .map((chunk, i) => (i % 2 === 1 ? chunk : replace(chunk)))
