@@ -100,6 +100,16 @@ describe('GEN-167 runner and admin page', { timeout: 120_000 }, () => {
     for (const r of journal) expect(r.maxOutputTokens).toBe(3_000);
   });
 
+  it('ISK-028 thinking: the day-summary scene asks for thinking off like the game; no other scene does', async () => {
+    const provider = mock();
+    const calls: AiCallRequest[] = [];
+    await run({ ...provider, call: (req) => (calls.push(req), provider.call(req)) });
+    const day = calls.filter((r) => r.purpose === 'summarize_day');
+    expect(day.length).toBeGreaterThan(0);
+    for (const r of day) expect(r.thinking).toBe('off');
+    for (const r of calls.filter((c) => c.purpose !== 'summarize_day')) expect(r).not.toHaveProperty('thinking');
+  });
+
   it('C4: scenes the AI fails are reported failed; the rest of the set still runs', async () => {
     const result = await run(mock(['npc_dialogue']));
     const failed = result.scenes.filter((s) => !s.ok);

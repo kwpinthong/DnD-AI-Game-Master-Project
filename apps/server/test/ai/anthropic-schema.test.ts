@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import type { AiCallRequest } from '../../src/ai/provider.ts';
 import { createAnthropicProvider } from '../../src/ai/providers/anthropic.ts';
 import { providerFor } from '../../src/ai/registry.ts';
 import { GM_OUTPUT, GmTurnProposal } from '../../src/gm/schema.ts';
@@ -26,13 +27,14 @@ describe('Anthropic provider: the schema goes in the prompt, the answer is JSON 
 
   const anthropic = (extra: Record<string, string> = {}) => aiConfig({ AI_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'sk-ant-test-key', ANTHROPIC_BASE_URL: stub!.baseUrl, ...extra });
 
-  async function callWith(answer: Parameters<typeof startAnthropicStub>[0]) {
+  async function callWith(answer: Parameters<typeof startAnthropicStub>[0], req: Partial<AiCallRequest> = {}) {
     stub = await startAnthropicStub(answer);
     const provider = createAnthropicProvider(anthropic());
     const jsonSchema = z.toJSONSchema(GmTurnProposal) as Record<string, unknown>;
     const result = await provider.call({
-      purpose: 'gm_adjudicate',
-      model: 'claude-sonnet-5-5',
+      ...req,
+      purpose: req.purpose ?? 'gm_adjudicate',
+      model: req.model ?? 'claude-sonnet-5-5',
       system: [
         { id: 'rules', text: 'กฎ', cache: true },
         { id: 'state', text: 'สถานะ', cache: false },
@@ -64,6 +66,22 @@ describe('Anthropic provider: the schema goes in the prompt, the answer is JSON 
     expect(system[2]!.text).toContain(JSON.stringify(schema));
     expect(system[2]!.text).toContain('"maxItems"');
     expect(system[2]!.text).toContain(GM_OUTPUT.turn);
+  });
+
+  it('ISK-028: a request without `thinking` sends no thinking param (every purpose but summarize_day, as before)', async () => {
+    const { body } = await callWith({ kind: 'json', value: {} }, { model: 'claude-haiku-5-5' });
+    expect(body).not.toHaveProperty('thinking');
+  });
+
+  it('ISK-028: thinking off on Haiku sends thinking disabled', async () => {
+    const { body } = await callWith({ kind: 'json', value: {} }, { purpose: 'summarize_day', model: 'claude-haiku-5-5', thinking: 'off' });
+    expect(body.thinking).toEqual({ type: 'disabled' });
+    expect(body.output_config).toEqual({ effort: 'low' });
+  });
+
+  it.each(['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-fable-5-2'])('ISK-028: thinking off on %s (rejects disabled with a 400) sends no thinking param', async (model) => {
+    const { body } = await callWith({ kind: 'json', value: {} }, { purpose: 'summarize_day', model, thinking: 'off' });
+    expect(body).not.toHaveProperty('thinking');
   });
 
   it.each([

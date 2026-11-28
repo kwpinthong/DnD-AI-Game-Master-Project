@@ -758,6 +758,15 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       for (const r of reqs) expect(r.maxOutputTokens).toBe(3_000);
     });
 
+    it('ISK-028 thinking: the summary request asks for thinking off; no other purpose carries a thinking field', async () => {
+      await dayOneEnds();
+      await until(() => provider.requests.some((r) => r.purpose === 'summarize_day'));
+      const [summary, others] = [provider.requests.filter((r) => r.purpose === 'summarize_day'), provider.requests.filter((r) => r.purpose !== 'summarize_day')];
+      for (const r of summary) expect(r.thinking).toBe('off');
+      expect(others.length).toBeGreaterThan(0);
+      for (const r of others) expect(r).not.toHaveProperty('thinking');
+    });
+
     it('C3: a summary that still fails (max_tokens) is logged, leaves no day / saga row and the game goes on', async () => {
       const clients = await dayOneEnds((req) => (req.purpose === 'summarize_day' ? mockReply.fail('max_tokens') : undefined));
       await until(() => logs.some((l) => l.includes('summarize_day day=1 failed')));
