@@ -9,6 +9,7 @@ import type { AiCallRequest, AiCallResult, AiErrorKind, AiProvider, AiTokenUsage
  *   parameters, "the compiled grammar is too large") and refuses a forced `tool_choice` on Sonnet 5.5. The
  *   AI service checks every answer with the zod schema, so a wrong answer is a `schema_mismatch` it retries.
  * - Thinking left at the model default (Sonnet 5.5 rejects `disabled`); depth via `output_config.effort`.
+ *   ISK-028: `thinking: 'off'` (summarize_day) sends `disabled` on Haiku only.
  * - `stop_reason` checked before content: `refusal` / `max_tokens` are failures the service retries.
  * - Server-side refusal fallback (`fallbacks: "default"`) on models that support it.
  * - SDK retries off: the AI service owns retry, so every attempt is one AiUsage row.
@@ -19,6 +20,9 @@ const MAX_CACHE_BREAKPOINTS = 4;
 
 /** Models that accept `fallbacks: "default"` (Haiku 5.5 has no server-side fallback). */
 const supportsFallback = (model: string) => /^claude-(?:sonnet-5-5|opus-5-5|fable-5-[12])$/.test(model);
+
+// shortcut: Haiku only (Sonnet 5.5, Opus 5.5 and Fable 400 on `disabled`; Opus 5 / Sonnet 5 would accept it but keep thinking), widen the name check if AI_SUMMARY_MODEL moves to one of those.
+const acceptsThinkingOff = (model: string) => /^claude-haiku-/.test(model);
 
 const estimateTokens = (text: string) => Math.ceil(text.length / 3);
 
@@ -105,6 +109,7 @@ function toParams(req: AiCallRequest): Anthropic.Beta.MessageCreateParamsNonStre
     ],
     messages: req.messages.map((message) => ({ role: message.role, content: message.text })),
     output_config: { effort: req.effort },
+    ...(req.thinking === 'off' && acceptsThinkingOff(req.model) ? { thinking: { type: 'disabled' as const } } : {}),
     ...(supportsFallback(req.model) ? { betas: [FALLBACK_BETA], fallbacks: 'default' as const } : {}),
   };
 }

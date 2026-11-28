@@ -3,7 +3,7 @@ import { PERIODS, type Period, type Turn } from '@isekai/rules';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lte } from 'drizzle-orm';
 import type { PromptBlock } from '../ai/provider.ts';
 import type { DbOrTx } from '../db/client.ts';
-import { gmConstraint, gmJournal, gmMemory, gmTurn, roomEntry, roomEntryRecipient } from '../db/schema.ts';
+import { characterPresence, gmConstraint, gmJournal, gmMemory, gmTurn, phaseAction, roomEntry, roomEntryRecipient } from '../db/schema.ts';
 import type { DialogueContext } from './context.ts';
 import type { GmNarration, GmTurnProposal } from './schema.ts';
 
@@ -127,6 +127,16 @@ export function releaseConstraint(db: DbOrTx, gameId: string, id: number, reason
 export function dayLog(db: DbOrTx, gameId: string, day: number, before?: TurnAt): string[] {
   const rank = (phase: string, turn: number) => PERIODS.indexOf(phase as Period) * 2 + turn;
   const limit = before ? rank(before.phase, before.turn) : Number.POSITIVE_INFINITY;
+  // ISK-032: the summary prompt cannot tell a Secret action from the text alone, so the line says it.
+  const secret = new Set(
+    db
+      .select({ phase: phaseAction.phase, turn: phaseAction.turn, ref: characterPresence.ref })
+      .from(phaseAction)
+      .innerJoin(characterPresence, eq(characterPresence.memberId, phaseAction.memberId))
+      .where(and(eq(phaseAction.gameId, gameId), eq(phaseAction.day, day), eq(phaseAction.visibility, 'secret')))
+      .all()
+      .map((s) => `${s.phase}|${s.turn}|${s.ref}`),
+  );
   return db
     .select()
     .from(gmTurn)
@@ -137,7 +147,7 @@ export function dayLog(db: DbOrTx, gameId: string, day: number, before?: TurnAt)
     .flatMap((r) => {
       const p = JSON.parse(r.proposal) as GmTurnProposal;
       const head = `${r.phase} เทิร์น ${r.turn}`;
-      return [...p.actions.map((a) => `${head}: ${a.intentSummary}`), ...p.remember.map((n) => `${head} (บันทึก GM): ${n}`)];
+      return [...p.actions.map((a) => `${head}: ${secret.has(`${r.phase}|${r.turn}|${a.actor}`) ? '[Secret] ' : ''}${a.intentSummary}`), ...p.remember.map((n) => `${head} (บันทึก GM): ${n}`)];
     });
 }
 

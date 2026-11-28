@@ -943,8 +943,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       system,
       messages,
       output: { name: GM_OUTPUT.daySummary, schema: GmDaySummary },
-      // ISK-014: +300 for the news, at most.
-      maxOutputTokens: 1_800,
+      // ISK-028: day 2 hit max_tokens 3 of 3 (in=1462 out=1500, Railway 2026-11-23); 3,000 like summarize_journal (Q-342), room for ISK-014's news.
+      maxOutputTokens: 3_000,
       ...(reserveUsdMicros !== undefined ? { reserveUsdMicros } : {}),
       ...(signal ? { signal } : {}),
     });

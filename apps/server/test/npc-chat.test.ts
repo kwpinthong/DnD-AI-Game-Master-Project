@@ -7,7 +7,7 @@ import { createMockProvider } from '../src/ai/providers/mock.ts';
 import { npcChatPerPeriod } from '../src/npc-chat/service.ts';
 import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
 import type { RunningServer } from '../src/server.ts';
-import { styleFlagStats } from '../src/gm/style-check.ts';
+import { setStyleSettings, styleFlagStats } from '../src/gm/style-check.ts';
 import { moveCharacter } from '../src/visibility/store.ts';
 import { makeTempDir } from './helpers.ts';
 import { isReady, openRoom, type RoomClient } from './room-client.ts';
@@ -37,10 +37,10 @@ describe('GEN-149 NPC chat', { timeout: 60_000 }, () => {
     cleanup();
   });
 
-  async function start(env: Record<string, string> = {}) {
+  async function start(env: Record<string, string> = {}, aiLog?: (line: string) => void) {
     const config = loadAiConfig({ AI_PROVIDER: 'mock', ...env });
     const provider = createMockProvider(config, undefined, (req: AiCallRequest) => (req.purpose === 'npc_chat' ? answer : undefined));
-    server = await startTestServer(dir, { ai: config, aiProvider: provider });
+    server = await startTestServer(dir, { ai: config, aiProvider: provider, ...(aiLog ? { aiLog } : {}) });
     const t = await startedTable(server, false);
     moveCharacter(server.orm, t.a.memberId, MARKET, CLOCK);
     moveCharacter(server.orm, t.b.memberId, MARKET, CLOCK);
@@ -237,6 +237,54 @@ describe('GEN-149 NPC chat', { timeout: 60_000 }, () => {
     expect((await chat(t, t.a.token, { npc: ref, text: 'จำได้ไหม' })).status).toBe(200);
     const recent = (JSON.parse(provider.requests.filter((r) => r.purpose === 'npc_chat').at(-1)!.messages[0]!.text) as { recent: { text: string }[] }).recent;
     expect(recent.map((r) => r.text)).toContain(old);
+  });
+
+  // ISK-027: the output ceiling of npc_chat is 1000 tokens (400 cut 15 chats off with max_tokens).
+  const npcChatCalls = (provider: { requests: AiCallRequest[] }) => provider.requests.filter((r) => r.purpose === 'npc_chat');
+
+  it('ISK-027 C1: the npc_chat call asks for up to 1000 output tokens', async () => {
+    const { t, ref, provider } = await start();
+    const res = await chat(t, t.a.token, { npc: ref, text: 'สวัสดี' });
+    expect(res.status).toBe(200);
+    expect(NpcChatResponse.parse(res.body).reply).not.toBe('');
+    const calls = npcChatCalls(provider);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.maxOutputTokens).toBe(1000);
+  });
+
+  it('ISK-027 C2: the style rewrite call asks for 1000 too', async () => {
+    const { t, ref, provider } = await start();
+    setStyleSettings(server!.orm, { rewrite: true });
+    answer = { reply: 'เขาทำการเปิดร้านแต่เช้า', suggestion: null, mood: 'same' };
+    expect((await chat(t, t.a.token, { npc: ref, text: 'เปิดร้านกี่โมง' })).status).toBe(200);
+    expect(npcChatCalls(provider).map((r) => r.maxOutputTokens)).toEqual([1000, 1000]);
+  });
+
+  it('ISK-027 C3: max_tokens on both tries is still ai_unavailable, nothing stored, quota kept, one log line', async () => {
+    const logs: string[] = [];
+    const { t, ref, provider } = await start({ AI_MOCK_FAIL: 'npc_chat:max_tokens', AI_RETRY_DELAY_MS: '0' }, (l) => logs.push(l));
+    const count = (table: string) => (server!.db.prepare(`select count(*) as n from ${table}`).get() as { n: number }).n;
+    const before = [count('npc_chat'), count('npc_memory')];
+    const left = await status(t, t.a.token);
+    const res = await chat(t, t.a.token, { npc: ref, text: 'สวัสดี' });
+    expect(res.status).toBe(503);
+    expect(ApiError.parse(res.body)).toMatchObject({ code: 'ai_unavailable', message: 'NPC ยังไม่ตอบ กด "ลองใหม่" ได้ ไม่เสียโควตา' });
+    expect(npcChatCalls(provider)).toHaveLength(2);
+    expect([count('npc_chat'), count('npc_memory')]).toEqual(before);
+    expect(await status(t, t.a.token)).toEqual(left);
+    const lines = logs.filter((l) => l.startsWith('[npc-chat]'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/failed: ai_unavailable$/);
+  });
+
+  it('ISK-027 C4: a 350 character reply still reaches the player at 300 characters or fewer', async () => {
+    const { t, ref } = await start();
+    answer = { reply: 'ก'.repeat(350), suggestion: null, mood: 'same' };
+    const res = await chat(t, t.a.token, { npc: ref, text: 'เล่าเรื่องตลาดให้ฟังหน่อย' });
+    expect(res.status).toBe(200);
+    const len = NpcChatResponse.parse(res.body).reply.length;
+    expect(len).toBeGreaterThan(0);
+    expect(len).toBeLessThanOrEqual(300);
   });
 
   it('the Human GM and empty / too long messages are refused', async () => {
