@@ -12,6 +12,7 @@ import { Lobby } from '../src/Lobby.tsx';
 import { installMock, MOCK_TOKEN, mockBaseUrl } from '../src/mock/install.ts';
 import { PlayRoom } from '../src/PlayRoom.tsx';
 import { TOKEN_KEY } from '../src/session.ts';
+import { lateJoinText } from '../src/ui/strings.ts';
 
 const noop = () => {};
 let uninstall: () => void;
@@ -60,7 +61,6 @@ describe('C1 / C6 / C7 the join form says why a game cannot be joined', () => {
 
   it.each([
     ['join_closed_day', 'เกมผ่านวันที่ 9 แล้ว เข้าร่วมไม่ได้'],
-    ['game_full', 'ห้องเต็มแล้ว (6 คน)'],
     ['single_mode', 'เกมนี้เล่นคนเดียว'],
     ['game_ended', 'เกมนี้จบแล้ว'],
   ])('C1: %s shows "%s"', async (code, text) => {
@@ -90,14 +90,63 @@ describe('C1 / C6 / C7 the join form says why a game cannot be joined', () => {
     fireEvent.click(button(/เข้าร่วม/));
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(screen.getByText('กำลังเข้าร่วม…')).toBeTruthy();
-    answer(Response.json({ code: 'game_full', message: 'x' }, { status: 409 }));
-    expect(await screen.findByText('ห้องเต็มแล้ว (6 คน)')).toBeTruthy();
+    answer(Response.json({ code: 'game_full', message: 'เกมเต็ม (เกมนี้เล่นคนเดียว)' }, { status: 409 }));
+    expect(await screen.findByText('เกมเต็ม (เกมนี้เล่นคนเดียว)')).toBeTruthy();
   });
 
   it('C6: joining before the start keeps the old flow: the lobby, no mid-game banner', async () => {
     lobby('lobby');
     expect(await screen.findByRole('list', { name: 'สมาชิก' })).toBeTruthy();
     expect(screen.queryByText(/คุณกำลังเข้าร่วมเกมที่เริ่มไปแล้ว/)).toBeNull();
+  });
+});
+
+// ISK-030: game_full shows the server's own message (solo game vs a full multiplayer game), not a web string.
+describe('ISK-030 game_full ใช้ข้อความ server', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = (file: string) => readFileSync(join(here, '..', 'src', file), 'utf8');
+
+  it('ISK-030 C1: a 409 game_full shows the server message, not "ห้องเต็มแล้ว (6 คน)"', async () => {
+    joinAnswering(() => Response.json({ code: 'game_full', message: 'เกมเต็ม (เกมนี้เล่นคนเดียว)' }, { status: 409 }));
+    fireEvent.click(button('เข้าร่วม'));
+    expect((await screen.findByRole('alert')).textContent).toBe('เกมเต็ม (เกมนี้เล่นคนเดียว)');
+    expect(screen.queryByText('ห้องเต็มแล้ว (6 คน)')).toBeNull();
+  });
+
+  it('ISK-030 C2: the multiplayer wording of the server shows as is', async () => {
+    joinAnswering(() => Response.json({ code: 'game_full', message: 'เกมเต็ม (ผู้เล่นครบ 4 คนแล้ว)' }, { status: 409 }));
+    fireEvent.click(button('เข้าร่วม'));
+    expect((await screen.findByRole('alert')).textContent).toBe('เกมเต็ม (ผู้เล่นครบ 4 คนแล้ว)');
+    expect(localStorage.getItem(TOKEN_KEY)).toBeNull();
+  });
+
+  it('ISK-030 C3: the other codes keep the web words, kicked keeps the server message', async () => {
+    const rows: [number, string, string, string][] = [
+      [409, 'join_closed_day', 'server wording', 'เกมผ่านวันที่ 9 แล้ว เข้าร่วมไม่ได้'],
+      [409, 'single_mode', 'server wording', 'เกมนี้เล่นคนเดียว'],
+      [409, 'game_ended', 'server wording', 'เกมนี้จบแล้ว'],
+      [409, 'brand_new_reason', 'อะไรสักอย่าง', 'เข้าร่วมไม่ได้ ลองใหม่ภายหลัง'],
+      [403, 'kicked', 'ชื่อนี้ถูกเจ้าของเกมเชิญออกแล้ว เข้าเกมนี้อีกไม่ได้', 'ชื่อนี้ถูกเจ้าของเกมเชิญออกแล้ว เข้าเกมนี้อีกไม่ได้'],
+    ];
+    for (const [status, code, message, shown] of rows) {
+      joinAnswering(() => Response.json({ code, message }, { status }));
+      fireEvent.click(button('เข้าร่วม'));
+      expect((await screen.findByRole('alert')).textContent).toBe(shown);
+      cleanup();
+    }
+  });
+
+  it('ISK-030 C4: the mock scenario join-game-full answers the solo wording', async () => {
+    render(<JoinForm apiBaseUrl={base('join-game-full')} onJoined={noop} />);
+    fill();
+    fireEvent.click(button('เข้าร่วม'));
+    expect((await screen.findByRole('alert')).textContent).toBe('เกมเต็ม (เกมนี้เล่นคนเดียว)');
+  });
+
+  it('ISK-030 C5: no web string for game_full is left', () => {
+    expect('game_full' in lateJoinText.errors).toBe(false);
+    for (const file of ['session.ts', 'ui/strings.ts', 'mock/scenarios.ts']) expect(src(file)).not.toContain('ห้องเต็มแล้ว (6 คน)');
   });
 });
 

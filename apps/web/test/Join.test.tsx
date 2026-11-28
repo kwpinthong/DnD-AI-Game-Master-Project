@@ -100,10 +100,10 @@ describe('Join page', () => {
     expect(screen.getByLabelText('โค้ดเกม').getAttribute('aria-invalid')).toBe('true');
   });
 
-  // GEN-025: a full game, a started game and a kicked name are refused and stay logged out. ISK-016: a full game
-  // and any other code say the web's own words; a kicked name keeps the server's message.
+  // GEN-025: a full game, a started game and a kicked name are refused and stay logged out. ISK-016: any other code
+  // says the web's own words; ISK-030: a full game and a kicked name show the server's message.
   it.each([
-    ['game_full', 409, 'เกมเต็ม (ผู้เล่นครบ 6 คนแล้ว)', 'ห้องเต็มแล้ว (6 คน)'],
+    ['game_full', 409, 'เกมเต็ม (ผู้เล่นครบ 4 คนแล้ว)', 'เกมเต็ม (ผู้เล่นครบ 4 คนแล้ว)'],
     ['game_started', 409, 'เกมนี้เริ่มไปแล้ว รับคนเพิ่มไม่ได้', 'เข้าร่วมไม่ได้ ลองใหม่ภายหลัง'],
     ['kicked', 403, 'ชื่อนี้ถูกเจ้าของเกมเชิญออกแล้ว เข้าเกมนี้อีกไม่ได้', 'ชื่อนี้ถูกเจ้าของเกมเชิญออกแล้ว เข้าเกมนี้อีกไม่ได้'],
   ])('GEN-025: shows the %s message and stays logged out', async (code, status, message, shown) => {

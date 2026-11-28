@@ -629,7 +629,7 @@ export const SCENARIOS: readonly MockScenario[] = [
     note: 'กดเข้าร่วม: server ตอบ 409 ข้อความใต้ฟอร์มบอกเหตุผล',
     session: 'guest' as const,
     screens: ['join'] as const,
-    http: { 'POST /api/join': { status: 409, body: { code, message: code } } },
+    http: { 'POST /api/join': { status: 409, body: { code, message: code === 'game_full' ? 'เกมเต็ม (เกมนี้เล่นคนเดียว)' : code } } },
     room: room(BASE_ROOM),
   })),
   {

@@ -547,9 +547,8 @@ export const toneText = {
 
 // ISK-016: joining a game that already started.
 export const lateJoinText = {
-  /** The join form's line per 409 code (ISK-015); any other code says `otherError`, 403 kicked keeps the server's. */
+  /** The join form's line per 409 code (ISK-015); any other code says `otherError`; 409 game_full (ISK-030) and 403 kicked show the server's message. */
   errors: {
-    game_full: 'ห้องเต็มแล้ว (6 คน)',
     join_closed_day: 'เกมผ่านวันที่ 9 แล้ว เข้าร่วมไม่ได้',
     single_mode: 'เกมนี้เล่นคนเดียว',
     game_ended: 'เกมนี้จบแล้ว',

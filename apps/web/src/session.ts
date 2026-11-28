@@ -123,11 +123,11 @@ export async function postJoin(
         fields: {},
         form: `ชื่อนี้ถูกล็อกชั่วคราวเพราะใส่ PIN ผิดหลายครั้ง ลองใหม่ได้เวลา ${clockTime(error.data.retryAt)}`,
       };
-    case 'game_full':
     case 'join_closed_day':
     case 'single_mode':
     case 'game_ended':
       return { ok: false, fields: {}, form: lateJoinText.errors[error.data.code] };
+    case 'game_full':
     case 'kicked':
       return { ok: false, fields: {}, form: error.data.message };
     default:
