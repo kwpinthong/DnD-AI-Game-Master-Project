@@ -51,7 +51,7 @@ export function registerHistoryRoutes(app: FastifyInstance, db: Db, now: Clock, 
       timeline: timelineFor(db, me),
       entries: entriesFor(db, me.gameId, me.id, 0).map((entry) => entryViewOf(db, entry, me, assets)),
       // GEN-059 spoiler rule: the secrets only once the game ended.
-      reveal: ended ? revealFor(db, assets, me.gameId) : null,
+      reveal: ended ? revealFor(db, assets, me.gameId, me.id) : null,
     };
     return reply.send(body);
   });

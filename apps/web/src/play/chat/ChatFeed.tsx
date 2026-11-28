@@ -30,6 +30,8 @@ export interface ChatFeedProps {
   acknowledged?: ReadonlySet<number>;
   /** Our own action of this turn (`RoomState.you.action`), drawn last on the right. */
   ownAction?: RoomState['you']['action'];
+  /** ISK-007: our character, for the avatar beside our own action. */
+  self?: { name: string; avatarId: string | null } | undefined;
   voting?: FeedVoting | undefined;
   /** GEN-148: seq → when it arrived (ms) of the entries that came in while online; only those are revealed piece by piece. */
   live?: ReadonlyMap<number, number> | undefined;
@@ -50,7 +52,7 @@ interface Shown {
  * amber box, an NPC's line on the left with avatar and name, GM narration and NPC reactions are italic text with
  * no box, rolls and changed values are capsules in the centre, a divider opens each turn / place.
  */
-export function ChatFeed({ entries, day, placeId, placeName, astral, acknowledged, ownAction, voting, live = NO_LIVE }: ChatFeedProps) {
+export function ChatFeed({ entries, day, placeId, placeName, astral, acknowledged, ownAction, self, voting, live = NO_LIVE }: ChatFeedProps) {
   const [only, setOnly] = useState('');
   const selectId = useId();
   const scroller = useRef<HTMLDivElement>(null);
@@ -163,7 +165,7 @@ export function ChatFeed({ entries, day, placeId, placeName, astral, acknowledge
             )}
             {ownAction && (
               <li className="chat-item">
-                <OwnBubble text={ownAction.text} secret={ownAction.visibility === 'secret'} />
+                <OwnBubble text={ownAction.text} secret={ownAction.visibility === 'secret'} self={self} />
               </li>
             )}
           </ol>
@@ -218,7 +220,7 @@ function entryView(e: RoomEntry, look: ReturnType<typeof entryLook>, vote: (entr
         </NpcBubble>
       );
     case 'player-action':
-      return <PlayerBubble alias={e.actor!.name} text={e.text} />;
+      return <PlayerBubble alias={e.actor!.name} text={e.text} avatarId={e.actor!.avatarId} />;
     case 'npc-reaction':
       return (
         <NarrationLine text={text}>

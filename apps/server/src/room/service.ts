@@ -235,6 +235,12 @@ export function createRoomService(
   const scenes = new Map<string, Promise<void>>();
   /** GEN-185: the games whose missing scene was looked for since this process started. */
   const sceneChecked = new Set<string>();
+  /**
+   * ISK-009: where each player who moved during the open turn was when it opened (their first move), for the arrival narration.
+   * shortcut: in memory, so a restart mid-turn forgets a same-zone move made before it (no arrival paragraph then); store it if that shows in play.
+   */
+  const movedFrom = new Map<string, { turn: string; from: Map<string, string> }>();
+  const turnKeyOf = (at: TurnPoint) => `${at.day}:${at.phase}:${at.turn}`;
   let stopped = false;
 
   function memberOf(socket: RoomSocket): MemberRow | undefined {
@@ -886,7 +892,17 @@ export function createRoomService(
         const at = { day: state.day, phase: state.phase, turn: state.turn };
         let resolution: PhaseResolution;
         try {
-          resolution = await resolver.resolve({ gameId, at, actions, state, signal: shutdown.signal, weather: periodWeather, ...(scene ? { scene } : {}) });
+          const moves = movedFrom.get(gameId);
+          resolution = await resolver.resolve({
+            gameId,
+            at,
+            actions,
+            state,
+            signal: shutdown.signal,
+            weather: periodWeather,
+            ...(scene ? { scene } : {}),
+            ...(moves?.turn === turnKeyOf(at) ? { movedFrom: moves.from } : {}),
+          });
           await scene;
         } catch (error) {
           // Stays `resolving`; after a restart the next player to enter starts it again, otherwise `retry` does.
@@ -1176,7 +1192,14 @@ export function createRoomService(
         if (lock) return { ok: false as const, code: 'cannot_act' as const, message: LOCK_MESSAGE[lock] };
         const turnState = ensurePhaseState(tx, me.gameId, now());
         const before = snapshotsOf(tx, assets, me.gameId, turnState, [me.id]).get(me.id);
+        const was = presenceOf(tx, me.id)?.locationId;
         const moved = travel(tx, assets, me.gameId, me.id, { to: normalizeActionText(input.to) }, now());
+        if (moved.ok && was !== undefined) {
+          const turn = turnKeyOf(turnState);
+          if (movedFrom.get(me.gameId)?.turn !== turn) movedFrom.set(me.gameId, { turn, from: new Map() });
+          const from = movedFrom.get(me.gameId)!.from;
+          if (!from.has(me.id)) from.set(me.id, was);
+        }
         if (!moved.ok || !before) return { ...moved, changed: null };
         // GEN-114: what the trip cost, in the mover's own log right now (the turn's close adds the rest).
         const after = snapshotsOf(tx, assets, me.gameId, moved.state, [me.id]).get(me.id);

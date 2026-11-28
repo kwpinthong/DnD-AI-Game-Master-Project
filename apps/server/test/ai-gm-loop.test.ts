@@ -1978,7 +1978,8 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       }
     });
 
-    it('C6: a player who moved in the last turn of the period reads the scene of the place they arrived at', async () => {
+    // ISK-009 C6: who moved in the last turn of the period read the place in their own arrival paragraph, so not its scene again.
+    it('C6: a player who moved in the last turn of the period reads no scene; the one there before reads it', async () => {
       await boot({}, (req, n) => {
         if (!isTurn(req)) return undefined;
         const ctx = contextOf<TurnContext>(req);
@@ -1991,10 +1992,10 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
       });
       const clients = await lastTurnOf(1, 'SOLARION', 'inn');
       await playTurn(clients, ['เดินไปน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], { day: 1, phase: 'HESPERION', turn: 1 });
-      await until(() => clients.every((c) => scenesOf(c, 1, 'HESPERION').length > 0));
-      const mine = scenesOf(clients[0]!, 1, 'HESPERION');
-      expect(mine.map((e) => e.place?.id)).toEqual(['fountain']);
-      expect(mine[0]!.text).toBe(scenesOf(clients[1]!, 1, 'HESPERION')[0]!.text);
+      await until(() => clients.slice(1).every((c) => scenesOf(c, 1, 'HESPERION').length > 0));
+      await pause(50);
+      expect(scenesOf(clients[0]!, 1, 'HESPERION')).toEqual([]);
+      expect(scenesOf(clients[1]!, 1, 'HESPERION').map((e) => e.place?.id)).toEqual(['fountain']);
     });
 
     describe('GEN-185 a scene a restart cut short is written on the first join', () => {

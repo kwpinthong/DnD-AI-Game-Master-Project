@@ -1,11 +1,12 @@
-import { formatInviteCode, type GameMember, type GameView } from '@isekai/protocol';
+import { formatInviteCode, type CharacterView, type GameMember, type GameView } from '@isekai/protocol';
 import { useEffect, useRef, useState } from 'react';
 import { CharacterScreen } from './CharacterScreen.tsx';
 import { GameClosedModal, type GameClosure } from './GameClosed.tsx';
 import { GameSummaryPage } from './GameHistory.tsx';
-import { deleteGameCall, gameCall, type GameAction } from './game-api.ts';
+import { characterCall, deleteGameCall, gameCall, type GameAction } from './game-api.ts';
 import { loadLateJoin } from './late-join.ts';
 import { LateJoinSetup } from './LateJoinSetup.tsx';
+import { Avatar } from './play/chat/Bubbles.tsx';
 import { NpcDialoguePicker } from './NpcDialoguePicker.tsx';
 import { npcDialogueText, toneText } from './ui/strings.ts';
 import { TonePicker } from './TonePicker.tsx';
@@ -199,6 +200,20 @@ export function Lobby({
     if (was === 'lobby' && status === 'started' && characterOpen && game) enterRoom(game);
   }, [status]);
 
+  // ISK-007: our own avatar on our row (GameView has none; another member's is never linked to their lobby name).
+  const [mine, setMine] = useState<Pick<CharacterView, 'name' | 'avatarId'> | null>(null);
+  const hasCharacter = game?.members.find((m) => m.id === game.you.memberId)?.hasCharacter === true;
+  useEffect(() => {
+    if (!hasCharacter || characterOpen || roomOpen) return;
+    let cancelled = false;
+    void characterCall(apiBaseUrl, token, 'GET').then((result) => {
+      if (!cancelled && result.kind === 'ok') setMine(result.character);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, token, hasCharacter, characterOpen, roomOpen]);
+
   // ISK-002: a closed game shows only the modal (nothing behind it can be used), then its end page or home.
   if (closed) {
     if (summaryOpen) return <GameSummaryPage apiBaseUrl={apiBaseUrl} token={token} onBack={() => onLeave?.()} />;
@@ -228,6 +243,7 @@ export function Lobby({
       <CharacterScreen
         apiBaseUrl={apiBaseUrl}
         token={token}
+        gameId={game?.id}
         onSessionLost={onSessionLost}
         onGameStarted={() => {
           if (game) enterRoom({ ...game, status: 'started' });
@@ -373,6 +389,7 @@ export function Lobby({
                   <span className="members__mark" aria-hidden="true">
                     {ready ? '●' : '○'}
                   </span>
+                  {m.id === game.you.memberId && mine && <Avatar name={mine.name} avatarId={mine.avatarId} own />}
                   <span className="members__name">{m.name}</span>
                   <span className="members__status">{memberStatus(m)}</span>
                   {m.id === game.members[0]?.id && <span className="members__tag">(เจ้าของเกม)</span>}

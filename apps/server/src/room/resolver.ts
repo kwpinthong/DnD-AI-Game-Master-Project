@@ -83,6 +83,8 @@ export interface ClosedPhase {
   readonly weather: PeriodWeather | null;
   /** GEN-190: the scene of the period this turn opens, still being written (never rejects); the room publishes it first. */
   readonly scene?: Promise<void>;
+  /** ISK-009: where each player who moved during the turn (a same-zone move) was when it opened; absent = nobody did. */
+  readonly movedFrom?: ReadonlyMap<string, string>;
 }
 
 /**

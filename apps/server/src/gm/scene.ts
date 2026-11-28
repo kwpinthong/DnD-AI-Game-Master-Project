@@ -10,11 +10,12 @@ import type { ResolutionEntry } from '../room/resolver.ts';
 import { locationSnapshot } from '../visibility/store.ts';
 import { weatherAt } from '../weather/service.ts';
 import { containsName } from './check.ts';
-import { CONTEXT_BUDGET, loadWorld, requestTokens, TOKEN_PATTERN, type GmWorld } from './context.ts';
+import { CONTEXT_BUDGET, loadWorld, requestTokens, TOKEN_PATTERN, withinTokens, type Arrival, type GmWorld } from './context.ts';
 import { THAI_OUTPUT } from './language.ts';
 import { renderTokens } from './loop.ts';
 import { lingersNow, lingersOf, npcsPresentAt, type PresenceNow } from './npc-lines.ts';
 import { GM_OUTPUT, GmScene } from './schema.ts';
+import { getStoredTurn } from './store.ts';
 import { gameTone, toneBlock } from './tone.ts';
 
 /**
@@ -61,6 +62,22 @@ export function sceneNpcs(world: GmWorld, assets: GameAssets, placeId: string, b
   };
 }
 
+/** ISK-009: the beat of `ref`'s arrival (its own narration ends with it; a place feed already told there says someone came). */
+export const arrivalBeatId = (ref: string) => `arrival:${ref}`;
+
+/** ISK-009: what a player who has just come to `placeId` sees: the place, the period, the weather, its NPCs now, the other players (`players`, refs). */
+export function arrivalAt(world: GmWorld, assets: GameAssets, placeId: string, now: PresenceNow, players: readonly string[]): Arrival {
+  const place = world.places.find((p) => p.id === placeId)!;
+  return {
+    // The description is cut so an arrival stays within ARRIVAL_TOKENS.
+    place: { id: place.id, name: place.name, description: withinTokens(assets.location(place.name)?.characteristics ?? '', 120) },
+    phase: now.phase,
+    weather: now.weather,
+    npcs: npcsPresentAt(world, assets, placeId, now).map((n) => ({ id: n.id, alias: n.alias })),
+    players: [...players],
+  };
+}
+
 export interface SceneContext {
   kind: 'gm_scene';
   turn: { day: number; phase: Phase; turn: Turn };
@@ -98,10 +115,13 @@ export async function periodScenes(
   const before: PresenceNow = { phase: prev.phase, weather: weatherAt(db, gameId, prev)?.weather ?? null, karmas, lingering: lingersOf(db, gameId) };
   const base = { phase: at.phase, weather: input.weather?.weather ?? null, karmas };
   const now: PresenceNow = { ...base, lingering: lingersNow(db, world, assets, base).lingering };
-  // Where everyone is now: a player who moved in the last turn reads the scene of the new place.
+  // ISK-009: who arrived somewhere on the last turn already read the place in their own narration (its arrival beat).
+  const told = getStoredTurn(db, gameId, { ...prev, turn: 2 })?.narrations ?? {};
+  const arrived = [...world.players.values()].filter((p) => told[`player:${p.ref}`]?.segments.some((s) => s.actionId === arrivalBeatId(p.ref))).map((p) => p.memberId);
+  // Where everyone is now, the ones who just arrived aside.
   const readers = new Map<string, string[]>();
   for (const [memberId, placeId] of locationSnapshot(db, gameId)) {
-    if (world.players.has(memberId) && world.places.some((p) => p.id === placeId)) readers.set(placeId, [...(readers.get(placeId) ?? []), memberId]);
+    if (world.players.has(memberId) && !arrived.includes(memberId) && world.places.some((p) => p.id === placeId)) readers.set(placeId, [...(readers.get(placeId) ?? []), memberId]);
   }
   const realNames = [...[...world.players.values()].map((p) => p.name), ...world.npcs.flatMap((n) => n.names.filter((name) => name !== n.alias))].filter((n) => n.trim().length > 0);
   // GEN-194: the game's tone after the fixed rules, in the cached start of every scene call (as narration, GEN-177).
@@ -156,7 +176,7 @@ export async function periodScenes(
         if (t !== shared) own.set(t, [...(own.get(t) ?? []), m]);
       }
       const feed = { kind: 'feed' as const, locationId: placeId, actorMemberId: null };
-      return [{ ...feed, text: shared, except: [...own.values()].flat() }, ...[...own].map(([t, only]): ResolutionEntry => ({ ...feed, text: t, only }))];
+      return [{ ...feed, text: shared, except: [...[...own.values()].flat(), ...arrived] }, ...[...own].map(([t, only]): ResolutionEntry => ({ ...feed, text: t, only }))];
     }),
   );
   return scenes.flat();

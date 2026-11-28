@@ -1,9 +1,10 @@
-import { isVotableEntry, type NpcLineView, type PlaceView, type RoomEntry } from '@isekai/protocol';
-import { eq } from 'drizzle-orm';
+import { appearanceLabels, appearanceParts, isVotableEntry, type AppearanceTraits, type NpcLineView, type PlaceView, type RoomEntry } from '@isekai/protocol';
+import { and, eq } from 'drizzle-orm';
 import { npcSpeaker } from '../companions/store.ts';
 import type { DbOrTx } from '../db/client.ts';
-import { character, member } from '../db/schema.ts';
+import { character, member, roomEntryRecipient } from '../db/schema.ts';
 import { titleOf } from '../game/character.ts';
+import { nameAsYou, youInText } from '../game/tokens.ts';
 import { maskNames } from '../gm/check.ts';
 import { getGameScenario } from '../scenario/store.ts';
 import { ASTRAL_PLANE, namesVisibleTo, npcBondsOf } from '../visibility/store.ts';
@@ -31,10 +32,11 @@ function npcOf(db: DbOrTx, npc: NonNullable<EntryMeta['npc']>, viewerId: string,
 }
 
 /** GEN-129: the actor of a `player` entry as `viewer` may know them: the real name for the Human GM and for a person they know (GEN-117), else the Social Title. */
-function actorOf(db: DbOrTx, memberId: string, viewer: { id: string; role: string }): { actor: { name: string } } {
+function actorOf(db: DbOrTx, memberId: string, viewer: { id: string; role: string }): { actor: { name: string; avatarId: string | null } } {
   const c = db.select().from(character).where(eq(character.memberId, memberId)).get();
-  if (!c) return { actor: { name: '' } };
-  return { actor: { name: viewer.role === 'gm' || namesVisibleTo(db, viewer.id).has(memberId) ? c.name : titleOf(c) } };
+  if (!c) return { actor: { name: '', avatarId: null } };
+  // ISK-007: the avatar is public (like OtherCharacterView.avatarId), the name is not.
+  return { actor: { name: viewer.role === 'gm' || namesVisibleTo(db, viewer.id).has(memberId) ? c.name : titleOf(c), avatarId: c.avatarId } };
 }
 
 /**
@@ -56,6 +58,41 @@ function playerTextOf(db: DbOrTx, row: RoomEntryRow, actorId: string, viewer: { 
   return aliases.size === 0 ? row.text : maskNames(row.text, aliases);
 }
 
+/**
+ * ISK-008: the text as this player reads it, their own look / title written by the AI as "คุณ" (the row keeps the raw text).
+ * shortcut: one character query per entry read, fine for a game's log; batch per request if replay gets slow.
+ */
+export function readerText(db: DbOrTx, gameId: string, text: string, viewer: { id: string; role: string }, assets: GameAssets): string {
+  if (viewer.role !== 'player') return text;
+  const people = db.select({ c: character }).from(character).innerJoin(member, eq(member.id, character.memberId)).where(eq(member.gameId, gameId)).all();
+  const me = people.find(({ c }) => c.memberId === viewer.id)?.c;
+  if (!me) return text;
+  // A chip part the label no longer spells (admin edit, ISK-006 C8) is not in the stored sentence: left out.
+  const parts = me.appearanceTraits === null ? [] : appearanceParts(JSON.parse(me.appearanceTraits) as AppearanceTraits, appearanceLabels(assets.appearanceOptions, true)).filter((p) => me.appearance.includes(p));
+  const others = people.filter(({ c }) => c.memberId !== viewer.id).map(({ c }) => ({ appearance: c.appearance, title: titleOf(c) }));
+  return youInText(text, { appearance: me.appearance, title: titleOf(me), parts }, others);
+}
+
+/** ISK-031: an ending (stored with real names) as its owner reads it: their own name is "คุณ", then their looks (readerText). */
+export function ownEndingText(db: DbOrTx, gameId: string, text: string, viewer: { id: string; role: string }, assets: GameAssets): string {
+  if (viewer.role !== 'player') return text;
+  const people = db.select({ memberId: character.memberId, name: character.name }).from(character).innerJoin(member, eq(member.id, character.memberId)).where(eq(member.gameId, gameId)).all();
+  const me = people.find((p) => p.memberId === viewer.id);
+  if (!me) return text;
+  const others = [...people.filter((p) => p !== me).map((p) => p.name), ...(getGameScenario(db, gameId)?.npcs ?? []).map((n) => n.name)];
+  return readerText(db, gameId, nameAsYou(text, me.name, others), viewer, assets);
+}
+
+/** ISK-031: a finale narration read by the one it was told to (its recipient). */
+const isOwnEnding = (db: DbOrTx, row: RoomEntryRow, meta: EntryMeta, viewer: { id: string; role: string }) =>
+  row.kind === 'narration' &&
+  meta.finale === true &&
+  viewer.role === 'player' &&
+  db.select({ id: roomEntryRecipient.entryId }).from(roomEntryRecipient).where(and(eq(roomEntryRecipient.entryId, row.id), eq(roomEntryRecipient.memberId, viewer.id))).get() !== undefined;
+
+/** ISK-008: what someone says or types (an action, a whisper, an NPC's spoken line) is never rewritten for the reader. */
+const ownWords = (row: RoomEntryRow, meta: EntryMeta) => row.kind === 'player' || row.kind === 'whisper' || (row.kind === 'npc' && meta.npc?.kind === 'dialogue');
+
 /** A stored feed / narration / whisper / hit entry as `viewer` receives it, live, on replay and in the game log (GEN-037). */
 export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string; role: string }, assets: GameAssets): RoomEntry {
   const meta = row.meta === null ? {} : (JSON.parse(row.meta) as EntryMeta);
@@ -66,7 +103,14 @@ export function entryViewOf(db: DbOrTx, row: RoomEntryRow, viewer: { id: string;
     phase: row.phase,
     turn: row.turn === 2 ? 2 : 1,
     place: placeViewOf(db, row.gameId, row.locationId, assets),
-    text: row.kind === 'player' && meta.actor ? playerTextOf(db, row, meta.actor, viewer) : row.text,
+    text:
+      row.kind === 'player' && meta.actor
+        ? playerTextOf(db, row, meta.actor, viewer)
+        : ownWords(row, meta)
+          ? row.text
+          : isOwnEnding(db, row, meta, viewer)
+            ? ownEndingText(db, row.gameId, row.text, viewer, assets)
+            : readerText(db, row.gameId, row.text, viewer, assets),
     // Q-229: the viewer's own roll / hit card; only the entries made for one reader carry them.
     ...(meta.roll ? { roll: meta.roll } : {}),
     ...(meta.hit ? { hit: meta.hit } : {}),

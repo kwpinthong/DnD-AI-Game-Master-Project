@@ -55,7 +55,8 @@ function character(scenario: string, more: Partial<Parameters<typeof CharacterSc
 
 function fillIdentity() {
   type('ชื่อจริง', 'ลิน');
-  type('ลักษณะภายนอก', 'หญิงผ้าคลุมเทา แผลเป็นที่คาง');
+  // ISK-007: the looks are an avatar (its default chips come with it), not typed
+  fireEvent.click(within(screen.getByRole('group', { name: 'รูปตัวละคร' })).getAllByRole('button')[2]!);
   type('บุคลิก', 'ช่างสังเกต พูดน้อย จำหน้าคนแม่น');
 }
 

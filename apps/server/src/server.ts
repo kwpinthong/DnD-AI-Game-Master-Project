@@ -150,9 +150,11 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   registerClosedGameGuard(app, db, now);
   registerAuthRoutes(app, db, now);
   const lobby = createLobby();
+  const weather = createWeatherService(db, ai, now, options.aiLog ?? ((line) => console.log(line)));
   registerGameRoutes(app, db, now, {
     lobby,
     ai,
+    weather,
     // A getter: an admin edit of the Karma Tiers rows reaches the next request (GEN-147).
     get karmaTiers() {
       return assets.karmaTiers;
@@ -163,7 +165,6 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
   });
   registerTimelineRoutes(app, db, now);
   registerVisibilityRoutes(app, db, now, assets);
-  const weather = createWeatherService(db, ai, now, options.aiLog ?? ((line) => console.log(line)));
   const resolver = options.phaseResolver ?? createAiGmResolver({ db, ai, assets, now, log: options.aiLog ?? ((line) => console.log(line)), styleRewriteMs: aiConfig.styleRewriteMs });
   // The backup job starts after `listen`; the room reaches it through this late binding (Q-185).
   let backups: BackupSchedule | undefined;

@@ -157,6 +157,7 @@ export function finaleEntries(db: DbOrTx, assets: GameAssets, gameId: string, ou
     { kind: 'feed', locationId: null, actorMemberId: null, text: revealTokens(world, out.overall) },
     ...out.players.flatMap((p) => {
       const member = world.byRef.get(p.player);
+      // ISK-031: stored raw (real names); its owner reads their name as "คุณ" (room/entry-view.ts, finale/reveal.ts).
       return member ? [{ kind: 'narration' as const, memberId: member.memberId, text: revealTokens(world, p.text) }] : [];
     }),
   ];

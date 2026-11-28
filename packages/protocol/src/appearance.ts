@@ -10,7 +10,9 @@ export const APPEARANCE_CATEGORIES = ['hairColor', 'hairStyle', 'eyes', 'build',
 export type AppearanceCategory = (typeof APPEARANCE_CATEGORIES)[number];
 export const APPEARANCE_EXTRA_MAX_LENGTH = 80;
 
-/** The preset avatars (packages/protocol/src/avatar-presets.json). */
+/** The preset avatars (packages/protocol/src/avatar-presets.json): `alt` for the picture, the default chip per category. */
+export type AvatarPreset = { id: string; alt: string } & Record<AppearanceCategory, string>;
+export const AVATAR_PRESETS: readonly AvatarPreset[] = presets;
 export const AVATAR_IDS: readonly string[] = presets.map((p) => p.id);
 
 /** The chips a character was made with (ids; `extra` already normalised). */
@@ -65,16 +67,20 @@ export function appearanceLabels(options: readonly AppearanceOption[], withHidde
 /** NFC, trimmed, every run of whitespace (line breaks included) one space. Plain text: tags are kept (escaped when shown). */
 export const normalizeAppearanceExtra = (raw: string): string => raw.normalize('NFC').trim().replace(/\s+/gu, ' ');
 
-/** The appearance sentence: hair, eyes, build, outfit, feature (none = left out), extra; one space between parts. */
-export function composeAppearance(traits: AppearanceTraits, labels: AppearanceLabels): string {
+/** The chip parts of the sentence: hair, eyes, build, outfit, feature (none = left out). ISK-008 matches each one alone. */
+export function appearanceParts(traits: AppearanceTraits, labels: AppearanceLabels): string[] {
   const label = (c: AppearanceCategory) => labels[c].find((o) => o.id === traits[c])?.label ?? traits[c];
-  const extra = normalizeAppearanceExtra(traits.extra ?? '');
   return [
     traits.hairStyle === 'shaved' ? 'ศีรษะโกนเกลี้ยง' : `ผม${label('hairStyle')}สี${label('hairColor')}`,
     traits.eyes === 'heterochromia' ? 'ดวงตาสองสี' : `ดวงตาสี${label('eyes')}`,
     `รูปร่าง${label('build')}`,
     `สวม${label('outfit')}`,
     ...(traits.feature === 'none' ? [] : [`มี${label('feature')}`]),
-    ...(extra ? [extra] : []),
-  ].join(' ');
+  ];
+}
+
+/** The appearance sentence: the chip parts, then extra; one space between parts. */
+export function composeAppearance(traits: AppearanceTraits, labels: AppearanceLabels): string {
+  const extra = normalizeAppearanceExtra(traits.extra ?? '');
+  return [...appearanceParts(traits, labels), ...(extra ? [extra] : [])].join(' ');
 }
