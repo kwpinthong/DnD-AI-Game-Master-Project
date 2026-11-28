@@ -10,6 +10,7 @@ import type { GameAssets } from '../assets/load.ts';
 import type { Db, DbOrTx } from '../db/client.ts';
 import { styleEvalRun } from '../db/schema.ts';
 import { DIALOGUE_BLOCK, FINALE_BLOCK, JOURNAL_BLOCK, NARRATOR_BLOCK, SUMMARY_BLOCK } from '../gm/context.ts';
+import { clampLine } from '../gm/npc-lines.ts';
 import { SCENE_BLOCK } from '../gm/scene.ts';
 import { GM_OUTPUT, GmDaySummary, GmDialogue, GmFinale, GmJournal, GmNarration, GmScene } from '../gm/schema.ts';
 import { styleIssues } from '../gm/style-check.ts';
@@ -46,7 +47,7 @@ function callFor(context: StyleSceneContext, assets: GameAssets): Call<unknown> 
         output: { name: GM_OUTPUT.narration, schema: GmNarration },
         maxOutputTokens: 1_500,
         scope: 'narration',
-        texts: (v) => v.segments.map((s) => ({ text: s.text, npcId: null })),
+        texts: (v) => [...v.segments.map((s) => s.text), ...(v.arrival !== undefined ? [v.arrival] : [])].map((text) => ({ text, npcId: null })),
       });
     case 'gm_dialogue':
       // shortcut: no NPC example library block (GEN-151) in the eval, so a round does not depend on the DB's library; add it when the library is part of what is judged.
@@ -97,6 +98,25 @@ const JUDGE_BLOCK: PromptBlock = {
 const JudgeAnswer = z.object({ verdicts: z.array(z.object({ persona: z.boolean(), feeling: z.boolean(), reaction: z.boolean(), place: z.boolean() })) });
 const PARTS = ['persona', 'feeling', 'reaction', 'place'] as const;
 
+/** ISK-026: one judge call per narration scene: the 4 parts of each action result, and C12 (never deciding for the player). Eval only. */
+const RESULT_JUDGE_BLOCK: PromptBlock = {
+  id: 'narration-judge',
+  cache: true,
+  text: [
+    'You judge the action results of a Thai fantasy game narration. The message JSON gives scene (everything the narrator was given: beats = what the players did and how it went, the place, period, cast, NPCs) and results (each one action\'s result as the player reads it).',
+    'For each result, in order, answer 5 booleans:',
+    '- reaction: the world or the people here react to the action',
+    '- feeling: it shows what the acting character senses or feels, through the body or what they see (stating the feeling outright is false)',
+    '- persona: it has personality: a voice in the game\'s tone, or the manner of an NPC involved',
+    '- place: it uses one real detail of here and now that the scene gives (place, period, weather, people); a detail the scene does not give is false',
+    '- playerChoice: true = it never decides or feels for the player beyond what their action says; false = it adds a choice, a deed or a feeling the action did not state',
+  ].join('\n'),
+};
+const ResultJudgeAnswer = z.object({
+  verdicts: z.array(z.object({ persona: z.boolean(), feeling: z.boolean(), reaction: z.boolean(), place: z.boolean(), playerChoice: z.boolean() })),
+});
+type ResultVerdict = z.infer<typeof ResultJudgeAnswer>['verdicts'][number];
+
 /** C4: weather words a reply may use only when the scene has that weather (a turn line's scene has none). */
 const WEATHER_WORDS: [string, readonly Weather[]][] = [
   ['ฝน', ['Rain', 'Storm']],
@@ -115,6 +135,8 @@ interface StoredScene extends StyleEvalSceneResult {
   prompt: { system: PromptBlock[]; user: string };
   /** ISK-025: each NPC reply of an NPC scene with its length and the judge's verdict (server only, like the prompt). */
   replies?: { text: string; chars: number; verdict: NpcReplyVerdict | null }[];
+  /** ISK-026: each action result of a narration scene as the player reads it (`clampLine`), its raw length and the judge's verdict. */
+  results?: { text: string; chars: number; raw: number; verdict: ResultVerdict | null }[];
 }
 
 export interface StyleEvalDeps {
@@ -191,8 +213,30 @@ export async function runStyleEval(deps: StyleEvalDeps, scenes: readonly StyleSc
       if (!verdicts) flags.push('judge_failed');
       for (const part of PARTS) if (verdicts?.some((v) => !v[part])) flags.push(`missing_${part}`);
     }
+    // ISK-026: the action results (not an arrival), cut as the game cuts them, judged on the 4 parts + C12.
+    let actionResults: StoredScene['results'];
+    if (scene.context.kind === 'gm_narration') {
+      const arrivals = new Set(scene.context.beats.filter((b) => b.kind === 'arrival').map((b) => b.actionId));
+      const raw = (result.value as GmNarration).segments.filter((s) => !arrivals.has(s.actionId)).map((s) => s.text);
+      const read = raw.map(clampLine);
+      const judged = await ai.call({
+        gameId: STYLE_EVAL_GAME_ID,
+        purpose: 'npc_chat',
+        system: [RESULT_JUDGE_BLOCK],
+        messages: [{ role: 'user', text: JSON.stringify({ scene: scene.context, results: read }) }],
+        output: { name: 'narration_judge', schema: ResultJudgeAnswer },
+        // The summary model thinks first: 300 ran out (max_tokens) on the real AI.
+        maxOutputTokens: 1_500,
+      });
+      const verdicts = judged.ok && judged.value.verdicts.length === read.length ? judged.value.verdicts : null;
+      actionResults = read.map((t, i) => ({ text: t, chars: [...t].length, raw: [...raw[i]!].length, verdict: verdicts?.[i] ?? null }));
+      if (actionResults.some((r) => r.chars > NPC_REPLY_MAX_LENGTH)) flags.push('result_too_long');
+      if (!verdicts) flags.push('result_judge_failed');
+      for (const part of PARTS) if (verdicts?.some((v) => !v[part])) flags.push(`result_missing_${part}`);
+      if (verdicts?.some((v) => !v.playerChoice)) flags.push('decides_for_player');
+    }
     spent += sceneCost;
-    results.push({ ...base, ok: true, text, failure: null, flags: [...new Set(flags)], costUsdMicros: sceneCost, ...(replies ? { replies } : {}) });
+    results.push({ ...base, ok: true, text, failure: null, flags: [...new Set(flags)], costUsdMicros: sceneCost, ...(replies ? { replies } : {}), ...(actionResults ? { results: actionResults } : {}) });
   }
   const row = db
     .insert(styleEvalRun)
@@ -239,11 +283,44 @@ export function npcReplyReport(db: DbOrTx, runId: number): NpcReplyReport {
   };
 }
 
+/** ISK-026 C7 / C12: the action results of a round's narration scenes against the bar. */
+export interface NarrationReport {
+  results: number;
+  withinLength: number;
+  complete: number;
+  completeRate: number;
+  /** Results the judge found do not decide or feel for the player beyond the action (C12). */
+  respectsPlayer: number;
+  /** Results the AI wrote over 120 (the player reads them cut). */
+  overRaw: number;
+  pass: boolean;
+  samples: string[];
+}
+
+export function narrationReport(db: DbOrTx, runId: number): NarrationReport {
+  const row = db.select({ scenes: styleEvalRun.scenes }).from(styleEvalRun).where(eq(styleEvalRun.id, runId)).get();
+  const scenes = row ? (JSON.parse(row.scenes) as StoredScene[]) : [];
+  const all = scenes.flatMap((s) => s.results ?? []);
+  const withinLength = all.filter((r) => r.chars <= NPC_REPLY_MAX_LENGTH).length;
+  const complete = all.filter((r) => r.verdict !== null && PARTS.every((p) => r.verdict![p])).length;
+  const completeRate = all.length === 0 ? 0 : complete / all.length;
+  return {
+    results: all.length,
+    withinLength,
+    complete,
+    completeRate,
+    respectsPlayer: all.filter((r) => r.verdict?.playerChoice === true).length,
+    overRaw: all.filter((r) => r.raw > NPC_REPLY_MAX_LENGTH).length,
+    pass: all.length > 0 && withinLength === all.length && completeRate >= 0.8,
+    samples: scenes.flatMap((s) => s.results?.slice(0, 1).map((r) => r.text) ?? []).slice(0, 6),
+  };
+}
+
 type RunRow = typeof styleEvalRun.$inferSelect;
 
 /** The round as the admin page reads it: no prompts. */
 function runOf(row: RunRow): StyleEvalRun {
-  const scenes = (JSON.parse(row.scenes) as StoredScene[]).map(({ prompt: _prompt, replies: _replies, ...s }) => s);
+  const scenes = (JSON.parse(row.scenes) as StoredScene[]).map(({ prompt: _prompt, replies: _replies, results: _results, ...s }) => s);
   return { id: row.id, createdAt: row.createdAt, provider: row.provider, models: JSON.parse(row.models) as string[], voiceVersion: row.voiceVersion, costUsdMicros: row.costUsdMicros, scenes };
 }
 

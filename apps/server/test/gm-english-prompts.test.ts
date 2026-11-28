@@ -8,6 +8,7 @@ import {
   DIALOGUE_BLOCK,
   FINALE_BLOCK,
   JOURNAL_BLOCK,
+  NARRATION_EXAMPLES,
   NARRATOR_BLOCK,
   NPC_SPEECH_EXAMPLES,
   REPAIR_INSTRUCTION,
@@ -32,7 +33,8 @@ import { WEATHER_RULES } from '../src/weather/service.ts';
  */
 // GEN-083: the avoid lead-in of the learning block is Thai by the requirement (GEN-108 R5).
 // ISK-025: the NPC reply rules show 2 good replies in Thai and name the word not to write (รู้สึก).
-const ALLOWED_THAI = ['คุณ', AVOID_LEAD, ...NPC_SPEECH_EXAMPLES, 'รู้สึก'];
+// ISK-026: the action result rule shows 1 good result in Thai.
+const ALLOWED_THAI = ['คุณ', AVOID_LEAD, ...NPC_SPEECH_EXAMPLES, 'รู้สึก', ...NARRATION_EXAMPLES];
 const THAI = /[฀-๿]/;
 const thaiLeft = (text: string) => ALLOWED_THAI.reduce((t, word) => t.split(word).join(''), text).match(/[฀-๿]+/g) ?? [];
 

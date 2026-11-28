@@ -76,7 +76,7 @@ import { learningContext, turnTags } from '../learning/memory.ts';
 import { introduceNpcs } from './npc-intro.ts';
 import { dialoguePrompt } from './npc-examples.ts';
 import { recordNpcMemories } from './npc-memory.ts';
-import { capTotal, cleanNpcLines, lingerAfter, lingersNow, npcAnswers, npcLineLimits, npcPlacesNow, npcPrompt, npcsPresentAt, saveLingers, withVoice } from './npc-lines.ts';
+import { capTotal, clampLine, cleanNpcLines, lingerAfter, lingersNow, npcAnswers, npcLineLimits, npcPlacesNow, npcPrompt, npcsPresentAt, saveLingers, withVoice } from './npc-lines.ts';
 import { npcFarewellFor } from './server-lines.ts';
 import { newsSources, publicNews, saveNews, storedNews } from './news.ts';
 import { arrivalAt, arrivalBeatId, periodScenes } from './scene.ts';
@@ -572,7 +572,11 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       const aliases = aliasesOf(world, forbidden);
       const purpose = 'player' in ctx.audience ? 'narrate_player' : 'narrate_place';
       const output = { name: GM_OUTPUT.narration, schema: GmNarration };
-      const sanitize = (n: GmNarration): GmNarration => ({ ...n, segments: n.segments.map((s) => ({ ...s, text: maskNames(s.text, aliases) })) });
+      const sanitize = (n: GmNarration): GmNarration => ({
+        ...n,
+        segments: n.segments.map((s) => ({ ...s, text: maskNames(s.text, aliases) })),
+        ...(n.arrival !== undefined ? { arrival: maskNames(n.arrival, aliases) } : {}),
+      });
       const check = (n: GmNarration) => checkNarration(ctx, n, forbidden);
       const out: StoredNarration =
         saved ??
@@ -604,7 +608,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
                 answer: value,
                 value,
                 scope: 'narration',
-                texts: (n) => n.segments.map((s) => ({ text: s.text, npcId: null })),
+                texts: (n) => [...n.segments.map((s) => s.text), ...(n.arrival !== undefined ? [n.arrival] : [])].map((text) => ({ text, npcId: null })),
                 accept: (n) => {
                   const clean = sanitize(n);
                   return check(clean).length === 0 ? clean : undefined;
@@ -644,7 +648,9 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     // 6: what the room publishes and applies. GEN-116: the result and narration only; the NPC lines are the second stage below.
     const perAudience = narrations.map(({ ctx, out, readers }): ResolutionEntry[] => {
       const reader = 'player' in ctx.audience ? world.byRef.get(ctx.audience.player)!.memberId : null;
-      const render = (who: string | null, shared: boolean) => out.segments.map((s) => renderTokens(db, world, s.text, who, shared)).join('\n');
+      // ISK-026: each action's result cut to 120 as this reader reads it (names filled in); the arrival paragraph whole, last (ISK-009).
+      const render = (who: string | null, shared: boolean) =>
+        [...out.segments.map((s) => clampLine(renderTokens(db, world, s.text, who, shared))), ...(out.arrival !== undefined ? [renderTokens(db, world, out.arrival, who, shared)] : [])].join('\n');
       const fallback = out.fallback ? { fallback: out.fallback } : {};
       if (reader !== null) {
         const roll = rollOf.has(reader) ? { roll: rollOf.get(reader)! } : {};
@@ -688,7 +694,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         const system = [...dialogueSystem, ...libSystem.slice(1)];
         // GEN-128 C3: the lines follow the narration the players read, a Human GM's edit included (names back to tokens).
         const edited = published[firstEntry(i)]?.text;
-        const narration = edited !== undefined && edited !== entries[firstEntry(i)]!.text ? [world.tokenise(edited)] : out.segments.map((s) => s.text);
+        const narration =
+          edited !== undefined && edited !== entries[firstEntry(i)]!.text ? [world.tokenise(edited)] : [...out.segments.map((s) => clampLine(s.text)), ...(out.arrival !== undefined ? [out.arrival] : [])];
         const context: DialogueContext = { ...rest, npcs, kind: 'gm_dialogue', narration, limits };
         if (requestTokens(system, [{ text: JSON.stringify(context) }]) > CONTEXT_BUDGET.npc_dialogue) {
           log(`[gm] game=${gameId} purpose=npc_dialogue audience=${key} skipped: limit_exceeded`);
@@ -1164,15 +1171,16 @@ const TEMPLATE_RESULT: Record<string, string> = {
  * after its repair. Built only from the audience's beats (the validated outcome), with tokens for people,
  * so it never names someone the reader does not know nor tells what happened elsewhere.
  */
-export function templateNarration(ctx: Pick<NarrationContext, 'beats'>): GmNarration {
-  return {
-    segments: ctx.beats.map((b) => {
-      const who = b.actor === null ? '' : `{{p:${b.actor}}}`;
-      const outcome = TEMPLATE_RESULT[b.result] ?? '';
-      const text = [who, b.text, outcome].filter((s) => s.length > 0).join(' ');
-      return { actionId: b.actionId, text: (text.length > 0 ? text : 'มีบางอย่างเกิดขึ้น').slice(0, 800) };
-    }),
-  };
+export function templateNarration(ctx: Pick<NarrationContext, 'beats' | 'arrival'>): GmNarration {
+  const told = ctx.beats.map((b) => {
+    const who = b.actor === null ? '' : `{{p:${b.actor}}}`;
+    const outcome = TEMPLATE_RESULT[b.result] ?? '';
+    const text = [who, b.text, outcome].filter((s) => s.length > 0).join(' ');
+    return { actionId: b.actionId, text: (text.length > 0 ? text : 'มีบางอย่างเกิดขึ้น').slice(0, 800), arrival: ctx.arrival !== undefined && b.kind === 'arrival' };
+  });
+  // ISK-026: the reader's own arrival is `arrival`, as the AI writes it.
+  const own = told.find((s) => s.arrival);
+  return { segments: told.filter((s) => !s.arrival).map(({ actionId, text }) => ({ actionId, text })), ...(own ? { arrival: own.text } : {}) };
 }
 
 /** Real names (players and NPCs) at least one reader does not know (GEN-050 / GEN-067). */

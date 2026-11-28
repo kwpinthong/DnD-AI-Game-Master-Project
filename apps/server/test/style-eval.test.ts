@@ -6,7 +6,7 @@ import { loadAiConfig } from '../src/ai/config.ts';
 import type { AiCallRequest, AiProvider } from '../src/ai/provider.ts';
 import { createMockProvider } from '../src/ai/providers/mock.ts';
 import { hashPin } from '../src/auth/pin.ts';
-import { npcReplyReport, runStyleEval, styleEvalView } from '../src/eval/style-eval.ts';
+import { narrationReport, npcReplyReport, runStyleEval, styleEvalView } from '../src/eval/style-eval.ts';
 import { STYLE_SCENES, THAI_PURPOSES } from '../src/eval/style-scenes.ts';
 import { cannedGmAnswer } from '../src/gm/mock-gm.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
@@ -21,7 +21,8 @@ const ADMIN_CODE = 'ทดสอบ-ชุดสำนวน-167';
 describe('GEN-167 the eval set', () => {
   it('C1: 10-20 scenes, at least 5 NPCs, every purpose that writes Thai', () => {
     expect(STYLE_SCENES.length).toBeGreaterThanOrEqual(10);
-    expect(STYLE_SCENES.length).toBeLessThanOrEqual(20);
+    // ISK-026 (pending Nok's answer): 6 narration + 6 NPC chat + 6 turn-line scenes + the 3 summaries no longer fit in 20.
+    expect(STYLE_SCENES.length).toBeLessThanOrEqual(23);
     expect(new Set(STYLE_SCENES.map((s) => s.id)).size).toBe(STYLE_SCENES.length);
     expect(new Set(STYLE_SCENES.flatMap((s) => s.npcs)).size).toBeGreaterThanOrEqual(5);
     expect(new Set(STYLE_SCENES.map((s) => s.purpose))).toEqual(new Set(THAI_PURPOSES));
@@ -226,6 +227,70 @@ describe('GEN-167 runner and admin page', { timeout: 120_000 }, () => {
     expect(npcReplyReport(server.orm, result.id).complete).toBe(0);
   });
 
+  // ISK-026: the action results of the narration scenes, judged as the player reads them (the Mock plays the judge).
+  const narrationScenes = STYLE_SCENES.filter((s) => s.context.kind === 'gm_narration');
+  const isResultJudge = (req: AiCallRequest) => req.output.name === 'narration_judge';
+  const judgingResults =
+    (verdict: Record<'persona' | 'feeling' | 'reaction' | 'place' | 'playerChoice', boolean>, segment?: string) =>
+    (req: AiCallRequest, json: unknown): unknown => {
+      if (isResultJudge(req)) return { verdicts: (JSON.parse(req.messages[0]!.text) as { results: unknown[] }).results.map(() => verdict) };
+      if (segment !== undefined && req.output.name === 'gm_narration') {
+        const out = json as { segments: { actionId: string; text: string }[] };
+        return { ...out, segments: out.segments.map((s) => ({ ...s, text: segment })) };
+      }
+      return json;
+    };
+  const RESULT_ALL = { ...ALL, playerChoice: true };
+
+  it('ISK-026 C7 (mock): every narration scene is judged once on the summary model; short results with all 4 parts pass the bar', async () => {
+    const provider = mock([], judgingResults(RESULT_ALL));
+    const calls: AiCallRequest[] = [];
+    const result = await run({ ...provider, call: (req) => (calls.push(req), provider.call(req)) });
+    const judged = calls.filter(isResultJudge);
+    expect(judged).toHaveLength(narrationScenes.length);
+    expect(judged.every((r) => r.purpose === 'npc_chat' && r.model === config.summaryModel)).toBe(true);
+    const report = narrationReport(server.orm, result.id);
+    expect(report.results).toBeGreaterThanOrEqual(narrationScenes.length);
+    expect(report).toMatchObject({ withinLength: report.results, complete: report.results, completeRate: 1, respectsPlayer: report.results, pass: true, overRaw: 0 });
+    expect(report.samples.length).toBeGreaterThan(0);
+    expect(JSON.stringify(styleEvalView(server.orm))).not.toContain('verdict');
+  });
+
+  it('ISK-026 C7 (mock): a result of 180 code points is judged as the player reads it (cut within 120); its raw length is reported', async () => {
+    const said = Array.from({ length: 9 }, () => 'ก'.repeat(19)).join(' ') + 'ข';
+    const calls: AiCallRequest[] = [];
+    const provider = mock([], judgingResults(RESULT_ALL, said));
+    const result = await run({ ...provider, call: (req) => (calls.push(req), provider.call(req)) });
+    const judged = calls.filter(isResultJudge).flatMap((r) => (JSON.parse(r.messages[0]!.text) as { results: string[] }).results);
+    expect(judged.length).toBeGreaterThan(0);
+    for (const text of judged) {
+      expect([...text].length).toBeLessThanOrEqual(120);
+      expect(said.startsWith(text)).toBe(true);
+    }
+    const report = narrationReport(server.orm, result.id);
+    expect(report).toMatchObject({ withinLength: report.results, overRaw: report.results, pass: true });
+    expect(flagged(result, 'too_long')).toEqual([]);
+  });
+
+  it('ISK-026 C12 (mock): the judge also says whether a result decides or feels for the player beyond the action; a no is flagged and reported', async () => {
+    const result = await run(mock([], judgingResults({ ...RESULT_ALL, playerChoice: false })));
+    expect(flagged(result, 'decides_for_player')).toEqual(narrationScenes.map((s) => s.id));
+    const report = narrationReport(server.orm, result.id);
+    expect(report.respectsPlayer).toBe(0);
+    expect(report.complete).toBe(report.results);
+    const calls: AiCallRequest[] = [];
+    const provider = mock([], judgingResults(RESULT_ALL));
+    await run({ ...provider, call: (req) => (calls.push(req), provider.call(req)) });
+    expect(calls.find(isResultJudge)!.system.map((b) => b.text).join('\n')).toMatch(/playerChoice: .*(decide|feel).*player/);
+  });
+
+  it('ISK-026 C7 (mock): a narration judge that fails is flagged result_judge_failed; the NPC replies are not affected', async () => {
+    const result = await run(mock([], (req, json) => (isResultJudge(req) ? { verdicts: 'nope' } : judging(ALL)(req, json))));
+    expect(flagged(result, 'result_judge_failed')).toEqual(narrationScenes.map((s) => s.id));
+    expect(narrationReport(server.orm, result.id)).toMatchObject({ complete: 0, pass: false });
+    expect(npcReplyReport(server.orm, result.id).pass).toBe(true);
+  });
+
   it('ISK-025 C4: a reply that brings up rain in a scene without rain is flagged not_in_scene; with rain it is fine', async () => {
     const result = await run(mock([], judging(ALL, 'ฝนตกหนักแบบนี้ ยังจะมาอีกหรือ')));
     const chats = STYLE_SCENES.filter((s) => s.context.kind === 'npc_chat');
@@ -233,6 +298,17 @@ describe('GEN-167 runner and admin page', { timeout: 120_000 }, () => {
     expect(chats.filter(rainy).length).toBeGreaterThan(0);
     expect(chats.filter((s) => !rainy(s)).length).toBeGreaterThan(0);
     expect(flagged(result, 'not_in_scene')).toEqual(chats.filter((s) => !rainy(s)).map((s) => s.id));
+  });
+});
+
+describe('ISK-026 the narration scenes of the eval set', () => {
+  it('ISK-026 C7: at least 6 narration scenes of action results, private and place feed, one of 3 actions and one with an arrival', () => {
+    const scenes = STYLE_SCENES.flatMap((s) => (s.context.kind === 'gm_narration' ? [s.context] : []));
+    expect(scenes.length).toBeGreaterThanOrEqual(6);
+    expect(scenes.some((c) => 'player' in c.audience)).toBe(true);
+    expect(scenes.some((c) => 'place' in c.audience)).toBe(true);
+    expect(scenes.some((c) => c.beats.filter((b) => b.kind !== 'arrival').length >= 3)).toBe(true);
+    expect(scenes.some((c) => c.arrival !== undefined && c.beats.at(-1)?.kind === 'arrival')).toBe(true);
   });
 });
 

@@ -209,19 +209,31 @@ export function checkNarration(ctx: NarrationContext, out: GmNarration, forbidde
   // ISK-009: who is at the place the reader arrived at may be named too.
   const cast = new Set([...ctx.cast.map((c) => c.ref), ...(ctx.arrival?.players ?? [])]);
   const npcs = new Set([...ctx.npcs, ...(ctx.arrival?.npcs ?? [])].map((n) => n.id));
+  // ISK-026: the reader's own arrival is told in `arrival`, never as a segment (a segment is cut to 120).
+  const ownArrival = ctx.arrival ? ctx.beats.find((b) => b.kind === 'arrival')?.actionId : undefined;
+  const checkText = (text: string, path: string) => {
+    for (const [, kind, id] of text.matchAll(TOKEN_PATTERN)) {
+      if (kind === 'p' && !cast.has(id!)) fail('unknown_ref', path, `${playerToken(id!)} is not in the cast of this audience`);
+      if (kind === 'n' && !npcs.has(id!)) fail('unknown_ref', path, `{{n:${id}}} is not an NPC of this place`);
+    }
+    if (forbiddenNames.some((name) => containsName(text, name))) fail('name_leak', path, 'the text has a real name the reader does not know; use the {{p:ref}} / {{n:id}} tokens only');
+  };
   let last = -1;
   out.segments.forEach((s, i) => {
     const path = `segments[${i}]`;
     const at = beatIndex.get(s.actionId);
     if (at === undefined) fail('unknown_action', `${path}.actionId`, `${s.actionId} is not a beat of this audience; tell only the beats given`);
+    else if (s.actionId === ownArrival) fail('arrival_segment', `${path}.actionId`, `tell ${s.actionId} in arrival, not as a segment`);
     else if (at < last) fail('beat_order', `${path}.actionId`, 'tell the beats in the order given');
     else last = at;
-    for (const [, kind, id] of s.text.matchAll(TOKEN_PATTERN)) {
-      if (kind === 'p' && !cast.has(id!)) fail('unknown_ref', `${path}.text`, `${playerToken(id!)} is not in the cast of this audience`);
-      if (kind === 'n' && !npcs.has(id!)) fail('unknown_ref', `${path}.text`, `{{n:${id}}} is not an NPC of this place`);
-    }
-    if (forbiddenNames.some((name) => containsName(s.text, name))) fail('name_leak', `${path}.text`, 'the text has a real name the reader does not know; use the {{p:ref}} / {{n:id}} tokens only');
+    checkText(s.text, `${path}.text`);
   });
-  for (const b of ctx.beats) if (!out.segments.some((s) => s.actionId === b.actionId)) fail('missing_beat', 'segments', `no segment for beat ${b.actionId}`);
+  if (out.arrival !== undefined && ownArrival === undefined) fail('unknown_action', 'arrival', 'this audience has no arrival of its own; leave arrival out');
+  else if (out.arrival !== undefined) checkText(out.arrival, 'arrival');
+  for (const b of ctx.beats) {
+    if (b.actionId === ownArrival) {
+      if (out.arrival === undefined) fail('missing_beat', 'arrival', `no arrival for beat ${b.actionId}`);
+    } else if (!out.segments.some((s) => s.actionId === b.actionId)) fail('missing_beat', 'segments', `no segment for beat ${b.actionId}`);
+  }
   return errors;
 }

@@ -6,7 +6,7 @@ import { DEFAULT_PRICES, loadAiConfig } from '../src/ai/config.ts';
 import type { AiCallRequest, AiCallResult, AiProvider } from '../src/ai/provider.ts';
 import { cannedGmAnswer, contextOf, mockNpcLines, mockTurnProposal } from '../src/gm/mock-gm.ts';
 import { mockReply } from '../src/ai/providers/mock.ts';
-import { CONTEXT_BUDGET, requestTokens, type DialogueContext, type JournalContext, type NarrationContext, type TurnContext } from '../src/gm/context.ts';
+import { CONTEXT_BUDGET, NARRATION_EXAMPLES, requestTokens, type DialogueContext, type JournalContext, type NarrationContext, type TurnContext } from '../src/gm/context.ts';
 import type { GmTurnProposal } from '../src/gm/schema.ts';
 import type { SceneContext } from '../src/gm/scene.ts';
 import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
@@ -192,7 +192,8 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     expect(ctx.actions.map((a) => a.text).sort()).toEqual([...texts].sort());
     const rules = provider.requests.flatMap((r) => r.system).filter((b) => /-rules$|^rules$/.test(b.id));
     expect([...new Set(rules.map((b) => b.id))]).toEqual(expect.arrayContaining(['rules', 'narrator-rules']));
-    for (const b of rules) expect(b.text.split('คุณ').join(''), b.id).not.toMatch(/[฀-๿]/);
+    // ISK-026: besides คุณ, the narrator rules show one good action result in Thai.
+    for (const b of rules) expect([...NARRATION_EXAMPLES, 'คุณ'].reduce((text, word) => text.split(word).join(''), b.text), b.id).not.toMatch(/[฀-๿]/);
     const letters = (s: string) => [...s].filter((ch) => /\p{L}/u.test(ch));
     for (const c of clients) {
       for (const e of turnEntries(c, 1, 'EOSORIA', 1).filter((x) => x.kind === 'narration')) {

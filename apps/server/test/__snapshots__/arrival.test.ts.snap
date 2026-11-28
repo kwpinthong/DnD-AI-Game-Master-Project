@@ -1,0 +1,6 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ISK-009 arrival > ISK-026 action results within 120 > ISK-026 C1: the narration prompt has the rule (1-2 sentences, ≤ 120, the 4 parts) and its examples (snapshot) 1`] = `
+"Each segment = one action's result: 1-2 sentences, at most 120 characters (aim for 60-100), with all 4: the world / people here react; what the actor feels, through the body or what they see (hands shake, eyes squint; never decide or feel for a player beyond their action); personality by the game's tone and the NPCs involved; one real detail of here and now (place, period, people; never invent one)
+Good (asking the way, noon at the barracks): ทหารยามชี้ไปทางโบสถ์อย่างห้วนๆ แดดเที่ยงแผดลานค่ายจนต้องหรี่ตา"
+`;

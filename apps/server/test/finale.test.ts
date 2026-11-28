@@ -151,6 +151,20 @@ describe('GEN-059 finale', { timeout: 60_000 }, () => {
     expect(ending(t)).toMatchObject({ reason: 'finale' });
   });
 
+  it('ISK-026 C10: the ending (table and own) is not cut to the 120 of an action result', async () => {
+    const LONG = Array.from({ length: 12 }, () => 'จ'.repeat(19)).join(' ');
+    const told = (req: AiCallRequest): AiCallResult =>
+      mockReply.ok({ overall: LONG, players: contextOf<FinaleContext>(req).players.map((p) => ({ player: p.ref, text: `ฉากจบส่วนตัว ${LONG}` })) });
+    await boot((req, n) => (isFinale(req) ? told(req) : turnWith()(req, n)));
+    const t = await startedTable(server!, false);
+    const clients = await playLastTurn(t);
+    for (const c of clients) {
+      await privateEnding(c);
+      await c.waitFor((m) => m.type === 'entry' && m.entry.kind === 'feed' && m.entry.text === LONG);
+      expect(c.entries().find((e) => e.text.startsWith('ฉากจบส่วนตัว'))!.text).toBe(`ฉากจบส่วนตัว ${LONG}`);
+    }
+  });
+
   it('C2: a player completed the Good path on day 12: the town is protected and everyone still alive survives', async () => {
     await boot((req, n) => (isFinale(req) ? markedFinale(req) : turnWith('good')(req, n)));
     const t = await startedTable(server!, false);

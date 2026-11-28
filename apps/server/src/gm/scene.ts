@@ -115,9 +115,9 @@ export async function periodScenes(
   const before: PresenceNow = { phase: prev.phase, weather: weatherAt(db, gameId, prev)?.weather ?? null, karmas, lingering: lingersOf(db, gameId) };
   const base = { phase: at.phase, weather: input.weather?.weather ?? null, karmas };
   const now: PresenceNow = { ...base, lingering: lingersNow(db, world, assets, base).lingering };
-  // ISK-009: who arrived somewhere on the last turn already read the place in their own narration (its arrival beat).
+  // ISK-009: who arrived somewhere on the last turn already read the place in their own narration (ISK-026: its `arrival`).
   const told = getStoredTurn(db, gameId, { ...prev, turn: 2 })?.narrations ?? {};
-  const arrived = [...world.players.values()].filter((p) => told[`player:${p.ref}`]?.segments.some((s) => s.actionId === arrivalBeatId(p.ref))).map((p) => p.memberId);
+  const arrived = [...world.players.values()].filter((p) => told[`player:${p.ref}`]?.arrival !== undefined).map((p) => p.memberId);
   // Where everyone is now, the ones who just arrived aside.
   const readers = new Map<string, string[]>();
   for (const [memberId, placeId] of locationSnapshot(db, gameId)) {

@@ -167,7 +167,10 @@ export type GmNpcLine = z.infer<typeof GmNpcLine>;
  * stage (`GmDialogue`); an old stored narration with `npcLines` still parses (the key is dropped).
  */
 export const GmNarration = z.object({
+  /** ISK-026: the raw text is taken up to 800; each segment reaches its readers cut to 120 (`clampLine`). */
   segments: z.array(z.object({ actionId: z.string(), text: z.string().min(1).max(800) })).min(1).max(12),
+  /** ISK-026: a private narration's own arrival paragraph (ISK-009), outside the segments so it is never cut to 120. */
+  arrival: z.string().min(1).max(400).optional(),
 });
 export type GmNarration = z.infer<typeof GmNarration>;
 

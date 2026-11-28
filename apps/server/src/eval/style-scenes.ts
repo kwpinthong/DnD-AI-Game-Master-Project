@@ -51,6 +51,7 @@ const PLACE: Record<'fountain' | 'temple' | 'market' | 'barracks', SceneContext[
 
 const A = { ref: 'p_a', looks: '', title: 'นักเดินทางผมเปีย', self: true, karmaBand: 0 };
 const B = { ref: 'p_b', looks: 'ชายร่างสูงสวมเสื้อคลุมขาด', title: 'ชายแปลกหน้าถือหอก', self: false, karmaBand: -1 };
+const C = { ref: 'p_c', looks: '', title: 'หญิงชราถือตะกร้าหวาย', self: false, karmaBand: 1 };
 
 /** An NPC of a narration: here = may speak; persona = a short personality, tokens only. */
 const npc = (id: string, persona: string | null, affinity = 0, met = false, here = true): NarrationContext['npcs'][number] => ({
@@ -258,6 +259,65 @@ export const STYLE_SCENES: StyleScene[] = [
       privateLines: true,
       journal: { saga: '{{p:p_a}} มาถึงเมืองพร้อมเงินติดตัวไม่มาก', yesterday: null },
       beats: [beat('a1', '{{p:p_a}} ต่อราคาตะเกียงน้ำมันจาก 12 เหลือ 8 เหรียญ', 'crit', { targetNpc: 'merchant', items: ['ตะเกียงน้ำมัน'] })],
+    }),
+  },
+  // ISK-026: three more narration scenes (six in all): three actions at once, an arrival, a fumble at night.
+  {
+    id: 'three-actions',
+    title: 'สามคนทำสามอย่างที่น้ำพุตอนเช้า',
+    purpose: 'narrate_place',
+    npcs: ['beggar'],
+    context: narration({
+      audience: { place: 'fountain' },
+      turn: { day: 2, phase: 'EOSORIA', turn: 1 },
+      place: PLACE.fountain,
+      cast: [{ ...A, self: false }, B, C],
+      npcs: [npc('beggar', 'เด็กกำพร้าช่างสังเกต พูดสุภาพแบบเด็ก ระแวงคนแปลกหน้าแต่ใจดี')],
+      beats: [
+        beat('a1', '{{p:p_a}} ซื้อขนมปังจากแผงริมน้ำพุ', 'success', { kind: 'public_action' }),
+        beat('b1', '{{p:p_b}} โยนเหรียญลงน้ำพุแล้วอธิษฐาน', 'success', { actor: 'p_b', kind: 'public_action' }),
+        beat('c1', '{{p:p_c}} ไล่นกพิราบที่จิกตะกร้าของตน', 'fail', { actor: 'p_c', kind: 'public_action' }),
+      ],
+    }),
+  },
+  {
+    id: 'arrive-market',
+    title: 'เดินจากน้ำพุมาถึงตลาด',
+    purpose: 'narrate_player',
+    npcs: ['merchant'],
+    context: narration({
+      audience: { player: 'p_a' },
+      turn: { day: 3, phase: 'SOLARION', turn: 2 },
+      place: PLACE.fountain,
+      cast: [A],
+      npcs: [npc('merchant', 'พ่อค้าช่างเจรจา สุภาพแบบคนขายของ นับเหรียญตลอดเวลา', 0, false, false)],
+      journal: { saga: null, yesterday: null },
+      beats: [
+        beat('a1', '{{p:p_a}} เดินจากน้ำพุไปย่านการค้า', 'success', { moved: { from: 'fountain', to: 'market' } }),
+        beat('arrival:p_a', 'มาถึงย่านการค้า-ตลาดมืด', 'scene', { kind: 'arrival' }),
+      ],
+      arrival: {
+        place: { id: 'market', name: PLACE.market.name, description: 'ตลาดแออัด แผงผ้าใบเรียงซ้อน ทางเดินแคบอบอวลกลิ่นเครื่องเทศ' },
+        phase: 'SOLARION',
+        weather: 'Clear',
+        npcs: [{ id: 'merchant', alias: ALIAS.merchant! }],
+        players: [],
+      },
+    }),
+  },
+  {
+    id: 'fail-climb',
+    title: 'ปีนกำแพงโบสถ์ตอนกลางคืนแล้วพลาด',
+    purpose: 'narrate_player',
+    npcs: ['nun'],
+    context: narration({
+      audience: { player: 'p_a' },
+      turn: { day: 4, phase: 'NOCTHERION', turn: 1 },
+      place: PLACE.temple,
+      cast: [A],
+      npcs: [npc('nun', 'แม่ชีที่ดูแลเด็กกำพร้ามานาน เหนื่อยแต่ไม่เคยบ่น พูดนุ่มและช้า', 10, true)],
+      journal: { saga: null, yesterday: null },
+      beats: [beat('a1', '{{p:p_a}} ปีนกำแพงหลังโบสถ์เพื่อแอบดูหน้าต่างชั้นบน', 'fumble')],
     }),
   },
   {

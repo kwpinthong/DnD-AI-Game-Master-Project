@@ -5,7 +5,7 @@ import { openGameData } from '../assets/game-data.ts';
 import { assetFileLabel, buildGameAssets, DEFAULT_ASSETS_DIR, readRawDataSets } from '../assets/load.ts';
 import { loadConfig } from '../config.ts';
 import { openDatabase } from '../db/client.ts';
-import { npcReplyReport, runStyleEval } from './style-eval.ts';
+import { narrationReport, npcReplyReport, runStyleEval } from './style-eval.ts';
 
 // `pnpm eval:style` (GEN-167): one round of the Thai style eval set against the AI of AI_PROVIDER, saved in the DB of
 // DB_PATH for the /admin compare page. Never creates or reads a game. STYLE_EVAL_MAX_USD (default 1) stops the round.
@@ -35,6 +35,12 @@ try {
     const npc = npcReplyReport(db, run.id);
     console.log(`[eval:style] NPC replies: ${npc.withinLength}/${npc.replies} within 120, ${npc.complete}/${npc.replies} with all 4 parts (${Math.round(npc.completeRate * 100)}%): ${npc.pass ? 'PASS' : 'BELOW THE BAR'}`);
     for (const s of npc.samples) console.log(`[eval:style]   ${s}`);
+    // ISK-026 C7 / C12: the action results of the narration scenes (as players read them).
+    const told = narrationReport(db, run.id);
+    console.log(
+      `[eval:style] action results: ${told.withinLength}/${told.results} within 120 (${told.overRaw} written longer and cut), ${told.complete}/${told.results} with all 4 parts (${Math.round(told.completeRate * 100)}%), ${told.respectsPlayer}/${told.results} not deciding for the player: ${told.pass ? 'PASS' : 'BELOW THE BAR'}`,
+    );
+    for (const s of told.samples) console.log(`[eval:style]   ${s}`);
   } finally {
     sqlite.close();
   }

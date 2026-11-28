@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadAiConfig } from '../src/ai/config.ts';
 import type { AiCallRequest, AiCallResult, AiProvider } from '../src/ai/provider.ts';
 import { mockReply } from '../src/ai/providers/mock.ts';
-import { loadWorld, requestTokens, type NarrationContext, type TurnContext } from '../src/gm/context.ts';
+import { estimateTokens, loadWorld, NARRATION_EXAMPLES, NARRATION_RULES, NARRATOR_BLOCK, requestTokens, type Beat, type NarrationContext, type TurnContext } from '../src/gm/context.ts';
 import { cannedGmAnswer, contextOf, mockTurnProposal } from '../src/gm/mock-gm.ts';
+import { clampLine } from '../src/gm/npc-lines.ts';
 import type { SceneContext } from '../src/gm/scene.ts';
 import { ensurePhaseState, savePhaseState } from '../src/room/store.ts';
 import type { RunningServer } from '../src/server.ts';
@@ -26,6 +27,10 @@ const isTurn = (req: AiCallRequest) => req.output.name === 'gm_turn_proposal';
 const isNarration = (req: AiCallRequest) => req.output.name === 'gm_narration';
 const isScene = (req: AiCallRequest) => req.output.name === 'gm_scene';
 const isOrigin = (req: AiCallRequest) => req.output.name === 'origin_narration';
+
+/** ISK-026 C6: `estimateTokens(NARRATOR_BLOCK.text)` and the ai_usage purposes of the fixture turn, measured before ISK-026. */
+const NARRATOR_TOKENS_BEFORE = 498;
+const TURN_PURPOSES_BEFORE = ['gm_adjudicate', 'narrate_place', 'narrate_place', 'narrate_place', 'narrate_player', 'narrate_player', 'narrate_player', 'npc_dialogue', 'npc_dialogue'];
 
 const FOUNTAIN = 'น้ำพุกลางเมือง';
 const INN = 'โรงเตี๊ยมและกิลด์นักเดินทาง';
@@ -293,6 +298,161 @@ describe('ISK-009 arrival', { timeout: 60_000 }, () => {
     expect(placeContext('fountain', S1)!.beats.filter((b) => b.kind === 'arrival').map((b) => b.actor).sort()).toEqual([refOf(t.a), refOf(t.b)].sort());
   });
 
+  /**
+   * ISK-026: each action's result (one segment) reaches its reader within 120 code points, cut at a sentence end by the
+   * shared `clampLine` (ISK-025); the reader's arrival paragraph (ISK-009) is outside the segments and never cut.
+   */
+  describe('ISK-026 action results within 120', () => {
+    /** `k` phrases of 20 code points with a space between them (20k - 1 code points; + `end`). */
+    const phrases = (k: number, letter = 'ก', end = '') => Array.from({ length: k }, () => letter.repeat(19)).join(' ') + end;
+    const SAID = phrases(9, 'ก', 'ข');
+    const ARRIVAL_TEXT = phrases(15, 'ฝ');
+    const cps = (s: string) => [...s].length;
+    /** The narration: every beat a segment (`segment`), the reader's own arrival in `arrival` (ISK-026), never as a segment. */
+    const narrating =
+      (segment: (b: Beat, ctx: NarrationContext) => string, arrival?: string): Handler =>
+      (req) => {
+        if (!isNarration(req)) return gm(req);
+        const ctx = contextOf<NarrationContext>(req);
+        const own = (b: Beat) => ctx.arrival !== undefined && b.kind === 'arrival';
+        const segments = ctx.beats.filter((b) => !own(b)).map((b) => ({ actionId: b.actionId, text: segment(b, ctx) }));
+        return mockReply.ok({ segments, ...(ctx.arrival && arrival ? { arrival } : {}) });
+      };
+    /** A cut text: within 120, the start of what was said, ending where a sentence (phrase) ends. */
+    const cutAtSentence = (text: string, said: string) => {
+      expect(cps(text)).toBeLessThanOrEqual(120);
+      expect(cps(text)).toBeGreaterThanOrEqual(20);
+      expect(said.startsWith(text), text).toBe(true);
+      expect(said[text.length]).toBe(' ');
+    };
+
+    it('ISK-026 C1: the narration prompt has the rule (1-2 sentences, ≤ 120, the 4 parts) and its examples (snapshot)', () => {
+      for (const part of ['1-2 sentences', 'at most 120 characters', 'react', 'feels', 'through the body', 'never decide', 'tone', 'one real detail of here and now']) expect(NARRATION_RULES).toContain(part);
+      expect(NARRATION_EXAMPLES.length).toBeGreaterThanOrEqual(1);
+      for (const e of NARRATION_EXAMPLES) {
+        expect(NARRATION_RULES).toContain(e);
+        expect(cps(e)).toBeLessThanOrEqual(120);
+      }
+      expect(NARRATOR_BLOCK.text).toContain(NARRATION_RULES);
+      expect(NARRATION_RULES).toMatchSnapshot();
+    });
+
+    it('ISK-026 C2: the AI answers an action result of 180 code points: the player reads it cut at a sentence end, within 120', async () => {
+      expect(cps(SAID)).toBe(180);
+      await boot(narrating(() => SAID));
+      const { clients } = await table();
+      await playTurn(clients, ['ยืนดูเวที', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], S2);
+      cutAtSentence(ownNarration(clients[0]!, S1), SAID);
+    });
+
+    it('ISK-026 C3 + C13: A arrives at the fountain: the arrival paragraph reaches A whole, live, after a reload and in the game log; the action result is cut', async () => {
+      await boot(narrating(() => SAID, ARRIVAL_TEXT));
+      const { t, clients } = await table();
+      await travel(clients[0]!, FOUNTAIN);
+      await playTurn(clients, [null, 'นั่งริมน้ำพุ', 'ล้างแก้ว'], S2);
+      expect(cps(ARRIVAL_TEXT)).toBeGreaterThan(120);
+      const live = ownNarration(clients[0]!, S1);
+      expect(live).toContain(ARRIVAL_TEXT);
+      const lines = live.split('\n');
+      cutAtSentence(lines[0]!, SAID);
+      // ISK-009 kept: the arrival ends A's own narration.
+      expect(lines.at(-1)).toBe(ARRIVAL_TEXT);
+      // Reload: a new connection replays the same entry.
+      const again = await enter(t.a);
+      expect(ownNarration(again, S1)).toBe(live);
+      const log = await t.call('GET', '/api/game/log', { token: t.a.token });
+      expect((log.body as { entries: RoomEntry[] }).entries.some((e) => e.kind === 'narration' && e.text === live)).toBe(true);
+      // Nobody else reads it.
+      for (const c of clients.slice(1)) expect(c.entries().some((e) => e.text.includes(ARRIVAL_TEXT))).toBe(false);
+    });
+
+    it('ISK-026 C4: the period scene (GEN-145) is not cut to 120', async () => {
+      const SCENE = phrases(12, 'ส');
+      await boot((req) => (isScene(req) ? mockReply.ok({ text: SCENE }) : narrating(() => SAID)(req)));
+      const { clients } = await table();
+      await playTurn(clients, ['ยืนดูเวที', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], S2);
+      await playTurn(clients, ['ยืนดูเวที', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], H1);
+      const scene = () => turnEntries(clients[1]!, 1, 'HESPERION', 1).filter((e) => e.kind === 'feed');
+      await until(() => scene().length > 0);
+      expect(scene().map((e) => e.text)).toContain(SCENE);
+    });
+
+    it('ISK-026 C5: A reads their own cut result with คุณ (ISK-008) and no real name they do not know', async () => {
+      await boot(narrating((b) => `{{p:${b.actor}}} ${SAID}`));
+      const { clients } = await table();
+      await playTurn(clients, ['ยืนดูเวที', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], S2);
+      const own = ownNarration(clients[0]!, S1);
+      // ISK-008 renders the reader's own token as คุณ, joined to the next Thai word.
+      expect(own.startsWith('คุณ'), own).toBe(true);
+      cutAtSentence(own, `คุณ${SAID}`);
+      for (const name of [LIN.name, DARIN.name, MEKHA.name]) expect(own).not.toContain(name);
+    });
+
+    it('ISK-026 C6: a turn asks the AI as before (same calls); the narration prompt grows by at most 200 tokens', async () => {
+      await boot(narrating(() => SAID));
+      const { t, clients } = await table();
+      await playTurn(clients, ['ยืนดูเวที', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], S2);
+      const added = estimateTokens(NARRATOR_BLOCK.text) - NARRATOR_TOKENS_BEFORE;
+      expect(added).toBeGreaterThan(0);
+      expect(added).toBeLessThanOrEqual(200);
+      expect(usageOf(t, S1)).toEqual(TURN_PURPOSES_BEFORE);
+    });
+
+    it('ISK-026 C8: the clamp changes only the text: a long narration and the Mock\'s give the same game state; the Mock\'s short text is read unchanged', async () => {
+      let longRefs = new Set<string>();
+      await boot((req) => {
+        if (isNarration(req) && contextOf<NarrationContext>(req).cast.some((c) => longRefs.has(c.ref))) return narrating(() => SAID)(req);
+        return gm(req);
+      });
+      const games = [];
+      for (const long of [false, true]) {
+        const { t, clients } = await table();
+        if (long) longRefs = new Set([t.a, t.b, t.c].map(refOf));
+        await playTurn(clients, ['ยืนดูเวที', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], S2);
+        games.push({ t, clients });
+      }
+      const stateOf = (t: Table) =>
+        [t.a, t.b, t.c].map((s) => ({ ...(server!.db.prepare('select hp, stamina, coins, karma from character where member_id = ?').get(s.memberId) as object), at: placeOf(s) }));
+      expect(stateOf(games[1]!.t)).toEqual(stateOf(games[0]!.t));
+      const short = ownNarration(games[0]!.clients[0]!, S1);
+      expect(short).toBe('คุณยืนดูเวที สำเร็จ');
+      expect(cps(short)).toBeLessThan(120);
+      cutAtSentence(ownNarration(games[1]!.clients[0]!, S1), SAID);
+    });
+
+    it('ISK-026 C9: a place feed of 3 actions: each result is cut on its own, every line within 120', async () => {
+      await boot(narrating((b) => (b.kind === 'public_action' ? SAID : 'เช้านี้มีบางอย่างเกิดขึ้น')));
+      const t = await startedTable(server!, false);
+      for (const who of [t.a, t.b, t.c]) put(who, 'fountain');
+      jumpTo(t, S1);
+      const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+      await playTurn(clients, ['ยืนดูน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างมือที่น้ำพุ'], S2);
+      const feed = turnEntries(clients[1]!, 1, 'SOLARION', 1).filter((e) => e.kind === 'feed' && e.text.includes('กกก'));
+      expect(feed).toHaveLength(1);
+      const cut = feed[0]!.text.split('\n').filter((l) => l.includes('กกก'));
+      expect(cut).toHaveLength(3);
+      for (const line of cut) cutAtSentence(line, SAID);
+    });
+
+    it('ISK-026 C11: A\'s private result never reaches the fountain feed; the cut adds under 5% to a turn (GEN-190)', async () => {
+      const MINE = phrases(9, 'ม', 'ข');
+      await boot(narrating((_b, ctx) => ('player' in ctx.audience ? MINE : SAID)));
+      const t = await startedTable(server!, false);
+      for (const who of [t.a, t.b]) put(who, 'fountain');
+      jumpTo(t, S1);
+      const clients = [await enter(t.a), await enter(t.b), await enter(t.c)];
+      await playTurn(clients, ['ยืนดูน้ำพุ', 'นั่งริมน้ำพุ', 'ล้างแก้ว'], S2);
+      cutAtSentence(ownNarration(clients[0]!, S1), MINE);
+      for (const c of clients) for (const e of c.entries().filter((x) => x.kind === 'feed')) expect(e.text).not.toContain('มมม');
+      // The work the cut adds to a turn: every segment (12) of every audience (6) at the longest (800), against the fastest
+      // real turn GEN-190 modelled (weather 2 s + adjudicate 6 s + narration 6 s).
+      const longest = phrases(40, 'ก');
+      const start = performance.now();
+      for (let i = 0; i < 12 * 6; i++) clampLine(longest);
+      expect(performance.now() - start).toBeLessThan(0.05 * 14_000);
+    });
+  });
+
   describe('the start of the game', () => {
     const MUSICIAN = 1; // นักดนตรีพเนจรตกอับ @ fountain
     const DISHWASHER = 701; // ลูกมือล้างจานประจำร้าน @ inn
@@ -329,6 +489,13 @@ describe('ISK-009 arrival', { timeout: 60_000 }, () => {
       // Opening the room picks no weather again.
       await enter(t.a);
       expect(provider.requests.filter((r) => r.purpose === 'gm_weather')).toHaveLength(1);
+    });
+
+    it('ISK-026 C10: the crossing narration is not cut to 120', async () => {
+      const CROSSING = Array.from({ length: 12 }, () => 'ข'.repeat(19)).join(' ');
+      await boot((req) => (isOrigin(req) ? mockReply.ok({ narration: CROSSING }) : gm(req)), scripted([MUSICIAN, DISHWASHER, DISHWASHER]));
+      const t = await startedTable(server!, false);
+      expect((await originOf(t, t.a)).narration).toContain(CROSSING);
     });
 
     it('C9: A and B spawn apart: B gets nothing of A\'s crossing; B and C spawn together and each is around the other (by title)', async () => {

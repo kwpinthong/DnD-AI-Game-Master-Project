@@ -476,6 +476,15 @@ const FINALE_TEXT = [
 ].join('\n');
 export const FINALE_BLOCK: PromptBlock = { id: 'finale-rules', text: FINALE_TEXT, cache: true };
 
+/** ISK-026: a good action result of `NARRATION_RULES`, in the Thai the AI writes (one only: the rule may add ≤ 200 tokens). */
+export const NARRATION_EXAMPLES = ['ทหารยามชี้ไปทางโบสถ์อย่างห้วนๆ แดดเที่ยงแผดลานค่ายจนต้องหรี่ตา'] as const;
+
+/** ISK-026 (Nok 2026-11-23): how each action's result (one segment) reads, in a player's narration and a place feed alike. */
+export const NARRATION_RULES = [
+  "Each segment = one action's result: 1-2 sentences, at most 120 characters (aim for 60-100), with all 4: the world / people here react; what the actor feels, through the body or what they see (hands shake, eyes squint; never decide or feel for a player beyond their action); personality by the game's tone and the NPCs involved; one real detail of here and now (place, period, people; never invent one)",
+  `Good (asking the way, noon at the barracks): ${NARRATION_EXAMPLES[0]}`,
+].join('\n');
+
 const NARRATOR_TEXT = [
   'You are the Game Master\'s narrator. Tell only the given beats, in order; every beat needs at least 1 segment whose actionId matches the beat',
   'Never tell anything that is not in the beats, never mention anyone not in the cast. Always use {{p:ref}} / {{n:id}} for names, never a real name; {{n:id}} only for ids in npcs (a place is never a token: write its name)',
@@ -492,8 +501,10 @@ const NARRATOR_TEXT = [
   'bonds.memories = what the NPC remembers about that player (newest first): let it shape the NPC\'s manner and expression toward the player; never tell a memory as a new beat',
   // GEN-143
   'answers = NPCs who will answer the beats that ask / talk / request (actionIds) with their own lines in the dialogue stage: in that beat\'s segments tell only gestures, expressions and mood; never sum up the answer or say what the NPC answers for them',
-  // ISK-009
-  'A beat of kind arrival: that player has just come here. Audience player: 2-3 sentences of arrival.place as it looks now (arrival.phase, arrival.weather, its description; never what it hides) and who is here (arrival.npcs as {{n:id}}, arrival.players as {{p:ref}}; these may be named too)',
+  // ISK-026
+  NARRATION_RULES,
+  // ISK-009. ISK-026: the reader's own arrival is the `arrival` field, so the 120 of a segment never cuts it.
+  'A beat of kind arrival: that player has just come here. Audience player: write it in arrival, never as a segment: 2-3 sentences of arrival.place as it looks now (arrival.phase, arrival.weather, its description; never what it hides) and who is here (arrival.npcs as {{n:id}}, arrival.players as {{p:ref}}; these may be named too)',
   THAI_OUTPUT,
 ].join('\n');
 

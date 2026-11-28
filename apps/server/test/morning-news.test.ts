@@ -229,6 +229,13 @@ describe('ISK-014 morning news', { timeout: 60_000 }, () => {
     expect(n.text.endsWith('…')).toBe(true);
   });
 
+  it('ISK-026 C10: a news item of 150 code points is not cut to the 120 of an action result', async () => {
+    const item = 'น'.repeat(150);
+    await boot((req) => ({ ...(cannedSummary(req) as object), news: [item] }));
+    const { clients } = await endDay(3);
+    expect((await waitNews(clients[0]!, 4)).text).toBe(item);
+  });
+
   it('C8: the day change makes the same AI calls: one summarize_day per finished day, nothing new for the news', async () => {
     await boot();
     const { clients } = await endDay(2);

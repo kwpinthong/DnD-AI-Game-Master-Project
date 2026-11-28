@@ -173,12 +173,13 @@ export function mockNpcLines(all: Pick<NarrationContext, 'audience' | 'npcs' | '
 }
 
 export function mockNarration(ctx: NarrationContext): GmNarration {
-  return {
-    segments: ctx.beats.map((b) => ({
-      actionId: b.actionId,
-      text: [b.actor === null ? 'มีบางอย่างเกิดขึ้น' : `{{p:${b.actor}}}`, b.text, RESULT_WORD[b.result] ?? ''].filter((s) => s.length > 0).join(' ').slice(0, 800),
-    })),
-  };
+  const told = ctx.beats.map((b) => ({
+    actionId: b.actionId,
+    text: [b.actor === null ? 'มีบางอย่างเกิดขึ้น' : `{{p:${b.actor}}}`, b.text, RESULT_WORD[b.result] ?? ''].filter((s) => s.length > 0).join(' ').slice(0, 800),
+  }));
+  // ISK-026: the reader's own arrival goes in `arrival`, not in the segments.
+  const own = ctx.arrival ? told.find((s) => ctx.beats.find((b) => b.actionId === s.actionId)?.kind === 'arrival') : undefined;
+  return { segments: told.filter((s) => s !== own), ...(own ? { arrival: own.text } : {}) };
 }
 
 export function mockDaySummary(ctx: DayContext): { recap: string; saga: string; news: string[] } {
