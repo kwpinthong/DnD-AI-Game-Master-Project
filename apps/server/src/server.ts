@@ -17,6 +17,7 @@ import { registerTimelineRoutes } from './timeline/routes.ts';
 import { registerVisibilityRoutes } from './visibility/routes.ts';
 import websocket from '@fastify/websocket';
 import { createAiGmResolver } from './gm/loop.ts';
+import { fitStoredTopics } from './gm/player-memory.ts';
 import type { PhaseResolver } from './room/resolver.ts';
 import { createLobby } from './room/lobby.ts';
 import { registerRoomRoutes } from './room/routes.ts';
@@ -113,6 +114,8 @@ export async function startServer(config: ServerConfig, options: ServerOptions =
     throw error;
   }
   const assets = gameData.assets;
+  // ISK-098: a journal saga the migration made a topic may be longer than maxChars; clampReply fits it here.
+  fitStoredTopics(db, assets.playerMemory, (options.now ?? Date.now)());
 
   const aiConfig = options.ai ?? loadAiConfig({});
   const ai = createAiService({

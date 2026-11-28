@@ -58,7 +58,14 @@ function callFor(context: StyleSceneContext, assets: GameAssets): Call<unknown> 
         texts: (v) => v.npcLines.map((l) => ({ text: l.text, npcId: l.npcId })),
       });
     case 'gm_journal':
-      return call({ system: [JOURNAL_BLOCK], output: { name: GM_OUTPUT.journal, schema: GmJournal }, maxOutputTokens: 3_000, scope: 'narration', texts: (v) => [{ text: v.journal, npcId: null }, { text: v.saga, npcId: null }] });
+      return call({
+        system: [JOURNAL_BLOCK],
+        output: { name: GM_OUTPUT.journal, schema: GmJournal },
+        // ISK-098: the topics in place of the saga (the scene's one topic fits the old ceiling).
+        maxOutputTokens: 3_000,
+        scope: 'narration',
+        texts: (v) => [{ text: v.journal, npcId: null }, ...(v.topics ?? []).map((t) => ({ text: t.summary, npcId: null }))],
+      });
     case 'gm_day':
       return call({ system: [SUMMARY_BLOCK], output: { name: GM_OUTPUT.daySummary, schema: GmDaySummary }, maxOutputTokens: 3_000, scope: 'narration', texts: (v) => [{ text: v.recap, npcId: null }, { text: v.saga, npcId: null }] });
     case 'gm_finale':

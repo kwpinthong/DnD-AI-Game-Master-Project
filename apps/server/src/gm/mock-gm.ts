@@ -189,10 +189,11 @@ export function mockDaySummary(ctx: DayContext): { recap: string; saga: string; 
   return { recap, saga, news: starting.length > 0 ? starting : ['ข่าวลือแพร่ไปทั่วตลาดว่าเมื่อคืนมีเสียงแปลกๆ ดังมาจากทางป่าทิศตะวันออก'] };
 }
 
+/** ISK-098: the day's journal from what the player saw, and one new topic of it. */
 export function mockJournal(ctx: JournalContext): GmJournal {
-  const journal = `วันที่ ${ctx.day}: ${ctx.seen.join(' / ') || 'ไม่มีเรื่องที่ได้เห็น'}`.slice(0, 750);
-  const saga = [ctx.saga, journal].filter((s): s is string => s !== null).join('\n').slice(-1800);
-  return { journal, saga };
+  const seen = ctx.days.find((d) => d.day === ctx.day)?.seen ?? [];
+  const journal = `วันที่ ${ctx.day}: ${seen.join(' / ') || 'ไม่มีเรื่องที่ได้เห็น'}`.slice(0, 750);
+  return { journal, topics: [{ topicId: 'new', title: `เรื่องของวันที่ ${ctx.day}`, summary: journal }] };
 }
 
 /** The Mock GM's answer for a GM request, or undefined when `req` is not one. */

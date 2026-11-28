@@ -130,7 +130,8 @@ export interface EntryMeta {
   /** GEN-110: an `npc` entry's speaker (scenario NPC id; the viewer's name / ref come at read time) and kind. */
   /** GEN-129: a `player` entry's actor (member id; the viewer's alias / name comes at read time). */
   readonly actor?: string;
-  readonly npc?: { readonly id: string; readonly kind: 'dialogue' | 'reaction'; readonly private?: true };
+  /** ISK-098: `chat` = a reply of the NPC chat (GEN-149), not a line of the turn. */
+  readonly npc?: { readonly id: string; readonly kind: 'dialogue' | 'reaction'; readonly private?: true; readonly chat?: true };
   /** ISK-013: a `narration` the server wrote for found Hidden Evidence (not AI text, so not votable). */
   readonly clue?: true;
 }

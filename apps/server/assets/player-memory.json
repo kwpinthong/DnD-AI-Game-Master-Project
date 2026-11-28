@@ -1,0 +1,5 @@
+{
+  "maxChars": 10000,
+  "maxTopics": 6,
+  "promptTokens": 2500
+}

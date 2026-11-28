@@ -26,7 +26,7 @@ import {
   type WorldEventRecord,
 } from './model.ts';
 import type { KarmaTier } from '@isekai/rules';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { KARMA_TIERS_CATEGORY, karmaTiersFrom } from './karma.ts';
 import { SERVER_LINES_FILE, ServerLines, type ServerLineRecord } from './server-lines.ts';
 import { AppearanceOptions, defaultScenario, type AppearanceOption } from '@isekai/protocol';
@@ -35,8 +35,8 @@ import { realNamesInProfiles, VOICE_FILE, VoiceAsset } from './voice.ts';
 export const DEFAULT_ASSETS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets');
 
 /** Hand-written data sets (not sheet tabs): a missing file stops start-up with no import hint. */
-const HAND_WRITTEN = ['Server_Lines', 'Voice', 'Appearance_Options'] as const;
-/** Every data set: the sheet tabs + GEN-150's server-line templates + GEN-176's voice + ISK-006's appearance chips. The DB keys its rows by these names. */
+const HAND_WRITTEN = ['Server_Lines', 'Voice', 'Appearance_Options', 'Player_Memory'] as const;
+/** Every data set: the sheet tabs + GEN-150's server-line templates + GEN-176's voice + ISK-006's appearance chips + ISK-098's memory limits. The DB keys its rows by these names. */
 export const DATA_SETS = [...ALL_TABS, ...HAND_WRITTEN] as const;
 export type DataSetName = (typeof DATA_SETS)[number];
 export const DATA_SET_FILES: Readonly<Record<DataSetName, string>> = {
@@ -44,7 +44,19 @@ export const DATA_SET_FILES: Readonly<Record<DataSetName, string>> = {
   Server_Lines: SERVER_LINES_FILE,
   Voice: VOICE_FILE,
   Appearance_Options: 'appearance-options.json',
+  Player_Memory: 'player-memory.json',
 };
+
+/**
+ * ISK-098: each player's memory (gm/player-memory.ts), for every game from its next summary: at most `maxChars` code
+ * points (title + summary of every topic) in at most `maxTopics` topics; `promptTokens` of it go to a narration.
+ */
+export const PlayerMemorySettings = z.strictObject({
+  maxChars: z.int().min(2_000).max(30_000),
+  maxTopics: z.int().min(1).max(12),
+  promptTokens: z.int().min(500).max(8_000),
+});
+export type PlayerMemorySettings = z.infer<typeof PlayerMemorySettings>;
 /** Data set → its JSON value as stored (before the schema's defaults); a missing optional set is absent. */
 export type RawDataSets = Partial<Record<DataSetName, unknown>>;
 
@@ -87,14 +99,22 @@ export interface GameAssets {
   readonly voice: VoiceAsset;
   /** ISK-006: the appearance chip values (appearance-options.json), hidden ones included. */
   readonly appearanceOptions: readonly AppearanceOption[];
+  /** ISK-098: the limits of each player's memory (player-memory.json). */
+  readonly playerMemory: PlayerMemorySettings;
 }
 
 function fieldPath(path: readonly PropertyKey[]): string {
   return path.map((p) => (typeof p === 'number' ? `[${p}]` : `.${String(p)}`)).join('').replace(/^\./, '');
 }
 
-const SCHEMAS: Readonly<Record<DataSetName, z.ZodType>> = { ...TAB_SCHEMAS, Server_Lines: ServerLines, Voice: VoiceAsset, Appearance_Options: AppearanceOptions };
-const SCHEMA_LABEL: Partial<Record<DataSetName, string>> = { Server_Lines: 'server lines', Voice: 'voice', Appearance_Options: 'appearance options' };
+const SCHEMAS: Readonly<Record<DataSetName, z.ZodType>> = {
+  ...TAB_SCHEMAS,
+  Server_Lines: ServerLines,
+  Voice: VoiceAsset,
+  Appearance_Options: AppearanceOptions,
+  Player_Memory: PlayerMemorySettings,
+};
+const SCHEMA_LABEL: Partial<Record<DataSetName, string>> = { Server_Lines: 'server lines', Voice: 'voice', Appearance_Options: 'appearance options', Player_Memory: 'player memory' };
 
 /** `where`: how an error names the source ("asset file /…/npc.json", "game data set NPC"). */
 function parseSet<T extends DataSetName>(raw: unknown, set: T, where: string): unknown {
@@ -167,6 +187,9 @@ export function buildGameAssets(raw: RawDataSets, where: (set: DataSetName) => s
   if (raw.Appearance_Options === undefined) throw new AssetLoadError(`${where('Appearance_Options')} is missing`, { '(root)': 'ไม่มีข้อมูล' });
   const appearanceOptions = parseSet(raw.Appearance_Options, 'Appearance_Options', where('Appearance_Options')) as AppearanceOption[];
 
+  if (raw.Player_Memory === undefined) throw new AssetLoadError(`${where('Player_Memory')} is missing`, { '(root)': 'ไม่มีข้อมูล' });
+  const playerMemory = parseSet(raw.Player_Memory, 'Player_Memory', where('Player_Memory')) as PlayerMemorySettings;
+
   return {
     abilities,
     items,
@@ -178,6 +201,7 @@ export function buildGameAssets(raw: RawDataSets, where: (set: DataSetName) => s
     serverLines,
     voice,
     appearanceOptions,
+    playerMemory,
     worldTimeline: tab('World_Timeline')!,
     ...(npcSchedule ? { npcSchedule } : {}),
     ...(day10Strategies ? { day10Strategies } : {}),

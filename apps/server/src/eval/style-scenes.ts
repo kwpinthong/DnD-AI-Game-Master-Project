@@ -116,6 +116,7 @@ function chatScene(
         recent: opt.recent ?? [],
         message,
         whisper: opt.whisper ?? false,
+        memory: [],
       },
     },
   };
@@ -151,7 +152,7 @@ export const STYLE_SCENES: StyleScene[] = [
       npcs: [npc('guard', 'ทหารผ่านศึก พูดห้วน ไม่ชอบคนต่างถิ่น แต่ซื่อตรงต่อหน้าที่', -5)],
       answers: [{ npcId: 'guard', actionIds: ['a1'], via: 'target' }],
       privateLines: true,
-      journal: { saga: null, yesterday: null },
+      journal: { yesterday: null, topics: [] },
       beats: [beat('a1', '{{p:p_a}} ถาม {{n:guard}} ว่าทางไปโบสถ์ไปทางไหน', 'success', { targetNpc: 'guard' })],
     }),
   },
@@ -256,7 +257,7 @@ export const STYLE_SCENES: StyleScene[] = [
       npcs: [npc('merchant', 'พ่อค้าช่างเจรจา สุภาพแบบคนขายของ นับเหรียญตลอดเวลา', 5, true)],
       answers: [{ npcId: 'merchant', actionIds: ['a1'], via: 'target' }],
       privateLines: true,
-      journal: { saga: '{{p:p_a}} มาถึงเมืองพร้อมเงินติดตัวไม่มาก', yesterday: null },
+      journal: { yesterday: null, topics: [{ title: 'มาถึงเมือง', summary: '{{p:p_a}} มาถึงเมืองพร้อมเงินติดตัวไม่มาก', firstDay: 1, lastDay: 1 }] },
       beats: [beat('a1', '{{p:p_a}} ต่อราคาตะเกียงน้ำมันจาก 12 เหลือ 8 เหรียญ', 'crit', { targetNpc: 'merchant', items: ['ตะเกียงน้ำมัน'] })],
     }),
   },
@@ -332,11 +333,21 @@ export const STYLE_SCENES: StyleScene[] = [
       kind: 'gm_journal',
       day: 4,
       player: 'p_a',
-      saga: '{{p:p_a}} มาถึงเมืองเมื่อสามวันก่อน ได้รู้จัก {{n:beggar}} ที่น้ำพุ',
-      seen: [
-        'เช้านี้ {{n:beggar}} พาคุณไปดูซากบ้านที่ถูกไฟไหม้ท้ายย่านชุมชน',
-        'คุณพบจดหมายเปื้อนเขม่าใต้แผ่นไม้',
-        'ตอนเย็น {{n:nun}} รับจดหมายไปแล้วนิ่งไปนาน ก่อนจะขอบคุณคุณด้วยเสียงสั่น',
+      limits: { maxTopics: 6, maxChars: 10_000 },
+      // ISK-098: the memory topics in place of the saga.
+      topics: [{ topicId: 't1', title: 'ขอทานที่น้ำพุ', summary: '{{p:p_a}} มาถึงเมืองเมื่อสามวันก่อน ได้รู้จัก {{n:beggar}} ที่น้ำพุ', firstDay: 1, lastDay: 3 }],
+      days: [
+        {
+          day: 4,
+          actions: ['ตามขอทานไปดูบ้านที่ถูกไฟไหม้'],
+          seen: [
+            'เช้านี้ {{n:beggar}} พาคุณไปดูซากบ้านที่ถูกไฟไหม้ท้ายย่านชุมชน',
+            'คุณพบจดหมายเปื้อนเขม่าใต้แผ่นไม้',
+            'ตอนเย็น {{n:nun}} รับจดหมายไปแล้วนิ่งไปนาน ก่อนจะขอบคุณคุณด้วยเสียงสั่น',
+          ],
+          npcChats: [],
+          whispers: [],
+        },
       ],
     },
   },

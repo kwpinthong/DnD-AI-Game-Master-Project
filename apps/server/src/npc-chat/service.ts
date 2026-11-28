@@ -10,8 +10,9 @@ import { activeMembers, type MemberRow } from '../game/service.ts';
 import { loadWorld, npcToken, playerToken } from '../gm/context.ts';
 import { renderTokens } from '../gm/loop.ts';
 import { dialoguePrompt } from '../gm/npc-examples.ts';
-import { clampLine, cutLine, npcPrompt, npcRealNames, npcsHereNow, withVoice } from '../gm/npc-lines.ts';
+import { clampLine, cutLine, npcPrompt, npcsHereNow, withVoice } from '../gm/npc-lines.ts';
 import { MEMORY_LIMITS } from '../gm/npc-memory.ts';
+import { namesOf, topicsForPrompt, topicsOf } from '../gm/player-memory.ts';
 import { gateStyle, styleIssues } from '../gm/style-check.ts';
 import { gameTone, toneBlock } from '../gm/tone.ts';
 import { ensurePhaseState, insertEntry, karmaOf, type RoomEntryRow } from '../room/store.ts';
@@ -108,11 +109,7 @@ export async function sendNpcChat(deps: NpcChatDeps, me: MemberRow, input: { npc
   const player = world.players.get(me.id)!;
   const npc = world.npcs.find((n) => n.id === npcId)!;
   // Every real name of every person → its token, so the reply is rendered per reader (C6, GEN-154).
-  const tokenise = (raw: string) =>
-    world.npcs
-      .flatMap((n) => npcRealNames(assets, n).map((name) => [name, npcToken(n.id)] as const))
-      .sort((a, b) => b[0].length - a[0].length)
-      .reduce((out, [name, token]) => out.split(name).join(token), world.tokenise(raw.normalize('NFC')));
+  const { tokenise } = namesOf(db, world, assets);
   // The persona / bond / memories as the turn's dialogue reads them; with examples, the persona sits in the library block.
   const { system: library, npcs: [npcView] } = dialoguePrompt(db, assets, world, withVoice(assets, npcPrompt(db, assets, world, [npc], new Set([npcId]), [me.id])));
   const system = [NPC_CHAT_BLOCK, toneBlock(assets.voice, gameTone(db, me.gameId)), ...library.slice(1)];
@@ -140,6 +137,8 @@ export async function sendNpcChat(deps: NpcChatDeps, me: MemberRow, input: { npc
     recent,
     message: tokenise(text),
     whisper: input.whisper,
+    // ISK-098 (6): the player's own memory, the topics naming this NPC first; only when the speaker alone reads the reply (topics hold B's whispers to A).
+    memory: !input.whisper && others.length > 0 ? [] : topicsForPrompt(topicsOf(db, me.id), assets.playerMemory.promptTokens / 2, [npcToken(npcId)]),
   };
 
   const ask = (messages: { role: 'user' | 'assistant'; text: string }[], signal?: AbortSignal) =>
@@ -203,7 +202,14 @@ export async function sendNpcChat(deps: NpcChatDeps, me: MemberRow, input: { npc
     const said = readers.size === 0 ? [] : [{ row: insertEntry(tx, me.gameId, { kind: 'player', at, locationId: here.locationId, text, meta: { actor: me.id } }, [...readers], t), recipients: readers }];
     const hearers = new Set([me.id, ...listeners, ...gms]);
     const line = renderTokens(tx, world, answer.reply, input.whisper ? me.id : null, !input.whisper);
-    const npcEntry = { kind: 'npc' as const, at, locationId: input.whisper ? null : here.locationId, text: line, meta: { npc: { id: npcId, kind: 'dialogue' as const, ...(input.whisper ? { private: true as const } : {}) } } };
+    // ISK-098: `chat` keeps the reply out of the listeners' memory (it is the speaker's talk, not a line of the turn).
+    const npcEntry = {
+      kind: 'npc' as const,
+      at,
+      locationId: input.whisper ? null : here.locationId,
+      text: line,
+      meta: { npc: { id: npcId, kind: 'dialogue' as const, chat: true as const, ...(input.whisper ? { private: true as const } : {}) } },
+    };
     return [...said, { row: insertEntry(tx, me.gameId, npcEntry, [...hearers], t), recipients: hearers }];
   });
   if (rows === null) return refuse(409, { code: 'game_closed', message: 'เกมนี้ถูกผู้ดูแลปิดแล้ว' });

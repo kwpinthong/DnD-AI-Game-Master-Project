@@ -184,10 +184,18 @@ export const GmDaySummary = z.object({
 });
 export type GmDaySummary = z.infer<typeof GmDaySummary>;
 
-/** One player's journal of a finished day and their saga folded through it (ADR §6.3, Q-153). */
+/** ISK-098: a memory topic the AI changed: an existing `topicId` or "new"; the server clamps the lengths. */
+export const GmJournalTopic = z.object({ topicId: z.string(), title: z.string().min(1), summary: z.string().min(1) });
+export type GmJournalTopic = z.infer<typeof GmJournalTopic>;
+
+/**
+ * One player's journal of a finished day (ADR §6.3, Q-153) and the memory topics it changed (ISK-098; the saga is
+ * gone). Each part fails alone (C18): a wrong `journal` reads '' (retried as before), wrong `topics` read null (the
+ * topics stay and the day waits for the next summary).
+ */
 export const GmJournal = z.object({
-  journal: z.string().min(1).max(750),
-  saga: z.string().min(1).max(1800),
+  journal: z.string().min(1).max(750).catch(''),
+  topics: z.array(GmJournalTopic).nullable().catch(null),
 });
 export type GmJournal = z.infer<typeof GmJournal>;
 

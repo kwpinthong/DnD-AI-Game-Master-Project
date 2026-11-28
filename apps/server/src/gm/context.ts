@@ -16,7 +16,7 @@ import { buildEventContext, type EventContext } from '../timeline/context.ts';
 import { namesVisibleTo, presencesInGame } from '../visibility/store.ts';
 import { forAi, THAI_OUTPUT } from './language.ts';
 import type { NewsSources } from './news.ts';
-import { activeConstraints, dayLog, journalFor, memoryFor } from './store.ts';
+import { activeConstraints, dayLog, memoryFor } from './store.ts';
 
 /**
  * What the AI GM sees (GEN-057, ADR "Isekai Chronicles - AI GM" §6). Every request is one JSON object in
@@ -46,20 +46,30 @@ export function estimateTokens(text: string): number {
 export const STYLE_BLOCK_TOKENS = 1_000;
 /** ISK-009: the most an arrival (its `arrival` and beat) may add to a player narration. */
 export const ARRIVAL_TOKENS = 300;
-/** ADR §6.2 hard caps per call. GEN-195: the narration / dialogue caps grow by the style block, so it never stops a turn. */
+/** ISK-098: the most of a player's memory topics a narration may carry (the top of PlayerMemorySettings.promptTokens). */
+export const MEMORY_PROMPT_TOKENS = 8_000;
+/** ISK-098: the most code points a player's topics may hold (the top of PlayerMemorySettings.maxChars; ~1 token each). */
+export const MEMORY_CHARS = 30_000;
+/** ISK-098: what of a player's days (actions, what reached them, chats, whispers) one `summarize_journal` gets, newest kept. */
+export const MEMORY_DAYS_TOKENS = 6_000;
+/**
+ * ADR §6.2 hard caps per call. GEN-195: the narration / dialogue caps grow by the style block, so it never stops a turn.
+ * ISK-098: the journal saga (600) gave way to the memory topics (narrate_player: promptTokens, npc_dialogue of one
+ * player: promptTokens / 2, both at most their top); summarize_journal = rules + days + every topic.
+ */
 export const CONTEXT_BUDGET = {
   gm_adjudicate: 20_000,
-  narrate_player: 6_000 + STYLE_BLOCK_TOKENS + ARRIVAL_TOKENS,
+  narrate_player: 5_400 + MEMORY_PROMPT_TOKENS + STYLE_BLOCK_TOKENS + ARRIVAL_TOKENS,
   narrate_place: 5_000 + STYLE_BLOCK_TOKENS,
   /** GEN-116: the narration context without the journal, plus the narration. */
-  npc_dialogue: 6_000 + STYLE_BLOCK_TOKENS,
+  npc_dialogue: 6_000 + MEMORY_PROMPT_TOKENS / 2 + STYLE_BLOCK_TOKENS,
   summarize_day: 14_000,
-  summarize_journal: 6_000,
+  summarize_journal: 2_000 + MEMORY_DAYS_TOKENS + MEMORY_CHARS,
   /** GEN-059: the ending (every event outcome + one entry per player). */
   finale: 10_000,
 } as const;
-/** ADR §6.2 / §6.3: what of a player's journal their narrator gets (saga ≤ 600 + yesterday ≤ 250 tokens). */
-export const JOURNAL_BUDGET = { saga: 600, yesterday: 250 } as const;
+/** ADR §6.2 / §6.3: what of yesterday's journal a player's narrator gets (≤ 250 tokens; ISK-098: the topics replace the saga). */
+export const JOURNAL_BUDGET = { yesterday: 250 } as const;
 /** How much of today's turn log the adjudicator gets (newest kept). */
 const TODAY_LOG_TOKENS = 3_000;
 
@@ -296,15 +306,6 @@ export function withinTokens(text: string, max: number): string {
   return out;
 }
 
-/** A player's journal for their narrations on `day`, cut to the ADR budget (Q-153). */
-export function narrationJournal(db: DbOrTx, memberId: string, day: number): NonNullable<NarrationContext['journal']> {
-  const j = journalFor(db, memberId, day);
-  return {
-    saga: j.saga === null ? null : withinTokens(j.saga, JOURNAL_BUDGET.saga),
-    yesterday: j.yesterday === null ? null : withinTokens(j.yesterday, JOURNAL_BUDGET.yesterday),
-  };
-}
-
 /** Saga + yesterday's recap + today's turn log (newest kept within `TODAY_LOG_TOKENS`). */
 export function memoryContext(db: DbOrTx, gameId: string, at: { day: number; phase: Phase; turn: Turn }): TurnContext['memory'] {
   const memory = memoryFor(db, gameId, at.day);
@@ -392,10 +393,21 @@ export interface NarrationContext {
   privateLines: boolean;
   /** In the server's order; write one or more segments for each, in the same order. */
   beats: Beat[];
-  /** The reader's own journal (Q-153), for a private narration only; null for a place feed. */
-  journal: { saga: string | null; yesterday: string | null } | null;
+  /**
+   * The reader's own journal (Q-153), for a private narration only; null for a place feed. ISK-098: `topics` = what
+   * the reader's memory holds, newest `lastDay` first, within the promptTokens setting (in place of the saga).
+   */
+  journal: { yesterday: string | null; topics: PromptTopic[] } | null;
   /** ISK-009: a private narration whose reader arrived somewhere this turn (its beat is the last one). */
   arrival?: Arrival;
+}
+
+/** ISK-098: one topic of a player's memory as a prompt carries it (tokens only). */
+export interface PromptTopic {
+  title: string;
+  summary: string;
+  firstDay: number;
+  lastDay: number;
 }
 
 /** GEN-116: what the dialogue stage is given for one audience: its narration context (no journal) and the narration it follows. */
@@ -405,18 +417,36 @@ export interface DialogueContext extends Omit<NarrationContext, 'kind' | 'journa
   narration: string[];
   /** What the server will keep (the game's level): the AI should not write more. */
   limits: { dialoguePerNpc: number; reactionNpcs: number; privatePerPlayer: number };
+  /** ISK-098, audience player only: the reader's memory, the topics naming an NPC here first (DIALOGUE_TEXT stays as it is: ISK-025 C7 caps its growth). */
+  memory?: PromptTopic[];
 }
 
-/** `summarize_journal` (ADR §6.3, Q-153): one player's day from the entries that player received. */
+/** ISK-098: what reached one player on one day (tokens only, oldest first in each list). */
+export interface MemoryDay {
+  day: number;
+  /** What they typed as their actions. */
+  actions: string[];
+  /** The feed, their own narrations and the turn's NPC lines they received. */
+  seen: string[];
+  /** Their own NPC chat. */
+  npcChats: { npc: string; said: string; reply: string }[];
+  /** Whispers they sent or got. */
+  whispers: { from: string; to: string; text: string }[];
+}
+
+/**
+ * `summarize_journal` (ADR §6.3, Q-153): one player's `day` (the last of `days`) from what reached that player.
+ * ISK-098: the same call updates their memory: `topics` as they are now, `days` = the days not in them yet (that
+ * day, plus at most 2 whose summary failed).
+ */
 export interface JournalContext {
   kind: 'gm_journal';
   day: number;
   /** The player's ref; their own entries say "คุณ" for them. */
   player: string;
-  /** Their saga through the day before. */
-  saga: string | null;
-  /** What reached this player that day (feed + private narration), oldest first, tokens only. */
-  seen: string[];
+  limits: { maxTopics: number; maxChars: number };
+  topics: (PromptTopic & { topicId: string })[];
+  days: MemoryDay[];
 }
 
 export interface DayContext {
@@ -492,6 +522,8 @@ const NARRATOR_TEXT = [
   'bonds.memories = what the NPC remembers about that player (newest first): let it shape the NPC\'s manner and expression toward the player; never tell a memory as a new beat',
   // GEN-143
   'answers = NPCs who will answer the beats that ask / talk / request (actionIds) with their own lines in the dialogue stage: in that beat\'s segments tell only gestures, expressions and mood; never sum up the answer or say what the NPC answers for them',
+  // ISK-098
+  'journal.topics (audience player only) = what the reader has done and heard in this game so far, by subject, newest first: keep the story consistent with it; never tell a topic as a new beat',
   // ISK-009
   'A beat of kind arrival: that player has just come here. Audience player: 2-3 sentences of arrival.place as it looks now (arrival.phase, arrival.weather, its description; never what it hides) and who is here (arrival.npcs as {{n:id}}, arrival.players as {{p:ref}}; these may be named too)',
   THAI_OUTPUT,
@@ -537,9 +569,15 @@ export const NARRATOR_BLOCK: PromptBlock = { id: 'narrator-rules', text: NARRATO
 export const DIALOGUE_BLOCK: PromptBlock = { id: 'dialogue-rules', text: DIALOGUE_TEXT, cache: true };
 export const SUMMARY_BLOCK: PromptBlock = { id: 'summary-rules', text: SUMMARY_TEXT, cache: true };
 
-const JOURNAL_TEXT =
-  'Summarise one player\'s personal journal from seen (only what this player saw and learned that day): journal = what mattered today from their point of view, at most 300 characters / saga = the old saga folded together with today, at most 900 characters (when full, shorten the older days and keep only what matters). Never add anything that is not in seen. Always use tokens for names, never HP / karma numbers. ' +
-  THAI_OUTPUT;
+// ISK-098: the saga gave way to the player's memory by topic, written by the same call.
+const JOURNAL_TEXT = [
+  'Summarise one player\'s own story from days (only what reached this player: actions = what they did, seen = what they were shown and the NPC lines they heard, npcChats = their talks with NPCs, whispers = what they whispered or were whispered). day = the last entry of days.',
+  'journal = what mattered on that day from their point of view, at most 300 characters',
+  'topics = their memory by subject (one NPC, one quest, their bond with another player, one place, ...), given as they are now: answer only the topics these days change, each whole: an existing one by its topicId, or topicId "new" for a new subject. A topic you leave out stays as it is; answer [] when nothing changes',
+  'All the topics together at most limits.maxTopics topics and limits.maxChars characters (title + summary); a title at most 40 characters. When full, shorten the older topics and keep what matters',
+  'Never add anything that is not in days or topics. Always use tokens for names, never HP / karma / DC numbers',
+  THAI_OUTPUT,
+].join('\n');
 export const JOURNAL_BLOCK: PromptBlock = { id: 'journal-rules', text: JOURNAL_TEXT, cache: true };
 
 /** Tokens of a whole request (system + messages). */

@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, lte } from 'drizzle-orm
 import type { PromptBlock } from '../ai/provider.ts';
 import type { DbOrTx } from '../db/client.ts';
 import { characterPresence, gmConstraint, gmJournal, gmMemory, gmTurn, phaseAction, roomEntry, roomEntryRecipient } from '../db/schema.ts';
+import type { EntryMeta } from '../room/store.ts';
 import type { DialogueContext } from './context.ts';
 import type { GmNarration, GmTurnProposal } from './schema.ts';
 
@@ -185,15 +186,19 @@ export function hasDaySummary(db: DbOrTx, gameId: string, day: number): boolean 
 
 // --- Player journal (Q-153, ADR §6.3) ---
 
-/** The feed and private narration texts `memberId` received on `day`, oldest first (rendered for them). */
+/**
+ * The feed, private narration and (ISK-098) turn NPC-line texts `memberId` received on `day`, oldest first (rendered
+ * for them). An NPC chat reply (meta npc.chat) is not a turn line: only the speaker's own chat counts, from npc_chat.
+ */
 export function seenOnDay(db: DbOrTx, gameId: string, memberId: string, day: number): string[] {
   return db
-    .select({ text: roomEntry.text })
+    .select({ text: roomEntry.text, kind: roomEntry.kind, meta: roomEntry.meta })
     .from(roomEntry)
     .innerJoin(roomEntryRecipient, eq(roomEntryRecipient.entryId, roomEntry.id))
-    .where(and(eq(roomEntry.gameId, gameId), eq(roomEntryRecipient.memberId, memberId), eq(roomEntry.day, day), inArray(roomEntry.kind, ['feed', 'narration'])))
+    .where(and(eq(roomEntry.gameId, gameId), eq(roomEntryRecipient.memberId, memberId), eq(roomEntry.day, day), inArray(roomEntry.kind, ['feed', 'narration', 'npc'])))
     .orderBy(asc(roomEntry.id))
     .all()
+    .filter((r) => r.kind !== 'npc' || r.meta === null || (JSON.parse(r.meta) as EntryMeta).npc?.chat !== true)
     .map((r) => r.text);
 }
 
@@ -201,35 +206,22 @@ export function hasJournal(db: DbOrTx, memberId: string, day: number): boolean {
   return db.select({ day: gmJournal.day }).from(gmJournal).where(and(eq(gmJournal.memberId, memberId), eq(gmJournal.kind, 'day'), eq(gmJournal.day, day))).get() !== undefined;
 }
 
-/** The newest journal saga of `memberId` through a day before `beforeDay`. */
-export function latestJournalSaga(db: DbOrTx, memberId: string, beforeDay: number): string | null {
+/** For a narration on `day`: the player's journal of yesterday. ISK-098: the saga rows stay readable but are used no more. */
+export function journalYesterday(db: DbOrTx, memberId: string, day: number): string | null {
   return (
     db
       .select({ text: gmJournal.text })
       .from(gmJournal)
-      .where(and(eq(gmJournal.memberId, memberId), eq(gmJournal.kind, 'saga'), lte(gmJournal.day, beforeDay - 1)))
-      .orderBy(desc(gmJournal.day))
+      .where(and(eq(gmJournal.memberId, memberId), eq(gmJournal.kind, 'day'), eq(gmJournal.day, day - 1)))
       .get()?.text ?? null
   );
 }
 
-/** For a narration on `day`: the player's saga through the day before yesterday and yesterday's journal. */
-export function journalFor(db: DbOrTx, memberId: string, day: number): { saga: string | null; yesterday: string | null } {
-  const yesterday = db
-    .select({ text: gmJournal.text })
-    .from(gmJournal)
-    .where(and(eq(gmJournal.memberId, memberId), eq(gmJournal.kind, 'day'), eq(gmJournal.day, day - 1)))
-    .get();
-  return { saga: latestJournalSaga(db, memberId, day - 1), yesterday: yesterday?.text ?? null };
-}
-
-export function saveJournal(db: DbOrTx, gameId: string, memberId: string, day: number, journal: { journal: string; saga: string }, now: number): void {
-  for (const [kind, text] of [['day', journal.journal], ['saga', journal.saga]] as const) {
-    db.insert(gmJournal)
-      .values({ gameId, memberId, kind, day, text, createdAt: now })
-      .onConflictDoUpdate({ target: [gmJournal.memberId, gmJournal.kind, gmJournal.day], set: { text, createdAt: now } })
-      .run();
-  }
+export function saveJournal(db: DbOrTx, gameId: string, memberId: string, day: number, text: string, now: number): void {
+  db.insert(gmJournal)
+    .values({ gameId, memberId, kind: 'day', day, text, createdAt: now })
+    .onConflictDoUpdate({ target: [gmJournal.memberId, gmJournal.kind, gmJournal.day], set: { text, createdAt: now } })
+    .run();
 }
 
 export function saveDaySummary(db: DbOrTx, gameId: string, day: number, summary: { recap: string; saga: string }, now: number): void {

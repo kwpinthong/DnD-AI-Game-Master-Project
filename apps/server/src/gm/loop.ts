@@ -47,7 +47,6 @@ import {
   CONTEXT_BUDGET,
   FINALE_BLOCK,
   JOURNAL_BLOCK,
-  JOURNAL_BUDGET,
   DIALOGUE_BLOCK,
   NARRATOR_BLOCK,
   REPAIR_INSTRUCTION,
@@ -56,21 +55,19 @@ import {
   SUMMARY_BLOCK,
   TOKEN_PATTERN,
   buildTurnContext,
-  estimateTokens,
   loadWorld,
-  narrationJournal,
+  npcToken,
   requestTokens,
   stripStrayTokens,
-  withinTokens,
   type Arrival,
   type Beat,
   type DayContext,
   type DialogueContext,
   type GmWorld,
-  type JournalContext,
   type NarrationContext,
   type TurnAction,
 } from './context.ts';
+import { journalContext, memoryJournal, storeTopics, topicsForPrompt, topicsOf } from './player-memory.ts';
 import { createStageTimer, type StageTimer } from './timing.ts';
 import { learningContext, turnTags } from '../learning/memory.ts';
 import { introduceNpcs } from './npc-intro.ts';
@@ -94,10 +91,8 @@ import {
   type DialogueJob,
   hasDaySummary,
   hasJournal,
-  latestJournalSaga,
   latestSaga,
   saveJournal,
-  seenOnDay,
   markApplied,
   releaseConstraint,
   saveAdjudicated,
@@ -150,9 +145,6 @@ function fallbackCause(error: AiServiceError): GmFallbackCause {
 
 /** GEN-162: the code plus the provider's error kind (`max_tokens`, `timeout`...), never its detail text, for a server log. */
 const failureOf = (error: AiServiceError) => (error.detail ? `${error.code} (${error.detail.split(':')[0]})` : error.code);
-
-/** What of a player's day goes into `summarize_journal` (cap 6k with the rules and the saga, ADR §6.2). */
-const JOURNAL_SEEN_TOKENS = 4_000;
 
 const RESULT_OF =(o: ActionOutcome): string => (o.status === 'resolved' ? o.log.degree : o.status);
 
@@ -565,7 +557,7 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         place: { id: audience.placeId, name: placeName.get(audience.placeId) ?? audience.placeId },
         answers: npcAnswers(audience.ctx.beats, new Set(audience.ctx.npcs.filter((n) => n.here).map((n) => n.id)), partnerAt(audience.placeId)),
         privateLines: 'player' in audience.ctx.audience && secretBy.has(audience.readers[0]!),
-        journal: 'player' in audience.ctx.audience ? narrationJournal(db, audience.readers[0]!, at.day) : null,
+        journal: 'player' in audience.ctx.audience ? memoryJournal(db, audience.readers[0]!, at.day, assets.playerMemory.promptTokens) : null,
       };
       const saved = stored.narrations[audience.key];
       const forbidden = forbiddenNamesFor(world, audience.readers);
@@ -689,7 +681,10 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         // GEN-128 C3: the lines follow the narration the players read, a Human GM's edit included (names back to tokens).
         const edited = published[firstEntry(i)]?.text;
         const narration = edited !== undefined && edited !== entries[firstEntry(i)]!.text ? [world.tokenise(edited)] : out.segments.map((s) => s.text);
-        const context: DialogueContext = { ...rest, npcs, kind: 'gm_dialogue', narration, limits };
+        // ISK-098: lines to one reader alone carry that reader's memory, the topics naming an NPC here first.
+        const here = rest.npcs.filter((n) => n.here).map((n) => npcToken(n.id));
+        const memory = reader === null ? {} : { memory: topicsForPrompt(topicsOf(db, reader), assets.playerMemory.promptTokens / 2, here) };
+        const context: DialogueContext = { ...rest, npcs, kind: 'gm_dialogue', narration, limits, ...memory };
         if (requestTokens(system, [{ text: JSON.stringify(context) }]) > CONTEXT_BUDGET.npc_dialogue) {
           log(`[gm] game=${gameId} purpose=npc_dialogue audience=${key} skipped: limit_exceeded`);
           return [];
@@ -865,7 +860,8 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     const before = writing.get(gameId);
     const endingDay = typeof parts.day === 'number' ? parts.day : undefined;
     // `one` → null: nothing was missing for that day; false: a call failed (later days wait for the next run).
-    const chain = (after: Promise<void> | undefined, stage: string, one: (d: number) => Promise<boolean | null>) =>
+    // ISK-098: journals go on past a failed day (no saga chains them any more): its talk waits in the next day's summary (C9).
+    const chain = (after: Promise<void> | undefined, stage: string, one: (d: number) => Promise<boolean | null>, goOn = false) =>
       (async () => {
         await after;
         const current = db.select({ state: gamePhase.state }).from(gamePhase).where(eq(gamePhase.gameId, gameId)).get()?.state;
@@ -875,14 +871,14 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
         for (let d = 1; d < day; d++) {
           const done = await one(d);
           asked ||= done !== null;
-          if (done === false) break;
+          if (done === false && !goOn) break;
         }
         if (asked) log(`[gm] game=${gameId} ${stage} timing total_ms=${Math.round(performance.now() - start)}`);
       })().catch((error) => log(`[gm] game=${gameId} ${stage} failed: ${error instanceof Error ? error.name : 'unknown error'}`));
     const entry = {
       day: parts.day === null ? (before?.day ?? Promise.resolve()) : chain(before?.day, 'summarize_day', (d) => summarizeDay(gameId, d, signal, parts.reserveUsdMicros)),
       // A journal reads the published texts, so never during the turn.
-      journals: parts.journals ? chain(before?.journals, 'summarize_journal', (d) => summarizeJournals(gameId, d, signal)) : (before?.journals ?? Promise.resolve()),
+      journals: parts.journals ? chain(before?.journals, 'summarize_journal', (d) => summarizeJournals(gameId, d, signal), true) : (before?.journals ?? Promise.resolve()),
     };
     writing.set(gameId, entry);
     return Promise.all([entry.day, entry.journals]).then(() => {
@@ -899,19 +895,14 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
     return done.every(Boolean);
   }
 
-  /** One player's journal of day `d`; false when the call failed. */
+  /**
+   * One player's journal of day `d` and (ISK-098) their memory topics, in the same call; false when the journal
+   * failed (asked again after the next turn, as before). Wrong topics or a failed call keep the topics and let the
+   * day wait for the next summary.
+   */
   async function summarizeJournal(gameId: string, world: GmWorld, p: { memberId: string; ref: string }, d: number, signal?: AbortSignal): Promise<boolean> {
-    const seen: string[] = [];
-    let used = 0;
-    // Newest kept within the budget (the saga carries the rest).
-    for (const text of seenOnDay(db, gameId, p.memberId, d).map(world.tokenise).reverse()) {
-      const cost = estimateTokens(text);
-      if (used + cost > JOURNAL_SEEN_TOKENS) break;
-      used += cost;
-      seen.unshift(text);
-    }
-    const saga = latestJournalSaga(db, p.memberId, d);
-    const context: JournalContext = { kind: 'gm_journal', day: d, player: p.ref, saga: saga === null ? null : withinTokens(saga, JOURNAL_BUDGET.saga * 2), seen };
+    const { context, plan, names, topics } = journalContext(db, world, assets, p, d);
+    const memory = { gameId, memberId: p.memberId, plan, topics, names, limits: assets.playerMemory };
     const system = [JOURNAL_BLOCK];
     const messages = [{ role: 'user' as const, text: JSON.stringify(context) }];
     if (requestTokens(system, messages) > CONTEXT_BUDGET.summarize_journal) {
@@ -926,14 +917,22 @@ export function createAiGmResolver(deps: AiGmDeps): PhaseResolver {
       messages,
       output: { name: GM_OUTPUT.journal, schema: GmJournal },
       // GEN-161 (Q-327): 800 hit max_tokens on every real call; GEN-180 (Q-342): 1500 still did 2 of 8 times.
-      maxOutputTokens: 3_000,
+      // ISK-098: + the topics it may rewrite (about 1 token per Thai character).
+      maxOutputTokens: 3_000 + assets.playerMemory.maxChars,
       ...(signal ? { signal } : {}),
     });
     if (!result.ok) {
       log(`[gm] game=${gameId} summarize_journal day=${d} player=${p.ref} failed: ${failureOf(result.error)}`);
+      storeTopics(db, memory, null, now());
       return false;
     }
-    saveJournal(db, gameId, p.memberId, d, result.value, now());
+    if (result.value.topics === null) log(`[gm] game=${gameId} summarize_journal day=${d} player=${p.ref} topics invalid`);
+    storeTopics(db, memory, result.value.topics, now());
+    if (result.value.journal === '') {
+      log(`[gm] game=${gameId} summarize_journal day=${d} player=${p.ref} journal invalid`);
+      return false;
+    }
+    saveJournal(db, gameId, p.memberId, d, result.value.journal, now());
     return true;
   }
 

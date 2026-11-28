@@ -106,7 +106,7 @@ export function registerAdminRoutes(app: FastifyInstance, db: Db, now: Clock, op
   registerStyleReviewRoutes(app, options.styleReview, refuse);
   registerStyleEvalRoutes(app, db, refuse);
   registerLearningRoutes(app, db, options.learning, refuse);
-  registerAdminGameRoutes(app, db, now, sessions, options.onGameClosed ?? (() => {}), options.onMemberKicked ?? (() => {}));
+  registerAdminGameRoutes(app, db, now, sessions, options.onGameClosed ?? (() => {}), options.onMemberKicked ?? (() => {}), options.gameData.assets);
   registerFeedbackAdminRoutes(app, db, refuse, now);
 
   app.get<{ Params: { gameId: string } }>('/api/admin/ai-usage/:gameId', async (request, reply) => {

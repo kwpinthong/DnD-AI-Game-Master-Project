@@ -113,6 +113,7 @@ function playerRequests(t: Table, me: Seat, merchantRef?: string): Record<string
     'POST /api/admin/games/:id/close': { method: 'POST', path: '/api/admin/games/any-game/close', body: { confirmName: 'x' } },
     // ISK-018: members, kick, new invite code; a player's session is 401 (no admin token), nothing changes.
     'GET /api/admin/games/:id/members': { method: 'GET', path: '/api/admin/games/any-game/members' },
+    'GET /api/admin/games/:id/memory': { method: 'GET', path: '/api/admin/games/any-game/memory' },
     'POST /api/admin/games/:id/members/:memberId/kick': { method: 'POST', path: '/api/admin/games/any-game/members/any-member/kick' },
     'POST /api/admin/games/:id/invite-code': { method: 'POST', path: '/api/admin/games/any-game/invite-code' },
     // GEN-084: the Learning library; a player's session is 403 (checked below).

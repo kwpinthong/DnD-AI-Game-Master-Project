@@ -625,6 +625,25 @@ export const CONTRACT_FIXTURES: Fixtures = {
     { members: [] },
   ],
   AdminInviteCodeResponse: [{ inviteCode: 'K7Q2MX' }],
+  AdminPlayerMemory: [
+    {
+      maxChars: 10_000,
+      maxTopics: 6,
+      players: [
+        {
+          memberId: 'm-1',
+          name: 'ลิน',
+          charCount: 47,
+          topics: [
+            { topicId: 'a1b2c3d4', title: 'พ่อค้า', summary: 'ต่อราคาผ้าไหมกับ {{n:merchant}} ไม่สำเร็จ', firstDay: 1, lastDay: 2 },
+          ],
+        },
+        { memberId: 'm-2', name: 'ดาริน', charCount: 0, topics: [] },
+      ],
+      names: { '{{n:merchant}}': 'มาร์คัส' },
+    },
+    { maxChars: 10_000, maxTopics: 6, players: [], names: {} },
+  ],
   GmConsoleResponse: [
     {
       view: 'gm',

@@ -1,7 +1,7 @@
 import type { Period, Weather } from '@isekai/rules';
 import { z } from 'zod';
 import type { PromptBlock } from '../ai/provider.ts';
-import { NPC_SPEECH_RULES, type NarrationContext } from '../gm/context.ts';
+import { NPC_SPEECH_RULES, type NarrationContext, type PromptTopic } from '../gm/context.ts';
 
 /**
  * GEN-149: the rules of the NPC chat call (purpose `npc_chat`). In its own file, in English, so the GEN-164 rewrite of
@@ -44,4 +44,9 @@ export interface NpcChatContext {
   recent: { from: 'player' | 'npc'; text: string }[];
   message: string;
   whisper: boolean;
+  /**
+   * ISK-098: the player's memory, the topics naming this NPC first, within promptTokens / 2. NPC_CHAT_TEXT says
+   * nothing of it: ISK-025 C7 caps that block's growth (the key names it).
+   */
+  memory: PromptTopic[];
 }

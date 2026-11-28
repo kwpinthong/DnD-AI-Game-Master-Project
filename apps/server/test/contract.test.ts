@@ -242,6 +242,9 @@ describe('GEN-099 contract against the real server', { timeout: 120_000 }, () =>
     // ISK-018: the members, a new invite code, and the kick (C leaves; a second kick / unknown game are refused).
     await hit(call, 'GET /api/admin/games/:id/members', { token: ownerToken, path: `/api/admin/games/${tableGame}/members` });
     await hit(call, 'GET /api/admin/games/:id/members', { token: ownerToken, path: '/api/admin/games/nope/members' });
+    // ISK-098: each player's memory topics (server owner only).
+    await hit(call, 'GET /api/admin/games/:id/memory', { token: ownerToken, path: `/api/admin/games/${tableGame}/memory` });
+    await hit(call, 'GET /api/admin/games/:id/memory', { token: ownerToken, path: '/api/admin/games/nope/memory' });
     await hit(call, 'POST /api/admin/games/:id/invite-code', { token: ownerToken, path: `/api/admin/games/${tableGame}/invite-code` });
     const kickPath = `/api/admin/games/${tableGame}/members/${t.c.memberId}/kick`;
     await hit(call, 'POST /api/admin/games/:id/members/:memberId/kick', { token: ownerToken, path: kickPath });

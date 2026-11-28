@@ -166,6 +166,7 @@ export async function createGame(db: Db, input: CreateGameRequest, now: Clock, d
       role: input.humanGm ? 'gm' : 'player',
       kickedAt: null,
       readyAt: null,
+      memoryPendingFromDay: null,
       createdAt: t,
     };
     withFreshInviteCode((inviteCode) =>

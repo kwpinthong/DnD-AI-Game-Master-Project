@@ -804,10 +804,11 @@ describe('GEN-057 AI GM turn loop', { timeout: 60_000 }, () => {
     const journalReqs = provider.requests.filter((r) => r.purpose === 'summarize_journal');
     expect(journalReqs).toHaveLength(3);
     // GEN-161 (Q-327) / GEN-180 (Q-342): 800 and then 1500 still hit max_tokens on real calls; the prompt caps the lengths.
+    // ISK-098: the same call writes the memory topics instead of the saga: + maxChars (10,000 by default) of output.
     for (const r of journalReqs) {
-      expect(r.maxOutputTokens).toBe(3_000);
+      expect(r.maxOutputTokens).toBe(3_000 + 10_000);
       expect(r.system.map((b) => b.text).join('\n')).toMatch(/journal[^/]*at most 300 characters/);
-      expect(r.system.map((b) => b.text).join('\n')).toMatch(/saga[^/]*at most 900 characters/);
+      expect(r.system.map((b) => b.text).join('\n')).toMatch(/topics[^/]*limits\.maxChars characters/);
     }
     const reqFor = (ref: string) => journalReqs.find((r) => contextOf<JournalContext>(r).player === ref)!;
     // Only what each player saw that day: A saw its own action (and nothing of B's Secret or C in the forest).

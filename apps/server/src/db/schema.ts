@@ -58,6 +58,8 @@ export const member = sqliteTable(
     kickedAt: integer('kicked_at'),
     /** ISK-017: when the player pressed ready in the lobby; null = not ready (a newcomer, and everyone of an old game). */
     readyAt: integer('ready_at'),
+    /** ISK-098: the first day whose talk is not in the player's memory yet (its summary failed); null = none waiting. */
+    memoryPendingFromDay: integer('memory_pending_from_day'),
     createdAt: integer('created_at').notNull(),
   },
   (t) => [uniqueIndex('member_game_name_key').on(t.gameId, t.nameKey)],

@@ -40,6 +40,7 @@ const dataOf = (a: GameAssets) => ({
   serverLines: a.serverLines,
   voice: a.voice,
   appearanceOptions: a.appearanceOptions,
+  playerMemory: a.playerMemory,
 });
 
 const ASSET_KEY: Record<DataSetName, keyof ReturnType<typeof dataOf>> = {
@@ -55,6 +56,7 @@ const ASSET_KEY: Record<DataSetName, keyof ReturnType<typeof dataOf>> = {
   Server_Lines: 'serverLines',
   Voice: 'voice',
   Appearance_Options: 'appearanceOptions',
+  Player_Memory: 'playerMemory',
 };
 
 describe('game data in the DB + admin editor (GEN-147)', { timeout: 120_000 }, () => {
@@ -314,6 +316,13 @@ describe('game data in the DB + admin editor (GEN-147)', { timeout: 120_000 }, (
       const editedVoice = { ...voice, guide: { ...voice.guide, voice: 'ผู้เล่าเรื่อง (แก้จาก admin)' } };
       expect((await save(token, name, editedVoice)).status).toBe(200);
       expect(server!.assets.voice.guide.voice).toBe('ผู้เล่าเรื่อง (แก้จาก admin)');
+      return;
+    }
+    // ISK-098: one object of limits.
+    if (name === 'Player_Memory') {
+      const limits = (await getSet(token, name)).value as Record<string, number>;
+      expect((await save(token, name, { ...limits, maxChars: 12_000 })).status).toBe(200);
+      expect(server!.assets.playerMemory.maxChars).toBe(12_000);
       return;
     }
     const value = (await getSet(token, name)).value as Record<string, unknown>[];

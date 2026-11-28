@@ -143,3 +143,27 @@ export const gmJournal = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.memberId, t.kind, t.day] }), index('gm_journal_game').on(t.gameId)],
 );
+
+/**
+ * ISK-098: what the AI remembers of one player in one game, by subject (gm/player-memory.ts): at most `maxTopics`
+ * topics of at most `maxChars` code points together (title + summary), made by `summarize_journal` from what reached
+ * that player only. Tokens only, never a real name. AI and server owner only: never sent to a player.
+ */
+export const playerMemory = sqliteTable(
+  'player_memory',
+  {
+    gameId: text('game_id')
+      .notNull()
+      .references(() => game.id, { onDelete: 'cascade' }),
+    memberId: text('member_id')
+      .notNull()
+      .references(() => member.id, { onDelete: 'cascade' }),
+    topicId: text('topic_id').notNull(),
+    title: text('title').notNull(),
+    summary: text('summary').notNull(),
+    firstDay: integer('first_day').notNull(),
+    lastDay: integer('last_day').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.memberId, t.topicId] }), index('player_memory_game').on(t.gameId)],
+);

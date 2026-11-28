@@ -1,6 +1,8 @@
 import { AdminCloseGameRequest, CLOSE_REASON_MAX, type AdminGamesResponse, type AdminInviteCodeResponse, type AdminMembersResponse } from '@isekai/protocol';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { GameAssets } from '../assets/load.ts';
 import { memberRowForToken, type Clock } from '../auth/join.ts';
+import { adminMemory } from '../gm/player-memory.ts';
 import { bearerToken, sendError } from '../auth/routes.ts';
 import type { Db } from '../db/client.ts';
 import { CryptoRng } from '../rng.ts';
@@ -17,7 +19,7 @@ const rng = new CryptoRng();
  * ISK-001: GET /api/admin/games (every game) and POST /api/admin/games/:id/close. Admin token only; without one the
  * answer is 401 (the case), and nothing changes. The close is written to `game_close` (the audit) before the hook runs.
  */
-export function registerAdminGameRoutes(app: FastifyInstance, db: Db, now: Clock, sessions: AdminSessions, onClosed: GameClosedHook, onKicked: MemberKickedHook) {
+export function registerAdminGameRoutes(app: FastifyInstance, db: Db, now: Clock, sessions: AdminSessions, onClosed: GameClosedHook, onKicked: MemberKickedHook, assets: GameAssets) {
   const refuse = (request: FastifyRequest, reply: FastifyReply): boolean => {
     if (sessions.valid(bearerToken(request.headers.authorization))) return false;
     void sendError(reply, 401, { code: 'unauthorized', message: 'หน้านี้สำหรับเจ้าของ server เท่านั้น เข้าด้วย admin code ก่อน' });
@@ -83,6 +85,14 @@ export function registerAdminGameRoutes(app: FastifyInstance, db: Db, now: Clock
         onKicked(id, memberId, outcome.turnClosed);
         return sendMembers(reply, id);
     }
+  });
+
+  // ISK-098: what the AI remembers of each player of a game (the server owner only; a player never gets it).
+  app.get<{ Params: { id: string } }>('/api/admin/games/:id/memory', async (request, reply) => {
+    if (refuse(request, reply)) return reply;
+    const body = adminMemory(db, assets, request.params.id);
+    if (!body) return noGame(reply);
+    return reply.header('cache-control', 'no-store').send(body);
   });
 
   app.post<{ Params: { id: string } }>('/api/admin/games/:id/invite-code', async (request, reply) => {

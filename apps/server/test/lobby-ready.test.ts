@@ -316,6 +316,9 @@ describe('ISK-017 ready + auto start, no owner', { timeout: 120_000 }, () => {
     // Drizzle only runs migrations newer than the last applied one, so the later ones (ISK-018's audit table) go too.
     const readyWhen = journal.entries.find((e) => e.tag.endsWith('_member_ready'))!.when;
     sqlite.prepare('drop table admin_game_audit').run();
+    // ISK-098's player memory.
+    sqlite.prepare('drop table player_memory').run();
+    sqlite.prepare('alter table member drop column memory_pending_from_day').run();
     expect(sqlite.prepare('delete from __drizzle_migrations where created_at >= ?').run(readyWhen).changes).toBeGreaterThanOrEqual(1);
     const owner = (sqlite.prepare('select owner_member_id as o from game where id = ?').get(t.gameId) as { o: string }).o;
     sqlite.close();
