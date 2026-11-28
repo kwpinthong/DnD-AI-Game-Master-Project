@@ -221,11 +221,12 @@ export async function runStyleEval(deps: StyleEvalDeps, scenes: readonly StyleSc
       const read = raw.map(clampLine);
       const judged = await ai.call({
         gameId: STYLE_EVAL_GAME_ID,
-        purpose: 'npc_chat',
+        // Q-611 B: the main model (style_review), the summary model judged unstably (38% then 25% on near-identical prompts).
+        purpose: 'style_review',
         system: [RESULT_JUDGE_BLOCK],
         messages: [{ role: 'user', text: JSON.stringify({ scene: scene.context, results: read }) }],
         output: { name: 'narration_judge', schema: ResultJudgeAnswer },
-        // The summary model thinks first: 300 ran out (max_tokens) on the real AI.
+        // The model thinks first: 300 ran out (max_tokens) on the real AI.
         maxOutputTokens: 1_500,
       });
       const verdicts = judged.ok && judged.value.verdicts.length === read.length ? judged.value.verdicts : null;

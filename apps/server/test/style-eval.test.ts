@@ -242,13 +242,13 @@ describe('GEN-167 runner and admin page', { timeout: 120_000 }, () => {
     };
   const RESULT_ALL = { ...ALL, playerChoice: true };
 
-  it('ISK-026 C7 (mock): every narration scene is judged once on the summary model; short results with all 4 parts pass the bar', async () => {
+  it('ISK-026 C7 (mock): every narration scene is judged once on the main model (Q-611); short results with all 4 parts pass the bar', async () => {
     const provider = mock([], judgingResults(RESULT_ALL));
     const calls: AiCallRequest[] = [];
     const result = await run({ ...provider, call: (req) => (calls.push(req), provider.call(req)) });
     const judged = calls.filter(isResultJudge);
     expect(judged).toHaveLength(narrationScenes.length);
-    expect(judged.every((r) => r.purpose === 'npc_chat' && r.model === config.summaryModel)).toBe(true);
+    expect(judged.every((r) => r.purpose === 'style_review' && r.model === config.model)).toBe(true);
     const report = narrationReport(server.orm, result.id);
     expect(report.results).toBeGreaterThanOrEqual(narrationScenes.length);
     expect(report).toMatchObject({ withinLength: report.results, complete: report.results, completeRate: 1, respectsPlayer: report.results, pass: true, overRaw: 0 });
